@@ -131,15 +131,26 @@ exprimés comme des dépendances entre cibles (cf. `docs/ENVIRONMENT.md` §4.2).
   dans les réglages du projet). C'est beaucoup moins cher en CPU sur un
   empilement de joints contraints. Doubler le tick global se discute *après*
   avoir essayé ça, et se mesure.
-- **Couple et force continus** : ils s'appliquent sur un `PhysicalBone3D` via
-  `_integrate_forces(state)` (`state.apply_torque()`,
-  `state.apply_central_force()`) ou via
-  `PhysicsServer3D.body_apply_torque(bone.get_rid(), …)`.
-  ⚠️ `PhysicalBone3D` n'hérite **pas** de `RigidBody3D` et n'expose pas
-  nécessairement `apply_torque()` / `apply_central_force()` / `angular_velocity`
-  en direct. **La formulation exacte est fixée par le spike S1
-  (`docs/SPIKE.md`), et ce paragraphe est réécrit à l'issue du spike.**
-  Tant que S1 n'a pas répondu, aucun code de production n'écrit de PD.
+- **Couple et force continus** — *mesuré au spike S1, ne pas redécouvrir* :
+
+  ```gdscript
+  PhysicsServer3D.body_apply_torque(bone.get_rid(), torque)
+  PhysicsServer3D.body_apply_central_force(bone.get_rid(), force)
+  ```
+
+  `PhysicalBone3D` hérite de `PhysicsBody3D`, **pas** de `RigidBody3D` :
+  `apply_torque()`, `apply_central_force()` et `apply_force()` **n'existent
+  pas** dessus, et `_integrate_forces()` non plus. Seules les *impulsions*
+  (`apply_impulse`, `apply_central_impulse`) et `angular_velocity` /
+  `linear_velocity` sont exposées directement.
+
+  Le couple **ne persiste pas** : il est consommé à chaque step et doit être
+  réappliqué à chaque tick. Vérifié : couple constant de 10 N·m sur une boîte
+  de 0,2667 kg·m² → ω croît linéairement à 37,5 rad/s², soit 36,875 rad/s après
+  59 ticks — exactement la valeur théorique.
+
+  `PhysicsServer3D.body_get_direct_state(rid).apply_torque()` donne le même
+  résultat au chiffre près, mais passe par une indirection inutile.
 - Les **impulsions** (`apply_impulse`) sont réservées aux événements ponctuels :
   saut, coup, poussée de test. Jamais pour du mouvement continu.
 - Aucun `set_global_position` sur un `PhysicalBone3D` en cours de simulation :
@@ -233,17 +244,32 @@ tranche définitivement ce point.
 
 | Comportement | Critère mesurable |
 |---|---|
+| Conformité géométrique | `head_y(t=0)` = **1,454 m** ±3 cm, centre de masse = **0,840 m** ±3 cm *(mesuré S4)* |
 | Équilibre | debout 600 ticks (10 s) sans input → `head_y > 0,92 × head_y(t=0)` |
-| Résistance | impulsion latérale **60 N·s** sur le torse → toujours debout 120 ticks après |
-| Récupération | impulsion latérale **300 N·s** → tombe, puis `head_y > 0,92 × head_y(t=0)` en < 240 ticks (4 s) |
+| Résistance | impulsion latérale de `impulse_stagger_ns` → toujours debout 120 ticks après |
+| Récupération | impulsion latérale de `impulse_knockdown_ns` → tombe, puis `head_y > 0,92 × head_y(t=0)` en < 240 ticks |
 | Grab | prise établie en < **12 ticks** (~200 ms) quand la cible est à portée |
-| Rupture du grab | séparation main↔ancre > **0,25 m** pendant 6 ticks → joint détruit, exactement une fois |
+| Rupture du grab | séparation main↔ancre > **0,25 m** pendant 6 ticks → prise relâchée, exactement une fois *(≈ 950 N, mesuré S5)* |
 | Éjection | un corps sous y = −10 déclenche **exactement un** signal `player_eliminated` |
-| Perf | temps de frame physique < **4 ms** à 4 persos, sur la machine de référence de `docs/ENVIRONMENT.md` |
+| Perf | temps de frame physique < **4 ms** à 4 persos, sur la machine de `docs/ENVIRONMENT.md` |
 
-Les valeurs d'impulsion ci-dessus sont des **points de départ à calibrer au
-spike S4**, pas des vérités révélées. Ce qui n'est pas négociable, c'est leur
-*forme* : une impulsion, un ratio, une durée en ticks.
+⚠️ **Les deux valeurs d'impulsion ne sont pas encore connues.** Le spike S4 a
+établi qu'elles ne sont **pas calibrables sur un ragdoll inerte** : sans
+`BalanceController`, le personnage s'effondre sous son propre poids quelle que
+soit l'impulsion (mesuré : ratio 0,12 de 20 à 500 N·s, sans aucune
+monotonie). Elles se mesurent **en fin de phase 1**, une fois l'équilibre
+obtenu, et s'écrivent alors dans `baseline.json`.
+
+En attendant, les tests de résistance et de récupération lisent
+`impulse_stagger_ns` / `impulse_knockdown_ns` depuis `baseline.json` et se
+**sautent explicitement** si la valeur est `null` — ils ne prennent pas une
+valeur par défaut. Un test qui invente son propre seuil ne mesure rien.
+
+⚠️ **Le budget perf est serré sur la machine actuelle.** Mesuré au spike S4 sur
+rig inerte : 2,565 ms à 1 perso, 4,351 ms à 4 persos — soit **déjà au-dessus
+des 4 ms avant tout PD**. Le budget sera vraisemblablement à renégocier en fin
+de phase 1 ; c'est une décision à prendre avec une mesure sous les yeux, pas un
+seuil à abaisser en silence.
 
 ### Non-déterminisme
 
@@ -255,13 +281,28 @@ un **bug de tuning** — remonte-le comme tel.
 Écris le test **avant** de tuner. Sinon tu tunes à l'aveugle et tu régresses sans
 le voir.
 
-## 11. Hypothèses non encore vérifiées
+## 11. Ce que les spikes ont établi
 
-Ce plan repose sur des hypothèses d'API Godot et Jolt qui n'ont jamais été
-testées. Elles sont listées et protocolées dans **`docs/SPIKE.md`** (phase 0.5).
-Tant qu'un spike n'a pas répondu, **le code de production concerné ne s'écrit
-pas** : une semaine de tuning sur une API qui n'existe pas est une semaine perdue
-en entier, pas à moitié.
+La phase 0.5 a répondu aux six hypothèses qui portaient ce plan. Les résultats
+détaillés sont dans **`docs/SPIKE.md`** ; voici ce qui change une règle :
+
+| # | Question | Réponse |
+|---|---|---|
+| S1 | Couple continu sur `PhysicalBone3D` | `PhysicsServer3D.body_apply_torque` — pas `apply_torque()`, qui n'existe pas (§6) |
+| S2 | Paramètres de joint sous Jolt | limites honorées ; `damping`/`restitution`/`force_limit` **ignorés** |
+| S3 | Pose cible vs simulateur | **aucun conflit** : le simulateur n'écrase pas `bone_pose` |
+| S4 | Coût CPU / impulsions | 4,35 ms à 4 persos ; impulsions non calibrables avant la phase 1 |
+| S5 | Force de joint / grab | non lisible ; un joint ne se sépare **jamais** → grab par ressort PD |
+| S6 | Échelle Blender → Godot | contrat d'export validé au millimètre |
+
+Il reste **une question ouverte**, à trancher en phase 1 : le budget de 4 ms à
+4 persos est déjà dépassé par un rig inerte sur cette machine.
+
+Si tu découvres qu'une règle de ce fichier est fausse, **corrige le fichier**
+dans le même commit que le code, et dis-le explicitement dans ton rapport. Une
+règle fausse qu'on contourne silencieusement est pire que pas de règle du tout.
+C'est exactement ce qui est arrivé à la §6 : elle prescrivait une API qui
+n'existe pas, et seule une mesure l'a révélé.
 
 Si tu découvres qu'une règle de ce fichier est fausse, **corrige le fichier**
 dans le même commit que le code, et dis-le explicitement dans ton rapport. Une

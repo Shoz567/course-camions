@@ -18,21 +18,28 @@ réseau, ni à l'UI, ni aux scripts Blender.
 changement tu le **demandes** avec ta justification chiffrée. Un contrat dont
 une des deux parties est propriétaire n'est pas un contrat (cf. `CLAUDE.md` §8).
 
-## Avant d'écrire la moindre ligne : les spikes
+## Ce que les spikes ont déjà établi — ne le redécouvre pas
 
-Trois hypothèses portent ton travail et ne sont pas vérifiées. Elles sont
-protocolées dans `docs/SPIKE.md` :
+Les trois hypothèses qui portaient ton travail ont été mesurées en phase 0.5
+(détail dans `docs/SPIKE.md`). Résultats :
 
-- **S1** — comment applique-t-on réellement un couple continu à un
-  `PhysicalBone3D` ?
-- **S2** — quels paramètres de `Generic6DOFJoint3D` Jolt honore-t-il ?
-- **S3** — comment fournir une pose cible sans conflit avec
-  `PhysicalBoneSimulator3D` ?
+- **S1** — le couple s'applique par
+  `PhysicsServer3D.body_apply_torque(bone.get_rid(), τ)`, **réappliqué chaque
+  tick**. `apply_torque()` / `apply_central_force()` / `_integrate_forces()`
+  n'existent pas sur `PhysicalBone3D`.
+- **S2** — les limites angulaires sont honorées, mais `damping`, `restitution`
+  et la limite de force sont **ignorés par Jolt**. Pour de la mollesse, passe
+  par `angular_spring_*`. Chaque `PhysicalBone3D` porte son joint via
+  `joint_type` ; ses limites sont des propriétés dynamiques
+  `joint_constraints/<axe>/…`.
+- **S3** — **aucun conflit** entre la pose cible et le simulateur : celui-ci
+  écrit dans le *global pose*, pas dans `bone_pose`. `PoseProvider` peut donc
+  écrire dans le même `Skeleton3D`.
 
-**Tant que S1 n'a pas répondu, tu n'écris pas de PD de production.** Une semaine
-de tuning sur une API qui n'existe pas est une semaine perdue en entier, pas à
-moitié. Si on te demande la tâche 1.6 et que S1 n'est pas fait, fais S1 d'abord
-et dis-le.
+Et un piège de construction, déjà payé une fois :
+`physical_bones_start_simulation()` place les corps d'après les **`bone_rest` du
+squelette**. Les transforms posés sur les `PhysicalBone3D` sont ignorés — le
+premier essai a produit un personnage de 24 cm au lieu de 1,45 m.
 
 ## Architecture imposée
 
@@ -81,12 +88,7 @@ Mesure d'abord, tune ensuite.
 
 ## Le PD-controller, forme canonique
 
-⚠️ **La ligne d'application du couple ci-dessous est un pseudo-code tant que S1
-n'a pas répondu.** `PhysicalBone3D` hérite de `PhysicsBody3D`, pas de
-`RigidBody3D` : il n'expose pas nécessairement `apply_torque()` ni
-`angular_velocity` en direct. Les candidats sont `_integrate_forces(state)` sur
-une classe dérivée, ou `PhysicsServer3D.body_apply_torque(bone.get_rid(), v)`.
-S1 tranche, puis **tu réécris ce bloc et `CLAUDE.md` §6 avec la vraie ligne.**
+Forme validée par le spike S1 :
 
 ```gdscript
 # Pour chaque os simulé, chaque tick physique :
@@ -95,10 +97,14 @@ var err: Quaternion = target_local * current_local.inverse()
 if err.w < 0.0:
     err = -err                                   # raccourcissement obligatoire
 var axis_angle: Vector3 = _to_scaled_axis(err)   # angle * axe unitaire
-var torque: Vector3 = tuning.kp * axis_angle - tuning.kd * angular_velocity
+var torque: Vector3 = tuning.kp * axis_angle - tuning.kd * bone.angular_velocity
 torque = torque.limit_length(tuning.max_torque * bone.mass)
-# ← application du couple : forme exacte fixée par S1
+PhysicsServer3D.body_apply_torque(bone.get_rid(), torque)
 ```
+
+`bone.angular_velocity` se lit bien directement (c'est le *couple* qui manque,
+pas la vélocité). Mets `bone.get_rid()` en cache dans `_ready` : la règle « aucune
+allocation dans `_physics_process` » s'applique aussi aux appels répétés.
 
 Points de vigilance qui coûtent des jours si on les rate :
 
@@ -109,8 +115,8 @@ Points de vigilance qui coûtent des jours si on les rate :
 - `kp` et `kd` sont liés : `kd ≈ 2 * sqrt(kp * I)` pour un amortissement
   critique. Expose les deux mais dérive `kd` par défaut.
 - Clampe **toujours** le couple, proportionnellement à la masse du membre.
-- Le couple est-il persistant ou à réappliquer chaque tick ? C'est une des
-  questions de S1 ; ne le devine pas.
+- Le couple est **consommé à chaque step** : réapplique-le tous les ticks. Si tu
+  l'appliques une fois, il ne reste pas.
 
 ## Durées : en ticks, toujours
 
@@ -143,8 +149,9 @@ premier lag réseau et à la première pause.
 | Il tourne sur lui-même | erreur de quaternion non raccourcie |
 | Les jambes se croisent | limites angulaires des hanches trop permissives |
 | Impossible à équilibrer quels que soient les gains | centre de masse non conforme à `RIG_SPEC.md` §4 — mesure-le |
-| Une limite de joint est ignorée | paramètre non supporté par Jolt — voir S2 |
-| La pose cible n'a aucun effet | conflit d'écriture sur le `Skeleton3D` — voir S3 |
+| Une limite de joint est ignorée | `damping`/`restitution`/`force_limit` : non supportés par Jolt (S2) |
+| Le personnage est minuscule ou difforme | `bone_rest` du squelette faux — c'est lui qui place les corps, pas leur transform |
+| Le couple semble sans effet | oubli de le réappliquer chaque tick, ou `apply_torque()` au lieu de `PhysicsServer3D` |
 | Tout ralentit à 4 persos | trop d'itérations de solveur, ou joints redondants |
 
 ## Livrable attendu à chaque tâche

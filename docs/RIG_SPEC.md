@@ -110,6 +110,16 @@ avant de toucher aux gains du PD.
 Le centre de l'os `head` est à **y = 1,46 m** au repos. C'est cette valeur, et
 non la hauteur totale, que mesure un test d'équilibre.
 
+> ✅ **Vérifié par la mesure** (spike S4, rig inerte de 13 corps) : masse totale
+> 70,0 kg, `head_y` = **1,454 m**, centre de masse = **0,840 m**. Les trois
+> tombent à moins d'un centimètre des valeurs calculées ci-dessus. Cette table
+> n'est pas théorique : elle décrit le rig tel qu'il se comporte.
+>
+> Attention en l'implémentant : `physical_bones_start_simulation()` positionne
+> les corps d'après les **`bone_rest` du squelette**. Les transforms posés
+> directement sur les `PhysicalBone3D` sont ignorés — c'est l'erreur qui a
+> produit un personnage de 24 cm au premier essai.
+
 Ne code **jamais** un seuil absolu du type « tête > 1,3 m » : il serait à 11 %
 de la valeur au repos, c'est-à-dire à la limite du bruit d'une flexion de genoux
 normale. Le critère s'écrit en ratio mesuré au tick 0 de la scène elle-même
@@ -124,9 +134,34 @@ head_y(t = 600 ticks) > 0,92 × head_y(t = 0)
 Toutes les articulations sont des `Generic6DOFJoint3D` avec les 3 axes linéaires
 **verrouillés** (lower = upper = 0) et les axes angulaires limités.
 
-⚠️ Le spike **S2** vérifie quels paramètres de ce joint sont réellement honorés
-par Jolt, et mesure la dérive résiduelle des axes verrouillés sous charge. Les
-valeurs ci-dessous sont le point de départ ; S2 peut en invalider la forme.
+### Ce que Jolt honore réellement (mesuré au spike S2)
+
+Un `PhysicalBone3D` porte **son propre joint** via `joint_type` : on ne crée pas
+de nœud `Generic6DOFJoint3D` séparé entre les os. Ses limites sont des
+propriétés **dynamiques** `joint_constraints/<axe>/…`, invisibles dans `ClassDB`
+(il faut instancier l'objet pour les lister).
+
+| Paramètre | Sous Jolt |
+|---|---|
+| `angular_limit_enabled`, `angular_limit_upper`, `angular_limit_lower` | ✅ honoré |
+| `angular_damping` (de la limite) | ❌ **ignoré** |
+| `angular_restitution` | ❌ **ignoré** |
+| force limit angulaire | ❌ **ignoré** |
+| `linear_limit_softness`, `linear_damping` | ❌ **ignoré** |
+| `angular_spring_*`, `linear_spring_*` | ✅ supporté |
+
+Deux conséquences directes :
+
+- **N'écris pas les paramètres ignorés.** Ils ne produisent aucun effet et
+  donnent l'illusion d'un réglage qui n'existe pas — Jolt émet un avertissement,
+  mais il se perd dans la sortie.
+- **Pour une articulation molle, passe par `angular_spring_*`**, jamais par
+  l'amortissement de limite. C'est ce qui a fait basculer le grab vers un
+  ressort PD (cf. `docs/SPIKE.md` S5).
+
+Un joint 6DOF à axes linéaires verrouillés est par ailleurs une **soudure
+parfaite** : séparation nulle mesurée jusqu'à 2000 N de traction. Aucune dérive,
+mais aussi aucune rupture possible.
 
 Angles en degrés, dans le repère local du parent (X = flexion, Y = torsion,
 Z = abduction).

@@ -1,17 +1,20 @@
 {
   "_comment": "Mesures de reference du projet. VERSIONNE (exception a CLAUDE.md §8). Une valeur null = pas encore mesuree. Toute derive de plus de 10% est signalee en fin de phase, meme si les tests passent.",
-  "machine": "poste principal — voir docs/ENVIRONMENT.md §1",
+  "machine": "i7-1255U / 15,7 Go / Iris Xe — voir docs/ENVIRONMENT.md §1",
   "godot_version": "4.6.3.stable.official.7d41c59c4",
   "blender_version": "5.2.1 LTS",
-  "measured_at": null,
+  "measured_at": "2026-09-23 (phase 0.5, spikes)",
 
-  "physics_frame_ms_1_char": null,
-  "physics_frame_ms_2_chars": null,
-  "physics_frame_ms_4_chars": null,
+  "_perf_comment": "Mesure via Performance.TIME_PHYSICS_PROCESS sur rig inerte 13 corps. Le temps mural est inutilisable en headless : Godot regule a 60 Hz et renvoie 16,67 ms quel que soit le nombre de corps.",
+  "physics_frame_ms_1_char": 2.565,
+  "physics_frame_ms_2_chars": 2.149,
+  "physics_frame_ms_4_chars": 4.351,
 
-  "head_y_rest_m": null,
-  "com_y_rest_m": null,
+  "_geom_comment": "Mesure sur rig inerte conforme a RIG_SPEC.md §3-4. Confirme les valeurs calculees (1,460 et 0,846) a moins de 1 cm pres.",
+  "head_y_rest_m": 1.454,
+  "com_y_rest_m": 0.840,
 
+  "_impulse_comment": "NON CALIBRABLE en phase 0.5 : sans BalanceController le ragdoll s'effondre sous son propre poids quelle que soit l'impulsion. A mesurer en fin de phase 1 (spike S4-B repousse).",
   "impulse_stagger_ns": null,
   "impulse_knockdown_ns": null,
   "recovery_ticks": null,
@@ -20,7 +23,10 @@
   "grab_reach_m": null,
   "walk_speed_ms": null,
   "shoulder_width_m": null,
-  "grab_break_dist_m": null,
+
+  "_grab_comment": "Courbe force -> separation mesuree au spike S5 avec un ressort PD (k=4000, d=120, m=5). Un joint 6DOF ne se separe jamais : separation nulle jusqu'a 2000 N.",
+  "grab_break_dist_m": 0.25,
+  "grab_break_force_equiv_n": 950,
 
   "character_tris": null,
   "arena_tris": null,

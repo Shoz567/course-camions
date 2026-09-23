@@ -236,22 +236,122 @@ correction à apporter à `lib/export.py`.
 
 ---
 
-## Livrable de la phase 0.5
+## Livrable de la phase 0.5 — RÉSULTATS (2026-09-23)
 
-Un rapport unique, et rien d'autre :
+Godot 4.6.3 · Jolt · Blender 5.2.1 · i7-1255U. Code des spikes supprimé après
+mesure, conformément à la règle ci-dessus.
 
-| Spike | Question | Réponse | Fichiers à corriger |
-|---|---|---|---|
-| S1 | couple continu sur `PhysicalBone3D` | | `CLAUDE.md` §6, `ragdoll-engineer.md` |
-| S2 | params de joint actifs sous Jolt | | `RIG_SPEC.md` §4, `gameplay-engineer.md` |
-| S3 | pose cible sans conflit | | `PLAN.md` 1.4, `ragdoll-engineer.md` |
-| S4 | coût CPU et impulsions réelles | | `CLAUDE.md` §10, `ENVIRONMENT.md` |
-| S5 | force de joint et plan B du grab | | `CLAUDE.md` §10, `PLAN.md` 2.5–2.6 |
-| S6 | échelle et noms d'os à l'import | | `ART_PIPELINE.md` §3 |
+| # | Réponse | Verdict |
+|---|---|---|
+| **S1** | `PhysicsServer3D.body_apply_torque(rid, τ)`, réappliqué chaque tick | ⚠️ règle `CLAUDE.md` §6 **réécrite** |
+| **S2** | limites honorées ; `damping`/`restitution`/`force_limit` ignorés par Jolt | ⚠️ `RIG_SPEC.md` §5 complété |
+| **S3** | aucun conflit : le simulateur n'écrase pas `bone_pose` | ✅ hypothèse infirmée, architecture simplifiée |
+| **S4** | 4,35 ms à 4 persos ; géométrie conforme ; impulsions non calibrables | ⚠️ budget perf à renégocier |
+| **S5** | force de joint illisible ; un joint ne se sépare jamais | ⚠️ **grab par ressort PD** |
+| **S6** | cube 1,0000 m, os 0,4000 m, noms intacts | ✅ contrat d'export validé |
 
-Puis : **les corrections sont appliquées aux documents**, `spike/` est supprimé,
-et la phase 0 peut commencer sur des bases vérifiées.
+### S1 — Couple continu
 
-Une phase 0.5 qui se termine sans avoir corrigé un seul document est suspecte :
-cela signifie soit que les six hypothèses étaient justes du premier coup, soit
-que les spikes n'ont pas vraiment cherché.
+`PhysicalBone3D < PhysicsBody3D < CollisionObject3D` : **pas** de `RigidBody3D`.
+`apply_torque()`, `apply_central_force()`, `apply_force()` et
+`_integrate_forces()` **n'existent pas**. Seules les impulsions et
+`angular_velocity` / `linear_velocity` sont exposées.
+
+Deux voies fonctionnent, au chiffre près : `PhysicsServer3D.body_apply_torque()`
+et `body_get_direct_state(rid).apply_torque()`. On retient la première.
+
+Validation : τ = 10 N·m sur I = 0,2667 kg·m² → α = 37,5 rad/s², ω mesuré
+**36,875 rad/s** après 59 ticks effectifs. La croissance est linéaire, donc **le
+couple est consommé à chaque step** et doit être réappliqué.
+
+### S2 — Paramètres de joint sous Jolt
+
+Jolt émet un avertissement explicite pour chaque paramètre non supporté. Ne pas
+les écrire : ils n'auront aucun effet.
+
+| Paramètre | Statut |
+|---|---|
+| `angular_limit/enabled`, `upper_angle`, `lower_angle` | ✅ honoré |
+| `angular_limit/damping`, `restitution`, `force_limit` | ❌ **ignoré** |
+| `linear_limit/softness`, `linear_limit/damping` | ❌ **ignoré** |
+| `angular_spring/*`, `linear_spring/*` | ✅ supporté |
+
+Conséquence : pour obtenir une articulation **molle**, il faut passer par
+`angular_spring_*`, jamais par l'amortissement de limite.
+
+À noter pour la tâche 1.2 : un `PhysicalBone3D` porte **son propre joint** via
+`joint_type`, on ne crée pas de nœud `Generic6DOFJoint3D` séparé. Ses limites
+sont des propriétés **dynamiques** `joint_constraints/<axe>/…`, invisibles dans
+`ClassDB` — il faut instancier l'objet pour les voir.
+
+### S3 — Pose cible
+
+**L'hypothèse de conflit était fausse.** Avec le corps physique en rotation
+continue (15° → 131° → 158°), `skeleton.get_bone_pose_rotation()` conserve
+exactement la valeur écrite (40,00°). `PhysicalBoneSimulator3D` écrit dans le
+*global pose*, pas dans `bone_pose`.
+
+`PoseProvider` peut donc écrire dans le même `Skeleton3D`. Un squelette de
+référence séparé fonctionne aussi, mais n'est pas nécessaire.
+
+### S4 — Performance et géométrie
+
+Piège de méthode : en headless, le temps mural donne **16,67 ms quel que soit le
+nombre de corps** — Godot régule à 60 Hz. Il faut `Performance.TIME_PHYSICS_PROCESS`.
+
+| Charge | Temps |
+|---|---|
+| 1 perso (13 corps) | 2,565 ms |
+| 2 persos (26 corps) | 2,149 ms |
+| 4 persos (52 corps) | **4,351 ms** |
+
+**Déjà au-dessus du budget de 4 ms, sur un rig totalement inerte.** Le PD, le
+grab et le gameplay s'ajouteront par-dessus. À trancher en phase 1 : optimiser,
+ou renégocier le budget avec la mesure sous les yeux.
+
+Géométrie conforme à `RIG_SPEC.md` §4, ce qui valide les calculs du document :
+
+| | Calculé | Mesuré |
+|---|---|---|
+| Masse totale | 70,0 kg | **70,0** |
+| `head_y` repos | 1,460 m | **1,454** |
+| Centre de masse | 0,846 m | **0,840** |
+
+Découverte au passage : `physical_bones_start_simulation()` **repositionne les
+corps selon les `bone_rest`** du squelette. Les transforms posés sur les
+`PhysicalBone3D` eux-mêmes sont ignorés.
+
+**Impulsions : non calibrables ici.** Sans `BalanceController`, le ragdoll
+s'effondre quelle que soit l'impulsion (ratio 0,12 de 20 à 500 N·s, sans
+monotonie). S4-B est repoussé en fin de phase 1.
+
+### S5 — Grab
+
+Aucune API n'expose la force interne d'un joint : le critère « rupture au-delà
+de 600 N » n'était pas implémentable.
+
+Pire, et c'est le résultat décisif : **un joint 6DOF à axes linéaires
+verrouillés ne se sépare jamais.** Séparation mesurée à 0,0000 m sous 100, 300,
+600, 1000 et 2000 N. C'est une soudure parfaite — donc avec un joint, la rupture
+du grab n'est détectable par *aucun* moyen observable.
+
+Le ressort PD (k = 4000, d = 120, m = 5) donne une courbe exploitable :
+
+| Traction | Séparation |
+|---|---|
+| 600 N | 0,180 m |
+| 1000 N | 0,263 m |
+| 2000 N | 0,561 m |
+
+Un seuil de rupture à **0,25 m ≈ 950 N**. Le plan B devient le plan A.
+
+> Réserve : le plateau à 0,180 m sous 100, 300 et 600 N ne correspond pas à
+> l'équilibre théorique F/k. La mesure capture un transitoire d'overshoot. Sans
+> incidence sur la conclusion (la courbe est monotone au-delà de 600 N), mais à
+> reprendre en phase 2 avant de figer les gains du ressort.
+
+### S6 — Échelle Blender → Godot
+
+Cube exporté à 1 m, mesuré **1,0000 m**. Os de 0,40 m, mesuré **0,4000 m**. Les
+deux noms d'os survivent intacts. Le contrat d'export de `ART_PIPELINE.md` §3
+fonctionne tel quel avec Blender 5.2.1 — aucune correction nécessaire.

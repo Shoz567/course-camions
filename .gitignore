@@ -10,6 +10,10 @@ game/assets/generated/
 *.blend1
 *.blend2
 
+# Python (les scripts de build sont importes comme modules par Blender)
+__pycache__/
+*.pyc
+
 # Spikes (phase 0.5) : code jetable, supprime en fin de phase
 spike/
 

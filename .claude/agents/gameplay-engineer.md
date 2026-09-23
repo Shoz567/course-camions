@@ -52,52 +52,77 @@ rien à ton code, mais ça change la façon dont tu écris `to_bytes()`.
 
 ## Le grab, en détail
 
-C'est la mécanique signature. **Deux implémentations possibles, départagées par
-le spike S5** (`docs/SPIKE.md`) — ne commence pas la tâche 2.5 avant qu'il ait
-répondu.
+C'est la mécanique signature. **Le spike S5 a tranché : ressort PD, pas de
+joint.** Ce n'est pas une préférence de style, c'est une contrainte mesurée —
+voir plus bas pourquoi le joint est disqualifié.
 
-### Plan A — joint physique
+### La solution retenue — ressort PD, sans joint
+
+Une force d'attraction continue entre la main et le point de prise, avec
+amortissement explicite :
+
+```gdscript
+var to_target: Vector3 = anchor_pos - hand_pos
+var spring: Vector3 = to_target * k - body.linear_velocity * d
+PhysicsServer3D.body_apply_central_force(body.get_rid(), spring)
+```
+
+Rupture quand la séparation dépasse le seuil. Mesures du spike S5
+(k = 4000, d = 120, m = 5) :
+
+| Traction | Séparation |
+|---|---|
+| 600 N | 0,180 m |
+| 1000 N | 0,263 m |
+| 2000 N | 0,561 m |
+
+Seuil retenu : **0,25 m ≈ 950 N**, écrit dans `baseline.json`
+(`grab_break_dist_m`).
+
+> Réserve honnête : sous 600 N la courbe plafonne à 0,180 m au lieu de suivre
+> F/k — la mesure capture un transitoire d'overshoot. Sans effet sur la
+> conclusion, mais reprends cette courbe proprement avant de figer k et d.
+
+### Pourquoi le joint est disqualifié
+
+Ce n'était pas le plan initial. Deux mesures l'ont écarté :
+
+1. **Godot n'expose aucune API pour lire la force interne d'un joint.** Le
+   critère « rupture au-delà de 600 N » des specs d'origine n'était pas
+   implémentable.
+2. **Un joint 6DOF à axes linéaires verrouillés ne se sépare jamais** :
+   séparation mesurée à 0,0000 m sous 100, 300, 600, 1000 et 2000 N. C'est une
+   soudure parfaite — donc avec un joint, la rupture n'est détectable par *aucune*
+   grandeur observable.
+
+S'ajoute le fait que Jolt ignore `angular_limit/damping` : même en gardant un
+joint, la « prise molle » recherchée aurait été une soudure rigide.
+
+Bénéfice collatéral pour la phase 6 : il n'y a **aucun joint à créer côté
+client**, seulement un état visuel. La réplication du grab en devient presque
+gratuite.
+
+### Détection de la cible
+
+Inchangé par rapport au plan d'origine :
 
 1. Une `Area3D` (rayon ~0,15 m) sur chaque main, masque de collision limité aux
    couches `player_body` et `climbable`.
 2. Gâchette pressée → on prend le corps **le plus proche** dans l'area, en
    excluant soi-même et les os de son propre squelette.
-3. Création d'un `Generic6DOFJoint3D` entre la main et le corps saisi, ancré au
-   point de contact. Axes linéaires verrouillés, axes angulaires libres mais
-   amortis — on veut une prise molle, pas une soudure.
-   ⚠️ **S2 vérifie que Jolt honore réellement cet amortissement.** S'il l'ignore,
-   la prise sera une soudure rigide et aucun réglage n'y changera rien : c'est
-   précisément le cas où le plan B devient obligatoire.
-4. Une fois saisi : la raideur du bras monte (`request_stiffness`), et la pose
+3. Une fois saisi : la raideur du bras monte (`request_stiffness`), et la pose
    cible du bras suit la cible.
-5. `queue_free()` du joint à la rupture. **Ne réutilise jamais un joint**, ça
-   laisse le solveur dans un état incohérent.
 
-### Plan B — ressort PD, sans joint
-
-Pas de joint du tout : une force d'attraction continue entre la main et le point
-de prise, via `apply_force`, avec un amortissement explicite.
-
-Ses avantages ne sont pas théoriques :
-- pas de création/destruction de contrainte à chaud, donc pas le mode de
-  défaillance n°1 du solveur dans ce genre de jeu ;
-- la mollesse est un paramètre, pas un espoir ;
-- la rupture est triviale et mesurable : une distance ;
-- en phase 6, il n'y a **aucun joint à créer côté client**, seulement un état
-  visuel — le netcode du grab devient presque gratuit.
-
-Si S5 ne départage pas nettement, **prends le plan B.**
-
-### Rupture — dans les deux cas
+### Rupture
 
 - gâchette relâchée, ou porteur stun ;
 - **séparation main↔ancre > 0,25 m pendant 6 ticks** ;
 - cooldown de **12 ticks** après rupture, pour éviter le re-grab instantané.
 
-⚠️ Le seuil de rupture ne s'exprime **pas en newtons**. Godot n'expose pas la
-force interne d'un joint : un critère « casse au-delà de 600 N » n'est pas
-implémentable tel quel. S5 mesure la courbe force → séparation et donne la
-conversion. Toute spec qui reparle de newtons ici est à corriger, pas à
+⚠️ Le seuil de rupture ne s'exprime **jamais en newtons** — Godot n'expose pas la
+force interne d'un joint, et c'est vérifié, pas supposé. Le seuil est une
+**distance**, et l'équivalence en force (≈ 950 N à 0,25 m) n'est là que pour
+donner l'intuition. Toute spec qui reparle de newtons ici est à corriger, pas à
 contourner.
 
 Cas limites à tester : grab mutuel simultané, grab d'un joueur déjà éliminé,

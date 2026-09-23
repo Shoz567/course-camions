@@ -39,7 +39,7 @@ difficile) et non pour de mauvaises (l'API n'était pas celle qu'on croyait).
 | 0.1 | Remplir `docs/ENVIRONMENT.md` : versions réelles de Godot/Blender, mise au PATH, choix pour `make` sous Windows | — |
 | 0.2 | Créer le projet Godot dans `game/`, Forward+, `physics/3d/physics_engine = "Jolt Physics"`, 60 ticks/s | — |
 | 0.3 | `.gitignore` (`.godot/`, `game/assets/generated/`, `*.blend1`, `builds/`, `spike/`) — **mais pas** `game/tests/baseline.json` | — |
-| 0.4 | Installer gdUnit4 dans `game/addons/`, créer `game/tests/cli_runner.gd` avec l'option `--runs=N` | godot-qa |
+| 0.4 | `game/tests/cli_runner.gd` avec l'option `--runs=N`. **gdUnit4 volontairement repoussé** : inutile avant les tests unitaires de la phase 2, et `CLAUDE.md` §8 interdit d'ajouter une dépendance sans validation | godot-qa |
 | 0.5 | `Makefile` : `assets`, `import`, `test`, `test-full`, `run` | — |
 | 0.6 | `game/tests/baseline.json` créé avec ses clés à `null` (cf. `ENVIRONMENT.md` §5) | godot-qa |
 | 0.7 | Autoloads vides mais nommés : `GameState`, `MatchManager`, `DebugDraw` | — |
@@ -62,29 +62,37 @@ difficile) et non pour de mauvaises (l'API n'était pas celle qu'on croyait).
 Le protocole complet est dans **`docs/SPIKE.md`**. Le code produit vit dans
 `spike/`, il est git-ignoré, et il est **supprimé à la fin**.
 
-| # | Tâche | Agent |
-|---|---|---|
-| 0.5.1 | **S1** — comment applique-t-on un couple continu à un `PhysicalBone3D` ? | ragdoll-engineer |
-| 0.5.2 | **S2** — quels paramètres de `Generic6DOFJoint3D` Jolt honore-t-il vraiment ? | ragdoll-engineer |
-| 0.5.3 | **S3** — comment fournir une pose cible sans conflit avec `PhysicalBoneSimulator3D` ? | ragdoll-engineer |
-| 0.5.4 | **S4** — coût CPU réel à 1/2/4 persos, et calibration des impulsions de test | godot-qa |
-| 0.5.5 | **S5** — peut-on lire la contrainte d'un joint ? prototype du grab sans joint | gameplay-engineer |
-| 0.5.6 | **S6** — échelle et noms d'os à l'aller-retour Blender → Godot | blender-modeler |
-| 0.5.7 | **Appliquer les corrections aux documents** et supprimer `spike/` | — |
+| # | Tâche | Agent | État |
+|---|---|---|---|
+| 0.5.1 | **S1** — couple continu sur un `PhysicalBone3D` | ragdoll-engineer | `[x]` |
+| 0.5.2 | **S2** — paramètres de joint honorés par Jolt | ragdoll-engineer | `[x]` |
+| 0.5.3 | **S3** — pose cible sans conflit avec le simulateur | ragdoll-engineer | `[x]` |
+| 0.5.4 | **S4** — coût CPU à 1/2/4 persos, calibration des impulsions | godot-qa | `[x]` partiel |
+| 0.5.5 | **S5** — contrainte de joint lisible ? grab sans joint | gameplay-engineer | `[x]` |
+| 0.5.6 | **S6** — échelle et noms d'os Blender → Godot | blender-modeler | `[x]` |
+| 0.5.7 | **Corrections appliquées aux documents**, `spike/` supprimé | — | `[x]` |
 
-**Critères de sortie**
-- Le tableau de livrable de `docs/SPIKE.md` est rempli, les six lignes ont une
-  réponse.
-- `CLAUDE.md` §6 contient la **ligne de code exacte** du couple continu, plus
-  aucun avertissement conditionnel.
-- `CLAUDE.md` §10 contient les **deux impulsions mesurées** (déséquilibre et
-  chute), plus les valeurs provisoires.
-- `baseline.json` contient `physics_frame_ms_1_char` et
-  `physics_frame_ms_4_chars`.
-- `spike/` n'existe plus.
+**Critères de sortie** — tous atteints sauf un, explicitement reporté :
 
-> Une phase 0.5 qui n'a corrigé aucun document est suspecte : soit les six
-> hypothèses étaient justes du premier coup, soit les spikes n'ont pas cherché.
+- `[x]` Les six lignes du tableau de `docs/SPIKE.md` ont une réponse mesurée.
+- `[x]` `CLAUDE.md` §6 contient la ligne de code exacte du couple continu.
+- `[x]` `baseline.json` contient les temps physiques à 1, 2 et 4 persos.
+- `[x]` `spike/` n'existe plus.
+- `[ ]` **`CLAUDE.md` §10 ne contient pas les deux impulsions.** Non par oubli :
+  S4 a établi qu'elles ne sont **pas calibrables sur un ragdoll inerte** — sans
+  `BalanceController`, le personnage s'effondre quelle que soit l'impulsion
+  (ratio 0,12 de 20 à 500 N·s, sans aucune monotonie). Reporté en fin de phase 1.
+
+**Trois décisions issues des spikes, à appliquer plus loin :**
+
+1. **Le grab se fait par ressort PD, pas par joint** (S5). Un joint 6DOF ne se
+   sépare jamais — 0,0000 m sous 2000 N — donc sa rupture n'est détectable par
+   aucune grandeur observable. Voir tâches 2.5–2.6.
+2. **Le budget perf est déjà dépassé** (S4) : 4,351 ms à 4 persos sur un rig
+   *inerte*, pour un budget de 4 ms. À trancher en fin de phase 1, avec une
+   mesure — optimiser ou renégocier, pas abaisser le seuil en silence.
+3. **`PoseProvider` n'a pas besoin d'un squelette séparé** (S3) : le simulateur
+   n'écrase pas `bone_pose`. La tâche 1.5 s'en trouve simplifiée.
 
 ---
 
@@ -99,29 +107,36 @@ tout seul**, encaisse une poussée et se relève. Pas de contrôle joueur encore
 | # | Tâche | Agent |
 |---|---|---|
 | 1.1 | Rig placeholder par code : 13 `PhysicalBone3D` selon `docs/RIG_SPEC.md` §3 | ragdoll-engineer |
-| 1.2 | Joints `Generic6DOFJoint3D` avec les limites de `RIG_SPEC.md` §5, corrigées par S2 | ragdoll-engineer |
+| 1.2 | Joints via `joint_type = JOINT_TYPE_6DOF` sur chaque `PhysicalBone3D` (pas de nœud joint séparé) + limites de `RIG_SPEC.md` §5, **sans** les paramètres que Jolt ignore | ragdoll-engineer |
 | 1.3 | **Test de conformité géométrique** : hauteur et centre de masse mesurés conformes à `RIG_SPEC.md` §4 (±3 cm) | godot-qa |
 | 1.4 | Ressource `CharacterTuning.tres` : raideurs, amortissements, couples max par membre | ragdoll-engineer |
-| 1.5 | `PoseProvider` : pose de référence, selon l'architecture retenue par **S3** | ragdoll-engineer |
-| 1.6 | `JointDriver` : PD par articulation, selon la forme canonique fixée par **S1** | ragdoll-engineer |
+| 1.5 | `PoseProvider` : pose de référence écrite dans `bone_pose` du même `Skeleton3D` (S3 : aucun conflit avec le simulateur) | ragdoll-engineer |
+| 1.6 | `JointDriver` : PD par articulation via `PhysicsServer3D.body_apply_torque`, réappliqué chaque tick (S1) | ragdoll-engineer |
 | 1.7 | `BalanceController` : couple correcteur sur le bassin pour le garder vertical | ragdoll-engineer |
 | 1.8 | Support au sol : le centre de masse projeté doit rester entre les pieds → déplacement de la pose cible des jambes | ragdoll-engineer |
 | 1.9 | État `stunned` : gains à 0 pendant **N ticks** après un impact fort, puis rampe de retour | ragdoll-engineer |
 | 1.10 | Overlay debug : centre de masse, polygone de support, vecteurs de couple (`DebugDraw`) | ragdoll-engineer |
 | 1.11 | Scènes de test : `ragdoll_balance_test`, `ragdoll_push_recovery_test`, `ragdoll_perf_test` | godot-qa |
 
-**Critères de sortie** (forme définie par `CLAUDE.md` §10, valeurs calibrées par S4)
+**Critères de sortie** (forme définie par `CLAUDE.md` §10)
 
-- Conformité géométrique : `head_y(t=0)` à 1,46 m ±3 cm, centre de masse à
-  0,85 m ±3 cm.
+- Conformité géométrique : `head_y(t=0)` à **1,454 m** ±3 cm, centre de masse à
+  **0,840 m** ±3 cm — valeurs *mesurées* au spike S4, pas théoriques.
 - Équilibre : 600 ticks sans input → `head_y > 0,92 × head_y(t=0)`.
-- Résistance : impulsion latérale de **60 N·s** sur le torse → critère
-  d'équilibre toujours vrai 120 ticks après.
-- Récupération : impulsion latérale de **300 N·s** → chute, puis critère
-  d'équilibre de nouveau vrai en moins de **240 ticks**.
-- Perf : temps de frame physique < **4 ms** à 4 persos sur la machine de
-  `docs/ENVIRONMENT.md`.
-- Les cinq critères passent **5 fois sur 5** via `make test-full`.
+- Perf : temps de frame physique < 4 ms à 4 persos. ⚠️ **Déjà à 4,351 ms sur rig
+  inerte** : ce critère devra être renégocié ou l'implémentation optimisée, avec
+  une mesure à l'appui.
+- Tous les critères passent **5 fois sur 5** via `make test-full`.
+
+**Puis, une fois l'équilibre obtenu — spike S4-B, reporté ici :**
+
+- Calibrer les impulsions sur le ragdoll *contrôlé* : balayage de 20 à 500 N·s,
+  relever le seuil qui déséquilibre et celui qui renverse. Écrire les deux dans
+  `baseline.json` (`impulse_stagger_ns`, `impulse_knockdown_ns`).
+- Alors seulement, ajouter les deux critères manquants :
+  - Résistance : `impulse_stagger_ns` → équilibre toujours vrai 120 ticks après.
+  - Récupération : `impulse_knockdown_ns` → chute, puis équilibre de nouveau
+    vrai en moins de 240 ticks.
 
 **Pièges connus**
 - Gains trop élevés = oscillation/explosion. Commence bas et monte.
