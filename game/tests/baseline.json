@@ -1,0 +1,31 @@
+{
+  "_comment": "Mesures de reference du projet. VERSIONNE (exception a CLAUDE.md §8). Une valeur null = pas encore mesuree. Toute derive de plus de 10% est signalee en fin de phase, meme si les tests passent.",
+  "machine": "poste principal — voir docs/ENVIRONMENT.md §1",
+  "godot_version": "4.6.3.stable.official.7d41c59c4",
+  "blender_version": "5.2.1 LTS",
+  "measured_at": null,
+
+  "physics_frame_ms_1_char": null,
+  "physics_frame_ms_2_chars": null,
+  "physics_frame_ms_4_chars": null,
+
+  "head_y_rest_m": null,
+  "com_y_rest_m": null,
+
+  "impulse_stagger_ns": null,
+  "impulse_knockdown_ns": null,
+  "recovery_ticks": null,
+
+  "jump_height_m": null,
+  "grab_reach_m": null,
+  "walk_speed_ms": null,
+  "shoulder_width_m": null,
+  "grab_break_dist_m": null,
+
+  "character_tris": null,
+  "arena_tris": null,
+
+  "snapshot_bytes_per_char": null,
+  "uplink_kbps_4_players": null,
+  "pose_drift_host_client_cm": null
+}
