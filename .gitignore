@@ -1,0 +1,31 @@
+# Godot
+.godot/
+game/.godot/
+*.translation
+
+# Assets generes par Blender : ils se regenerent avec `make assets`
+game/assets/generated/
+
+# Blender
+*.blend1
+*.blend2
+
+# Spikes (phase 0.5) : code jetable, supprime en fin de phase
+spike/
+
+# Builds
+builds/
+*.exe
+*.pck
+*.zip
+
+# OS / editeurs
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# IMPORTANT : baseline.json EST versionne (cf. CLAUDE.md §8).
+# Ne pas l'ignorer : c'est la reference de non-regression du projet.
+!game/tests/baseline.json
