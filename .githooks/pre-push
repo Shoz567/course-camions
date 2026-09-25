@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# pre-push — interdit de pousser directement sur main.
+#
+# Tout passe par une branche et une pull request (docs/ENVIRONMENT.md §6.4).
+#
+# Pourquoi un hook local et pas une protection GitHub : le depot est prive sur
+# un compte gratuit, et GitHub refuse alors toute protection de branche cote
+# serveur ("Upgrade to GitHub Pro or make this repository public", HTTP 403,
+# verifie le 2026-09-25 pour les deux mecanismes, branch protection et
+# rulesets).
+#
+# Limite a connaitre : ce hook ne protege que les clones ou
+# `git config core.hooksPath .githooks` a ete lance. C'est une convention
+# outillee, pas une garantie. Le merge d'une pull request sur GitHub n'est pas
+# concerne : il se fait cote serveur, sans push local.
+#
+# Contournement, pour une vraie urgence uniquement : git push --no-verify
+
+RED=""
+RESET=""
+if [ -t 2 ]; then
+	RED="$(printf '\033[31m')"
+	RESET="$(printf '\033[0m')"
+fi
+
+# Git fournit sur stdin : <ref locale> <sha local> <ref distante> <sha distant>
+while read -r local_ref local_sha remote_ref remote_sha; do
+	if [ "$remote_ref" = "refs/heads/main" ]; then
+		branch=$(git rev-parse --abbrev-ref HEAD)
+		echo "${RED}pre-push : push direct sur main refuse${RESET}" >&2
+		echo "" >&2
+		echo "  Sur ce depot, main ne se modifie que par pull request." >&2
+		echo "  Pousse ta branche puis ouvre une PR :" >&2
+		echo "" >&2
+		if [ "$branch" = "main" ]; then
+			echo "    git switch -c <zone>/<sujet>     # tes commits suivent" >&2
+			echo "    git push -u origin <zone>/<sujet>" >&2
+		else
+			echo "    git push -u origin $branch" >&2
+		fi
+		echo "    gh pr create --fill" >&2
+		echo "" >&2
+		echo "  Voir docs/ENVIRONMENT.md §6.4." >&2
+		exit 1
+	fi
+done
+
+exit 0

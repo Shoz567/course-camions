@@ -198,14 +198,21 @@ pour le supporter :
 ## 9. Workflow attendu
 
 1. Lis `PLAN.md`, identifie la **phase courante** et la tâche.
-2. Si la tâche correspond à un sous-agent de `.claude/agents/`, délègue-lui.
-3. Implémente la plus petite tranche vérifiable.
-4. **Vérifie** : `make test` pendant l'itération, `make test-full` pour clore une
+2. **Crée une branche** depuis un `main` à jour : `<zone>/<sujet>`, par exemple
+   `phase-1/rig`. On ne travaille jamais directement sur `main` : l'équipe est
+   à quatre, et le hook `pre-push` refuse tout push sur `main`.
+3. Si la tâche correspond à un sous-agent de `.claude/agents/`, délègue-lui.
+4. Implémente la plus petite tranche vérifiable.
+5. **Vérifie** : `make test` pendant l'itération, `make test-full` pour clore une
    phase. Une phase n'est finie que quand ses critères de sortie dans `PLAN.md`
    sont cochés **et mesurés**.
-5. Commit atomique, message en français, à l'impératif :
+6. Commit atomique, message en français, à l'impératif :
    `ragdoll: ajoute le couple correcteur du bassin`.
-6. Mets à jour la case correspondante dans `PLAN.md`.
+7. Mets à jour la case correspondante dans `PLAN.md`.
+8. Pousse la branche et ouvre une **pull request** vers `main`. Son titre suit la
+   même convention que les commits : il devient le message du commit fusionné.
+
+Détail des commandes et des règles de branche : `docs/ENVIRONMENT.md` §6.4.
 
 Le dépôt doit être sous git **avant** la première ligne de code. Pendant les
 semaines de tuning de la phase 1, la capacité à revenir à « l'état où ça tenait
