@@ -166,15 +166,34 @@ mais aussi aucune rupture possible.
 Angles en degrés, dans le repère local du parent (X = flexion, Y = torsion,
 Z = abduction).
 
+**Convention de signe** (mesurée en tâche 1.2, Godot 4.7.2 + Jolt) : angle de
+rotation de l'**enfant** dans le repère de son **parent**, règle de la main
+droite, personnage tourné vers −Z.
+
+- **X** : +θ amène un segment *pendant* vers l'avant (hanche +110 = cuisse en
+  avant, genou −135 = tibia en arrière). Pour le torse, segment *montant*, le
+  signe s'inverse : X < 0 = penché en avant.
+- **Y et Z** : la table est écrite pour le côté **droit** (+X), où +Z écarte le
+  membre du corps (abduction). Le côté gauche est son miroir :
+  `[min, max] → [−max, −min]`.
+- ⚠️ **Le moteur inverse le signe des limites** : avec
+  `angular_limit_lower = L`, `angular_limit_upper = U`, la rotation de l'enfant
+  est bornée à `[−U, −L]`. Le builder écrit donc `lower = −max`, `upper = −min`.
+
+Révision tâche 1.2 (validée par l'utilisateur le 2026-09-25) : torse, hanche Z
+et cheville inversés pour être anatomiques : torse 35° en avant / 20° en
+arrière, hanche 40° d'abduction / 25° d'adduction, cheville 35° de pointe
+tendue / 25° relevée.
+
 | Articulation | X (flexion) | Y (torsion) | Z (abduction) |
 |---|---|---|---|
-| pelvis → spine | −20 / +35 | −30 / +30 | −25 / +25 |
+| pelvis → spine | −35 / +20 | −30 / +30 | −25 / +25 |
 | spine → head | −30 / +30 | −50 / +50 | −30 / +30 |
 | spine → upperarm | −80 / +160 | −60 / +60 | −10 / +100 |
 | upperarm → forearm | 0 / +140 | −70 / +70 | 0 / 0 |
-| pelvis → thigh | −25 / +110 | −30 / +30 | −40 / +25 |
+| pelvis → thigh | −25 / +110 | −30 / +30 | −25 / +40 |
 | thigh → shin | −135 / 0 | 0 / 0 | 0 / 0 |
-| shin → foot | −25 / +35 | 0 / 0 | −12 / +12 |
+| shin → foot | −35 / +25 | 0 / 0 | −12 / +12 |
 
 Coude et genou sont des charnières : verrouille leurs axes inutiles plutôt que de
 les laisser « presque » libres, ça soulage beaucoup le solveur.

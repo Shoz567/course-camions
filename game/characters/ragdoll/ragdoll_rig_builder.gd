@@ -1,7 +1,7 @@
 class_name RagdollRigBuilder
 extends RefCounted
 
-## Construit par code le rig physique placeholder (tâche 1.1) :
+## Construit par code le rig physique placeholder (tâches 1.1 et 1.2) :
 ##
 ##     Skeleton3D
 ##     └── PhysicalBoneSimulator3D
@@ -14,12 +14,13 @@ extends RefCounted
 ## la géométrie ; le `PhysicalBone3D` ne porte que le décalage du corps par
 ## rapport à son os (`body_offset`) et celui de son joint (`joint_offset`).
 ##
-## Hors périmètre (tâche 1.2) : les limites angulaires. Chaque os non racine
-## reçoit `joint_type = JOINT_TYPE_6DOF` (structure du rig), mais aucune
-## propriété `joint_constraints/*` n'est écrite ici.
+## Articulations (tâche 1.2) : chaque os non racine porte son propre joint
+## (`joint_type = JOINT_TYPE_6DOF`, pas de nœud joint séparé — spike S2),
+## ancré sur l'articulation avec son parent, limité selon RIG_SPEC §5.
 
 const SKELETON_NAME := "Skeleton3D"
 const SIMULATOR_NAME := "PhysicalBoneSimulator3D"
+const AXIS_NAMES: PackedStringArray = ["x", "y", "z"]
 
 
 ## Construit le squelette et ses os physiques, et les ajoute sous `root`.
@@ -71,11 +72,9 @@ static func _make_physical_bone(bone_name: String) -> PhysicalBone3D:
 	bone.body_offset = body_offset
 	# Le joint est à l'origine de l'os, c'est-à-dire l'articulation avec le parent.
 	bone.joint_offset = body_offset.affine_inverse()
-	# Valeurs par défaut du 6DOF (mesurées) : 3 axes linéaires ET 3 axes
-	# angulaires limités à [0, 0] → rig soudé en statue tant que la tâche 1.2
-	# n'a pas posé les limites de RIG_SPEC §5.
 	if RagdollRigSpec.parent_of(bone_name) != "":
 		bone.joint_type = PhysicalBone3D.JOINT_TYPE_6DOF
+		_apply_joint_limits(bone, bone_name)
 
 	var material: Vector2 = RagdollRigSpec.MATERIAL_BY_BONE.get(bone_name, RagdollRigSpec.MATERIAL_DEFAULT)
 	# `PhysicalBone3D.friction` refuse toute valeur > 1 (erreur moteur
@@ -107,6 +106,32 @@ static func _make_physical_bone(bone_name: String) -> PhysicalBone3D:
 		bone.add_child(hand)
 
 	return bone
+
+
+## Limites §5 (tâche 1.2). Seuls les paramètres honorés par Jolt (spike S2)
+## sont écrits : `linear_limit_*` et `angular_limit_enabled/lower/upper`.
+## `angular_damping`, `angular_restitution`, force limit et `*_softness` ne
+## sont PAS écrits : ils gardent leur valeur par défaut, sans effet sous Jolt.
+##
+## ⚠️ Convention de signe MESURÉE (Godot 4.7.2 + Jolt, un seul axe libre,
+## couple imposé) : avec `lower = L, upper = U`, la rotation de l'enfant dans
+## le repère du parent est bornée à [-U, -L] — le moteur limite la rotation
+## du parent vu de l'enfant. D'où l'inversion ci-dessous.
+static func _apply_joint_limits(bone: PhysicalBone3D, bone_name: String) -> void:
+	var limits: Array[Vector2] = RagdollRigSpec.joint_limits_deg(bone_name)
+	assert(limits.size() == 3, "limites §5 manquantes pour %s" % bone_name)
+	for axis: int in 3:
+		var prefix: String = "joint_constraints/%s/" % AXIS_NAMES[axis]
+		# 3 axes linéaires verrouillés (RIG_SPEC §5) : écrits explicitement,
+		# sans dépendre des valeurs par défaut.
+		bone.set(prefix + "linear_limit_enabled", true)
+		bone.set(prefix + "linear_limit_lower", 0.0)
+		bone.set(prefix + "linear_limit_upper", 0.0)
+		# Propriétés en DEGRÉS (stockées en radians par le moteur).
+		var child_range: Vector2 = limits[axis]
+		bone.set(prefix + "angular_limit_enabled", true)
+		bone.set(prefix + "angular_limit_lower", -child_range.y)
+		bone.set(prefix + "angular_limit_upper", -child_range.x)
 
 
 static func _make_shape(bone_name: String) -> Shape3D:

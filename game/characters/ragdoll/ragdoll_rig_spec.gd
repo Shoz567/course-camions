@@ -90,6 +90,30 @@ const MATERIAL_BY_BONE: Dictionary = {
 	"forearm_r": Vector2(0.9, 0.0),
 }
 
+## Limites articulaires §5, en degrés : [X flexion, Y torsion, Z abduction],
+## chaque axe en Vector2(min, max). Clé = os enfant sans suffixe de côté.
+##
+## Convention (celle du contrat, lue au pied de la lettre) : angle de rotation
+## de l'ENFANT dans le repère de son PARENT, positif selon la règle de la main
+## droite autour de l'axe, personnage tourné vers -Z.
+## - X : +θ amène un segment pendant vers l'avant (-Z). Cohérent avec la
+##   hanche (+110 = cuisse vers l'avant), l'épaule, le coude (+140) et le
+##   genou (-135 = tibia vers l'arrière).
+## - Y et Z : la table est lue pour le côté DROIT (+X), où +Z écarte le membre
+##   du corps (épaule +100 = abduction). Le côté gauche est le miroir :
+##   [min, max] → [-max, -min] (cf. `joint_limits_deg`).
+## - Le torse (segment montant) penche donc vers l'AVANT pour X < 0.
+## Axe absent de §5 ou « 0 / 0 » → verrouillé à [0, 0].
+const JOINT_LIMITS_DEG: Dictionary = {
+	"spine":    [Vector2(-35.0, 20.0),  Vector2(-30.0, 30.0), Vector2(-25.0, 25.0)],
+	"head":     [Vector2(-30.0, 30.0),  Vector2(-50.0, 50.0), Vector2(-30.0, 30.0)],
+	"upperarm": [Vector2(-80.0, 160.0), Vector2(-60.0, 60.0), Vector2(-10.0, 100.0)],
+	"forearm":  [Vector2(0.0, 140.0),   Vector2(-70.0, 70.0), Vector2(0.0, 0.0)],
+	"thigh":    [Vector2(-25.0, 110.0), Vector2(-30.0, 30.0), Vector2(-25.0, 40.0)],
+	"shin":     [Vector2(-135.0, 0.0),  Vector2(0.0, 0.0),    Vector2(0.0, 0.0)],
+	"foot":     [Vector2(-35.0, 25.0),  Vector2(0.0, 0.0),    Vector2(-12.0, 12.0)],
+}
+
 ## Marqueurs de main (§2) : portés par l'avant-bras, à son extrémité.
 const HAND_MARKERS: Dictionary = {
 	"forearm_l": "hand_l",
@@ -167,3 +191,20 @@ static func body_center_offset(bone: String) -> Vector3:
 		"foot_l", "foot_r":
 			return Vector3(0.0, -size_of(bone).y * 0.5, -FOOT_FORWARD_OFFSET_M)
 	return direction_of(bone) * length_of(bone) * 0.5
+
+
+## Limites §5 de l'articulation portée par `bone` (vers son parent), miroir
+## gauche/droite appliqué : 3 × Vector2(min, max) en degrés, X/Y/Z, angle de
+## l'enfant dans le repère du parent. Vide pour la racine `pelvis`.
+static func joint_limits_deg(bone: String) -> Array[Vector2]:
+	var result: Array[Vector2] = []
+	var key: String = bone.trim_suffix("_l").trim_suffix("_r")
+	if not JOINT_LIMITS_DEG.has(key):
+		return result
+	var table: Array = JOINT_LIMITS_DEG[key] as Array
+	for axis: int in 3:
+		var limits: Vector2 = table[axis] as Vector2
+		if axis > 0 and side_of(bone) < 0.0:
+			limits = Vector2(-limits.y, -limits.x)
+		result.append(limits)
+	return result
