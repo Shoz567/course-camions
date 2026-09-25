@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/selftest/expect_pass_sphere.gd" id="1"]
+
+[node name="expect_pass_sphere" type="Node3D"]
+script = ExtResource("1")

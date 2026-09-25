@@ -106,6 +106,7 @@ tout seul**, encaisse une poussée et se relève. Pas de contrôle joueur encore
 
 | # | Tâche | Agent |
 |---|---|---|
+| 1.0 | ✅ Socle des tests physiques : classe `PhysicsTest`, verdict SKIP, garde anti-blocage, `make test-selftest` | godot-qa |
 | 1.1 | Rig placeholder par code : 13 `PhysicalBone3D` selon `docs/RIG_SPEC.md` §3 | ragdoll-engineer |
 | 1.2 | Joints via `joint_type = JOINT_TYPE_6DOF` sur chaque `PhysicalBone3D` (pas de nœud joint séparé) + limites de `RIG_SPEC.md` §5, **sans** les paramètres que Jolt ignore | ragdoll-engineer |
 | 1.3 | **Test de conformité géométrique** : hauteur et centre de masse mesurés conformes à `RIG_SPEC.md` §4 (±3 cm) | godot-qa |
