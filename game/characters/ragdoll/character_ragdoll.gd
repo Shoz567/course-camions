@@ -13,19 +13,29 @@ extends Node3D
 ##     ├── BalanceController   (tâche 1.7)
 ##     └── StunState           (tâche 1.9)
 ##
-## Tâche 1.1 : seul le rig physique existe. Il est construit par code au
-## `_ready` (`RagdollRigBuilder`) à partir de `RagdollRigSpec`, miroir de
-## `docs/RIG_SPEC.md`. L'origine du nœud est au sol, entre les pieds ; le
-## personnage regarde vers -Z.
+## Le rig physique est construit par code au `_ready` (`RagdollRigBuilder`) à
+## partir de `RagdollRigSpec`, miroir de `docs/RIG_SPEC.md`. L'origine du nœud
+## est au sol, entre les pieds ; le personnage regarde vers -Z.
+##
+## `PoseProvider` (1.5) et `JointDriver` (1.6) sont créés ensuite, par code
+## aussi. Sans `tuning` valide, le driver reste inactif (erreur signalée) : le
+## personnage est alors un ragdoll inerte.
 
 ## Démarre la simulation physique dès `_ready`. À désactiver pour inspecter
 ## le rig au repos (le squelette reste alors dans sa pose de repos).
 @export var simulate_on_ready: bool = true
+## Ressource de gains (`CharacterTuning`) lue par `JointDriver`. Typée
+## `Resource` pour ne pas lier le rig à une classe précise.
+@export var tuning: Resource
+## Flag de debug : crée le JointDriver (false = ragdoll inerte, sans couple).
+@export var drive_enabled: bool = true
 
 var skeleton: Skeleton3D
 var simulator: PhysicalBoneSimulator3D
 ## Os physiques, dans l'ordre de `RagdollRigSpec.BONE_NAMES`.
 var bones: Array[PhysicalBone3D] = []
+var pose_provider: PoseProvider
+var joint_driver: JointDriver
 
 var _bones_by_name: Dictionary = {}
 var _head: PhysicalBone3D
@@ -45,6 +55,15 @@ func _ready() -> void:
 	_head = _bones_by_name["head"] as PhysicalBone3D
 	_pelvis = _bones_by_name["pelvis"] as PhysicalBone3D
 
+	pose_provider = PoseProvider.new()
+	add_child(pose_provider)
+	pose_provider.setup(skeleton)
+
+	if drive_enabled:
+		joint_driver = JointDriver.new()
+		add_child(joint_driver)
+		joint_driver.setup(skeleton, simulator, bones, tuning)
+
 	if simulate_on_ready:
 		start_simulation()
 
@@ -61,7 +80,13 @@ func get_bone(bone_name: StringName) -> PhysicalBone3D:
 	return _bones_by_name.get(bone_name) as PhysicalBone3D
 
 
+## Alias attendu par les agents et le socle de tests (cf. review PR)
+func get_bone_body(bone_name: StringName) -> PhysicalBone3D:
+	return get_bone(bone_name)
+
+
 func get_head() -> PhysicalBone3D:
+
 	return _head
 
 
