@@ -1,23 +1,23 @@
-# INPUT_SPEC.md — Entrées, manettes, multijoueur local
+# INPUT_SPEC.md — Entrées, manettes, écran partagé
 
 ---
 
 ## 1. Le principe qui structure tout
 
-Le code de gameplay ne lit **jamais** `Input.*`. Il consomme une `InputFrame`
+Le code de conduite ne lit **jamais** `Input.*`. Il consomme une `InputFrame`
 fournie par une `InputSource`.
 
 ```
 LocalKeyboardSource ─┐
-DeviceInputSource ───┼──► InputFrame ──► PlayerController ──► CharacterRagdoll
+DeviceInputSource ───┼──► InputFrame ──► TruckController ──► Truck (RigidBody3D)
 RemoteInputSource ───┤
 ScriptedInputSource ─┘
 ```
 
-C'est ce qui permet, sans toucher au gameplay :
-- le multijoueur local (une source par manette),
-- l'online (source alimentée par RPC),
-- les tests headless (source scriptée),
+C'est ce qui permet, sans toucher au camion :
+- l'écran partagé (une source par manette) ;
+- l'online (une source alimentée par le réseau) ;
+- les tests headless (une source scriptée qui « conduit » le camion) ;
 - les rejeux et le debug.
 
 Une seule violation de cette règle coûte une réécriture en phase 6.
@@ -28,76 +28,70 @@ Une seule violation de cette règle coûte une réécriture en phase 6.
 class_name InputFrame extends RefCounted
 
 var tick: int = 0
-var move: Vector2 = Vector2.ZERO   # normalisé, dead-zone déjà appliquée
-var jump: bool = false             # impulsion : vrai un seul tick
-var grab_left: bool = false        # état maintenu
-var grab_right: bool = false
-var special: bool = false          # coup de tête / charge
+var steer: float = 0.0        # -1 (gauche) .. +1 (droite), zone morte appliquée
+var throttle: float = 0.0     # 0 .. 1
+var brake: float = 0.0        # 0 .. 1 ; à l'arrêt, freiner = marche arrière
+var handbrake: bool = false   # état maintenu : dérapage
+var boost: bool = false       # état maintenu (si le design retient le boost)
+var reset: bool = false       # front montant : vrai un seul tick
 
 func to_bytes() -> PackedByteArray
 static func from_bytes(b: PackedByteArray) -> InputFrame
 ```
 
-### Format binaire : 5 octets
+La caméra (regard arrière, changement de vue) n'est **pas** dans l'`InputFrame` :
+elle ne modifie pas la simulation, elle reste locale au joueur.
+
+### Format binaire : 6 octets
 
 | Champ | Codage | Octets |
 |---|---|---|
 | `tick` | `uint16`, modulo 65536 | 2 |
-| `move.x`, `move.y` | 2 × `int8` (−127..127) | 2 |
-| `jump`, `grab_left`, `grab_right`, `special`, réserve | bitfield | 1 |
-| **Total** | | **5** |
+| `steer` | `int8` (−127..127) | 1 |
+| `throttle` | `uint8` (0..255) | 1 |
+| `brake` | `uint8` (0..255) | 1 |
+| `handbrake`, `boost`, `reset`, réserve | bitfield | 1 |
+| **Total** | | **6** |
 
-À 60 Hz : **300 octets/s par joueur** de charge utile. Négligeable.
+À 60 Hz : 360 octets/s de charge utile par joueur. Négligeable.
 
 ### Ce qui coûte vraiment : le nombre de paquets
 
-C'est le point que la charge utile masque. Un datagramme UDP transporte environ
-**28 octets d'en-têtes IP/UDP**, plus l'en-tête ENet. Envoyer 5 octets utiles
-60 fois par seconde coûte donc en réalité :
+Un datagramme UDP transporte ~48 octets d'en-têtes (IP, UDP, ENet). Envoyer
+6 octets 60 fois par seconde coûte donc ~3,2 ko/s par client, soit **neuf fois
+la charge utile**.
 
-```
-60 paquets/s × (5 o utiles + ~48 o d'en-têtes) ≈ 3,2 ko/s montant par client
-```
+**Règle : grouper 3 `InputFrame` consécutives par paquet, envoyé à 20 Hz**
+(~1,3 ko/s, −60 %). Le coût en latence (2 ticks au plus) est absorbé par la
+prédiction du camion local (`docs/NETCODE.md` §5), et le groupement donne une
+redondance gratuite : un paquet perdu, le suivant contient encore deux des trois
+frames. À prévoir dès la phase 1 dans `to_bytes()`, à implémenter en phase 6.
 
-Soit **dix fois la charge utile**, et le même ordre de grandeur que le flux de
-snapshots descendant. L'optimisation n'est pas de compresser les 5 octets : elle
-est de **réduire le nombre de paquets**.
+## 3. Mapping
 
-**Règle : grouper 3 `InputFrame` consécutives par paquet, envoyé à 20 Hz.**
-
-```
-20 paquets/s × (15 o utiles + ~48 o d'en-têtes) ≈ 1,26 ko/s
-```
-
-Gain de 60 %, pour un coût de latence d'au plus 2 ticks (33 ms) — largement
-absorbé par le buffer d'interpolation de 100 ms côté client. Et le groupement
-apporte une redondance gratuite : si un paquet est perdu, le suivant contient
-encore deux des trois frames manquantes.
-
-Cette structure se prévoit **dès la phase 2**, dans la façon dont `InputFrame`
-se sérialise. Elle ne s'implémente qu'en phase 6.
-
-## 3. Mapping manette (XInput / DualShock)
-
-| Action | Manette | Clavier (joueur 1, dev) |
+| Action | Manette (XInput / DualShock) | Clavier (joueur 1, dev) |
 |---|---|---|
-| `move` | stick gauche | ZQSD |
-| `jump` | A / Croix | Espace |
-| `grab_left` | LT (gâchette) | Clic gauche |
-| `grab_right` | RT (gâchette) | Clic droit |
-| `special` | B / Rond | E |
-| `pause` | Start | Échap |
+| `steer` | stick gauche, axe X | Q / D (ou ← / →) |
+| `throttle` | RT (gâchette droite) | Z (ou ↑) |
+| `brake` | LT (gâchette gauche) | S (ou ↓) |
+| `handbrake` | A / Croix | Espace |
+| `boost` | X / Carré | Maj |
+| `reset` | Y / Triangle | R |
+| pause | Start | Échap |
 
-Gâchettes analogiques : seuil de déclenchement à **0,5**, hystérésis à **0,35**
-pour le relâchement (sinon ça clignote et le grab se fait et se défait).
+- **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
+  utile), puis courbe de réponse légèrement exponentielle pour la précision en
+  ligne droite. La courbe est un paramètre, pas une constante en dur.
+- **Gâchettes** : analogiques de bout en bout, pas de seuil — un demi-gaz est
+  un demi-gaz.
+- **Clavier** : le clavier est binaire. `steer` et `throttle` y sont **lissés
+  en ticks** (montée en ~8 ticks) pour ne pas donner des coups de volant
+  instantanés qu'aucune manette ne produit.
 
-Dead-zone du stick : **radiale à 0,20**, pas par axe. Une dead-zone par axe rend
-les diagonales inconfortables.
+## 4. Écran partagé : routage par device
 
-## 4. Multijoueur local : filtrage par device
-
-Godot ne propose pas d'actions par joueur. La bonne approche est de lire les
-événements bruts et de les router par `device` id :
+Godot ne propose pas d'actions par joueur. On lit les événements bruts et on les
+route par `device` id :
 
 ```gdscript
 class_name DeviceInputSource extends InputSource
@@ -110,53 +104,51 @@ func _input(event: InputEvent) -> void:
     # ... mise à jour de l'état interne
 ```
 
-**Ne crée pas** d'actions `p1_jump`, `p2_jump`, `p3_jump`… dans la map d'input :
-ça ne monte pas en nombre de joueurs, ça ne gère pas le branchement à chaud, et
+**Ne crée pas** d'actions `p1_throttle`, `p2_throttle`… dans la map d'input : ça
+ne monte pas en nombre de joueurs, ça ne gère pas le branchement à chaud, et
 c'est ingérable à remapper.
 
-Le clavier a `device == -1` par convention dans ce projet (les manettes commencent
-à 0), ce qui permet de le traiter comme une source parmi d'autres.
+Le clavier a `device == -1` par convention (les manettes commencent à 0).
 
 ## 5. Lobby local
 
 1. Écran « appuyez sur A pour rejoindre ».
-2. À la première pression d'un device inconnu → création d'un slot joueur lié à
-   ce `device_id`, attribution d'une couleur.
-3. B pour quitter son slot. Start (par le joueur 1) pour lancer.
-4. Entre 2 et 4 joueurs.
+2. Première pression d'un device inconnu → création d'un slot joueur lié à ce
+   `device_id`, attribution d'une couleur de camion.
+3. B pour quitter son slot. Start (joueur 1) pour lancer.
+4. Entre 1 et 4 joueurs.
 
 Le mapping `device_id → player_slot` est détenu par `GameState` et **persiste
-pendant tout le match**. Ne réattribue jamais les slots en cours de partie.
+pendant toute la course**.
 
 ## 6. Branchement à chaud
 
 `Input.joy_connection_changed` :
-- **manette branchée** en partie → elle n'entre pas dans le match en cours, elle
-  attend le prochain lobby ;
-- **manette débranchée** en partie → le perso reste en jeu, inerte (aucune
-  `InputFrame` produite, donc il s'effondre naturellement), et une icône
-  « manette déconnectée » s'affiche ;
-- la même manette rebranchée reprend **son** slot, via son `device_id`.
+- **manette débranchée** en course → le camion ne reçoit plus d'`InputFrame` :
+  gaz à zéro, il roule en roue libre et s'arrête. Une icône « manette
+  déconnectée » s'affiche dans **sa** vue ;
+- la même manette rebranchée reprend **son** camion, via son `device_id` ;
+- **manette branchée** en course → elle attend le prochain lobby.
 
-Ne mets jamais le jeu en pause sur une déconnexion dans un jeu de couch versus :
-c'est plus frustrant que le problème lui-même.
+Ne mets jamais la course en pause sur une déconnexion : en écran partagé, c'est
+plus frustrant que le problème lui-même.
 
 ## 7. Tests
 
-`ScriptedInputSource` rejoue une séquence d'`InputFrame` prédéfinie, utilisée par
-tous les tests headless. Toutes les durées sont en **ticks**, jamais en secondes
-(cf. `CLAUDE.md` §7) :
+`ScriptedInputSource` rejoue une séquence d'`InputFrame` prédéfinie. C'est elle
+qui « conduit » le camion dans tous les tests headless. Durées en **ticks** :
 
 ```gdscript
 var src := ScriptedInputSource.new()
-src.push_hold(&"move", Vector2.RIGHT, 120)   # 120 ticks (~2 s)
-src.push_once(&"jump")
-src.push_hold(&"grab_right", true, 60)
+src.push_hold(&"throttle", 1.0, 600)            # plein gaz 600 ticks (~10 s)
+src.push_hold(&"steer", 1.0, 120)               # plein braquage à droite
+src.push_hold(&"handbrake", true, 30)
+src.push_once(&"reset")
 ```
 
-C'est aussi la source utilisée par `metrics_test` (tâche 2.11) pour mesurer les
-valeurs de `docs/METRICS.md`. Elle doit donc être **parfaitement reproductible** :
-aucune lecture de temps réel, aucun aléatoire non seedé.
+C'est aussi la source de `handling_test`, qui mesure les métriques de
+`docs/METRICS.md` : elle doit être **parfaitement reproductible** — aucune
+lecture de temps réel, aucun aléatoire non seedé.
 
 Critère de la phase 4 : avec 4 `DeviceInputSource` simulées, l'input du device 2
-ne modifie **aucun** état du joueur 1, 3 ou 4 (test automatisé, pas visuel).
+ne modifie **aucun** autre camion (test automatisé, pas visuel).

@@ -28,10 +28,13 @@ machines n'est pas un bug.
 > (i7-1255U, architecture hybride avec 2 cœurs performants et 8 cœurs efficients)
 > et un GPU intégré. Deux implications pour ce projet :
 >
-> - Le budget « temps physique < 4 ms à 4 persos » est **exigeant** sur cette
->   machine. Le spike S4 doit le mesurer tôt : s'il s'avère hors d'atteinte, il
->   vaut mieux le savoir en phase 0.5 et ajuster la cible que le découvrir en
->   phase 4.
+> - **Le GPU intégré est le vrai risque du projet.** L'écran partagé rend la
+>   scène jusqu'à quatre fois par frame. Le spike V3 (`docs/SPIKE.md`) mesure
+>   tôt ce que l'Iris Xe tient à 4 vues : mieux vaut fixer le renderer et les
+>   budgets de rendu en phase 0.5 que les découvrir en phase 4.
+> - Le budget « physique < 4 ms à 4 camions » est à mesurer aussi (V1). Un
+>   camion est un seul corps rigide plus 4 rayons : bien moins coûteux qu'un
+>   ragdoll de 13 corps (4,35 ms à 4, mesurés sur l'ancien projet).
 > - Les CPU mobiles réduisent leur fréquence sous charge prolongée. Une mesure de
 >   perf prise sur batterie ou après 20 minutes de tests **n'est pas comparable**
 >   à une mesure prise à froid sur secteur. Mesure toujours dans les mêmes
@@ -39,11 +42,11 @@ machines n'est pas un bug.
 
 ## 2. Versions figées
 
-Installées et vérifiées le 2026-09-18 :
+Installées et vérifiées le 2026-09-18 ; Godot mis à jour vers 4.7.2 le 2026-09-25 :
 
 | Outil | Version attendue | Version réelle | Commande de vérification |
 |---|---|---|---|
-| Godot | 4.6.x stable | ✅ **4.6.3.stable.official** (`7d41c59c4`) | `godot --version` |
+| Godot | 4.7.x stable | ✅ **4.7.2.stable.official** (`ed1daf0bf`) | `godot --version` |
 | Blender | 4.x ou 5.x LTS | ✅ **5.2.1 LTS** | `blender --version` |
 | Python | 3.13 | ✅ 3.13 (`C:\Program Files\Python313`) | `python --version` |
 | Git | présent | ✅ `C:\Program Files\Git` | `git --version` |
@@ -103,7 +106,7 @@ make    -> ABSENT                                  ❌
 État actuel, après la mise en place de la §4 :
 
 ```
-git ✅   python ✅   godot ✅ 4.6.3   blender ✅ 5.2.1   make ✅ 4.4.1
+git ✅   python ✅   godot ✅ 4.7.2   blender ✅ 5.2.1   make ✅ 4.4.1
 ```
 
 Toutes les commandes de `CLAUDE.md` §4 sont exécutables.
@@ -115,7 +118,7 @@ Toutes les commandes de `CLAUDE.md` §4 sont exécutables.
 Godot et Blender ont été installés via winget :
 
 ```powershell
-winget install --id GodotEngine.GodotEngine --version 4.6.3 --exact
+winget upgrade --id GodotEngine.GodotEngine --version 4.7.2 --exact   # 4.6.3 installé d'abord
 winget install --id BlenderFoundation.Blender --exact
 ```
 
@@ -128,7 +131,7 @@ Contournement retenu, sans admin : un dossier de shims dans le PATH utilisateur.
 
 | Fichier | Cible |
 |---|---|
-| `%LOCALAPPDATA%\bin\godot.cmd` | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_…\Godot_v4.6.3-stable_win64_console.exe` |
+| `%LOCALAPPDATA%\bin\godot.cmd` | `%LOCALAPPDATA%\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_…\Godot_v4.7.2-stable_win64_console.exe` |
 | `%LOCALAPPDATA%\bin\blender.cmd` | `C:\Program Files\Blender Foundation\Blender 5.2\blender.exe` |
 
 `%LOCALAPPDATA%\bin` a été ajouté au PATH **utilisateur**.
@@ -145,7 +148,7 @@ Vérification, dans un **nouveau** terminal (le PATH n'est pas rafraîchi dans l
 terminaux déjà ouverts) :
 
 ```powershell
-godot --version     # 4.6.3.stable.official.7d41c59c4
+godot --version     # 4.7.2.stable.official.ed1daf0bf
 blender --version   # Blender 5.2.1 LTS
 ```
 
@@ -190,26 +193,12 @@ et jamais de séparateur `/` ou `\` écrit en dur. C'est déjà la règle dans
 ## 5. Baseline de performance
 
 `game/tests/baseline.json` est **versionné** (exception explicite à la règle « pas
-de binaires » de `CLAUDE.md` §8) et contient les mesures de référence :
+de binaires » de `CLAUDE.md` §8) et contient les mesures de référence : temps
+physique et de rendu, métriques de conduite (`docs/METRICS.md`), triangles par
+asset, octets par snapshot. Le fichier lui-même fait référence pour la liste des
+clés — elle n'est volontairement pas recopiée ici, pour ne pas diverger.
 
-```json
-{
-  "machine": "poste principal — voir ENVIRONMENT.md §1",
-  "godot_version": "à remplir",
-  "measured_at": "à remplir",
-  "physics_frame_ms_1_char": null,
-  "physics_frame_ms_4_chars": null,
-  "head_y_rest_m": null,
-  "com_y_rest_m": null,
-  "impulse_stagger_ns": null,
-  "impulse_knockdown_ns": null,
-  "character_tris": null,
-  "arena_tris": null,
-  "snapshot_bytes_per_char": null
-}
-```
-
-Il est créé **vide dès la phase 0** et rempli au fur et à mesure. Le créer tard
+Il a été créé **dès la phase 0**, clés à `null`, et se remplit au fur et à mesure. Le créer tard
 est une erreur classique : sans point de départ, une régression de perf apparue
 en phase 3 devient impossible à localiser en phase 6.
 
@@ -267,7 +256,7 @@ impératif, sujet de 72 caractères maximum.
 **`pre-push`** refuse tout push direct sur `main` (cf. §6.4).
 
 ```
-ragdoll: ajoute le couple correcteur du bassin
+vehicule: ajoute la force de suspension par raycast
 phase-1: verrouille l'equilibre par un test headless
 ```
 
@@ -283,9 +272,9 @@ sur `main`** : une branche par tâche, puis une pull request.
 ```bash
 git switch main
 git pull
-git switch -c phase-1/rig            # <zone>/<sujet>
+git switch -c phase-1/suspension     # <zone>/<sujet>
 # ... commits ...
-git push -u origin phase-1/rig
+git push -u origin phase-1/suspension
 gh pr create --fill                  # titre = sujet du premier commit
 ```
 
@@ -294,12 +283,12 @@ Une fois la PR fusionnée sur GitHub :
 ```bash
 git switch main
 git pull
-git branch -d phase-1/rig
+git branch -d phase-1/suspension
 ```
 
 **Nommage des branches** : `<zone>/<sujet>`, avec la même zone que les
-messages de commit — `phase-1/rig`, `ragdoll/pd-bassin`, `tests/geometrie`,
-`docs/metrics`.
+messages de commit — `phase-1/suspension`, `vehicule/adherence`,
+`tests/handling`, `docs/metrics`.
 
 **Fusion** : en *squash*. Une PR devient un seul commit sur `main`, dont le
 message est le titre de la PR. Ce titre doit donc respecter la convention de
@@ -312,9 +301,9 @@ par Godot et leurs conflits se résolvent très mal à la main. Répartissez les
 tâches de `PLAN.md` en conséquence, et gardez les branches courtes : quelques
 jours, pas quelques semaines.
 
-**Phase 1** : une branche par session de tuning du ragdoll reste la bonne
-pratique. Pouvoir revenir en une commande à « l'état où ça tenait debout » vaut
-plus que n'importe quel test pendant ces semaines-là.
+**Phase 1** : une branche par session de réglage de la conduite reste la bonne
+pratique. Pouvoir revenir en une commande à « l'état où le camion se conduisait
+bien » vaut plus que n'importe quel test pendant ces semaines-là.
 
 #### Pourquoi la protection de `main` est locale
 

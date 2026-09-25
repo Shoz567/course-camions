@@ -2,11 +2,11 @@
 
 Règle fondatrice : **le script Python est la source de vérité, pas le `.blend`.**
 Tout asset se régénère depuis zéro par `make assets`. Rien d'artistique n'est
-committé en binaire.
+committé en binaire (le hook `pre-commit` refuse les `.glb` et `.blend`).
 
-Pourquoi ce choix : un agent peut itérer seul sur un script (générer, mesurer,
-corriger) alors qu'il ne peut pas cliquer dans Blender. Et un diff de paramètres
-est lisible, un diff de `.blend` ne l'est pas.
+Pourquoi : un agent peut itérer seul sur un script (générer, mesurer, corriger)
+alors qu'il ne peut pas cliquer dans Blender. Et un diff de paramètres est
+lisible, un diff de `.blend` ne l'est pas.
 
 ---
 
@@ -22,7 +22,7 @@ game/assets/generated/*.glb          (git-ignoré)
 game/.godot/imported/                (git-ignoré)
         │  instanciation
         ▼
-game/characters/*.tscn, game/levels/*.tscn
+game/vehicles/*.tscn, game/tracks/*.tscn
 ```
 
 ## 2. Squelette d'un script de build
@@ -32,7 +32,7 @@ import bpy, sys, argparse
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent))
-from lib import rig, mesh, materials, export
+from lib import mesh, export
 
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
@@ -44,149 +44,112 @@ def parse_args():
 def main():
     args = parse_args()
     bpy.ops.wm.read_factory_settings(use_empty=True)   # scène vierge, toujours
-
-    arm = rig.build_armature()                          # noms issus de RIG_SPEC
-    body = mesh.build_body(args.variant)
-    rig.bind(body, arm)                                 # skinning automatique
-    materials.apply_vertex_colors(body, args.variant)
-
-    rig.assert_bone_names(arm)                          # échoue si le contrat est rompu
-    export.to_glb(args.out, objects=[body, arm])
-    print(f"OK {args.out} tris={mesh.tri_count(body)}")
-
-if __name__ == "__main__":
-    main()
+    objects = build(args.variant)
+    export.apply_transforms(objects)
+    export.to_glb(args.out, objects)
+    print(f"OK {args.out} tris={sum(mesh.tri_count(o) for o in objects)}")
 ```
 
 Exigences pour tout script de build :
 - part d'une scène vide, ne dépend d'aucun état antérieur ;
 - **idempotent** : deux exécutions produisent le même résultat ;
 - `raise SystemExit("message")` en cas d'échec (code de sortie non nul) ;
-- imprime en dernière ligne le chemin produit et le nombre de triangles.
+- imprime en dernière ligne le chemin produit et le nombre de triangles ;
+- chemins construits avec `pathlib`, jamais par concaténation (projet développé
+  sous Windows).
 
-## 3. Réglages d'export (centralisés dans `lib/export.py`)
+## 3. Réglages d'export
 
-```python
-bpy.ops.export_scene.gltf(
-    filepath=out_path,
-    export_format="GLB",
-    export_yup=True,              # Y up / -Z forward : convention Godot
-    export_apply=True,            # applique les modificateurs
-    export_skins=True,
-    export_all_influences=False,  # 4 poids max par sommet
-    export_animations=True,       # seulement la pose idle
-    export_morph=False,
-    export_cameras=False,
-    export_lights=False,
-    use_selection=True,
-)
-```
+Centralisés dans `tools/blender/lib/export.py`, **seul endroit** où l'on appelle
+`bpy.ops.export_scene.gltf` : GLB, `export_yup=True`, modificateurs appliqués,
+transforms appliquées, pas de caméra ni de lumière.
 
-Vérifie systématiquement **avant** l'export :
-`bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)`.
-Une échelle non appliquée est la cause n°1 de personnages géants ou minuscules
-dans Godot.
+✅ **Validé** (acquis A6 de `docs/SPIKE.md`) : un cube de 1 m arrive à
+1,0000 m dans Godot, les noms sont conservés. Le spike **V4** doit encore
+vérifier le cas d'un véhicule : objets séparés dont le pivot est au moyeu.
 
-> ⚠️ Ces réglages sont une **hypothèse tant que le spike S6 n'a pas tourné**
-> (`docs/SPIKE.md`). S6 exporte un cube de 1 m et une armature aux longueurs
-> connues, les mesure côté Godot, et confirme ou corrige ce bloc. Il coûte une
-> heure et il se fait **avant** d'écrire le reste du pipeline : découvrir un
-> facteur d'échelle une fois `build_character.py` terminé, c'est tout reprendre.
+## 4. Le camion
 
-**Chemins.** Toute construction de chemin passe par `pathlib`, jamais par une
-concaténation avec `/` ou `\`. Le projet est développé sous Windows et les
-scripts doivent rester portables (cf. `docs/ENVIRONMENT.md` §4.3).
+### Objets et noms — un contrat
 
-## 4. Génération du corps : technique recommandée
+Un camion est exporté en **objets séparés**, nommés selon
+`docs/VEHICLE_SPEC.md` §4 :
 
-Pour le style « pâte à modeler » :
+| Objet | Rôle | Pivot (origine) |
+|---|---|---|
+| `Body` | carrosserie : cabine + châssis | origine du camion (au sol, centré) |
+| `Wheel_FL`, `Wheel_FR`, `Wheel_RL`, `Wheel_RR` | roues | **exactement au moyeu** |
 
-1. Poser des primitives (UV spheres, cylindres) aux positions des os définies
-   dans `RIG_SPEC.md` §3 et §4, avec des rayons un peu supérieurs aux capsules
-   de collision (le visuel enveloppe la physique).
-2. Fusionner par booléen `UNION`.
-3. `Remesh` modifier en mode **Voxel**, taille ~0,02 m → surface continue et
-   lisse, membres qui se fondent l'un dans l'autre.
-4. `Decimate` jusqu'à atteindre le budget (< 2 000 tris).
-5. `Shade Smooth` + `Weighted Normal`.
+Le pivot au moyeu n'est pas un détail : c'est autour de lui que Godot fera
+tourner la roue (rotation) et la braquera (direction). Un pivot décalé de 2 cm
+donne une roue qui « boite ».
 
-Tous les paramètres (rayons, taille de voxel, budget) sont des constantes en tête
-de `lib/mesh.py`, pas des nombres dispersés dans le code.
+Un renommage appliqué d'un seul côté ne produit pas d'erreur bruyante : la roue
+n'est pas trouvée, elle reste immobile. Les noms se changent dans
+`VEHICLE_SPEC.md` d'abord, dans le même commit des deux côtés.
 
-### Le mesh n'a aucune autorité sur la physique
+### Le maillage n'a aucune autorité sur la physique
 
-Le maillage **suit** les longueurs et les positions de `RIG_SPEC.md` ; il ne les
-définit pas, et il ne définit surtout pas les masses. La tentation, une fois le
-corps généré, est de recalculer les masses depuis le volume réel des membres :
-c'est explicitement interdit (`RIG_SPEC.md` §9).
+Le modèle **suit** `VEHICLE_SPEC.md` (dimensions, positions et rayon des roues),
+il ne le définit pas. La physique utilise deux boîtes de collision et quatre
+rayons définis côté Godot ; on ne dérive jamais une masse, un centre de masse ou
+une forme de collision du maillage. Si le camion paraît trop haut, c'est la
+carrosserie qu'on ajuste, pas la suspension.
 
-La raison est simple : les masses sont l'entrée du tuning PD de la phase 1. Les
-dériver du mesh en phase 5, c'est invalider des semaines de réglages au moment
-précis où plus personne ne se souvient pourquoi les gains valent ce qu'ils
-valent. Si un membre paraît visuellement trop lourd ou trop léger, **c'est le
-rayon du mesh qu'on ajuste**, pas la masse.
+### Style
 
-## 5. Skinning
+Formes franches et lisibles de loin — en écran partagé à 4, chaque camion
+occupe une petite portion d'une petite vue. Silhouettes de cabine distinctes
+d'une variante à l'autre, couleur dominante par joueur. Aucun camion, logo ou
+marque existants.
 
-`rig.bind()` utilise `bpy.ops.object.parent_set(type="ARMATURE_AUTO")` (heat map
-automatique). Sur un corps simple et fermé, c'est suffisant et ça évite d'écrire
-des poids à la main.
+## 5. Les pistes
 
-Contrainte d'export Godot : **4 influences maximum par sommet**
-(`export_all_influences=False`). Au-delà, les poids excédentaires sont écartés
-silencieusement et le membre se déforme mal. Vérifie-le après le binding, en même
-temps que le test de sommets non skinnés ci-dessous.
+Deux objets exportés par piste :
+- `Track01` : le visuel ;
+- `Track01-col` : une version simplifiée. Le suffixe `-col` fait générer par
+  Godot un `StaticBody3D` avec `ConcavePolygonShape3D` à l'import.
 
-Vérification obligatoire après binding : aucun sommet sans influence.
+Rappels :
+- concave = **statique uniquement**. Tout obstacle mobile a une collision
+  convexe (boîte), donc se construit comme tel ;
+- chaque zone de collision porte sa **surface** (`asphalt`, `dirt`, `grass`,
+  `ice` : `VEHICLE_SPEC.md` §8), via une propriété personnalisée exportée en
+  métadonnée ;
+- l'épaisseur des murs respecte le minimum fixé par le spike V2 ;
+- les checkpoints, zones de reset et points de réapparition ne sont **pas** de
+  l'art : ils sont posés côté Godot par le `track-designer`.
 
-```python
-for v in body.data.vertices:
-    assert sum(g.weight for g in v.groups) > 0.001, f"sommet {v.index} non skinné"
-```
-
-Un sommet non skinné reste à l'origine du monde et produit un triangle étiré
-jusqu'au centre de la scène — visuel très reconnaissable, cause toujours celle-là.
-
-## 6. Arènes
-
-Deux objets exportés par arène :
-- `Arena01` : le visuel ;
-- `Arena01-col` : une version simplifiée. Le suffixe `-col` déclenche la
-  génération automatique d'une `StaticBody3D` avec `ConcavePolygonShape3D` à
-  l'import Godot.
-
-Rappel : concave = **statique uniquement**. Toute plateforme mobile doit avoir
-une collision convexe (boîte), donc être construite comme telle.
-
-## 7. Budgets
+## 6. Budgets
 
 | Asset | Triangles | Matériaux |
 |---|---|---|
-| Personnage | < 2 000 | 1 |
-| Arène (visuel) | < 20 000 | ≤ 3 |
-| Arène (collision) | < 2 000 | — |
-| Prop / hazard | < 800 | 1 |
+| Camion (carrosserie) | < 6 000 | 1–2 |
+| Roue | < 400 | 1 |
+| Piste (visuel) | < 60 000 | ≤ 4 |
+| Piste (collision) | < 8 000 | — |
+| Prop | < 800 | 1 |
 
-`build_all.py` échoue si un budget est dépassé. C'est volontaire : un dépassement
-silencieux se paie à 4 joueurs en phase 6.
+Constantes en tête de `tools/blender/lib/mesh.py`. `build_all.py` échoue si un
+budget est dépassé. Les budgets de piste sont **provisoires** : le spike V3
+(écran partagé à 4 sur GPU intégré) les confirme ou les réduit. En écran
+partagé à 4, chaque triangle est rendu quatre fois.
 
-## 8. Couleurs plutôt que textures
+## 7. Couleurs plutôt que textures
 
-En phase 5, aucune texture image : couleurs vertex + un `StandardMaterial3D` avec
-`vertex_color_use_as_albedo = true`. Avantages : zéro UV à gérer, zéro poids,
-variantes de couleur triviales, et ça suffit largement au style visé.
+En phase 5 : couleurs vertex + un `StandardMaterial3D` avec
+`vertex_color_use_as_albedo = true`. Zéro UV à gérer, zéro poids, variantes de
+couleur triviales (couleur de camion par joueur). Les textures ne reviennent en
+discussion qu'en phase 7, si le besoin est réel.
 
-Les textures ne reviennent en discussion qu'en phase 7, si le besoin est réel.
-
-## 9. Itération rapide
+## 8. Itération rapide
 
 Pendant le travail sur un asset, ne lance pas `make assets` complet :
 
 ```bash
-blender -b -P tools/blender/build_character.py -- --variant=default \
-  --out=game/assets/generated/character_default.glb \
-&& godot --headless --path game --import
+blender -b -P tools/blender/build_truck.py -- --variant=default \
+  --out=game/assets/generated/truck_default.glb
+godot --headless --path game --import
 ```
 
-Environ 10 s de boucle. Si ça dépasse 30 s, réduis la résolution du remesh
-pendant l'itération et remonte-la dans `build_all.py`.
+Si la boucle dépasse 30 s, simplifie le modèle pendant l'itération.

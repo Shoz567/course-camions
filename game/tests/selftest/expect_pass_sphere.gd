@@ -3,7 +3,7 @@ extends PhysicsTest
 ## Auto-test du socle — doit donner PASS.
 ##
 ## Une sphere lachee de 1 m doit se poser sur le sol. Exerce les principales
-## verifications du socle et la lecture de baseline.json, sans dependre du rig.
+## verifications du socle et la lecture de baseline.json, sans dependre d'un vehicule.
 
 const RADIUS := 0.1
 const DROP_HEIGHT := 1.0
@@ -44,10 +44,12 @@ func _test_finish() -> void:
 	# Ratio volontairement lache : on verifie le helper, pas la physique.
 	check_ratio_above("ratio calcule", y, _y0, 0.05)
 
-	# Lecture de baseline.json : valeur mesuree au spike S4.
-	var head: Variant = require_baseline("head_y_rest_m")
-	if head != null:
-		check_near("baseline.json lu", float(head), 1.454, 0.0001)
+	# Lecture de baseline.json. On compare la valeur de reference au reglage
+	# REEL du moteur : si une mise a jour de Godot change le defaut de Jolt
+	# (les roues d'un camion s'enfoncent de cette valeur), ce test le signale.
+	var ref_slop: Variant = require_baseline("jolt_penetration_slop_m")
+	if ref_slop != null:
+		check_near("baseline.json lu et a jour (penetration_slop)", slop, float(ref_slop), 0.0001)
 
 	# Diagnostic : rapport iterations / ticks, pour calibrer --quit-after.
 	print("  INFO   iterations=%d ticks=%d" % [Engine.get_process_frames(), tick])

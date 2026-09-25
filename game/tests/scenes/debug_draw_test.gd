@@ -1,6 +1,6 @@
 extends PhysicsTest
 
-## Test des primitives de DebugDraw (tache 1.10). Logique pure : en headless
+## Test des primitives de DebugDraw. Logique pure : en headless
 ## rien n'est rendu, mais la file de segments se comporte a l'identique.
 ##
 ## Expiration : ce qui compte est ce qui est present AU RENDU (_process). Un
@@ -51,12 +51,12 @@ func _test_setup() -> void:
 		DebugDraw.polyline(square, false))
 
 	# --- interrupteurs -----------------------------------------------------
-	DebugDraw.set_channel_enabled(DebugDraw.CH_TORQUE, false)
+	DebugDraw.set_channel_enabled(DebugDraw.CH_FORCES, false)
 	_expect_segments("canal coupe : rien n'est ajoute", 0, func() -> void:
-		DebugDraw.arrow(Vector3.ZERO, Vector3.UP, Color.RED, DebugDraw.CH_TORQUE))
+		DebugDraw.arrow(Vector3.ZERO, Vector3.UP, Color.RED, DebugDraw.CH_FORCES))
 	_expect_segments("autre canal toujours actif", 1, func() -> void:
 		DebugDraw.line(Vector3.ZERO, Vector3.UP, Color.RED, DebugDraw.CH_COM))
-	DebugDraw.set_channel_enabled(DebugDraw.CH_TORQUE, true)
+	DebugDraw.set_channel_enabled(DebugDraw.CH_FORCES, true)
 
 	DebugDraw.enabled = false
 	_expect_segments("interrupteur global coupe", 0, func() -> void:

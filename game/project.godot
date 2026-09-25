@@ -1,18 +1,19 @@
 ; Engine configuration file.
-; Ragdoll Brawler — voir CLAUDE.md §2 et §6 pour les regles non negociables.
+; Course de camions arcade — voir CLAUDE.md §2 et §6 pour les regles non
+; negociables.
 
 config_version=5
 
 [application]
 
-config/name="Ragdoll Brawler"
-config/features=PackedStringArray("4.6", "Forward Plus")
+config/name="Course de camions"
+config/features=PackedStringArray("4.7", "Forward Plus")
 run/print_header=false
 
 [autoload]
 
 GameState="*res://gameplay/game_state.gd"
-MatchManager="*res://gameplay/match_manager.gd"
+RaceManager="*res://gameplay/race_manager.gd"
 DebugDraw="*res://gameplay/debug_draw.gd"
 
 [debug]
