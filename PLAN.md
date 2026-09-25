@@ -106,16 +106,17 @@ tout seul**, encaisse une poussée et se relève. Pas de contrôle joueur encore
 
 | # | Tâche | Agent |
 |---|---|---|
+| 1.0 | ✅ Socle des tests physiques : classe `PhysicsTest`, verdict SKIP, garde anti-blocage, `make test-selftest` | godot-qa |
 | 1.1 | Rig placeholder par code : 13 `PhysicalBone3D` selon `docs/RIG_SPEC.md` §3 | ragdoll-engineer |
 | 1.2 | Joints via `joint_type = JOINT_TYPE_6DOF` sur chaque `PhysicalBone3D` (pas de nœud joint séparé) + limites de `RIG_SPEC.md` §5, **sans** les paramètres que Jolt ignore | ragdoll-engineer |
 | 1.3 | **Test de conformité géométrique** : hauteur et centre de masse mesurés conformes à `RIG_SPEC.md` §4 (±3 cm) | godot-qa |
-| 1.4 | Ressource `CharacterTuning.tres` : raideurs, amortissements, couples max par membre | ragdoll-engineer |
+| 1.4 | ✅ Ressource `CharacterTuning` + `default_tuning.tres` : fréquence, amortissement, couple max pour les 12 articulations (valeurs de départ, non réglées) | ragdoll-engineer |
 | 1.5 | `PoseProvider` : pose de référence écrite dans `bone_pose` du même `Skeleton3D` (S3 : aucun conflit avec le simulateur) | ragdoll-engineer |
 | 1.6 | `JointDriver` : PD par articulation via `PhysicsServer3D.body_apply_torque`, réappliqué chaque tick (S1) | ragdoll-engineer |
 | 1.7 | `BalanceController` : couple correcteur sur le bassin pour le garder vertical | ragdoll-engineer |
 | 1.8 | Support au sol : le centre de masse projeté doit rester entre les pieds → déplacement de la pose cible des jambes | ragdoll-engineer |
 | 1.9 | État `stunned` : gains à 0 pendant **N ticks** après un impact fort, puis rampe de retour | ragdoll-engineer |
-| 1.10 | Overlay debug : centre de masse, polygone de support, vecteurs de couple (`DebugDraw`) | ragdoll-engineer |
+| 1.10 | Overlay debug : centre de masse, polygone de support, vecteurs de couple (`DebugDraw`). 🟡 **Primitives faites** (ligne, flèche, point, polyligne, canaux) ; reste à les brancher sur le rig et le PD | ragdoll-engineer |
 | 1.11 | Scènes de test : `ragdoll_balance_test`, `ragdoll_push_recovery_test`, `ragdoll_perf_test` | godot-qa |
 
 **Critères de sortie** (forme définie par `CLAUDE.md` §10)

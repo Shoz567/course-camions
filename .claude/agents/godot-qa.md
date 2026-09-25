@@ -50,33 +50,60 @@ Refuse d'écrire un test qui prétend mesurer ce qu'il ne peut pas mesurer.
 `MatchManager`, sérialisation d'`InputFrame`, quantification de quaternions,
 calcul de score. Rapides, lancés à chaque commit.
 
-**2. Scènes de test physique** pour tout ce qui touche au ragdoll. Le patron :
+**2. Scènes de test physique** pour tout ce qui touche au ragdoll. Elles
+héritent **toujours** du socle `PhysicsTest` (`game/tests/physics_test.gd`) :
+n'écris jamais la boucle de ticks, la lecture de `baseline.json` ni le code de
+sortie à la main.
 
 ```gdscript
 # tests/scenes/ragdoll_balance_test.gd
-extends Node3D
+extends PhysicsTest
 
-const DURATION_TICKS := 600          # 10 s à 60 Hz
-const RATIO := 0.92
+var _head_y0: float = 0.0
 
-var _ticks := 0
-var _head_y0 := 0.0
-
-func _ready() -> void:
+func _test_setup() -> void:
+    duration_ticks = 600                      # 10 s à 60 Hz
     _head_y0 = $Character.get_bone_body(&"head").global_position.y
 
-func _physics_process(_d: float) -> void:
-    _ticks += 1
-    if _ticks < DURATION_TICKS:
-        return
+func _test_finish() -> void:
     var head_y: float = $Character.get_bone_body(&"head").global_position.y
-    var ok: bool = head_y > RATIO * _head_y0
-    print("head_y=%.3f y0=%.3f ratio=%.3f seuil=%.2f -> %s"
-        % [head_y, _head_y0, head_y / _head_y0, RATIO, "PASS" if ok else "FAIL"])
-    get_tree().quit(0 if ok else 1)
+    check_ratio_above("tete debout apres 10 s", head_y, _head_y0, 0.92)
 ```
 
-Le code de sortie fait foi. Ces scènes sont enchaînées par `tests/cli_runner.gd`.
+Ce que le socle fournit :
+
+| Méthode | Usage |
+|---|---|
+| `check_ratio_above(label, mesure, ref, ratio_min)` | critère en ratio (la forme à privilégier) |
+| `check_near(label, mesure, attendu, tolérance)` | valeur à ± tolérance — jamais d'égalité exacte |
+| `check_above` / `check_below` / `check` | seuils simples |
+| `check_finite(label, Vector3)` | détecte un solveur qui a explosé (NaN) |
+| `require_baseline(clé)` | lit `baseline.json` et **saute le test** si la valeur est `null` |
+| `skip(raison)` / `abort(raison)` | arrêt anticipé, explicite |
+| `add_floor()` | sol statique dont la surface est à y = 0 |
+
+Verdicts et codes de sortie : **PASS** (0), **FAIL** (1), **SKIP** (77). Un SKIP
+ne fait pas échouer la suite. Le runner **exige** la ligne `RESULT` finale et
+compte en échec toute sortie contenant `SCRIPT ERROR` : un test qui plante n'est
+jamais compté réussi, même si Godot sort en code 0.
+
+Les scènes de `tests/scenes/` sont enchaînées par `tests/cli_runner.gd`. Si tu
+modifies le socle lui-même, lance `make test-selftest` : ses six cas vérifient
+que chaque verdict (y compris les échecs attendus) sort bien.
+
+### Deux pièges mesurés
+
+**Jolt enfonce les corps au repos de 2 cm.** `penetration_slop` vaut 0,02 m par
+défaut : une sphère de 10 cm de rayon se pose à y = 0,080, pas 0,100. Tout
+critère sur une hauteur absolue (pieds, tête au repos) doit en tenir compte —
+lis la valeur dans `ProjectSettings` plutôt que de la coder en dur. Les critères
+en ratio, mesurés au tick 0 de la scène, n'y sont pas sensibles.
+
+**`--quit-after` compte des itérations, pas des ticks.** Mesuré : 215 itérations
+pour 90 ticks sur une scène légère, soit ~2,4 par tick. La garde par défaut
+(7200 itérations) couvre donc ~3000 ticks. Un test plus long — le stress test de
+5 minutes de la phase 2 — doit relever `--max-iterations`, sinon il sera coupé
+et compté en échec.
 
 ## Deux cibles de test, pas une
 
