@@ -4,7 +4,7 @@ C'est le SEUL endroit du projet ou bpy.ops.export_scene.gltf est appele.
 Tous les scripts de build passent par ici (cf. .claude/agents/blender-modeler.md).
 
 Le contrat d'export est dans docs/ART_PIPELINE.md §3. Il est verifie par le
-spike S6 : une echelle non appliquee est la cause n1 de personnages geants ou
+spike S6 : une echelle non appliquee est la cause n1 de camions geants ou
 minuscules dans Godot, et ca ne se voit qu'une fois tout le pipeline ecrit.
 """
 

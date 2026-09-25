@@ -27,15 +27,16 @@ extends Node3D
 ##
 ##   extends PhysicsTest
 ##
-##   var _head_y0: float
+##   var _height0: float
 ##
 ##   func _test_setup() -> void:
 ##       duration_ticks = 600
-##       _head_y0 = $Character.get_bone_body(&"head").global_position.y
+##       add_floor()
+##       _height0 = $Truck.global_position.y
 ##
 ##   func _test_finish() -> void:
-##       var head_y: float = $Character.get_bone_body(&"head").global_position.y
-##       check_ratio_above("tete debout apres 10 s", head_y, _head_y0, 0.92)
+##       check_near("hauteur de caisse stable apres 10 s",
+##           $Truck.global_position.y, _height0, 0.03)
 
 const EXIT_PASS := 0
 const EXIT_FAIL := 1

@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO_ROOT / "game" / "assets" / "generated"
 
 # (script, arguments) — rempli au fil des phases.
-# Phase 5 : build_character.py, build_arena_01.py
+# Phase 5 : build_truck.py, build_track_01.py
 BUILDS = []
 
 

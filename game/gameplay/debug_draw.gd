@@ -1,13 +1,14 @@
 class_name DebugDrawNode
 extends Node
 
-## Overlay de debug 3D (tache 1.10) : primitives de trace.
+## Overlay de debug 3D : primitives de trace.
 ##
 ## Autoload `DebugDraw`. Usage, depuis n'importe quel _physics_process :
 ##
-##   DebugDraw.point(com, 0.05, Color.YELLOW, DebugDraw.CH_COM)
-##   DebugDraw.polyline(support_polygon, true, Color.GREEN, DebugDraw.CH_SUPPORT)
-##   DebugDraw.arrow(bone_pos, torque * 0.01, Color.RED, DebugDraw.CH_TORQUE)
+##   DebugDraw.line(hub, contact_point, Color.CYAN, DebugDraw.CH_SUSPENSION)
+##   DebugDraw.arrow(contact_point, tire_force * 0.001, Color.RED, DebugDraw.CH_FORCES)
+##   DebugDraw.point(truck.global_transform * com, 0.2, Color.YELLOW, DebugDraw.CH_COM)
+##   DebugDraw.polyline(racing_line, false, Color.GREEN, DebugDraw.CH_TRACK)
 ##
 ## Trois regles de conception :
 ##
@@ -24,7 +25,7 @@ extends Node
 ## 3. DUREE EN TICKS, pas en secondes (CLAUDE.md §7). Par defaut un trace vit
 ##    1 tick : il faut le redessiner a chaque tick, ce qui est le cas normal
 ##    pour un centre de masse ou un couple. `duration_ticks` > 1 sert a garder
-##    une trace (un impact, une rupture de grab).
+##    une trace (un choc, une sortie de piste).
 ##
 ##    Chaque trace memorise le tick physique ou il EXPIRE (compteur
 ##    Engine.get_physics_frames()), et l'expiration compare a ce compteur. Le
@@ -38,16 +39,18 @@ extends Node
 ## la scene (sans test de profondeur). En headless, rien n'est rendu, mais la
 ## logique tourne a l'identique — c'est ce qui la rend testable.
 
-## Capacite fixe. 4096 segments couvrent largement 4 persos : squelette (13),
-## centre de masse (3), polygone d'appui (~8), couples (12 x 3).
+## Capacite fixe. 4096 segments couvrent largement 4 camions : par camion,
+## 4 rayons de suspension, 4 x 2 fleches de force de pneu (6 segments chacune),
+## le centre de masse (3), soit ~60 segments ; plus les traces de piste.
 const MAX_SEGMENTS := 4096
 
-## Canaux predefinis de la phase 1. N'importe quel StringName peut servir de
-## canal ; un canal jamais configure est actif.
+## Canaux predefinis. N'importe quel StringName peut servir de canal ; un canal
+## jamais configure est actif.
 const CH_GENERAL := &"general"
-const CH_COM := &"com"             # centre de masse
-const CH_SUPPORT := &"support"     # polygone de support au sol
-const CH_TORQUE := &"torque"       # couples appliques par le PD
+const CH_SUSPENSION := &"suspension"   # rayons de suspension, points de contact
+const CH_FORCES := &"forces"           # forces de pneu : traction, adherence laterale
+const CH_COM := &"com"                 # centre de masse du camion
+const CH_TRACK := &"track"             # trajectoire, checkpoints, ligne de course
 
 ## Interrupteur global. Actif par defaut en build de debug uniquement.
 var enabled: bool = OS.is_debug_build()

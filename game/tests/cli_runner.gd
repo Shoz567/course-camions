@@ -51,7 +51,7 @@ func _initialize() -> void:
 	var scenes: PackedStringArray = _discover_scenes()
 
 	print("")
-	print("=== Ragdoll Brawler — %s ===" % ("auto-test du socle" if _selftest else "suite de tests"))
+	print("=== Course de camions — %s ===" % ("auto-test du socle" if _selftest else "suite de tests"))
 	print("dossier=%s scenes=%d runs=%d max-iterations=%d"
 		% [_dir, scenes.size(), _runs, _max_iterations])
 	print("")
