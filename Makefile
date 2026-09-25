@@ -12,7 +12,7 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full run clean-spike
+.PHONY: help assets import test test-full test-selftest run clean-spike
 
 help:
 	@echo "Cibles disponibles :"
@@ -20,6 +20,7 @@ help:
 	@echo "  make import     - importe les assets dans Godot"
 	@echo "  make test       - suite rapide : 1 run par test (< 60 s)"
 	@echo "  make test-full  - suite complete : 5 runs par test physique"
+	@echo "  make test-selftest - verifie le socle de test lui-meme"
 	@echo "  make run        - lance le jeu"
 	@echo "  make clean-spike- supprime spike/ (fin de phase 0.5)"
 
@@ -37,6 +38,12 @@ test:
 # 5 runs : la physique n'est pas deterministe (cf. CLAUDE.md §10).
 test-full:
 	$(GODOT) --headless --path $(PROJECT) -s res://tests/cli_runner.gd -- --runs=5
+
+# Verifie le socle de test (PhysicsTest + cli_runner) : chaque scene de
+# tests/selftest/ declare son verdict attendu dans son nom, et c'est l'ECART
+# qui fait echouer. A lancer apres toute modification du socle.
+test-selftest:
+	$(GODOT) --headless --path $(PROJECT) -s res://tests/cli_runner.gd -- --dir=res://tests/selftest --selftest --max-iterations=600
 
 run:
 	$(GODOT) --path $(PROJECT)

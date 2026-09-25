@@ -83,8 +83,13 @@ make assets        # régénère tous les assets 3D (Blender headless)
 make import        # godot --headless --path game --import
 make test          # suite rapide : 1 run par test, à chaque commit
 make test-full     # suite complète : 5 runs par test physique, fin de phase
+make test-selftest # vérifie le socle de test lui-même (après l'avoir modifié)
 make run           # lance le jeu
 ```
+
+Toute scène de test physique hérite de `PhysicsTest` (`game/tests/physics_test.gd`) :
+comptage en ticks, lecture de `baseline.json`, verdict PASS / FAIL / SKIP.
+Mode d'emploi dans `.claude/agents/godot-qa.md`.
 
 Deux cibles de test, volontairement :
 

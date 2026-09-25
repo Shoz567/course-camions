@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+; Auto-test du socle — doit donner FAIL.
+; Scene sans script : elle ne conclut jamais d'elle-meme. Le runner doit la
+; couper via --quit-after, puis la compter en echec faute de ligne RESULT.
+; Sans cette garde, une scene bloquee figerait `make test` indefiniment.
+
+[node name="expect_fail_hang" type="Node3D"]
