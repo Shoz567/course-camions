@@ -97,10 +97,23 @@ var err: Quaternion = target_local * current_local.inverse()
 if err.w < 0.0:
     err = -err                                   # raccourcissement obligatoire
 var axis_angle: Vector3 = _to_scaled_axis(err)   # angle * axe unitaire
-var torque: Vector3 = tuning.kp * axis_angle - tuning.kd * bone.angular_velocity
-torque = torque.limit_length(tuning.max_torque * bone.mass)
+# bt : le BoneTuning de cet os, recupere UNE FOIS dans _ready()
+# inertia : inertie du membre (kg.m^2), mise en cache elle aussi
+var torque: Vector3 = bt.kp(inertia) * axis_angle - bt.kd(inertia) * bone.angular_velocity
+torque = torque.limit_length(bt.max_torque(bone.mass))
 PhysicsServer3D.body_apply_torque(bone.get_rid(), torque)
 ```
+
+Les gains ne sont pas stockés en `kp` / `kd` bruts mais en **fréquence propre**
+et **taux d'amortissement** (`game/characters/ragdoll/bone_tuning.gd`) :
+`kp = I·ω²`, `kd = 2ζ·I·ω`. Ils sont donc proportionnels à l'inertie, et
+`damping_ratio = 1` est exactement l'amortissement critique. Pour raidir un
+membre, monte `frequency` ; pour qu'il oscille moins, monte `damping_ratio`.
+
+`CharacterTuning` couvre **12 articulations**, pas 13 : le bassin est la racine,
+sans parent, donc sans articulation. Son maintien relève du `BalanceController`.
+Coupe un PD avec `BoneTuning.enabled`, ou tous d'un coup avec
+`CharacterTuning.joint_drive_enabled`.
 
 `bone.angular_velocity` se lit bien directement (c'est le *couple* qui manque,
 pas la vélocité). Mets `bone.get_rid()` en cache dans `_ready` : la règle « aucune

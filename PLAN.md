@@ -110,7 +110,7 @@ tout seul**, encaisse une poussée et se relève. Pas de contrôle joueur encore
 | 1.1 | Rig placeholder par code : 13 `PhysicalBone3D` selon `docs/RIG_SPEC.md` §3 | ragdoll-engineer |
 | 1.2 | Joints via `joint_type = JOINT_TYPE_6DOF` sur chaque `PhysicalBone3D` (pas de nœud joint séparé) + limites de `RIG_SPEC.md` §5, **sans** les paramètres que Jolt ignore | ragdoll-engineer |
 | 1.3 | **Test de conformité géométrique** : hauteur et centre de masse mesurés conformes à `RIG_SPEC.md` §4 (±3 cm) | godot-qa |
-| 1.4 | Ressource `CharacterTuning.tres` : raideurs, amortissements, couples max par membre | ragdoll-engineer |
+| 1.4 | ✅ Ressource `CharacterTuning` + `default_tuning.tres` : fréquence, amortissement, couple max pour les 12 articulations (valeurs de départ, non réglées) | ragdoll-engineer |
 | 1.5 | `PoseProvider` : pose de référence écrite dans `bone_pose` du même `Skeleton3D` (S3 : aucun conflit avec le simulateur) | ragdoll-engineer |
 | 1.6 | `JointDriver` : PD par articulation via `PhysicsServer3D.body_apply_torque`, réappliqué chaque tick (S1) | ragdoll-engineer |
 | 1.7 | `BalanceController` : couple correcteur sur le bassin pour le garder vertical | ragdoll-engineer |
