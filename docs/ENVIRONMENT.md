@@ -264,6 +264,8 @@ git config core.safecrlf false
 **`commit-msg`** vérifie la convention de `CLAUDE.md` §9 : préfixe de zone,
 impératif, sujet de 72 caractères maximum.
 
+**`pre-push`** refuse tout push direct sur `main` (cf. §6.4).
+
 ```
 ragdoll: ajoute le couple correcteur du bassin
 phase-1: verrouille l'equilibre par un test headless
@@ -273,14 +275,62 @@ Contournement : `git commit --no-verify`. À réserver aux cas où tu peux
 expliquer pourquoi — un test rouge qu'on contourne est exactement ce que
 `CLAUDE.md` §10 cherche à empêcher.
 
-### 6.4 Branches
+### 6.4 Branches et pull requests
 
-`main` est la branche de travail. Le projet est mono-développeur : les branches
-de fonctionnalité n'apportent rien tant que c'est le cas.
+L'équipe compte quatre personnes (§6.6). **On ne travaille jamais directement
+sur `main`** : une branche par tâche, puis une pull request.
 
-La seule exception qui vaudra le coup : **une branche par session de tuning du
-ragdoll en phase 1**. Pouvoir revenir en une commande à « l'état où ça tenait
-debout » vaut plus que n'importe quel test pendant ces semaines-là.
+```bash
+git switch main
+git pull
+git switch -c phase-1/rig            # <zone>/<sujet>
+# ... commits ...
+git push -u origin phase-1/rig
+gh pr create --fill                  # titre = sujet du premier commit
+```
+
+Une fois la PR fusionnée sur GitHub :
+
+```bash
+git switch main
+git pull
+git branch -d phase-1/rig
+```
+
+**Nommage des branches** : `<zone>/<sujet>`, avec la même zone que les
+messages de commit — `phase-1/rig`, `ragdoll/pd-bassin`, `tests/geometrie`,
+`docs/metrics`.
+
+**Fusion** : en *squash*. Une PR devient un seul commit sur `main`, dont le
+message est le titre de la PR. Ce titre doit donc respecter la convention de
+`CLAUDE.md` §9 (`zone: verbe à l'impératif`) : le hook `commit-msg` ne le
+vérifie pas, puisque le commit est créé par GitHub.
+
+**Éviter les conflits** : deux personnes ne travaillent pas sur la même scène
+`.tscn` ou la même ressource `.tres` en même temps. Ces fichiers sont générés
+par Godot et leurs conflits se résolvent très mal à la main. Répartissez les
+tâches de `PLAN.md` en conséquence, et gardez les branches courtes : quelques
+jours, pas quelques semaines.
+
+**Phase 1** : une branche par session de tuning du ragdoll reste la bonne
+pratique. Pouvoir revenir en une commande à « l'état où ça tenait debout » vaut
+plus que n'importe quel test pendant ces semaines-là.
+
+#### Pourquoi la protection de `main` est locale
+
+La protection naturelle serait une règle GitHub : « `main` ne se modifie que par
+pull request ». **Elle est impossible ici** : sur un compte gratuit, GitHub
+refuse toute protection de branche sur un dépôt privé. Les deux mécanismes ont
+été essayés (*branch protection* et *rulesets*), avec la même réponse :
+
+```
+Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)
+```
+
+Le hook `pre-push` compense, avec une limite : il ne protège que les clones où
+`git config core.hooksPath .githooks` a été lancé (§6.1). C'est une convention
+outillée, pas une garantie. Pour une vraie protection côté serveur, il faudrait
+passer le compte propriétaire à GitHub Pro, ou rendre le dépôt public.
 
 ### 6.5 Remote
 
@@ -304,3 +354,19 @@ git ls-tree -r --name-only origin/main | grep -Ei '\.(glb|blend|pck|exe)$'
 Cette commande doit ne rien renvoyer. Les assets se régénèrent avec
 `make assets` — c'est la règle de `CLAUDE.md` §8, et elle vaut aussi pour le
 distant.
+
+### 6.6 Équipe
+
+| Compte GitHub | Accès |
+|---|---|
+| `Shoz567` | propriétaire (admin) |
+| `angelomakerprog` | écriture |
+| `Dbalmeas` | écriture |
+| `xiliros2007-ai` | écriture |
+
+Il n'existe pas de rôle admin pour les collaborateurs d'un dépôt personnel : seul
+le propriétaire peut modifier les paramètres, gérer les accès ou supprimer le
+dépôt. Pour de vrais rôles, il faudrait transférer le dépôt dans une
+organisation GitHub.
+
+Chaque nouveau membre, après son `git clone`, lance la commande du §6.1.
