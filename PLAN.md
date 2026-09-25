@@ -116,7 +116,7 @@ tout seul**, encaisse une poussée et se relève. Pas de contrôle joueur encore
 | 1.7 | `BalanceController` : couple correcteur sur le bassin pour le garder vertical | ragdoll-engineer |
 | 1.8 | Support au sol : le centre de masse projeté doit rester entre les pieds → déplacement de la pose cible des jambes | ragdoll-engineer |
 | 1.9 | État `stunned` : gains à 0 pendant **N ticks** après un impact fort, puis rampe de retour | ragdoll-engineer |
-| 1.10 | Overlay debug : centre de masse, polygone de support, vecteurs de couple (`DebugDraw`) | ragdoll-engineer |
+| 1.10 | Overlay debug : centre de masse, polygone de support, vecteurs de couple (`DebugDraw`). 🟡 **Primitives faites** (ligne, flèche, point, polyligne, canaux) ; reste à les brancher sur le rig et le PD | ragdoll-engineer |
 | 1.11 | Scènes de test : `ragdoll_balance_test`, `ragdoll_push_recovery_test`, `ragdoll_perf_test` | godot-qa |
 
 **Critères de sortie** (forme définie par `CLAUDE.md` §10)
