@@ -1,0 +1,52 @@
+# Normalisation des fins de ligne.
+#
+# Le depot est sous Windows mais Godot, Python et make lisent tous le LF sans
+# difficulte. On force donc le LF PARTOUT — dans le depot et dans la copie de
+# travail — plutot que de laisser git convertir en CRLF au checkout.
+#
+# Sans cette ligne, chaque commit affiche des dizaines d'avertissements
+# "LF will be replaced by CRLF", et un futur collaborateur sous Linux verrait
+# tout le depot comme modifie.
+* text=auto eol=lf
+
+# --- Sources : texte explicite ---
+*.gd         text eol=lf
+*.py         text eol=lf
+*.md         text eol=lf
+*.json       text eol=lf
+*.cfg        text eol=lf
+*.sh         text eol=lf
+Makefile     text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
+
+# --- Formats Godot : texte, malgre les extensions inhabituelles ---
+*.tscn       text eol=lf
+*.tres       text eol=lf
+*.godot      text eol=lf
+*.import     text eol=lf
+*.uid        text eol=lf
+
+# --- Binaires : jamais de conversion, jamais de diff ---
+# Rappel : les .glb sont git-ignores (ils se regenerent avec `make assets`).
+# Ces regles protegent le jour ou l'un passerait quand meme.
+*.glb        binary
+*.gltf       binary
+*.blend      binary
+*.png        binary
+*.jpg        binary
+*.jpeg       binary
+*.webp       binary
+*.ogg        binary
+*.wav        binary
+*.mp3        binary
+*.ttf        binary
+*.otf        binary
+*.exe        binary
+*.pck        binary
+*.zip        binary
+
+# --- Diff plus lisible sur les fichiers de contrat ---
+# baseline.json est versionne et relu a chaque fin de phase : on veut un diff
+# propre dessus (cf. CLAUDE.md §8).
+game/tests/baseline.json text eol=lf diff

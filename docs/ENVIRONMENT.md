@@ -217,3 +217,72 @@ Règle de lecture : toute dérive de plus de **10 %** sur une valeur de baseline
 est signalée en fin de phase, même si tous les tests passent. Un test qui passe
 avec 20 % de perf en moins est un test qui passera de justesse au prochain
 changement.
+
+## 6. Environnement git
+
+### 6.1 Après un clone — une commande obligatoire
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Les hooks vivent dans `.githooks/` (versionné) et **non** dans `.git/hooks/`,
+qui ne se versionne pas et disparaîtrait au premier clone. Git ne lit pas
+`.githooks/` tout seul : sans cette commande, les garde-fous sont silencieusement
+inactifs — c'est le pire des deux mondes, on croit être protégé et on ne l'est
+pas.
+
+### 6.2 Fins de ligne
+
+`.gitattributes` impose `* text=auto eol=lf` : **LF partout**, dans le dépôt
+comme dans la copie de travail. Godot, Python et make lisent tous le LF sans
+difficulté sous Windows.
+
+Sans cela, git convertit en CRLF au checkout, ce qui produit un avertissement à
+chaque commit et ferait apparaître tout le dépôt comme modifié pour un
+collaborateur sous Linux.
+
+La configuration locale accompagne le fichier :
+
+```bash
+git config core.autocrlf false
+git config core.safecrlf false
+```
+
+### 6.3 Ce que les hooks vérifient
+
+**`pre-commit`**, dans l'ordre du moins cher au plus cher :
+
+1. **Aucun artefact régénérable** (`.glb`, `.gltf`, `.blend`, `.pck`, `.exe`).
+   Ils se refont avec `make assets` — cf. `CLAUDE.md` §8.
+2. **Aucun fichier de plus de 1 Mo.** Sur ce dépôt, un gros fichier est presque
+   toujours un asset qui aurait dû être régénéré.
+3. **`make test` passe.** C'est la raison d'être de la règle « `make test` sous
+   60 s » : au-delà, le hook devient insupportable et quelqu'un finit par le
+   désactiver. Si la suite déborde, **découpe la suite**, ne retire pas le hook.
+
+**`commit-msg`** vérifie la convention de `CLAUDE.md` §9 : préfixe de zone,
+impératif, sujet de 72 caractères maximum.
+
+```
+ragdoll: ajoute le couple correcteur du bassin
+phase-1: verrouille l'equilibre par un test headless
+```
+
+Contournement : `git commit --no-verify`. À réserver aux cas où tu peux
+expliquer pourquoi — un test rouge qu'on contourne est exactement ce que
+`CLAUDE.md` §10 cherche à empêcher.
+
+### 6.4 Branches
+
+`main` est la branche de travail. Le projet est mono-développeur : les branches
+de fonctionnalité n'apportent rien tant que c'est le cas.
+
+La seule exception qui vaudra le coup : **une branche par session de tuning du
+ragdoll en phase 1**. Pouvoir revenir en une commande à « l'état où ça tenait
+debout » vaut plus que n'importe quel test pendant ces semaines-là.
+
+### 6.5 Remote
+
+Aucun remote configuré à ce jour. Le dépôt est purement local, donc **il n'y a
+aucune sauvegarde hors de cette machine**.

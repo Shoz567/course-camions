@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# commit-msg — verifie la forme du message (CLAUDE.md §9).
+#
+# Convention du depot : message en francais, a l'imperatif, prefixe par la
+# zone touchee.
+#     ragdoll: ajoute le couple correcteur du bassin
+#     phase-1: verrouille l'equilibre par un test headless
+#
+# Le hook n'est pas tatillon : il refuse ce qui est clairement hors convention
+# (pas de prefixe, sujet trop long) et laisse passer le reste.
+
+msg_file="$1"
+subject=$(head -n 1 "$msg_file")
+
+# Les messages generes par git lui-meme passent sans controle.
+case "$subject" in
+	"Merge "*|"Revert "*|"fixup!"*|"squash!"*|"#"*) exit 0 ;;
+esac
+
+RED=""
+YELLOW=""
+RESET=""
+if [ -t 2 ]; then
+	RED="$(printf '\033[31m')"
+	YELLOW="$(printf '\033[33m')"
+	RESET="$(printf '\033[0m')"
+fi
+
+fail=0
+
+# --- prefixe de zone --------------------------------------------------------
+if ! echo "$subject" | grep -qE '^[a-z0-9._-]+: .+'; then
+	echo "${RED}commit-msg : il manque le prefixe de zone${RESET}" >&2
+	echo "  recu   : $subject" >&2
+	echo "  attendu: 'zone: verbe a l'imperatif'" >&2
+	echo "  ex.    : ragdoll: ajoute le couple correcteur du bassin" >&2
+	fail=1
+fi
+
+# --- longueur du sujet ------------------------------------------------------
+len=$(printf '%s' "$subject" | wc -c)
+if [ "$len" -gt 72 ]; then
+	echo "${RED}commit-msg : sujet trop long ($len caracteres, max 72)${RESET}" >&2
+	echo "  Mets le detail dans le corps du message, pas dans le sujet." >&2
+	fail=1
+fi
+
+# --- point final ------------------------------------------------------------
+case "$subject" in
+	*.) echo "${YELLOW}commit-msg : pas de point final sur le sujet${RESET}" >&2 ;;
+esac
+
+exit $fail

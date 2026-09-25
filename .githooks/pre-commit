@@ -1,0 +1,83 @@
+#!/bin/sh
+#
+# pre-commit — garde-fous avant chaque commit.
+#
+# Active par : git config core.hooksPath .githooks
+# (deja fait ; a refaire apres un clone — voir docs/ENVIRONMENT.md §6)
+#
+# Deux verifications, dans l'ordre du moins cher au plus cher :
+#   1. aucun binaire ni artefact regenerable ne part dans le commit ;
+#   2. la suite de tests rapide passe.
+#
+# Si tu dois vraiment contourner : git commit --no-verify. Mais demande-toi
+# d'abord pourquoi le test echoue — sur ce projet, un test rouge qu'on
+# contourne est exactement ce que CLAUDE.md §10 cherche a empecher.
+
+set -e
+
+RED=""
+GREEN=""
+YELLOW=""
+RESET=""
+if [ -t 1 ]; then
+	RED="$(printf '\033[31m')"
+	GREEN="$(printf '\033[32m')"
+	YELLOW="$(printf '\033[33m')"
+	RESET="$(printf '\033[0m')"
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# --- 1. artefacts regenerables ---------------------------------------------
+# Les assets se regenerent (`make assets`), ils ne se versionnent pas.
+# CLAUDE.md §8. baseline.json est l'exception explicite, et il est en .json
+# donc il ne matche aucun de ces motifs.
+forbidden=$(echo "$staged" | grep -Ei '\.(glb|gltf|blend|blend1|pck|exe)$' || true)
+if [ -n "$forbidden" ]; then
+	echo "${RED}pre-commit : artefact regenerable dans le commit${RESET}"
+	echo "$forbidden" | sed 's/^/    /'
+	echo ""
+	echo "  Ces fichiers se regenerent avec 'make assets' (CLAUDE.md §8)."
+	echo "  Retire-les : git restore --staged <fichier>"
+	exit 1
+fi
+
+# --- 2. fichiers volumineux -------------------------------------------------
+big=""
+for f in $staged; do
+	[ -f "$f" ] || continue
+	size=$(wc -c < "$f" 2>/dev/null || echo 0)
+	if [ "$size" -gt 1048576 ]; then
+		big="$big\n    $f ($((size / 1024)) Ko)"
+	fi
+done
+if [ -n "$big" ]; then
+	echo "${YELLOW}pre-commit : fichier(s) de plus de 1 Mo${RESET}"
+	printf "$big\n"
+	echo ""
+	echo "  Sur ce depot, un gros fichier est presque toujours un asset"
+	echo "  qui aurait du etre regenere. Verifie avant de forcer."
+	exit 1
+fi
+
+# --- 3. suite de tests rapide ----------------------------------------------
+# CLAUDE.md §4 : `make test` doit rester sous 60 s, c'est ce qui rend ce hook
+# supportable. Si elle depasse, c'est la suite qu'il faut decouper, pas le
+# hook qu'il faut retirer.
+if command -v make >/dev/null 2>&1 && [ -f Makefile ]; then
+	echo "pre-commit : make test..."
+	if ! make test > /tmp/rb_pretest.log 2>&1; then
+		echo "${RED}pre-commit : la suite de tests echoue${RESET}"
+		echo ""
+		tail -n 30 /tmp/rb_pretest.log | sed 's/^/    /'
+		echo ""
+		echo "  Commit refuse. Corrige, ou explique-toi avec --no-verify."
+		exit 1
+	fi
+	echo "${GREEN}pre-commit : tests OK${RESET}"
+else
+	echo "${YELLOW}pre-commit : make introuvable, tests sautes${RESET}"
+fi
+
+exit 0

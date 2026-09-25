@@ -303,7 +303,3 @@ dans le même commit que le code, et dis-le explicitement dans ton rapport. Une
 règle fausse qu'on contourne silencieusement est pire que pas de règle du tout.
 C'est exactement ce qui est arrivé à la §6 : elle prescrivait une API qui
 n'existe pas, et seule une mesure l'a révélé.
-
-Si tu découvres qu'une règle de ce fichier est fausse, **corrige le fichier**
-dans le même commit que le code, et dis-le explicitement dans ton rapport. Une
-règle fausse qu'on contourne silencieusement est pire que pas de règle du tout.
