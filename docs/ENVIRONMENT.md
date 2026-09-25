@@ -284,5 +284,23 @@ debout » vaut plus que n'importe quel test pendant ces semaines-là.
 
 ### 6.5 Remote
 
-Aucun remote configuré à ce jour. Le dépôt est purement local, donc **il n'y a
-aucune sauvegarde hors de cette machine**.
+| | |
+|---|---|
+| URL | `https://github.com/Shoz567/ragdoll-brawler` |
+| Visibilité | **privé** |
+| Branche par défaut | `main` |
+| Authentification | `gh` CLI (GitHub CLI 2.101.0), protocole HTTPS |
+
+`gh` n'est pas dans le PATH des terminaux ouverts avant son installation. Chemin
+complet si besoin : `C:\Program Files\GitHub CLI\gh.exe`.
+
+Ce qui **ne** doit **pas** y arriver, et que le hook `pre-commit` empêche :
+aucun `.glb`, `.blend`, `.pck` ni `.exe`. Vérification après chaque push :
+
+```bash
+git ls-tree -r --name-only origin/main | grep -Ei '\.(glb|blend|pck|exe)$'
+```
+
+Cette commande doit ne rien renvoyer. Les assets se régénèrent avec
+`make assets` — c'est la règle de `CLAUDE.md` §8, et elle vaut aussi pour le
+distant.
