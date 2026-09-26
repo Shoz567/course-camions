@@ -69,7 +69,11 @@ par un test avant de passer à la suivante.
    multiplicateur de surface (`VEHICLE_SPEC.md` §8). Sans pondération par la
    charge, le camion adhère en l'air.
 4. **Direction** : l'angle de braquage **diminue avec la vitesse**, sinon le
-   camion devient ingérable à 150 km/h.
+   camion devient ingérable à 150 km/h. Il est borné par l'angle qui fait
+   tourner à la limite d'adhérence (`atan(empattement · μg / v²)`, facteur
+   `steer_grip_ratio`) : ainsi tout le stick reste utile à toutes les vitesses.
+   Une simple interpolation « 32° à l'arrêt → 8° à 150 km/h » laissait 19° à
+   80 km/h quand 4° suffisent : au-delà de 20 % de stick, plus rien ne changeait.
 5. **Dérapage** : le frein à main réduit l'adhérence latérale du train arrière.
    Un dérapage doit se **rattraper** en contre-braquant — c'est le cœur du plaisir.
 6. **Aides arcade** : anti-retournement (couple de redressement proportionnel au
@@ -124,6 +128,9 @@ et vérifie aussi qu'il **attrape** les erreurs.
 | Sa hauteur change quand on règle la raideur | longueur libre du ressort codée en dur au lieu d'être déduite |
 | Il traverse les murs à pleine vitesse | détection continue désactivée ou mur trop fin (spike V2) |
 | Direction ingérable à haute vitesse | angle de braquage non réduit avec la vitesse |
+| Demi-stick et plein stick tournent pareil | angle max non borné par la limite d'adhérence, ou adhérence qui sature en m/s au lieu d'un angle de glissement |
+| Accélère moins que prévu, pousse au freinage | force de suspension appliquée le long de l'axe de la caisse : dès qu'elle cabre, composante horizontale (mesuré : 0,10 m/s² pour 0,6°). L'appliquer le long de la normale de contact |
+| Se couche contre un mur pris en biais | pneus qui retiennent le bas pendant que le mur pousse la caisse : anti-retournement (mesuré : 34° → 16° à 150 km/h, 30°) |
 
 ## Livrable attendu à chaque tâche
 

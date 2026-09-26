@@ -37,8 +37,8 @@ func _test_finish() -> void:
 
 	# Regles de coherence.
 	var t2 := tuning.duplicate() as VehicleTuning
-	t2.steer_deg_at_top_speed = t2.max_steer_deg + 1.0
-	check("braquage a haute vitesse > max refuse", not t2.validate().is_empty())
+	t2.steer_grip_ratio = 3.5
+	check("rapport de braquage / adherence > 3 refuse", not t2.validate().is_empty())
 	var t3 := tuning.duplicate() as VehicleTuning
 	t3.handbrake_rear_grip_factor = 1.0
 	check("facteur de frein a main = 1 refuse", not t3.validate().is_empty())

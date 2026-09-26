@@ -37,6 +37,16 @@ const LAYER_VEHICLE := 2
 
 const GRAVITY := 9.81
 
+# §6 Cibles de conduite (les tests mesurent l'ecart)
+const TARGET_TOP_SPEED_KMH := 150.0
+const TARGET_ACCEL_0_100_S := 6.0
+const TARGET_TOLERANCE := 0.05          # +/- 5 %
+const TARGET_BRAKING_100_0_M := 45.0
+const TARGET_LATERAL_G := 0.9
+
+# §8 Surfaces : multiplicateur d'adherence, lu dans la metadonnee `surface`
+const SURFACE_GRIP := {&"asphalt": 1.0, &"dirt": 0.75, &"grass": 0.6, &"ice": 0.3}
+
 
 ## Distance ancrage -> moyeu au repos (0,45 m).
 static func rest_hub_distance() -> float:

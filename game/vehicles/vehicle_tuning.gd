@@ -23,8 +23,12 @@ extends Resource
 @export_group("Moteur et freins")
 ## Poussee moteur a bas regime. 4,63 m/s2 = 0 -> 100 km/h en 6 s sans pertes.
 @export_range(0.0, 20.0, 0.01, "suffix:m/s²") var engine_accel_ms2: float = 0.0
-## Vitesse a laquelle la poussee moteur s'annule, le long de l'axe avant.
+## Vitesse max sur le plat, le long de l'axe avant. La poussee nette reste
+## egale a engine_accel_ms2 (les resistances sont compensees) jusqu'a
+## top_speed - engine_taper, puis decroit lineairement jusqu'a 0.
 @export_range(0.0, 300.0, 0.1, "suffix:km/h") var top_speed_kmh: float = 0.0
+## Largeur de la bande sous la vitesse max ou la poussee decroit.
+@export_range(0.0, 100.0, 0.1, "suffix:km/h") var engine_taper_kmh: float = 0.0
 @export_range(0.0, 20.0, 0.01, "suffix:m/s²") var reverse_accel_ms2: float = 0.0
 @export_range(0.0, 100.0, 0.1, "suffix:km/h") var reverse_top_speed_kmh: float = 0.0
 ## Deceleration au frein. 100 -> 0 en < 45 m exige au moins 8,57 m/s2.
@@ -40,24 +44,41 @@ extends Resource
 @export_group("Adherence")
 ## Adherence laterale max, en g, ponderee par la charge de chaque roue.
 @export_range(0.0, 2.0, 0.01, "suffix:g") var lateral_grip_g: float = 0.0
-## Vitesse de glissement laterale a laquelle l'adherence sature.
+## Angle de glissement a partir duquel l'adherence laterale sature. En
+## dessous, la force croit lineairement : c'est ce qui rend la direction
+## progressive a haute vitesse (un demi-stick tourne moins qu'un plein stick).
+@export_range(0.0, 45.0, 0.1, "suffix:°") var grip_slip_angle_deg: float = 0.0
+## A basse vitesse, glissement (m/s) auquel adherence, freins et resistance au
+## roulement saturent : c'est ce qui tient le camion immobile a l'arret.
 @export_range(0.0, 5.0, 0.01, "suffix:m/s") var grip_saturation_speed_ms: float = 0.0
 ## Multiplicateur d'adherence du train arriere au frein a main (0 .. 1).
 @export_range(0.0, 1.0, 0.01) var handbrake_rear_grip_factor: float = 0.0
 
+## Frottement de la caisse (chassis, cabine) contre les murs et les autres
+## camions. Faible : un camion qui frotte glisse au lieu de s'accrocher et de
+## basculer (directive arcade : les contacts sont frequents).
+@export_range(0.0, 1.0, 0.01) var chassis_friction: float = 0.0
+
 @export_group("Direction")
-## Angle de braquage a l'arret.
+## Angle de braquage max, atteint a basse vitesse.
 @export_range(0.0, 60.0, 0.1, "suffix:°") var max_steer_deg: float = 0.0
-## Angle de braquage a top_speed_kmh (<= max_steer_deg).
-@export_range(0.0, 60.0, 0.1, "suffix:°") var steer_deg_at_top_speed: float = 0.0
+## Angle limite a haute vitesse, en multiple de l'angle qui fait tourner a la
+## limite d'adherence : atan(empattement * lateral_grip_g * g / v2). 1 = le
+## plein stick tourne exactement a la limite ; un peu plus = leger sous-virage
+## au plein stick, sur. L'angle reel est le plus petit des deux limites : tout
+## le stick reste utile a toutes les vitesses.
+@export_range(0.0, 3.0, 0.01) var steer_grip_ratio: float = 0.0
 ## Vitesse de rotation des roues directrices.
 @export_range(0.0, 20.0, 0.01, "suffix:°/tick") var steer_rate_deg_per_tick: float = 0.0
 
 @export_group("Aides arcade")
-## Roulis au-dela duquel l'anti-retournement agit.
+## Inclinaison (roulis et tangage) au-dela de laquelle l'anti-retournement agit.
+## Mesuree par rapport au sol sous les roues quand 3 roues touchent (une rampe
+## ou un virage releve ne declenche rien), sinon par rapport a la verticale.
 @export_range(0.0, 90.0, 0.1, "suffix:°") var anti_roll_threshold_deg: float = 0.0
-## Acceleration angulaire de redressement par radian de roulis au-dela du seuil.
-@export_range(0.0, 50.0, 0.01, "suffix:1/s²") var anti_roll_strength: float = 0.0
+## Acceleration angulaire de redressement par radian au-dela du seuil. Amortie
+## critiquement (2 * racine de la raideur) : pas de rebond de l'autre cote.
+@export_range(0.0, 200.0, 0.01, "suffix:1/s²") var anti_roll_strength: float = 0.0
 ## Acceleration angulaire max du controle en l'air.
 @export_range(0.0, 20.0, 0.01, "suffix:rad/s²") var air_control_accel: float = 0.0
 
@@ -78,9 +99,12 @@ func validate() -> PackedStringArray:
 		errors.append("suspension_damping_ratio = %s : >= 2, suspension figee" % suspension_damping_ratio)
 	if handbrake_rear_grip_factor >= 1.0:
 		errors.append("handbrake_rear_grip_factor = %s : doit etre < 1" % handbrake_rear_grip_factor)
-	if steer_deg_at_top_speed > max_steer_deg:
-		errors.append("steer_deg_at_top_speed (%s) > max_steer_deg (%s)"
-			% [steer_deg_at_top_speed, max_steer_deg])
+	if steer_grip_ratio > 3.0:
+		errors.append("steer_grip_ratio = %s : > 3, le plein stick sature l'avant" % steer_grip_ratio)
+	if grip_slip_angle_deg >= 45.0:
+		errors.append("grip_slip_angle_deg = %s : doit etre < 45" % grip_slip_angle_deg)
+	if engine_taper_kmh >= top_speed_kmh:
+		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
 	if reverse_top_speed_kmh >= top_speed_kmh:
 		errors.append("reverse_top_speed_kmh (%s) >= top_speed_kmh (%s)"
 			% [reverse_top_speed_kmh, top_speed_kmh])
