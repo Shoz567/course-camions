@@ -8,7 +8,10 @@ extends Node3D
 ##
 ##   RT / R2 ou Z (W)   gaz          stick gauche ou Q D (A D)   direction
 ##   LT / L2 ou S       frein, puis marche arriere a l'arret
+##   A / Croix ou Espace frein a main : drift (contre-braquer pour le tenir)
 ##   Y / Triangle ou R  reset : camion remis droit sur place
+##   En l'air : stick gauche = lacet ; l'assiette se corrige seule
+##   F1 traces de debug   F2 suspension   F3 forces de pneu   F4 centre de masse
 ##
 ## La camera ici est un simple suivi de debug : la vraie camera de poursuite est
 ## la tache 2.1. Ce script joue le role du gameplay (source d'input, reset) :
@@ -44,6 +47,26 @@ func _pick_pad() -> void:
 		_pad.connected = true
 
 
+## Bascules des traces DebugDraw (outil de dev, pas une commande de conduite).
+func _unhandled_key_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return
+	match key.physical_keycode:
+		KEY_F1:
+			DebugDraw.enabled = not DebugDraw.enabled
+		KEY_F2:
+			_toggle_channel(DebugDraw.CH_SUSPENSION)
+		KEY_F3:
+			_toggle_channel(DebugDraw.CH_FORCES)
+		KEY_F4:
+			_toggle_channel(DebugDraw.CH_COM)
+
+
+func _toggle_channel(ch: StringName) -> void:
+	DebugDraw.set_channel_enabled(ch, not DebugDraw.is_channel_enabled(ch))
+
+
 func _physics_process(_delta: float) -> void:
 	var tick := Engine.get_physics_frames()
 	var k := _keyboard.poll(tick)
@@ -75,7 +98,13 @@ func _process(delta: float) -> void:
 	_camera.look_at(xf.origin + Vector3.UP * 1.5)
 
 	var f := _truck.get_input()
-	var pad_name := "aucune (clavier : ZQSD / fleches, R reset)"
+	var v := _truck.linear_velocity
+	var slip := 0.0
+	var v_fwd := v.dot(-xf.basis.z)
+	if v_fwd > 1.0:
+		slip = rad_to_deg(atan2(v.dot(xf.basis.x), v_fwd))
+	var state := "au sol" if _truck.wheels_on_ground() > 0 else "EN L'AIR"
+	var pad_name := "aucune (clavier : ZQSD / fleches, Espace, R)"
 	if _pad.connected:
 		pad_name = "%d — %s" % [_pad.device_id, Input.get_joy_name(_pad.device_id)]
 	_hud.text = "\n".join([
@@ -85,7 +114,10 @@ func _process(delta: float) -> void:
 		"steer     %+.2f  %s" % [f.steer, _bar(f.steer)],
 		"throttle   %.2f  %s" % [f.throttle, _bar(f.throttle)],
 		"brake      %.2f  %s" % [f.brake, _bar(f.brake)],
-		"Y / Triangle / R : reset",
+		"frein a main %3d %%   derive %+5.1f deg   %s" % [
+			roundi(_truck.get_handbrake_blend() * 100.0), slip, state],
+		"A/Croix : frein a main   Y/Triangle : reset   F1-F4 : traces (%s)"
+			% ("actifs" if DebugDraw.enabled else "coupes"),
 	])
 
 

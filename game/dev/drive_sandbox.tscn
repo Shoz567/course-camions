@@ -81,5 +81,5 @@ fov = 70.0
 offset_left = 16.0
 offset_top = 12.0
 offset_right = 900.0
-offset_bottom = 200.0
+offset_bottom = 240.0
 theme_override_font_sizes/font_size = 18
