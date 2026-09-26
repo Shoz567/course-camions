@@ -83,7 +83,7 @@ appliquées de l'extérieur, sauf pour tester une réaction à un choc.
 | 0.5 | spikes V2 ✅, V3 | épaisseur de mur (aucun minimum physique, cf. `SPIKE.md`), budget de rendu à 4 vues |
 | 1 | stabilité à l'arrêt | 600 ticks : roulis et tangage < 1°, dérive < 5 cm |
 | 1 | hauteur de caisse | conforme à `VEHICLE_SPEC.md` ± 3 cm |
-| 1 | **handling_test** | mesure et écrit les métriques de `docs/METRICS.md` ; vitesse max et 0-100 à ± 5 % de la cible |
+| 1 | **handling_test** | mesure les métriques de `docs/METRICS.md` (écrites par `make baseline`, verrouillées à ± 10 % par `make test`) ; vitesse max et 0-100 à ± 5 % de la cible |
 | 1 | virage | plein braquage à 80 km/h, 300 ticks : jamais retourné |
 | 1 | saut | chute de 2 m : 4 roues au sol < 30 ticks après le 1er contact, stabilisé < 60 ticks après, châssis jamais au sol, aucun NaN |
 | 1 | haute vitesse | mur à vitesse max : jamais traversé |
@@ -100,9 +100,10 @@ appliquées de l'extérieur, sauf pour tester une réaction à un choc.
 
 ## `handling_test` : ton livrable le plus structurant
 
-Ce n'est pas un test de non-régression, c'est une **source de vérité** : il
-mesure vitesse max, 0-100, freinage, rayon de braquage et adhérence latérale,
-et les écrit dans `baseline.json`. Le `track-designer` dessine ses pistes
+C'est une **source de vérité** autant qu'un test de non-régression : il
+mesure vitesse max, 0-100, freinage, rayon de braquage et adhérence latérale.
+`make baseline` les écrit dans `baseline.json` (seul moyen de changer la
+référence) ; `make test` les verrouille ensuite à ± 10 %. Le `track-designer` dessine ses pistes
 dessus. Protocoles de mesure : `docs/METRICS.md` (vitesse le long de l'axe
 avant, rayon de braquage en régime établi).
 

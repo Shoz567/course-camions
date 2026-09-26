@@ -19,13 +19,20 @@ refaire la piste.
 
 ## 2. Comment elles sont produites
 
-`game/tests/scenes/handling_test.tscn` (tâche 1.10) pilote un camion réel par
-une `ScriptedInputSource`, mesure chaque grandeur et l'écrit dans
-`game/tests/baseline.json`.
+`game/tests/scenes/handling_test.tscn` (tâche 1.10) pilote de vrais camions par
+des `InputFrame` (gaz, frein, braquage, et une commande qui tient une vitesse),
+et mesure chaque grandeur selon le protocole du tableau ci-dessous.
 
-Il tourne en fin de phase 1, puis à chaque fin de phase. Une dérive de plus de
-10 % est signalée : si la vitesse max augmente de 15 % après un réglage, un
-virage de la piste n°1 est peut-être devenu infranchissable.
+- **`make baseline`** écrit les valeurs mesurées dans `game/tests/baseline.json`.
+  C'est le seul moyen de changer la référence : un geste explicite, après un
+  changement de réglage voulu, committé avec lui.
+- **`make test`** (à chaque commit) mesure à nouveau et **échoue** si une valeur
+  s'écarte de plus de 10 % de la référence : si la vitesse max augmente de 15 %
+  après un réglage, un virage de la piste n°1 est peut-être devenu
+  infranchissable, et on veut le savoir avant de dessiner.
+
+Première mesure : 2026-09-26, Godot 4.7.2 (vitesse max 149,2 km/h, 0 → 100 en
+6,03 s, freinage 38,7 m, rayon mini 21,6 m à 50 km/h, 0,877 g).
 
 ## 3. Le tableau
 
@@ -70,7 +77,7 @@ font le sel du genre ; si tu hésites, resserre.
 ## 5. Règle d'usage
 
 - Le `track-designer` **lit** ce fichier et `baseline.json`. Il ne les écrit pas.
-- Le `godot-qa` **écrit** `baseline.json` via `handling_test`.
+- Le `godot-qa` **écrit** `baseline.json` via `make baseline` (`handling_test`).
 - Personne ne modifie une valeur mesurée à la main pour faire passer un design.
   Si une piste a besoin d'un rayon de 15 m et que le camion en tient 22, c'est
   soit la piste qui change, soit le réglage — et le réglage se change avec ses

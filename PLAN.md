@@ -87,23 +87,26 @@ rattrape. Sur un sol plat : pas encore de piste.
 | 1.3 | Suspension par rayons : force ressort-amortisseur à chaque ancrage, longueur libre déduite **par essieu** | vehicle-physics-engineer | `[x]` |
 | 1.4 | Moteur, freins, marche arrière : force longitudinale au point de contact | vehicle-physics-engineer | `[x]` |
 | 1.5 | Direction (angle réduit avec la vitesse) et adhérence latérale, modulée par la surface | vehicle-physics-engineer | `[x]` |
-| 1.6 | Dérapage au frein à main, anti-retournement, contrôle en l'air | vehicle-physics-engineer | `[~]` anti-retournement fait ; dérapage au frein à main et contrôle en l'air restent |
+| 1.6 | Dérapage au frein à main, anti-retournement, contrôle en l'air | vehicle-physics-engineer | `[x]` |
 | 1.7 | Reset : remise sur les roues par `state.transform`, vitesses à zéro | vehicle-physics-engineer | `[x]` `reset_to()` ; le reset automatique est la 2.6 |
 | 1.8 | `InputFrame` de conduite + `ScriptedInputSource` (tests) + `LocalInputSource` | gameplay-engineer | `[~]` sources manette, clavier, scriptée ; `DeviceInputSource` anticipe la 4.1 |
-| 1.9 | Branchement de `DebugDraw` : rayons de suspension, forces de pneu, centre de masse | vehicle-physics-engineer | `[ ]` |
-| 1.10 | Tests : stabilité à l'arrêt, hauteur de caisse, `handling_test` (métriques), virage, saut, haute vitesse, perf | godot-qa | `[~]` repos, hauteur, chute, moteur/freins, virage, contacts ; restent `handling_test` (baseline) et perf |
+| 1.9 | Branchement de `DebugDraw` : rayons de suspension, forces de pneu, centre de masse | vehicle-physics-engineer | `[x]` F1 à F4 dans le bac à sable |
+| 1.10 | Tests : stabilité à l'arrêt, hauteur de caisse, `handling_test` (métriques), virage, saut, haute vitesse, perf | godot-qa | `[x]` baseline de perf à écrire sur la machine de référence |
 
 **Critères de sortie** (catalogue de `CLAUDE.md` §10, cibles de `VEHICLE_SPEC.md` §6)
-- Posé 600 ticks sans input : roulis et tangage < 1°, dérive < 5 cm.
-- Hauteur de caisse au repos conforme à ± 3 cm.
-- Vitesse max et 0 → 100 km/h à ± 5 % de la cible ; freinage 100 → 0 < 45 m.
-- Plein braquage à 80 km/h pendant 300 ticks : jamais retourné.
-- Chute de 2 m : 4 roues au sol en < 30 ticks **après le premier contact**, stabilisé
-  en < 60 ticks après ce contact, châssis jamais au sol, aucun NaN.
-- Mur de piste à vitesse max : jamais traversé.
-- Physique < 4 ms/tick à 4 camions.
-- `docs/METRICS.md` renseigné par la mesure (`handling_test`).
-- Tout passe **5 fois sur 5** via `make test-full`.
+- `[x]` Posé 600 ticks sans input : roulis et tangage < 1°, dérive < 5 cm.
+  *Mesuré : 0,0005°, 1,2 mm.*
+- `[x]` Hauteur de caisse au repos conforme à ± 3 cm. *Mesuré : +0,1 mm.*
+- `[x]` Vitesse max et 0 → 100 km/h à ± 5 % de la cible ; freinage 100 → 0 < 45 m.
+  *Mesuré : 149,2 km/h, 6,03 s, 38,7 m.*
+- `[x]` Plein braquage à 80 km/h pendant 300 ticks : jamais retourné. *Roulis max 3,5°.*
+- `[x]` Chute de 2 m : 4 roues au sol en < 30 ticks **après le premier contact**, stabilisé
+  en < 60 ticks après ce contact, châssis jamais au sol, aucun NaN. *Mesuré : 0 et 47 ticks.*
+- `[x]` Mur de piste à vitesse max : jamais traversé. *Mur de 0,3 m à 150 km/h, de face et à 30°.*
+- `[~]` Physique < 4 ms/tick à 4 camions. *1,66 ms sur Ryzen 7 8845HS ; à confirmer
+  sur la machine de référence (i7-1255U), où s'écrit `physics_frame_ms_*`.*
+- `[x]` `docs/METRICS.md` renseigné par la mesure (`make baseline`, verrouillé par `make test`).
+- `[x]` Tout passe **5 fois sur 5** via `make test-full`.
 
 **Pièges connus**
 - Un amortissement de suspension trop faible fait « pomper » le camion à haute

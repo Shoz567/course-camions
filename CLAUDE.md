@@ -90,6 +90,7 @@ make import        # godot --headless --path game --import
 make test          # suite rapide : 1 run par test, à chaque commit
 make test-full     # suite complète : 5 runs par test physique, fin de phase
 make test-selftest # vérifie le socle de test lui-même (après l'avoir modifié)
+make baseline      # mesure les métriques de conduite et les ÉCRIT dans baseline.json
 make run           # lance le jeu
 ```
 
