@@ -266,7 +266,7 @@ Les acquis qui piègent le plus souvent :
 | Acquis | Conséquence |
 |---|---|
 | Jolt enfonce un corps au repos de `penetration_slop` = 0,02 m (vérifié sur 4.7.2) | les hauteurs absolues au repos en tiennent compte |
-| Le temps mural en headless vaut 16,67 ms quelle que soit la charge | mesurer la perf avec `Performance.TIME_PHYSICS_PROCESS` |
+| Le temps mural en headless vaut 16,67 ms quelle que soit la charge | mesurer la perf avec `Performance.TIME_PHYSICS_PROCESS` ; le runner accélère les tests avec `--fixed-fps 60`, sauf les scènes `perf_*` où ce compteur vaudrait 0 |
 | Au démarrage, Godot enchaîne plusieurs ticks sans rendu | un test qui observe le rendu n'agit pas dès le tick 1 |
 | Jolt ignore `damping`, `restitution`, `force_limit` des joints 6DOF | ne pas les écrire ; pour de la mollesse : `angular_spring_*` |
 | Une erreur de script n'empêche pas une scène de conclure PASS | le runner compte en échec toute sortie contenant `SCRIPT ERROR` |

@@ -22,9 +22,9 @@ documents, pas du code : son code vit dans `spike/` (git-ignoré) et est supprim
 | # | Acquis | Mesuré sur | Conséquence |
 |---|---|---|---|
 | A1 | Jolt laisse un corps au repos s'enfoncer de `penetration_slop` = **0,02 m** | 4.6.3, **revérifié 4.7.2** | les hauteurs absolues au repos en tiennent compte ; `make test-selftest` le revérifie |
-| A2 | En headless, le temps mural vaut **16,67 ms/tick quelle que soit la charge** : Godot régule à 60 Hz | 4.6.3 | mesurer la perf avec `Performance.TIME_PHYSICS_PROCESS`, jamais le temps mural |
+| A2 | En headless, le temps mural vaut **16,67 ms/tick quelle que soit la charge** : Godot régule à 60 Hz | 4.6.3 | mesurer la perf avec `Performance.TIME_PHYSICS_PROCESS`, jamais le temps mural. Le runner lance donc les tests avec `--fixed-fps 60` (sans attente : suite 10× plus rapide), **sauf** les scènes `perf_*` (A11) |
 | A3 | Au démarrage, Godot enchaîne **plusieurs ticks physiques sans rendu** pour rattraper le chargement | 4.6.3 | un test qui observe le rendu n'agit pas avant ~30 ticks |
-| A4 | `--quit-after` compte des **itérations**, pas des ticks : ~2,4 par tick sur une scène légère | 4.6.3 | un test long relève `--max-iterations` |
+| A4 | `--quit-after` compte des **itérations**, pas des ticks : ~2,4 par tick sur une scène légère | 4.6.3 | un test long relève `--max-iterations`. Sous `--fixed-fps` (runner, hors `perf_*`), **1 itération = 1 tick** : la garde de 7 200 couvre 7 200 ticks |
 | A5 | Joints 6DOF sous Jolt : limites angulaires **honorées** ; `damping`, `restitution`, `force_limit` des limites **ignorés** ; `angular_spring_*` **supporté** ; axes linéaires verrouillés = **soudure parfaite** (0,0000 m de séparation sous 2 000 N) | 4.6.3 | pour une attache souple (remorque, objet traîné) : ressort, pas limite amortie ; une rupture de joint n'est pas observable par la séparation |
 | A6 | Export glTF de `tools/blender/lib/export.py` : cube de 1 m mesuré **1,0000 m**, os de 0,40 m mesuré **0,4000 m**, noms conservés | Blender 5.2.1 + Godot 4.6.3 | le contrat d'export tient ; à revérifier pour des roues à pivot (V4) |
 | A7 | Sur une même machine, une simulation se rejoue **à l'identique** d'un lancement à l'autre | 4.6.3 | les écarts entre runs viennent d'ailleurs (autre machine, ordre de création) |

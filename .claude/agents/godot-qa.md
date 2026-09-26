@@ -109,13 +109,17 @@ avant, rayon de braquage en régime établi).
 ## Pièges mesurés (`docs/SPIKE.md`, partie 1)
 
 - **Perf** : le temps mural en headless vaut 16,67 ms quelle que soit la
-  charge. Mesure avec `Performance.TIME_PHYSICS_PROCESS`.
+  charge. Mesure avec `Performance.TIME_PHYSICS_PROCESS`. Le runner lance les
+  tests avec `--fixed-fps 60` (sans attente du temps réel) ; sous ce mode, ce
+  compteur vaut 0 : **nomme `perf_*` toute scène qui mesure la perf**, le
+  runner la lance alors au rythme normal.
 - **Rendu** : le headless ne rend rien. La perf de l'écran partagé se mesure
   avec un vrai rendu, fenêtre ouverte, sur la machine de référence.
 - **Démarrage** : Godot enchaîne plusieurs ticks sans rendu au lancement ; un
   test qui observe le rendu n'agit pas avant ~30 ticks.
-- **`--quit-after`** compte des itérations (~2,4 par tick), pas des ticks : un
-  test long relève `--max-iterations`.
+- **`--quit-after`** compte des itérations, pas des ticks : 1 par tick sous
+  `--fixed-fps`, ~2,4 par tick pour les scènes `perf_*`. Un test long relève
+  `--max-iterations`.
 - **Jolt** enfonce un corps au repos de 0,02 m (`penetration_slop`).
 - Sur une même machine, une simulation se rejoue à l'identique : un écart entre
   runs signale un changement d'ordre ou d'état, pas du hasard.
