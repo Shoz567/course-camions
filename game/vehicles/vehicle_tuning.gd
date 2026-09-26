@@ -53,6 +53,13 @@ extends Resource
 @export_range(0.0, 5.0, 0.01, "suffix:m/s") var grip_saturation_speed_ms: float = 0.0
 ## Multiplicateur d'adherence du train arriere au frein a main (0 .. 1).
 @export_range(0.0, 1.0, 0.01) var handbrake_rear_grip_factor: float = 0.0
+## Ticks pour passer de l'adherence pleine a l'adherence de frein a main.
+@export_range(0.0, 60.0, 0.1, "suffix:ticks") var handbrake_engage_ticks: float = 0.0
+## Ticks pour retrouver l'adherence pleine au relacher : plus long que
+## l'engagement, pour une relance propre sans effet de balancier.
+@export_range(0.0, 120.0, 0.1, "suffix:ticks") var handbrake_release_ticks: float = 0.0
+## Freinage du train arriere au frein a main (faible : le drift garde la vitesse).
+@export_range(0.0, 20.0, 0.01, "suffix:m/s²") var handbrake_decel_ms2: float = 0.0
 
 ## Frottement de la caisse (chassis, cabine) contre les murs et les autres
 ## camions. Faible : un camion qui frotte glisse au lieu de s'accrocher et de
@@ -68,6 +75,11 @@ extends Resource
 ## au plein stick, sur. L'angle reel est le plus petit des deux limites : tout
 ## le stick reste utile a toutes les vitesses.
 @export_range(0.0, 3.0, 0.01) var steer_grip_ratio: float = 0.0
+## Contre-braquage automatique, stick au neutre : fraction de l'angle de
+## derive que les roues avant suivent d'elles-memes (comme la chasse d'un vrai
+## train avant). S'efface a mesure que le joueur braque. Rend la relance propre
+## a la sortie d'un drift, et stabilise la ligne droite.
+@export_range(0.0, 1.0, 0.01) var auto_countersteer_ratio: float = 0.0
 ## Vitesse de rotation des roues directrices.
 @export_range(0.0, 20.0, 0.01, "suffix:°/tick") var steer_rate_deg_per_tick: float = 0.0
 
@@ -79,8 +91,13 @@ extends Resource
 ## Acceleration angulaire de redressement par radian au-dela du seuil. Amortie
 ## critiquement (2 * racine de la raideur) : pas de rebond de l'autre cote.
 @export_range(0.0, 200.0, 0.01, "suffix:1/s²") var anti_roll_strength: float = 0.0
-## Acceleration angulaire max du controle en l'air.
-@export_range(0.0, 20.0, 0.01, "suffix:rad/s²") var air_control_accel: float = 0.0
+## En l'air (aucune roue au sol) : raideur du ressort angulaire qui ramene le
+## camion a plat, amorti critiquement. Remplace l'anti-retournement.
+@export_range(0.0, 200.0, 0.01, "suffix:1/s²") var air_level_strength: float = 0.0
+## En l'air : vitesse de lacet obtenue au plein stick.
+@export_range(0.0, 720.0, 0.1, "suffix:°/s") var air_yaw_rate_deg_s: float = 0.0
+## En l'air : acceleration angulaire max pour atteindre ce lacet.
+@export_range(0.0, 50.0, 0.01, "suffix:rad/s²") var air_control_accel: float = 0.0
 
 
 ## Liste des erreurs de reglage ; vide = valide.
@@ -103,6 +120,10 @@ func validate() -> PackedStringArray:
 		errors.append("steer_grip_ratio = %s : > 3, le plein stick sature l'avant" % steer_grip_ratio)
 	if grip_slip_angle_deg >= 45.0:
 		errors.append("grip_slip_angle_deg = %s : doit etre < 45" % grip_slip_angle_deg)
+	if auto_countersteer_ratio >= 1.0:
+		errors.append("auto_countersteer_ratio = %s : doit etre < 1" % auto_countersteer_ratio)
+	if handbrake_engage_ticks < 1.0 or handbrake_release_ticks < 1.0:
+		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:
 		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
 	if reverse_top_speed_kmh >= top_speed_kmh:

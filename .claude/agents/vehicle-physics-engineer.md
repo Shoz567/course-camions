@@ -76,6 +76,11 @@ par un test avant de passer à la suivante.
    80 km/h quand 4° suffisent : au-delà de 20 % de stick, plus rien ne changeait.
 5. **Dérapage** : le frein à main réduit l'adhérence latérale du train arrière.
    Un dérapage doit se **rattraper** en contre-braquant — c'est le cœur du plaisir.
+   Réalisé : adhérence arrière en rampe (engagement rapide, relâcher plus lent),
+   limite de braquage élargie de l'angle de dérive du côté du contre-braquage,
+   et **contre-braquage automatique** stick au neutre (les roues suivent une
+   fraction de la dérive). Mesuré : relance stick relâché en 79 ticks au lieu
+   de 131, vitesse conservée, dépassement de 3°.
 6. **Aides arcade** : anti-retournement (couple de redressement proportionnel au
    roulis, seulement au-delà d'un seuil), contrôle en l'air (léger couple pour
    orienter le camion avant de retomber), stabilisation en ligne droite.
