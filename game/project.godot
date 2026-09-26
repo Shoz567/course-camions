@@ -9,6 +9,7 @@ config_version=5
 config/name="Course de camions"
 config/features=PackedStringArray("4.7", "Forward Plus")
 run/print_header=false
+run/main_scene="res://dev/drive_sandbox.tscn"
 
 [autoload]
 

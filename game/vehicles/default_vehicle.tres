@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="VehicleTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/vehicle_tuning.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+suspension_frequency_hz = 1.6
+suspension_damping_ratio = 0.45
+engine_accel_ms2 = 4.63
+top_speed_kmh = 150.0
+reverse_accel_ms2 = 3.0
+reverse_top_speed_kmh = 30.0
+brake_decel_ms2 = 9.5
+aero_drag_per_m = 0.0004
+rolling_resistance_ms2 = 0.3
+lateral_grip_g = 0.9
+grip_saturation_speed_ms = 0.5
+handbrake_rear_grip_factor = 0.35
+max_steer_deg = 32.0
+steer_deg_at_top_speed = 8.0
+steer_rate_deg_per_tick = 2.5
+anti_roll_threshold_deg = 25.0
+anti_roll_strength = 6.0
+air_control_accel = 1.5
