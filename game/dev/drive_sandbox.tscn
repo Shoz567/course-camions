@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://dev/drive_sandbox.gd" id="1"]
 [ext_resource type="PackedScene" path="res://vehicles/truck.tscn" id="2"]
@@ -8,8 +8,25 @@
 [sub_resource type="BoxShape3D" id="shape_floor"]
 size = Vector3(400, 1, 400)
 
-[sub_resource type="StandardMaterial3D" id="mat_floor"]
-albedo_color = Color(0.32, 0.36, 0.32, 1)
+[sub_resource type="Shader" id="shader_checker"]
+code = "shader_type spatial;
+
+// Damier de 4 m en coordonnees monde : donne la sensation de vitesse.
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	float c = mod(floor(world_pos.x / 4.0) + floor(world_pos.z / 4.0), 2.0);
+	ALBEDO = mix(vec3(0.28, 0.31, 0.28), vec3(0.36, 0.40, 0.35), c);
+	ROUGHNESS = 0.9;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="mat_floor"]
+shader = SubResource("shader_checker")
 
 [sub_resource type="PlaneMesh" id="mesh_floor"]
 material = SubResource("mat_floor")
@@ -46,6 +63,7 @@ shape = SubResource("shape_floor")
 mesh = SubResource("mesh_floor")
 
 [node name="Truck" parent="." instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 40)
 
 [node name="PadSource" type="Node" parent="."]
 script = ExtResource("3")
@@ -54,7 +72,7 @@ script = ExtResource("3")
 script = ExtResource("4")
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.9, 0.44, 0, -0.44, 0.9, 0, 5.5, 13)
+transform = Transform3D(1, 0, 0, 0, 0.9, 0.44, 0, -0.44, 0.9, 0, 5.5, 54)
 fov = 70.0
 
 [node name="Hud" type="CanvasLayer" parent="."]
@@ -63,5 +81,5 @@ fov = 70.0
 offset_left = 16.0
 offset_top = 12.0
 offset_right = 900.0
-offset_bottom = 260.0
+offset_bottom = 200.0
 theme_override_font_sizes/font_size = 18
