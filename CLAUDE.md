@@ -133,16 +133,20 @@ d'emploi dans `.claude/agents/godot-qa.md`.
 - **Échelle** : 1 unité Godot = 1 mètre. Dimensions, masse et position des roues
   du camion : `docs/VEHICLE_SPEC.md`, qui est un **contrat**.
 - **Tick physique : 60 Hz.** À 160 km/h, un camion parcourt 0,74 m par tick :
-  la collision à haute vitesse est un risque réel, tranché par le **spike V2**.
-  Première soupape : la détection continue de collision de Jolt et ses
-  itérations de solveur, **pas** le tick global, qui doublerait le coût CPU.
-- **Un camion est un seul `RigidBody3D`** (sous réserve du spike V1) : forces
+  la collision à haute vitesse a été mesurée au **spike V2** : aucune traversée
+  de mur, même de 0,1 m à 200 km/h. Le camion a `continuous_cd = true` (il
+  limite l'enfoncement visible) ; le tick global ne change pas.
+- **Un camion est un seul `RigidBody3D`** (confirmé par le spike V1 ;
+  `VehicleBody3D` est écarté) : forces
   continues avec `apply_force(force, position)` / `apply_central_force()` /
   `apply_torque()`, **dans `_physics_process`** ou `_integrate_forces()`.
   Les **impulsions** (`apply_impulse`) sont réservées aux événements ponctuels :
   collision scénarisée, boost instantané, test.
 - Les forces sont **proportionnelles à la masse** : une accélération se règle en
   m/s², jamais en newtons en dur.
+- **Pas d'amortissement caché** : le camion est en `linear_damp_mode = REPLACE`,
+  `linear_damp = 0`. Le défaut du projet (0,1) plafonnait sa vitesse vers
+  167 km/h. La traînée est une force explicite de `VehicleTuning`.
 - **Pas de téléportation d'un corps en mouvement** par `global_position`. Le
   reset d'un camion (retour sur la piste) passe par `state.transform` dans
   `_integrate_forces()`, avec les vitesses remises à zéro dans le même tick.
@@ -234,7 +238,7 @@ grandeurs observables : vitesse, position, angle de roulis, contact des roues.
 | Accélération | 0 → 100 km/h en `accel_0_100_s` ± 5 % de la cible |
 | Freinage | 100 → 0 km/h en moins de `braking_100_0_m` |
 | Virage | plein braquage à 80 km/h pendant 300 ticks → jamais retourné (roulis < 45°) |
-| Saut | réception d'une chute de 2 m → roues au sol en < 30 ticks, aucun NaN |
+| Saut | chute de 2 m → 4 roues au sol < 30 ticks **après le premier contact**, stabilisé < 60 ticks après, châssis jamais au sol, aucun NaN (la chute libre seule dure ~38 ticks) |
 | Haute vitesse | à vitesse max contre un mur de 0,3 m → **jamais traversé**, 5 fois sur 5 |
 | Perf | physique < 4 ms/tick à 4 camions ; rendu écran partagé à 4 : cible fixée par le spike V3 |
 
@@ -266,6 +270,8 @@ Les acquis qui piègent le plus souvent :
 | Au démarrage, Godot enchaîne plusieurs ticks sans rendu | un test qui observe le rendu n'agit pas dès le tick 1 |
 | Jolt ignore `damping`, `restitution`, `force_limit` des joints 6DOF | ne pas les écrire ; pour de la mollesse : `angular_spring_*` |
 | Une erreur de script n'empêche pas une scène de conclure PASS | le runner compte en échec toute sortie contenant `SCRIPT ERROR` |
+| `default_linear_damp` = 0,1 freine tout corps en silence | le camion le remplace par 0 (A10) |
+| Appliquer la location à l'export met le pivot des roues au centre du camion | `export.apply_transforms()` ne l'applique plus (A13) |
 
 Tant qu'un spike n'a pas répondu, **le code de production concerné ne s'écrit
 pas**.

@@ -13,8 +13,8 @@ Colonne **Agent** = sous-agent de `.claude/agents/` à qui déléguer.
 | Phase | Objectif | Sortie visible | Effort indicatif |
 |---|---|---|---|
 | 0 | Fondations du dépôt | `make test` passe | ✅ fait |
-| **0.5** | **Spikes du camion** | **4 réponses, docs corrigés** | **1–2 j** |
-| 1 | Un camion arcade qui se conduit bien | un camion sur un plat, testé | 1–3 sem |
+| 0.5 | Spikes du camion | 4 réponses, docs corrigés | 🟡 V1, V2, V4 faits ; V3 ouvert |
+| **1** | **Un camion arcade qui se conduit bien** | **un camion sur un plat, testé** | **1–3 sem** |
 | 2 | Piste et tour solo | 3 tours chronométrés | 1–2 sem |
 | 3 | Course complète + premier juice | une course avec départ, classement, arrivée | 1–1,5 sem |
 | 4 | Écran partagé 2 à 4 joueurs | 4 joueurs sur un canapé | 1 sem |
@@ -53,19 +53,22 @@ nettoyée pour la course de camions.
 **But** : trancher quatre questions avant d'écrire la physique. Protocoles
 complets dans **`docs/SPIKE.md`**. Code jetable dans `spike/`, supprimé à la fin.
 
-| # | Tâche | Agent |
-|---|---|---|
-| 0.5.1 | **V1** — `VehicleBody3D` ou `RigidBody3D` + suspension par rayons ? | vehicle-physics-engineer |
-| 0.5.2 | **V2** — collisions à 160 km/h : épaisseur de mur minimale, détection continue | godot-qa |
-| 0.5.3 | **V3** — écran partagé à 4 sur l'Iris Xe : renderer et budget de rendu | godot-qa |
-| 0.5.4 | **V4** — export Blender d'un camion à roues séparées | blender-modeler |
-| 0.5.5 | Corrections appliquées aux documents, `spike/` supprimé | — |
+| # | Tâche | Agent | État |
+|---|---|---|---|
+| 0.5.1 | **V1** — `VehicleBody3D` ou `RigidBody3D` + suspension par rayons ? → **rayons** | vehicle-physics-engineer | `[x]` |
+| 0.5.2 | **V2** — collisions à 160 km/h : épaisseur de mur minimale, détection continue → **CCD, pas de minimum physique** | godot-qa | `[x]` |
+| 0.5.3 | **V3** — écran partagé à 4 sur l'Iris Xe : renderer et budget de rendu | godot-qa | `[ ]` machine de référence |
+| 0.5.4 | **V4** — export Blender d'un camion à roues séparées → **`export.py` corrigé** | blender-modeler | `[x]` |
+| 0.5.5 | Corrections appliquées aux documents, `spike/` supprimé | — | `[x]` |
 
 **Critères de sortie**
-- Le tableau de livrable de `docs/SPIKE.md` est rempli.
-- `docs/VEHICLE_SPEC.md` confirmé ou corrigé par V1.
-- `baseline.json` contient `physics_frame_ms_1_truck`, `physics_frame_ms_4_trucks`
-  et `render_frame_ms_split_4`.
+- `[~]` Le tableau de livrable de `docs/SPIKE.md` est rempli (V3 ouvert).
+- `[x]` `docs/VEHICLE_SPEC.md` confirmé ou corrigé par V1.
+- `[ ]` `baseline.json` contient `physics_frame_ms_1_truck`, `physics_frame_ms_4_trucks`
+  et `render_frame_ms_split_4` : à mesurer sur la machine de référence
+  (`ENVIRONMENT.md` §1). Les deux premiers se mesurent en phase 1 (tâche 1.10).
+
+> La phase 1 démarre sans attendre V3 : V3 ne bloque que la phase 4.
 
 ---
 
@@ -80,8 +83,8 @@ rattrape. Sur un sol plat : pas encore de piste.
 | # | Tâche | Agent |
 |---|---|---|
 | 1.1 | Ressource `VehicleTuning` + `default_vehicle.tres` (ressorts en fréquence et amortissement, moteur, freins, direction, adhérence) avec `validate()` | vehicle-physics-engineer |
-| 1.2 | Scène du camion construite d'après `VEHICLE_SPEC.md` : `RigidBody3D`, 2 boîtes de collision, centre de masse, 4 ancrages de roue | vehicle-physics-engineer |
-| 1.3 | Suspension par rayons : force ressort-amortisseur à chaque ancrage | vehicle-physics-engineer |
+| 1.2 | Scène du camion construite d'après `VEHICLE_SPEC.md` : `RigidBody3D`, 2 boîtes de collision, centre de masse, 4 ancrages de roue, `linear_damp = 0`, `continuous_cd` | vehicle-physics-engineer |
+| 1.3 | Suspension par rayons : force ressort-amortisseur à chaque ancrage, longueur libre déduite **par essieu** | vehicle-physics-engineer |
 | 1.4 | Moteur, freins, marche arrière : force longitudinale au point de contact | vehicle-physics-engineer |
 | 1.5 | Direction (angle réduit avec la vitesse) et adhérence latérale, modulée par la surface | vehicle-physics-engineer |
 | 1.6 | Dérapage au frein à main, anti-retournement, contrôle en l'air | vehicle-physics-engineer |
@@ -95,7 +98,8 @@ rattrape. Sur un sol plat : pas encore de piste.
 - Hauteur de caisse au repos conforme à ± 3 cm.
 - Vitesse max et 0 → 100 km/h à ± 5 % de la cible ; freinage 100 → 0 < 45 m.
 - Plein braquage à 80 km/h pendant 300 ticks : jamais retourné.
-- Chute de 2 m : roues au sol en < 30 ticks, aucun NaN.
+- Chute de 2 m : 4 roues au sol en < 30 ticks **après le premier contact**, stabilisé
+  en < 60 ticks après ce contact, châssis jamais au sol, aucun NaN.
 - Mur de piste à vitesse max : jamais traversé.
 - Physique < 4 ms/tick à 4 camions.
 - `docs/METRICS.md` renseigné par la mesure (`handling_test`).
@@ -108,6 +112,8 @@ rattrape. Sur un sol plat : pas encore de piste.
   camion glisse en l'air comme au sol.
 - Mesure la vitesse le long de l'axe avant du camion, pas la norme du vecteur :
   en dérapage, les deux diffèrent beaucoup.
+- `default_linear_damp` (0,1) est une traînée cachée : le camion la remplace
+  par 0, et la traînée est une force de `VehicleTuning` (`docs/SPIKE.md` A10).
 
 ---
 

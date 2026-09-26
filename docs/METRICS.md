@@ -62,7 +62,7 @@ Ces valeurs-là sont des **choix de design**, pas des mesures.
 | Largeur minimale de piste | 14 m | 4 camions de 2,5 m de front, avec de la marge pour doubler |
 | Largeur de la grille de départ | 4 camions de front, rangs espacés de 9 m | un camion (5,8 m) + marge de freinage |
 | Durée d'un tour | 60 à 90 s | assez court pour que les écarts restent lisibles, assez long pour varier les virages |
-| Épaisseur minimale d'un mur | fixée par le spike V2 | sous ce seuil, un camion à pleine vitesse peut le traverser |
+| Épaisseur minimale d'un mur | **0,3 m** | choix de design (2026-09-26) : le spike V2 n'a mesuré aucune traversée jusqu'à 0,1 m à 200 km/h ; 0,3 m est la glissière de son protocole, avec de la marge |
 
 Principe : **une piste trop large est ennuyeuse**. Les contacts entre camions
 font le sel du genre ; si tu hésites, resserre.

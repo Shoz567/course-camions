@@ -62,11 +62,15 @@ Exigences pour tout script de build :
 
 Centralisés dans `tools/blender/lib/export.py`, **seul endroit** où l'on appelle
 `bpy.ops.export_scene.gltf` : GLB, `export_yup=True`, modificateurs appliqués,
-transforms appliquées, pas de caméra ni de lumière.
+**rotation et échelle appliquées, location conservée**, pas de caméra ni de
+lumière.
 
 ✅ **Validé** (acquis A6 de `docs/SPIKE.md`) : un cube de 1 m arrive à
-1,0000 m dans Godot, les noms sont conservés. Le spike **V4** doit encore
-vérifier le cas d'un véhicule : objets séparés dont le pivot est au moyeu.
+1,0000 m dans Godot, les noms sont conservés.
+
+✅ **Validé par le spike V4** (acquis A13) : chassis + 4 roues séparées, pivots
+à 0,0000 m du moyeu dans Godot. La location n'est **jamais** appliquée : c'est
+elle qui porte le pivot. L'appliquer mettait les roues à 2,24 m du moyeu.
 
 ## 4. Le camion
 

@@ -51,7 +51,7 @@ Ce qui est ton choix (et reste dans `docs/METRICS.md` §4) : largeur de piste
 ```
 Track01 (Node3D)
 ├── Geometry/            # visuel + StaticBody3D de collision, avec leur surface
-├── Walls/               # glissières, épaisseur >= minimum du spike V2
+├── Walls/               # glissières, épaisseur >= 0,3 m (METRICS.md §4)
 ├── Checkpoints/         # Area3D ordonnées ; la dernière est la ligne d'arrivée
 ├── ResetZones/          # Area3D hors-piste (eau, vide, zones interdites)
 ├── RespawnPoints/       # un point par checkpoint, orienté dans le sens de course
@@ -83,8 +83,9 @@ Tout obstacle dérive d'une classe `Hazard` commune :
 
 ## Règles dures
 
-- Murs d'épaisseur au moins égale au minimum fixé par le spike V2 : sous ce
-  seuil, un camion à pleine vitesse les traverse.
+- Murs d'au moins **0,3 m** d'épaisseur (`docs/METRICS.md` §4). Le spike V2
+  n'a mesuré aucune traversée jusqu'à 0,1 m : c'est une marge de design, pas
+  une limite physique.
 - Aucune collision concave sur un objet mobile.
 - Durées en ticks (`CLAUDE.md` §7).
 - Teste toujours ta piste : un camion piloté par une `ScriptedInputSource` doit

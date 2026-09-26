@@ -54,7 +54,8 @@ jamais en déplaçant les formes de collision.
 
 ## 4. Roues et suspension
 
-Les roues **ne sont pas des corps physiques**. Chaque roue est un rayon
+Modèle confirmé par le spike V1 : `RigidBody3D` + rayons (`VehicleBody3D`
+écarté). Les roues **ne sont pas des corps physiques**. Chaque roue est un rayon
 (raycast) tiré vers le bas depuis un point d'ancrage sur le châssis ; la force
 de suspension s'applique au châssis, au point d'ancrage. Les maillages de roues
 sont purement visuels et suivent le rayon.
@@ -75,9 +76,27 @@ sont purement visuels et suivent le rayon.
 | Longueur du rayon | débattement + rayon de roue = 1,15 m |
 
 **La hauteur au repos est un contrat, la raideur est un réglage.** La longueur
-libre du ressort se *déduit* des deux (affaissement statique = m·g / k par
-roue) : changer la raideur dans `VehicleTuning` ne doit jamais changer la
-hauteur de caisse au repos.
+libre du ressort se *déduit* des deux, **essieu par essieu** : changer la
+raideur dans `VehicleTuning` ne doit jamais changer la hauteur de caisse au
+repos.
+
+Le centre de masse étant à z = −0,30 (§3), les essieux ne portent pas la même
+charge. Charge statique d'une roue, avec `a` = 1,9 + 0,3 = 2,2 m (CdM → essieu
+arrière) et `L` = 3,8 m (empattement) :
+
+| Essieu | Part de la masse | Charge par roue |
+|---|---|---|
+| avant | a / L = **57,9 %** | 14 199 N |
+| arrière | 1 − a / L = **42,1 %** | 10 326 N |
+
+`longueur libre = 0,45 m (ancrage → moyeu au repos) + charge de la roue / k`.
+Avec une longueur libre commune calculée sur M/4, le camion pique du nez
+(avant −1,5 cm, arrière +1,5 cm, ~0,46°) : mesuré au spike V1. La raideur `k`
+reste réglée en fréquence sur `m_roue` = M/4 (`vehicle-physics-engineer.md`) ;
+la longueur libre ne l'est pas.
+
+Validé au spike V1 (`docs/SPIKE.md`) : hauteur de caisse au repos à
++0,1 mm de la cote, tangage 0,0005°.
 
 Rappel mesuré : Jolt laisse un corps au repos s'enfoncer de
 `penetration_slop` = 0,02 m. Ça ne concerne pas les roues (des rayons), mais
@@ -95,6 +114,17 @@ Deux boîtes convexes, **jamais le maillage** :
 Le bas du châssis est à y = 0,75 : garde au sol de 0,75 m au repos. C'est ce qui
 permet de passer les bosses et de retomber d'un saut sur les roues plutôt que
 sur le ventre.
+
+Le corps du camion a **`continuous_cd = true`** (spike V2 : l'enfoncement dans
+un mur à 200 km/h passe de 0,87 m à 0,10 m, sans coût mesurable).
+
+## 5 bis. Amortissement du corps
+
+`linear_damp_mode = REPLACE`, **`linear_damp = 0`**. Le défaut du projet
+(`default_linear_damp` = 0,1) est une traînée cachée qui plafonnait le camion à
+~167 km/h (spike V1). La résistance à l'avancement est une force explicite,
+réglée dans `VehicleTuning` et désactivable comme les autres.
+`angular_damp` reste au défaut du projet.
 
 ## 6. Cibles de conduite
 

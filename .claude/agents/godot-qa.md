@@ -80,12 +80,12 @@ appliquées de l'extérieur, sauf pour tester une réaction à un choc.
 
 | Phase | Test | Critère |
 |---|---|---|
-| 0.5 | spikes V2, V3 | épaisseur de mur minimale, budget de rendu à 4 vues |
+| 0.5 | spikes V2 ✅, V3 | épaisseur de mur (aucun minimum physique, cf. `SPIKE.md`), budget de rendu à 4 vues |
 | 1 | stabilité à l'arrêt | 600 ticks : roulis et tangage < 1°, dérive < 5 cm |
 | 1 | hauteur de caisse | conforme à `VEHICLE_SPEC.md` ± 3 cm |
 | 1 | **handling_test** | mesure et écrit les métriques de `docs/METRICS.md` ; vitesse max et 0-100 à ± 5 % de la cible |
 | 1 | virage | plein braquage à 80 km/h, 300 ticks : jamais retourné |
-| 1 | saut | chute de 2 m : roues au sol en < 30 ticks, aucun NaN |
+| 1 | saut | chute de 2 m : 4 roues au sol < 30 ticks après le 1er contact, stabilisé < 60 ticks après, châssis jamais au sol, aucun NaN |
 | 1 | haute vitesse | mur à vitesse max : jamais traversé |
 | 1 | perf physique | < 4 ms/tick à 4 camions |
 | 2 | tours | tour compté seulement si les checkpoints sont passés dans l'ordre |
