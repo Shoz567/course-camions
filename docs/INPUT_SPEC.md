@@ -52,7 +52,7 @@ elle ne modifie pas la simulation, elle reste locale au joueur.
 | `steer` | `int8` (−127..127) | 1 |
 | `throttle` | `uint8` (0..255) | 1 |
 | `brake` | `uint8` (0..255) | 1 |
-| `handbrake`, `boost`, `reset`, réserve | bitfield | 1 |
+| `handbrake`, `boost`, `reset`, `honk` (klaxon), réserve | bitfield | 1 |
 | **Total** | | **6** |
 
 À 60 Hz : 360 octets/s de charge utile par joueur. Négligeable.
@@ -71,15 +71,30 @@ frames. À prévoir dès la phase 1 dans `to_bytes()`, à implémenter en phase 
 
 ## 3. Mapping
 
-| Action | Manette (XInput / DualShock) | Clavier (joueur 1, dev) |
+Schéma « style Mario Kart », décidé le 2026-09-28. Godot (SDL) nomme les
+boutons **par position** : bas = A Xbox / Croix PS / B Switch ; droite = B Xbox
+/ Rond PS / A Switch ; gauche = X Xbox / Carré PS / Y Switch ; haut = Y Xbox /
+Triangle PS / X Switch. Chaque affectation est un `@export` de
+`DeviceInputSource` : réaffectable sans code.
+
+| Action | Manette | Clavier (joueur 1, dev) |
 |---|---|---|
 | `steer` | stick gauche, axe X | Q / D (ou ← / →) |
-| `throttle` | RT (gâchette droite) | Z (ou ↑) |
-| `brake` | LT (gâchette gauche) | S (ou ↓) |
-| `handbrake` | A / Croix | Espace |
-| `boost` | X / Carré | Maj |
-| `reset` | Y / Triangle | R |
-| pause | Start | Échap |
+| `throttle` | RT / R2 / ZR (analogique) **ou** bouton du bas | Z (ou ↑) |
+| `brake` (puis recul à l'arrêt) | LT / L2 / ZL (analogique) **ou** bouton de droite | S (ou ↓) |
+| `handbrake` (drift) | RB / R1 / R, **ou RT tant qu'on accélère au bouton du bas** | Espace |
+| `boost` | LB / L1 / L (1,5 s, recharge 4 s) | Maj |
+| `honk` (klaxon) | bouton de gauche | H |
+| caméra 1re / 3e personne | bouton du haut (local, hors `InputFrame`) | C |
+| `reset` | Select / View / Share / − | R |
+| pause, rejouer après l'arrivée | Start | Entrée |
+
+Trois conflits de la demande initiale, résolus ainsi (à revoir si besoin) :
+RT servait à la fois à accélérer et à drifter (→ RT drifte seulement quand on
+accélère au bouton, comme A + ZR dans Mario Kart) ; le klaxon était demandé sur
+« A Switch / B Xbox », soit le bouton de droite déjà pris par le frein (→ bouton
+de gauche, le Carré demandé sur PS) ; la caméra prend le bouton du haut, qui
+servait au reset (→ Select).
 
 - **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
   utile), puis courbe de réponse légèrement exponentielle pour la précision en

@@ -8,6 +8,9 @@ extends InputSource
 ## Pour l'ecran partage (phase 4), un joueur = une DeviceInputSource : cette
 ## source ne sert qu'au jeu solo et au developpement.
 
+## Changement de vue demande, par la manette ou le clavier (local).
+signal camera_toggle_requested
+
 var pad: DeviceInputSource
 var keyboard: KeyboardInputSource
 
@@ -21,6 +24,8 @@ func _ready() -> void:
 	add_child(keyboard)
 	_pick_pad()
 	Input.joy_connection_changed.connect(func(_d: int, _c: bool) -> void: _pick_pad())
+	pad.camera_toggle_requested.connect(camera_toggle_requested.emit)
+	keyboard.camera_toggle_requested.connect(camera_toggle_requested.emit)
 
 
 ## Nom lisible de la manette suivie, ou "" si aucune.
@@ -50,4 +55,5 @@ func poll(tick: int) -> InputFrame:
 	frame.handbrake = p.handbrake or k.handbrake
 	frame.boost = p.boost or k.boost
 	frame.reset = p.reset or k.reset
+	frame.honk = p.honk or k.honk
 	return frame
