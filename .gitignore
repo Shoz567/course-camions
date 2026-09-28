@@ -5,6 +5,7 @@ game/.godot/
 
 # Assets generes par Blender : ils se regenerent avec `make assets`
 game/assets/generated/
+Assets_Visuels/
 
 # Blender
 *.blend1
