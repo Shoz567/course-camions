@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
@@ -10,6 +10,9 @@ size = Vector3(2.4, 1, 5.8)
 
 [sub_resource type="BoxShape3D" id="shape_cab"]
 size = Vector3(2.4, 1.4, 2.2)
+
+[sub_resource type="BoxShape3D" id="shape_trailer"]
+size = Vector3(3, 3.1, 13)
 
 [sub_resource type="StandardMaterial3D" id="mat_body"]
 albedo_color = Color(0.85, 0.3, 0.1, 1)
@@ -27,6 +30,13 @@ size = Vector3(2.4, 1, 5.8)
 [sub_resource type="BoxMesh" id="mesh_cab"]
 material = SubResource("mat_cab")
 size = Vector3(2.4, 1.4, 2.2)
+
+[sub_resource type="StandardMaterial3D" id="mat_trailer"]
+albedo_color = Color(0.82, 0.84, 0.88, 1)
+
+[sub_resource type="BoxMesh" id="mesh_trailer"]
+material = SubResource("mat_trailer")
+size = Vector3(3, 3.1, 13)
 
 [sub_resource type="CylinderMesh" id="mesh_wheel"]
 material = SubResource("mat_wheel")
@@ -54,6 +64,10 @@ shape = SubResource("shape_chassis")
 [node name="Cab" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.45, -1.8)
 shape = SubResource("shape_cab")
+
+[node name="Trailer" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.35, 6.9)
+shape = SubResource("shape_trailer")
 
 [node name="Probe_FL" type="RayCast3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.05, 1, -1.9)
@@ -87,6 +101,10 @@ mesh = SubResource("mesh_chassis")
 [node name="CabMesh" type="MeshInstance3D" parent="Visual/Body"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.45, -1.8)
 mesh = SubResource("mesh_cab")
+
+[node name="TrailerMesh" type="MeshInstance3D" parent="Visual/Body"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.35, 6.9)
+mesh = SubResource("mesh_trailer")
 
 [node name="Wheel_FL" type="MeshInstance3D" parent="Visual"]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, -1.05, 0.55, -1.9)

@@ -30,6 +30,10 @@ const CHASSIS_SIZE := Vector3(2.4, 1.00, 5.8)
 const CHASSIS_CENTER := Vector3(0.0, 1.25, 0.0)
 const CAB_SIZE := Vector3(2.4, 1.40, 2.2)
 const CAB_CENTER := Vector3(0.0, 2.45, -1.8)
+# §5 bis Semi-remorque rigide (caisse du modele de l'equipe, a l'echelle du
+# tracteur) : de z = 0,4 a 13,4 m, de y = 1,8 a 4,9 m.
+const TRAILER_SIZE := Vector3(3.0, 3.1, 13.0)
+const TRAILER_CENTER := Vector3(0.0, 3.35, 6.9)
 
 # §7 Couches (numeros de couche, 1 = bit 0)
 const LAYER_WORLD := 1

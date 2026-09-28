@@ -120,8 +120,9 @@ func _build_arena() -> void:
 	# obstacles a percuter : camions gares, et plots de 1 m
 	for i in 3:
 		var parked := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
-		parked.position = Vector3(-25.0 + i * 5.0, 0.0, -30.0)
-		parked.rotation_degrees = Vector3(0.0, 90.0, 0.0)
+		# alignes dans le sens de la marche : leurs semi-remorques (13 m) ne se
+		# chevauchent pas
+		parked.position = Vector3(-30.0 + i * 6.0, 0.0, -30.0)
 		add_child(parked)
 	var post_mat := StandardMaterial3D.new()
 	post_mat.albedo_color = Color(0.2, 0.6, 0.9)

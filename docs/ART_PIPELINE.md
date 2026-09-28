@@ -116,7 +116,7 @@ Mesuré sur `Camion_Bleu.glb` (2026-09-28), **le modèle ne suit pas la spec** :
 |---|---|---|
 | Avant | −Z | +Z |
 | Échelle | appliquée (1,0) | ×1,25 non appliqué sur la racine |
-| Remorque | aucune | semi-remorque 3 essieux (11 m) |
+| Remorque | semi-remorque (depuis le 2026-09-28) | semi-remorque 3 essieux avec aileron : conservée |
 | Longueur du tracteur | 5,8 m | 6,1 m |
 | Largeur / hauteur | 2,5 / 3,2 m | 2,9 m (cabine), 3,7 m hors tout / 3,7 m (4,7 m échappements) |
 | Empattement / voie | 3,8 / 2,1 m | 3,1 / 2,4 m |
@@ -124,16 +124,19 @@ Mesuré sur `Camion_Bleu.glb` (2026-09-28), **le modèle ne suit pas la spec** :
 | Noms des roues | `Wheel_FL`… pivot au moyeu | `Roue_AV_G`… groupes sans pivot au moyeu ; « G » est à droite une fois l'avant en −Z |
 
 `TruckVisual` l'**ajuste** donc sans toucher à la physique : demi-tour,
-remorque retirée, échelle uniforme ×0,947 (tracteur de 5,8 m), centrage sur la
-caisse, bas des pneus au sol, pivot recalé au moyeu de chaque groupe de roues,
-roues associées aux rayons **par position** (pas par nom). Restent visibles :
-caisse visuelle plus large (3,5 m) et plus haute (4,4 m) que la collision, et
+échelle uniforme ×0,947 calculée sur le **tracteur** (5,8 m) et appliquée à tout
+l'ensemble (semi-remorque exclue du calage mais affichée : 16,4 m hors tout),
+centrage sur la caisse du tracteur, bas des pneus au sol, pivot recalé au moyeu
+de chaque groupe de roues du tracteur, roues associées aux rayons **par
+position** (pas par nom) ; les roues de remorque restent fixes. Restent
+visibles : cabine plus large (3,5 m) et plus haute (4,4 m) que sa collision, et
 roues visuelles à l'empattement du modèle (≈ 3,0 m) au lieu de 3,8 m.
 `truck_visual_test` vérifie l'ajustement ; il se saute sans le modèle.
 
 **À corriger à la source** (blender-modeler / camarades) : avant en −Z, échelle
-appliquée, remorque dans un fichier séparé, empattement 3,8 m, voie 2,1 m, roues
-de 0,55 m, objets `Body` + `Wheel_FL/FR/RL/RR` pivotés au moyeu (§4). **À
+appliquée, empattement 3,8 m, voie 2,1 m, roues de 0,55 m, objets `Body` +
+`Wheel_FL/FR/RL/RR` pivotés au moyeu (§4), caisse de remorque de 13,0 × 3,0 m
+dont le bas est à 1,8 m (VEHICLE_SPEC §5). **À
 vérifier** : les nœuds `Logo_001`, `Embleme_004/005` et `Plaque_AV_UE` ne
 doivent reproduire aucune marque existante (`CLAUDE.md` §1).
 

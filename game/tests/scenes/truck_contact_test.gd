@@ -12,6 +12,9 @@ extends PhysicsTest
 ##   D. le meme mur a 30 deg, a 150 km/h ;
 ##   E. temoin : D avec l'anti-retournement coupe. L'aide doit reduire
 ##      l'inclinaison max d'au moins 30 % (ratio mesure dans la scene).
+##      D et E roulent avec une caisse a 0,2 de frottement : le cas le plus
+##      severe mesure (le temoin s'y couche a 52 deg ; a 0,5 le frottement
+##      stabilise deja le camion et ne sollicite plus assez l'aide).
 ## Les vitesses initiales sont posees au tick 0 (m/s ajoutes, CLAUDE.md §10 b),
 ## puis les camions gardent le gaz.
 
@@ -50,11 +53,13 @@ func _test_setup() -> void:
 	# l'impact ; mur de 300 m pour qu'il ne le depasse pas pendant le test.
 	lane = 600.0
 	var d := _add("D mur a 30 deg 150 km/h", Vector3(lane, 0.0, 0.0), 30.0, 150.0, 1.0)
+	_severe(d)
 	_add_wall(Vector3(lane - 150.0, 0.0, -40.0), 0.0, d, 300.0)
 	# E. temoin sans anti-retournement
 	lane = 1200.0
 	var e := _add("E temoin sans aide (non verifie)", Vector3(lane, 0.0, 0.0), 30.0, 150.0, 1.0)
 	e.debug_anti_roll = false
+	_severe(e)
 	_add_wall(Vector3(lane - 150.0, 0.0, -40.0), 0.0, e, 300.0)
 
 
@@ -72,6 +77,13 @@ func _add(label: String, pos: Vector3, yaw_deg: float, kmh: float, throttle: flo
 	_upside.append(false)
 	_nan.append(false)
 	return t
+
+
+## Caisse a 0,2 de frottement : le cas le plus severe pour l'anti-retournement.
+func _severe(t: Truck) -> void:
+	var pm := PhysicsMaterial.new()
+	pm.friction = 0.2
+	t.physics_material_override = pm
 
 
 ## Mur de 0,3 m, 3 m de haut, face avant a `pos.z`.

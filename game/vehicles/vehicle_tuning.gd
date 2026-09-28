@@ -20,6 +20,16 @@ extends Resource
 ## Taux d'amortissement (1 = critique). Spike V1 : 0,45.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float = 0.0
 
+@export_group("Inertie")
+## Moments d'inertie imposes (kg.m2), axes locaux. Sans eux, Godot les deduit
+## des formes : la semi-remorque (13 m de caisse) multiplie le lacet par 17 et
+## tue le drift (mesure 2026-09-28 : derive 29 -> 3,5 deg). Arcade : la
+## remorque pese peu dans la dynamique ; on regle le ressenti ici.
+## Reference : tracteur seul, calcule par Godot = 19 989 / 16 450 / 8 338.
+@export_range(0.0, 1000000.0, 1.0, "suffix:kg·m²") var inertia_pitch_kgm2: float = 0.0
+@export_range(0.0, 1000000.0, 1.0, "suffix:kg·m²") var inertia_yaw_kgm2: float = 0.0
+@export_range(0.0, 1000000.0, 1.0, "suffix:kg·m²") var inertia_roll_kgm2: float = 0.0
+
 @export_group("Moteur et freins")
 ## Poussee moteur a bas regime. 4,63 m/s2 = 0 -> 100 km/h en 6 s sans pertes.
 @export_range(0.0, 20.0, 0.01, "suffix:m/s²") var engine_accel_ms2: float = 0.0
@@ -61,9 +71,11 @@ extends Resource
 ## Freinage du train arriere au frein a main (faible : le drift garde la vitesse).
 @export_range(0.0, 20.0, 0.01, "suffix:m/s²") var handbrake_decel_ms2: float = 0.0
 
-## Frottement de la caisse (chassis, cabine) contre les murs et les autres
-## camions. Faible : un camion qui frotte glisse au lieu de s'accrocher et de
-## basculer (directive arcade : les contacts sont frequents).
+## Frottement de la caisse (chassis, cabine, remorque) contre les murs et les
+## autres camions. Jolt retient le PLUS FAIBLE des deux frottements en contact
+## (mesure 2026-09-28) : un mur a 0,5 ne freine a 0,5 que si la caisse est a
+## 0,5. A 0,5 : glissade le long du mur 138 -> 110 km/h, et un camion pris en
+## biais a 150 km/h se couche moins (10,9 deg contre 13,2 a 0,2).
 @export_range(0.0, 1.0, 0.01) var chassis_friction: float = 0.0
 
 @export_group("Direction")

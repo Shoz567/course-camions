@@ -98,6 +98,9 @@ func apply_tuning() -> void:
 	# Sous cette vitesse, l'adherence se regle en glissement (m/s) et non plus en
 	# angle : les deux lois se raccordent exactement a cette vitesse.
 	_min_ref_speed = tuning.grip_saturation_speed_ms / _tan_slip
+	# inertie imposee (axes locaux X tangage, Y lacet, Z roulis) : independante
+	# des formes de collision, donc de la remorque
+	inertia = Vector3(tuning.inertia_pitch_kgm2, tuning.inertia_yaw_kgm2, tuning.inertia_roll_kgm2)
 	var mat := PhysicsMaterial.new()
 	mat.friction = tuning.chassis_friction
 	mat.bounce = 0.0

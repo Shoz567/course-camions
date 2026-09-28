@@ -27,14 +27,18 @@ corrige, pas le code qu'on contourne.
 
 ## 2. Gabarit
 
-Camion de course à deux essieux, **sans remorque** (les remorques sont une
-question de design ouverte, cf. `PLAN.md`).
+**Tracteur à deux essieux + semi-remorque de course avec aileron** : c'est
+l'identité visuelle du jeu (décision du 2026-09-28, modèles de l'équipe). La
+semi-remorque est **rigide**, portée par le même corps que le tracteur (§5 bis) :
+pas d'articulation, pas de mise en portefeuille. Les cotes ci-dessous sont
+celles du tracteur, sauf mention « ensemble ».
 
 | Grandeur | Valeur |
 |---|---|
-| Longueur | 5,8 m |
-| Largeur | 2,5 m |
-| Hauteur (cabine) | 3,2 m |
+| Longueur (tracteur) | 5,8 m |
+| Longueur (ensemble) | **16,4 m** (de z = −2,9 à +13,5) |
+| Largeur (tracteur / remorque) | 2,5 m / 3,0 m |
+| Hauteur (cabine / remorque / aileron) | 3,2 m / 4,9 m / 5,8 m |
 | Masse totale | **5 000 kg** |
 | Empattement | 3,8 m (essieu avant z = −1,9 ; arrière z = +1,9) |
 | Voie | 2,1 m (roues à x = ±1,05) |
@@ -104,12 +108,18 @@ bien le châssis s'il touche le sol.
 
 ## 5. Formes de collision
 
-Deux boîtes convexes, **jamais le maillage** :
+Trois boîtes convexes, **jamais le maillage** :
 
 | Forme | Taille (x × y × z) | Centre (x ; y ; z) |
 |---|---|---|
 | Châssis | 2,4 × 1,00 × 5,8 | (0 ; 1,25 ; 0) |
 | Cabine | 2,4 × 1,40 × 2,2 | (0 ; 2,45 ; −1,8) |
+| Remorque | 3,0 × 3,10 × 13,0 | (0 ; 3,35 ; 6,9) |
+
+La boîte de remorque couvre la caisse du modèle de l'équipe mis à l'échelle du
+tracteur (arrière à 13,4 m, visuel à 13,46 m, vérifié par `truck_visual_test`).
+Son bas est à 1,8 m : la queue ne talonne pas en dessous de ~9° de tangage. Les
+roues et bavettes de la remorque (sous 1,8 m) sont purement visuelles.
 
 Le bas du châssis est à y = 0,75 : garde au sol de 0,75 m au repos. C'est ce qui
 permet de passer les bosses et de retomber d'un saut sur les roues plutôt que
@@ -118,7 +128,21 @@ sur le ventre.
 Le corps du camion a **`continuous_cd = true`** (spike V2 : l'enfoncement dans
 un mur à 200 km/h passe de 0,87 m à 0,10 m, sans coût mesurable).
 
-## 5 bis. Amortissement du corps
+## 5 bis. Semi-remorque rigide : inertie imposée
+
+Laissée à Godot, l'inertie se déduit des formes : la boîte de remorque multiplie
+l'inertie en lacet par 17 (16 450 → 285 873 kg·m²) et **tue le drift** (dérive au
+frein à main 29° → 3,5° ; mesuré le 2026-09-28). Choix arcade : la remorque pèse
+peu dans la dynamique. Masse (5 000 kg) et centre de masse (§3) restent ceux du
+tracteur, et les **moments d'inertie sont imposés** par `VehicleTuning`
+(`inertia_*_kgm2`, valeurs du tracteur seul : 19 989 / 16 450 / 8 338). La
+remorque reste **pleinement physique pour les contacts** (murs, autres camions).
+Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réception.
+
+Conséquence d'une remorque rigide : en braquant fort à basse vitesse, la queue
+balaie vers l'extérieur (11,5 m derrière l'essieu arrière).
+
+## 5 ter. Amortissement du corps
 
 `linear_damp_mode = REPLACE`, **`linear_damp = 0`**. Le défaut du projet
 (`default_linear_damp` = 0,1) est une traînée cachée qui plafonnait le camion à

@@ -9,19 +9,25 @@ extends Node3D
 ##   charge a l'execution s'il existe, sinon le camion garde ses boites de
 ##   blockout. Un clone neuf et les tests ne dependent donc d'aucun binaire.
 ##
-## Le modele ne suit pas VEHICLE_SPEC.md (avant en +Z, semi-remorque, empattement
-## 3,1 m, roues de 0,72 / 0,84 m...). Il est donc AJUSTE au chargement, sans
-## jamais toucher a la physique (VEHICLE_SPEC §9) :
-##   demi-tour (avant en -Z), remorque retiree, echelle uniforme pour que le
-##   tracteur mesure la longueur de la spec, centre sur la caisse, bas des pneus
-##   au sol ; chaque groupe de roues recoit un pivot au moyeu et est associe au
-##   rayon le plus proche PAR POSITION (les noms du modele ne sont pas fiables).
+## Le modele ne suit pas VEHICLE_SPEC.md (avant en +Z, echelle non appliquee,
+## empattement 3,1 m, roues de 0,72 / 0,84 m...). Il est donc AJUSTE au
+## chargement, sans jamais toucher a la physique (VEHICLE_SPEC §9) :
+##   demi-tour (avant en -Z), echelle uniforme pour que le TRACTEUR mesure la
+##   longueur de la spec (la semi-remorque est exclue du calage mais affichee,
+##   a la meme echelle), centre sur la caisse du tracteur, bas des pneus au sol ;
+##   chaque groupe de roues du tracteur recoit un pivot au moyeu et est associe
+##   au rayon le plus proche PAR POSITION (les noms du modele ne sont pas
+##   fiables). Les roues de la remorque restent fixes.
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
 
 ## Chemin du modele, relatif au dossier du projet Godot (game/). Vide = boites.
 @export var external_model: String = "../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb"
-## Noeuds retires du modele (la spec est sans remorque, PLAN.md).
-@export var strip_prefixes: PackedStringArray = ["Remorque"]
+## Noeuds retires du modele. Aucun : la semi-remorque fait partie de l'identite
+## du jeu (VEHICLE_SPEC §2 bis).
+@export var strip_prefixes: PackedStringArray = []
+## Noeuds affiches mais exclus du calage : l'echelle et le centrage se font sur
+## le tracteur, dont les cotes sont celles de la spec.
+@export var fit_exclude_prefixes: PackedStringArray = ["Remorque"]
 ## Prefixe des groupes de roues dans le modele.
 @export var wheel_group_prefix: String = "Roue"
 
@@ -88,7 +94,7 @@ func _probe_index(i: int) -> int:
 
 func _attach_external() -> void:
 	var path := ProjectSettings.globalize_path("res://").path_join(external_model).simplify_path()
-	var template := _template(path, strip_prefixes, wheel_group_prefix)
+	var template := _template(path, strip_prefixes, fit_exclude_prefixes, wheel_group_prefix)
 	if template == null:
 		return
 	var model := template.instantiate() as Node3D
@@ -119,7 +125,8 @@ func _attach_external() -> void:
 
 ## Charge et ajuste le modele une seule fois par chemin ; les camions suivants
 ## dupliquent le resultat (maillages partages).
-static func _template(path: String, strip: PackedStringArray, wheel_prefix: String) -> PackedScene:
+static func _template(path: String, strip: PackedStringArray, exclude: PackedStringArray,
+		wheel_prefix: String) -> PackedScene:
 	if _templates.has(path):
 		return _templates[path]
 	_templates[path] = null
@@ -134,7 +141,7 @@ static func _template(path: String, strip: PackedStringArray, wheel_prefix: Stri
 	# on va deplacer des noeuds : plus de proprietaire le temps de l'ajustement
 	for n in raw.find_children("*", "", true, false):
 		n.owner = null
-	var fitted := _fit(raw, strip, wheel_prefix)
+	var fitted := _fit(raw, strip, exclude, wheel_prefix)
 	raw.free()
 	if fitted == null:
 		return null
@@ -148,7 +155,8 @@ static func _template(path: String, strip: PackedStringArray, wheel_prefix: Stri
 
 
 ## Construit un Node3D dans le repere du camion : corps ajuste + pivots de roue.
-static func _fit(raw: Node3D, strip: PackedStringArray, wheel_prefix: String) -> Node3D:
+static func _fit(raw: Node3D, strip: PackedStringArray, exclude: PackedStringArray,
+		wheel_prefix: String) -> Node3D:
 	# 1. retirer la remorque (et tout ce qui commence par un prefixe exclu)
 	for n in raw.find_children("*", "Node3D", true, false):
 		if not is_instance_valid(n):
@@ -158,9 +166,12 @@ static func _fit(raw: Node3D, strip: PackedStringArray, wheel_prefix: String) ->
 				n.get_parent().remove_child(n)
 				n.free()
 				break
-	# 2. boite englobante et groupes de roues, dans le repere du modele
+	# 2. boite englobante du tracteur (hors parties exclues du calage), boite de
+	#    l'ensemble, et groupes de roues, dans le repere du modele
 	var box := AABB()
 	var first := true
+	var rig := AABB()
+	var rig_first := true
 	var groups: Array[Node3D] = []
 	var group_xf: Array[Transform3D] = []
 	var stack: Array = [[raw, Transform3D.IDENTITY]]
@@ -170,11 +181,15 @@ static func _fit(raw: Node3D, strip: PackedStringArray, wheel_prefix: String) ->
 		var xf: Transform3D = item[1]
 		if node is Node3D and node != raw:
 			xf = xf * (node as Node3D).transform
+		var excluded := _under_prefix(node, raw, exclude)
 		if node is MeshInstance3D:
 			var a := xf * (node as MeshInstance3D).get_aabb()
-			box = a if first else box.merge(a)
-			first = false
-		if node.get_class() == "Node3D" and String(node.name).begins_with(wheel_prefix):
+			rig = a if rig_first else rig.merge(a)
+			rig_first = false
+			if not excluded:
+				box = a if first else box.merge(a)
+				first = false
+		if node.get_class() == "Node3D" and String(node.name).begins_with(wheel_prefix) and not excluded:
 			groups.append(node as Node3D)
 			group_xf.append(xf)
 		for c in node.get_children():
@@ -214,12 +229,27 @@ static func _fit(raw: Node3D, strip: PackedStringArray, wheel_prefix: String) ->
 		raw.remove_child(c)
 		body.add_child(c)
 	var fitted_box := AABB(f * box.position, Vector3.ZERO).expand(f * box.end)
+	var fitted_rig := AABB(f * rig.position, Vector3.ZERO).expand(f * rig.end)
 	root.set_meta(&"fit_report", {
 		"scale": s,
 		"size": fitted_box.size,
+		"rig_size": fitted_rig.size,
+		"rig_rear_z": fitted_rig.end.z,
 		"wheel_groups": groups.size(),
 	})
 	return root
+
+
+## Vrai si `node` ou l'un de ses ancetres (jusqu'a `root` exclu) porte un nom
+## commencant par l'un des prefixes.
+static func _under_prefix(node: Node, root: Node, prefixes: PackedStringArray) -> bool:
+	var n := node
+	while n != null and n != root:
+		for pre in prefixes:
+			if String(n.name).begins_with(pre):
+				return true
+		n = n.get_parent()
+	return false
 
 
 static func _subtree_aabb(node: Node, xf: Transform3D) -> AABB:

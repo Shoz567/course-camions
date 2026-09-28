@@ -32,11 +32,17 @@ func _test_finish() -> void:
 
 	_check_box("Chassis", TruckSpec.CHASSIS_SIZE, TruckSpec.CHASSIS_CENTER)
 	_check_box("Cab", TruckSpec.CAB_SIZE, TruckSpec.CAB_CENTER)
+	_check_box("Trailer", TruckSpec.TRAILER_SIZE, TruckSpec.TRAILER_CENTER)
 	var shapes := 0
 	for c in t.get_children():
 		if c is CollisionShape3D:
 			shapes += 1
-	check("exactement 2 formes de collision", shapes == 2, "n=%d" % shapes)
+	check("exactement 3 formes de collision (chassis, cabine, remorque)", shapes == 3, "n=%d" % shapes)
+	# inertie imposee par le reglage, pas deduite des formes (VEHICLE_SPEC §5 bis)
+	var inv := t.get_inverse_inertia_tensor()
+	var yaw := 1.0 / inv.y.y if inv.y.y > 0.0 else 0.0
+	check_near("inertie en lacet imposee (kg.m2)", yaw, t.tuning.inertia_yaw_kgm2,
+		t.tuning.inertia_yaw_kgm2 * 0.01)
 
 	for i in 4:
 		var probe := t.get_node_or_null(NodePath(TruckSpec.PROBE_NAMES[i])) as Node3D
