@@ -181,13 +181,19 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 
 ## Phase 4 — Écran partagé local
 
-| # | Tâche | Agent |
-|---|---|---|
-| 4.1 | `DeviceInputSource` : routage des `InputEvent` par `device` id (`docs/INPUT_SPEC.md`) | gameplay-engineer |
-| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer |
-| 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer |
-| 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer |
-| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa |
+| # | Tâche | Agent | État |
+|---|---|---|---|
+| 4.1 | `DeviceInputSource` : routage des `InputEvent` par `device` id (`docs/INPUT_SPEC.md`) | gameplay-engineer | `[x]` + profil MK8 Switch, jeux de touches par joueur |
+| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[ ]` 2 joueurs fixes pour le playtest (`race_2p.tscn`) |
+| 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[~]` 2 vues haut / bas (`LocalRace`) ; 3 et 4 vues : disposition en grille à faire |
+| 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer | `[~]` débranchement : roue libre (testé en solo) ; rebranchement en course non testé |
+| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[~]` isolation à 2 joueurs (`race_scene_test`) ; perf de rendu : spike V3 |
+
+Anticipé le 2026-09-28 pour le playtest : **course à 2 joueurs en écran partagé**
+(`make run`, scène principale `dev/race_2p.tscn`) : J1 camion bleu AZUR (manette
+0 ou flèches, vue du haut), J2 camion rouge DURAND (manette 1 ou ZQSD, vue du
+bas), départ côte à côte, compte à rebours, position (POS 1/2) dans chaque HUD.
+Le solo reste dans `dev/track_drive.tscn` (`make solo`).
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).

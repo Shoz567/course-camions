@@ -6,18 +6,21 @@ extends InputSource
 ## c'est ce qui rend l'ecran partage possible sans actions p1_, p2_...
 ##
 ## Godot (SDL) nomme les boutons par POSITION, pas par etiquette :
-##   bas = A Xbox / Croix PS / B Switch      droite = B Xbox / Rond PS / A Switch
-##   gauche = X Xbox / Carre PS / Y Switch   haut = Y Xbox / Triangle PS / X Switch
+##   JOY_BUTTON_A = bas    (B Switch, A Xbox, Croix PS)
+##   JOY_BUTTON_B = droite (A Switch, B Xbox, Rond PS)
+##   JOY_BUTTON_X = gauche (Y Switch, X Xbox, Carre PS)
+##   JOY_BUTTON_Y = haut   (X Switch, Y Xbox, Triangle PS)
+##   JOY_BUTTON_BACK = - Switch (Select, View, Share)
 ##
-## Schema par defaut (style Mario Kart, tout est reaffectable ci-dessous) :
-##   accelerer        RT / R2 / ZR (analogique)  ou bouton du bas
-##   freiner, reculer LT / L2 / ZL (analogique)  ou bouton de droite
-##   drift            RB / R1 / R (frein a main), ou RT tant qu'on accelere
-##                    avec le bouton du bas (A pour avancer, gachette pour deraper)
-##   boost            LB / L1 / L
-##   klaxon           bouton de gauche
-##   camera           bouton du haut (signal local, hors InputFrame)
-##   reset            Select / View / Share / -
+## Profil par defaut : Mario Kart 8 Deluxe (disposition Switch), reaffectable
+## ci-dessous sans code :
+##   accelerer        A ou Y (droite, gauche), ou ZR analogique
+##   freiner, reculer B (bas)
+##   drift            R, ou ZR tant qu'on accelere au bouton (A + ZR, comme MK8)
+##   boost            L (1,5 s, recharge 4 s)
+##   klaxon           ZL
+##   camera           X (haut) : signal local, hors InputFrame
+##   reset            -
 
 ## Changement de vue demande (1re / 3e personne). Local : la camera ne modifie
 ## pas la simulation, elle n'est pas dans l'InputFrame (INPUT_SPEC §2).
@@ -28,29 +31,34 @@ signal camera_toggle_requested
 @export_range(0.0, 0.5, 0.01) var steer_deadzone: float = 0.10
 ## Courbe de reponse de la direction : 1 = lineaire, > 1 = plus precis au centre.
 @export_range(1.0, 3.0, 0.05) var steer_exponent: float = 1.5
-## Au-dela, une gachette compte comme enfoncee (drift a la gachette).
+## Au-dela, une gachette compte comme enfoncee (drift ou klaxon a la gachette).
 @export_range(0.0, 1.0, 0.01) var trigger_press_threshold: float = 0.5
 
 @export_group("Affectations")
-@export var button_accelerate: JoyButton = JOY_BUTTON_A
-@export var button_brake: JoyButton = JOY_BUTTON_B
-@export var button_handbrake: JoyButton = JOY_BUTTON_RIGHT_SHOULDER
-@export var button_boost: JoyButton = JOY_BUTTON_LEFT_SHOULDER
-@export var button_honk: JoyButton = JOY_BUTTON_X
-@export var button_camera: JoyButton = JOY_BUTTON_Y
-@export var button_reset: JoyButton = JOY_BUTTON_BACK
+@export var buttons_accelerate: Array[JoyButton] = [JOY_BUTTON_B, JOY_BUTTON_X]
+@export var buttons_brake: Array[JoyButton] = [JOY_BUTTON_A]
+@export var buttons_handbrake: Array[JoyButton] = [JOY_BUTTON_RIGHT_SHOULDER]
+@export var buttons_boost: Array[JoyButton] = [JOY_BUTTON_LEFT_SHOULDER]
+@export var buttons_honk: Array[JoyButton] = []
+@export var buttons_camera: Array[JoyButton] = [JOY_BUTTON_Y]
+@export var buttons_reset: Array[JoyButton] = [JOY_BUTTON_BACK]
+## Gachette d'accelerateur analogique (ZR).
 @export var axis_accelerate: JoyAxis = JOY_AXIS_TRIGGER_RIGHT
-@export var axis_brake: JoyAxis = JOY_AXIS_TRIGGER_LEFT
+## Gachette de frein analogique : aucune dans le profil MK8 (ZL = klaxon).
+@export var axis_brake: JoyAxis = JOY_AXIS_INVALID
+## Gachette de klaxon (ZL), declenchee au franchissement du seuil.
+@export var axis_honk: JoyAxis = JOY_AXIS_TRIGGER_LEFT
 
 var connected: bool = false
 
 var _axis_x: float = 0.0
 var _rt: float = 0.0
 var _lt: float = 0.0
-var _accel_button: bool = false
-var _brake_button: bool = false
-var _handbrake: bool = false
-var _boost: bool = false
+var _honk_axis_down: bool = false
+var _accel_held: int = 0
+var _brake_held: int = 0
+var _handbrake_held: int = 0
+var _boost_held: int = 0
 var _reset_pending: bool = false
 var _honk_pending: bool = false
 
@@ -65,52 +73,59 @@ func _input(event: InputEvent) -> void:
 		return
 	var motion := event as InputEventJoypadMotion
 	if motion != null:
-		if motion.axis == JOY_AXIS_LEFT_X:
+		var a := motion.axis
+		if a == JOY_AXIS_LEFT_X:
 			_axis_x = motion.axis_value
-		elif motion.axis == axis_accelerate:
+		if a == axis_accelerate:
 			_rt = motion.axis_value
-		elif motion.axis == axis_brake:
+		if a == axis_brake:
 			_lt = motion.axis_value
+		if a == axis_honk:
+			var down := motion.axis_value >= trigger_press_threshold
+			if down and not _honk_axis_down:
+				_honk_pending = true
+			_honk_axis_down = down
 		return
 	var button := event as InputEventJoypadButton
 	if button == null:
 		return
-	var p := button.pressed
 	var b := button.button_index
-	if b == button_accelerate:
-		_accel_button = p
-	elif b == button_brake:
-		_brake_button = p
-	elif b == button_handbrake:
-		_handbrake = p
-	elif b == button_boost:
-		_boost = p
-	elif b == button_honk:
-		if p:
-			_honk_pending = true
-	elif b == button_camera:
-		if p:
-			camera_toggle_requested.emit()
-	elif b == button_reset:
-		if p:
-			_reset_pending = true
+	var step := 1 if button.pressed else -1
+	# compteurs : deux boutons pour la meme action (A et Y) se cumulent
+	if buttons_accelerate.has(b):
+		_accel_held = maxi(0, _accel_held + step)
+	if buttons_brake.has(b):
+		_brake_held = maxi(0, _brake_held + step)
+	if buttons_handbrake.has(b):
+		_handbrake_held = maxi(0, _handbrake_held + step)
+	if buttons_boost.has(b):
+		_boost_held = maxi(0, _boost_held + step)
+	if not button.pressed:
+		return
+	if buttons_honk.has(b):
+		_honk_pending = true
+	if buttons_camera.has(b):
+		camera_toggle_requested.emit()
+	if buttons_reset.has(b):
+		_reset_pending = true
 
 
 func poll(tick: int) -> InputFrame:
 	var rt := clampf(_rt, 0.0, 1.0)
 	frame.tick = tick
 	frame.steer = shape_steer(_axis_x)
-	# accelerer : bouton du bas (plein gaz) ou gachette (analogique de bout en
-	# bout, sans seuil : un demi-gaz est un demi-gaz, INPUT_SPEC §3). Quand on
-	# accelere au bouton, la gachette devient le drift.
-	if _accel_button:
+	# accelerer : bouton (plein gaz) ou gachette (analogique de bout en bout,
+	# sans seuil : un demi-gaz est un demi-gaz, INPUT_SPEC §3). Quand on
+	# accelere au bouton, la gachette devient le drift (A + ZR, comme MK8).
+	var handbrake := _handbrake_held > 0
+	if _accel_held > 0:
 		frame.throttle = 1.0
-		frame.handbrake = _handbrake or rt >= trigger_press_threshold
+		frame.handbrake = handbrake or rt >= trigger_press_threshold
 	else:
 		frame.throttle = rt
-		frame.handbrake = _handbrake
-	frame.brake = 1.0 if _brake_button else clampf(_lt, 0.0, 1.0)
-	frame.boost = _boost
+		frame.handbrake = handbrake
+	frame.brake = 1.0 if _brake_held > 0 else clampf(_lt, 0.0, 1.0)
+	frame.boost = _boost_held > 0
 	frame.reset = _reset_pending
 	frame.honk = _honk_pending
 	_reset_pending = false
@@ -136,9 +151,10 @@ func _on_joy_connection_changed(device: int, is_connected: bool) -> void:
 		_axis_x = 0.0
 		_rt = 0.0
 		_lt = 0.0
-		_accel_button = false
-		_brake_button = false
-		_handbrake = false
-		_boost = false
+		_honk_axis_down = false
+		_accel_held = 0
+		_brake_held = 0
+		_handbrake_held = 0
+		_boost_held = 0
 		_reset_pending = false
 		_honk_pending = false

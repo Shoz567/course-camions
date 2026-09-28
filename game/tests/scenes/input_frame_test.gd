@@ -93,47 +93,53 @@ func _test_device() -> void:
 	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 0.5)
 	check_near("gachette analogique : demi-gaz", _pad0.poll(4).throttle, 0.5, 1e-6)
 
+	# Profil Mario Kart 8 Deluxe (disposition Switch, boutons par POSITION)
 	_send_button(0, JOY_BUTTON_BACK, true)
 	var r1 := _pad0.poll(5).reset
 	var r2 := _pad0.poll(6).reset
-	check("reset (Select) : vrai un seul tick", r1 and not r2, "%s puis %s" % [r1, r2])
-	_send_button(0, JOY_BUTTON_X, true)
+	check("reset (-) : vrai un seul tick", r1 and not r2, "%s puis %s" % [r1, r2])
+	_send_button(0, JOY_BUTTON_BACK, false)
+	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 1.0)
 	var h1 := _pad0.poll(7).honk
 	var h2 := _pad0.poll(8).honk
-	check("klaxon (bouton de gauche) : vrai un seul tick", h1 and not h2, "%s puis %s" % [h1, h2])
-
-	# schema style Mario Kart : A pour avancer, gachette pour deraper
+	check("klaxon (ZL) : vrai un seul tick", h1 and not h2, "%s puis %s" % [h1, h2])
+	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 0.0)
+	check("ZL ne freine pas (profil MK8)", _pad0.poll(8).brake == 0.0)
 	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 0.0)
-	_send_button(0, JOY_BUTTON_A, true)
+	_send_button(0, JOY_BUTTON_B, true)
 	var fa := _pad0.poll(9)
-	check("bouton du bas : plein gaz, pas de drift", fa.throttle == 1.0 and not fa.handbrake)
+	check("A Switch (droite) : plein gaz, pas de drift", fa.throttle == 1.0 and not fa.handbrake)
 	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 1.0)
 	var fd := _pad0.poll(10)
-	check("bouton du bas + RT : plein gaz ET drift", fd.throttle == 1.0 and fd.handbrake)
-	_send_button(0, JOY_BUTTON_A, false)
+	check("A + ZR : plein gaz ET drift", fd.throttle == 1.0 and fd.handbrake)
+	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 0.0)
+	_send_button(0, JOY_BUTTON_X, true)
+	_send_button(0, JOY_BUTTON_B, false)
+	check("Y Switch (gauche) accelere aussi, A et Y cumules", _pad0.poll(11).throttle == 1.0)
+	_send_button(0, JOY_BUTTON_X, false)
+	check("A et Y relaches : plus de gaz", _pad0.poll(12).throttle == 0.0)
 	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 0.7)
-	var fr := _pad0.poll(11)
-	check("RT seul : accelerateur analogique, pas de drift",
+	var fr := _pad0.poll(13)
+	check("ZR seul : accelerateur analogique, pas de drift",
 		absf(fr.throttle - 0.7) < 1e-6 and not fr.handbrake, "throttle=%.2f" % fr.throttle)
 	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 0.0)
 	_send_button(0, JOY_BUTTON_RIGHT_SHOULDER, true)
-	check("RB : frein a main (drift)", _pad0.poll(12).handbrake)
+	check("R : drift", _pad0.poll(14).handbrake)
 	_send_button(0, JOY_BUTTON_RIGHT_SHOULDER, false)
-	_send_button(0, JOY_BUTTON_B, true)
-	check("bouton de droite : freiner / reculer", _pad0.poll(13).brake == 1.0)
-	_send_button(0, JOY_BUTTON_B, false)
+	_send_button(0, JOY_BUTTON_A, true)
+	check("B Switch (bas) : freiner / reculer", _pad0.poll(15).brake == 1.0)
+	_send_button(0, JOY_BUTTON_A, false)
 	_send_button(0, JOY_BUTTON_LEFT_SHOULDER, true)
-	check("LB : boost", _pad0.poll(14).boost)
+	check("L : boost", _pad0.poll(16).boost)
 	_send_button(0, JOY_BUTTON_LEFT_SHOULDER, false)
 	var toggles := [0]
 	_pad0.camera_toggle_requested.connect(func() -> void: toggles[0] += 1)
 	_send_button(0, JOY_BUTTON_Y, true)
-	var fc := _pad0.poll(15)
-	check("haut : changement de camera, hors InputFrame",
+	var fc := _pad0.poll(17)
+	check("X Switch (haut) : changement de camera, hors InputFrame",
 		toggles[0] == 1 and not fc.reset and not fc.honk, "signaux=%d" % toggles[0])
-
 	_pad0._on_joy_connection_changed(0, false)
-	var fu := _pad0.poll(16)
+	var fu := _pad0.poll(18)
 	check("manette debranchee : neutre", fu.throttle == 0.0 and fu.steer == 0.0 and not _pad0.connected)
 
 

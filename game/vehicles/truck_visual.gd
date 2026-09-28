@@ -31,6 +31,10 @@ extends Node3D
 ## Prefixe des groupes de roues dans le modele.
 @export var wheel_group_prefix: String = "Roue"
 
+## Couleur des boites de blockout quand le modele est absent (clone neuf) :
+## transparente = couleurs d'origine. Distingue les joueurs sans le modele.
+@export var mock_tint: Color = Color(0, 0, 0, 0)
+
 ## En headless (tests), le modele n'est pas charge : rien a voir, et les tests
 ## ne doivent pas dependre d'un fichier hors depot. Un test peut forcer.
 static var load_external_in_headless: bool = false
@@ -60,6 +64,13 @@ func _ready() -> void:
 	if external_model != "" and (DisplayServer.get_name() != "headless" or load_external_in_headless):
 		_attach_external()
 	if not model_loaded:
+		if mock_tint.a > 0.0:
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = mock_tint
+			for mesh_name: String in ["Body/ChassisMesh", "Body/TrailerMesh"]:
+				var mi := get_node_or_null(NodePath(mesh_name)) as MeshInstance3D
+				if mi != null:
+					mi.material_override = mat
 		for n in TruckSpec.WHEEL_NAMES:
 			var w := get_node_or_null(NodePath(n)) as Node3D
 			_pivots.append(w)

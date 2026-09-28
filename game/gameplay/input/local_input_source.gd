@@ -1,15 +1,18 @@
 class_name LocalInputSource
 extends InputSource
 
-## Joueur local unique : la premiere manette connectee ET le clavier, fusionnes
-## (docs/INPUT_SPEC.md §3). La commande la plus franche l'emporte. Suit les
-## branchements a chaud : une manette branchee en cours de route est adoptee.
+## Un joueur local : une manette ET un jeu de touches du clavier, fusionnes
+## (docs/INPUT_SPEC.md §3). La commande la plus franche l'emporte.
 ##
-## Pour l'ecran partage (phase 4), un joueur = une DeviceInputSource : cette
-## source ne sert qu'au jeu solo et au developpement.
+## `device` = -1 : la premiere manette connectee, adoptee a chaud (joueur seul).
+## `device` >= 0 : cette manette-la, et aucune autre (ecran partage : le joueur
+## 2 ne reagit jamais a la manette du joueur 1, INPUT_SPEC §4).
 
 ## Changement de vue demande, par la manette ou le clavier (local).
 signal camera_toggle_requested
+
+@export var device: int = -1
+@export var keyboard_layout: KeyboardInputSource.Layout = KeyboardInputSource.Layout.BOTH
 
 var pad: DeviceInputSource
 var keyboard: KeyboardInputSource
@@ -18,12 +21,15 @@ var keyboard: KeyboardInputSource
 func _ready() -> void:
 	pad = DeviceInputSource.new()
 	pad.name = "Pad"
+	pad.device_id = maxi(device, 0)
 	add_child(pad)
 	keyboard = KeyboardInputSource.new()
 	keyboard.name = "Keyboard"
+	keyboard.layout = keyboard_layout
 	add_child(keyboard)
-	_pick_pad()
-	Input.joy_connection_changed.connect(func(_d: int, _c: bool) -> void: _pick_pad())
+	if device < 0:
+		_pick_pad()
+		Input.joy_connection_changed.connect(func(_d: int, _c: bool) -> void: _pick_pad())
 	pad.camera_toggle_requested.connect(camera_toggle_requested.emit)
 	keyboard.camera_toggle_requested.connect(camera_toggle_requested.emit)
 

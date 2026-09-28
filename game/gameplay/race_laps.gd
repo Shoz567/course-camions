@@ -130,6 +130,35 @@ func _physics_process(_delta: float) -> void:
 			wrong_way_changed.emit(t, wrong)
 
 
+func racer_count() -> int:
+	return _racers.size()
+
+
+## Progression (m) depuis la ligne : tours faits x longueur + position dans le
+## tour. Negative sur la grille (derriere la ligne). Un camion arrive passe
+## devant tous ceux qui roulent, par ordre d'arrivee.
+func progress(truck: Truck) -> float:
+	var r := racer(truck)
+	var length := track.length()
+	if r.finished:
+		return total_laps * length + 1.0e6 - r.finish_ticks
+	var idx := r.idx if r.idx >= 0 else track.closest_sample(truck.global_position)
+	var s := track.sample_s(idx)
+	if r.lap == 0:
+		return s - length
+	return (r.lap - 1) * length + s
+
+
+## Position (1 = en tete) parmi les camions suivis.
+func position(truck: Truck) -> int:
+	var mine := progress(truck)
+	var pos := 1
+	for other: Truck in _racers.keys():
+		if other != truck and progress(other) > mine:
+			pos += 1
+	return pos
+
+
 ## Reapparition au plus pres, mais jamais au-dela du prochain checkpoint
 ## attendu : on ne gagne pas de terrain en sautant un mur.
 func respawn_transform(truck: Truck) -> Transform3D:

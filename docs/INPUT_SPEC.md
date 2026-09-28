@@ -71,30 +71,33 @@ frames. À prévoir dès la phase 1 dans `to_bytes()`, à implémenter en phase 
 
 ## 3. Mapping
 
-Schéma « style Mario Kart », décidé le 2026-09-28. Godot (SDL) nomme les
-boutons **par position** : bas = A Xbox / Croix PS / B Switch ; droite = B Xbox
-/ Rond PS / A Switch ; gauche = X Xbox / Carré PS / Y Switch ; haut = Y Xbox /
-Triangle PS / X Switch. Chaque affectation est un `@export` de
-`DeviceInputSource` : réaffectable sans code.
+Profil **Mario Kart 8 Deluxe, disposition Switch** (décidé le 2026-09-28 pour le
+playtest). Godot (SDL) nomme les boutons **par position** :
+`JOY_BUTTON_A` = bas (B Switch), `JOY_BUTTON_B` = droite (A Switch),
+`JOY_BUTTON_X` = gauche (Y Switch), `JOY_BUTTON_Y` = haut (X Switch),
+`JOY_BUTTON_BACK` = − (Select). Chaque action est une **liste** de boutons
+exportée par `DeviceInputSource` : réaffectable sans code.
 
-| Action | Manette | Clavier (joueur 1, dev) |
-|---|---|---|
-| `steer` | stick gauche, axe X | Q / D (ou ← / →) |
-| `throttle` | RT / R2 / ZR (analogique) **ou** bouton du bas | Z (ou ↑) |
-| `brake` (puis recul à l'arrêt) | LT / L2 / ZL (analogique) **ou** bouton de droite | S (ou ↓) |
-| `handbrake` (drift) | RB / R1 / R, **ou RT tant qu'on accélère au bouton du bas** | Espace |
-| `boost` | LB / L1 / L (1,5 s, recharge 4 s) | Maj |
-| `honk` (klaxon) | bouton de gauche | H |
-| caméra 1re / 3e personne | bouton du haut (local, hors `InputFrame`) | C |
-| `reset` | Select / View / Share / − | R |
-| pause, rejouer après l'arrivée | Start | Entrée |
+| Action | Manette (Switch) | Clavier J1 (flèches) | Clavier J2 / solo (ZQSD) |
+|---|---|---|---|
+| `steer` | stick gauche, axe X | ← / → | Q / D |
+| `throttle` | **A ou Y**, ou ZR analogique | ↑ | Z |
+| `brake` (puis recul à l'arrêt) | **B** | ↓ | S |
+| `handbrake` (drift) | **R**, ou **ZR tant qu'on accélère au bouton** (A + ZR, comme MK8) | Ctrl droit | Espace |
+| `boost` | **L** (1,5 s, recharge 4 s) | Maj droite | Maj gauche |
+| `honk` (klaxon) | **ZL** (au franchissement du seuil) | touche à gauche de Maj droite (!) | H |
+| caméra 1re / 3e personne | **X** (local, hors `InputFrame`) | touche suivante (:) | C |
+| `reset` | **−** | Retour arrière | R |
+| rejouer après l'arrivée | + (Start) | Entrée | Entrée |
 
-Trois conflits de la demande initiale, résolus ainsi (à revoir si besoin) :
-RT servait à la fois à accélérer et à drifter (→ RT drifte seulement quand on
-accélère au bouton, comme A + ZR dans Mario Kart) ; le klaxon était demandé sur
-« A Switch / B Xbox », soit le bouton de droite déjà pris par le frein (→ bouton
-de gauche, le Carré demandé sur PS) ; la caméra prend le bouton du haut, qui
-servait au reset (→ Select).
+Deux conflits de la demande, résolus ainsi : ZR sert à accélérer **et** à
+drifter (→ accélérateur quand aucun bouton d'accélération n'est tenu, drift
+sinon) ; « klaxon : Select » et « reset : − » désignent le **même** bouton sur
+une manette Nintendo (`JOY_BUTTON_BACK`) → − reste le reset, ZL seul klaxonne.
+
+En solo, le clavier accepte ZQSD **et** les flèches. En écran partagé, chaque
+joueur a sa manette (J1 = device 0, J2 = device 1) **et** son jeu de touches :
+deux joueurs peuvent partager un clavier.
 
 - **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
   utile), puis courbe de réponse légèrement exponentielle pour la précision en

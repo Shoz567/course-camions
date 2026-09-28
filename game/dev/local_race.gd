@@ -1,0 +1,187 @@
+extends Node3D
+
+## Course locale de 3 tours sur la piste n°1, de 1 a 4 joueurs.
+##
+##   1 joueur  : plein ecran, premiere manette + tout le clavier.
+##   2 joueurs : ecran partage haut / bas (SubViewport par joueur, style MK8).
+##               J1 : camion bleu AZUR, manette 0 + fleches ;
+##               J2 : camion rouge DURAND, manette 1 + ZQSD.
+##
+## Chaque joueur a sa source d'input (sa manette, et AUCUNE autre : INPUT_SPEC
+## §4), son camion, sa camera, son HUD. Compte a rebours commun, puis course :
+## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Quand
+## tous sont arrives, Start / Entree relance.
+##
+## Le compte a rebours et l'enchainement migreront dans RaceManager (tache 3.1).
+
+const COUNTDOWN_TICKS := 180      # 3 s
+const GO_TICKS := 60              # "GO !" reste 1 s
+const MODELS: PackedStringArray = [
+	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Vert.glb",
+]
+const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3", "J4"]
+## Couleur des boites quand le modele est absent (clone neuf).
+const TINTS: Array[Color] = [Color(0.15, 0.35, 0.9), Color(0.85, 0.12, 0.1),
+	Color(0.95, 0.8, 0.1), Color(0.15, 0.7, 0.25)]
+const HELP_SOLO := "Manette (disposition Switch, style MK8) : A ou Y accelerer, B freiner / reculer, R ou A + ZR drift,\nL boost, ZL klaxon, X camera, - reset.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, H klaxon, C camera, R reset"
+const HELP_P1 := "J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), Retour arriere (reset)"
+const HELP_P2 := "J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), R (reset)"
+
+enum State { COUNTDOWN, RACING, FINISHED }
+
+class Player:
+	var truck: Truck
+	var input: LocalInputSource
+	var camera: ChaseCamera
+	var hud: RaceHud
+	var viewport: SubViewport
+
+
+@export_range(1, 4) var player_count: int = 2
+
+@onready var track: TrackBlockout = $Track01
+@onready var race: RaceLaps = $RaceLaps
+@onready var auto_reset: AutoReset = $AutoReset
+
+var players: Array[Player] = []
+var state: State = State.COUNTDOWN
+var _state_tick: int = 0
+var _neutral: InputFrame = InputFrame.new()
+var _finish_order: Array[Truck] = []
+
+
+func _ready() -> void:
+	# vue propre par defaut : F1 affiche les traces de debug
+	DebugDraw.enabled = false
+	auto_reset.respawn_provider = race.respawn_transform
+	race.race_finished.connect(_on_race_finished)
+	var split := _build_split_screen() if player_count > 1 else null
+	for i in player_count:
+		players.append(_add_player(i, split))
+	_state_tick = Engine.get_physics_frames()
+
+
+## Ecran partage : une boite verticale, un SubViewport par joueur (haut = J1).
+func _build_split_screen() -> VBoxContainer:
+	var layer := CanvasLayer.new()
+	layer.layer = -1
+	add_child(layer)
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	box.add_theme_constant_override("separation", 4)
+	layer.add_child(box)
+	return box
+
+
+func _add_player(i: int, split: VBoxContainer) -> Player:
+	var p := Player.new()
+	# camion : modele et couleur du joueur, case de depart i (centre de la grille)
+	var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
+	t.name = "Truck%d" % (i + 1)
+	var visual := t.get_node("Visual") as TruckVisual
+	visual.external_model = MODELS[i]
+	visual.mock_tint = TINTS[i]
+	t.transform = track.get_start_transform(i)   # pose d'un camion immobile
+	add_child(t)
+	p.truck = t
+	race.watch(t)
+	auto_reset.watch(t)
+	# input : sa manette seulement en ecran partage ; son jeu de touches
+	var input := LocalInputSource.new()
+	input.name = "Input%d" % (i + 1)
+	if player_count > 1:
+		input.device = i
+		input.keyboard_layout = KeyboardInputSource.Layout.ARROWS if i == 0 \
+				else (KeyboardInputSource.Layout.ZQSD if i == 1 else KeyboardInputSource.Layout.BOTH)
+	add_child(input)
+	p.input = input
+	# vue : plein ecran, ou SubViewport dans l'ecran partage
+	var view_parent: Node = self
+	if split != null:
+		var container := SubViewportContainer.new()
+		container.stretch = true
+		container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		split.add_child(container)
+		var vp := SubViewport.new()
+		vp.name = "View%d" % (i + 1)
+		vp.audio_listener_enable_3d = i == 0
+		container.add_child(vp)
+		p.viewport = vp
+		view_parent = vp
+	var cam := ChaseCamera.new()
+	cam.name = "Camera%d" % (i + 1)
+	cam.target = t
+	view_parent.add_child(cam)
+	cam.snap()
+	p.camera = cam
+	input.camera_toggle_requested.connect(cam.toggle_view)
+	var hud := RaceHud.new()
+	hud.truck = t
+	hud.race = race
+	hud.player_label = NAMES[i]
+	hud.help_text = HELP_SOLO if player_count == 1 else (HELP_P1 if i == 0 else HELP_P2)
+	view_parent.add_child(hud)
+	p.hud = hud
+	return p
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	var pad := event as InputEventJoypadButton
+	var restart := (key != null and key.pressed and not key.echo and key.physical_keycode == KEY_ENTER) \
+			or (pad != null and pad.pressed and pad.button_index == JOY_BUTTON_START)
+	if restart and state == State.FINISHED:
+		get_tree().reload_current_scene()
+		return
+	if key != null and key.pressed and not key.echo and key.physical_keycode == KEY_F1:
+		DebugDraw.enabled = not DebugDraw.enabled
+
+
+func _physics_process(_delta: float) -> void:
+	var tick := Engine.get_physics_frames()
+	if state == State.COUNTDOWN:
+		# camions immobilises jusqu'au depart
+		_neutral.tick = tick
+		for p in players:
+			p.input.poll(tick)
+			p.truck.set_input(_neutral)
+		if tick - _state_tick >= COUNTDOWN_TICKS:
+			race.start()
+			state = State.RACING
+			_state_tick = tick
+		return
+	for p in players:
+		var f := p.input.poll(tick)
+		p.truck.set_input(f)
+		if f.reset:
+			p.truck.reset_to(race.respawn_transform(p.truck))
+			p.camera.snap()
+
+
+func _process(_delta: float) -> void:
+	var elapsed := Engine.get_physics_frames() - _state_tick
+	for p in players:
+		var r := race.racer(p.truck)
+		if state == State.COUNTDOWN:
+			p.hud.set_center_message(str(maxi(3 - floori(elapsed / 60.0), 1)), Color(1.0, 0.85, 0.2))
+		elif r != null and r.finished:
+			var rank := _finish_order.find(p.truck) + 1
+			var more := "\nStart / Entree : rejouer" if state == State.FINISHED else "\nen attente des autres"
+			var place := ("%de" % rank) if player_count > 1 else "ARRIVEE"
+			if player_count > 1 and rank == 1:
+				place = "1er !"
+			p.hud.set_center_message("%s\n%s   meilleur tour %s%s" % [place,
+				RaceHud.chrono(r.finish_ticks), RaceHud.chrono(r.best_lap), more], Color.WHITE)
+		else:
+			p.hud.set_center_message("GO !" if elapsed < GO_TICKS and state == State.RACING else "",
+				Color(0.4, 1.0, 0.4))
+
+
+func _on_race_finished(truck: Truck, _total: int) -> void:
+	_finish_order.append(truck)
+	if _finish_order.size() == players.size():
+		state = State.FINISHED

@@ -8,6 +8,9 @@ extends CanvasLayer
 
 @export var truck: Truck
 @export var race: RaceLaps
+## Nom affiche (ecran partage) et aide des commandes de CE joueur.
+@export var player_label: String = ""
+@export_multiline var help_text: String = ""
 
 var _lap: Label
 var _lap_time: Label
@@ -52,16 +55,11 @@ func _ready() -> void:
 	_boost_label.offset_top = -80
 	_boost_label.offset_right = -24
 	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_help = _label(15, Vector2.ZERO)
+	_help = _label(14, Vector2.ZERO)
 	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_help.offset_left = 24
-	_help.offset_top = -120
-	_help.text = "\n".join([
-		"RT ou A/Croix : accelerer     LT ou B/Rond : freiner, reculer",
-		"RB, ou RT en accelerant au bouton : drift     LB : boost",
-		"Carre/X : klaxon     Y/Triangle : camera     Select : reset",
-		"Clavier : ZQSD, Espace drift, Maj boost, H klaxon, C camera, R reset",
-	])
+	_help.offset_top = -30.0 - 18.0 * help_text.count("\n")
+	_help.text = help_text
 
 
 ## Message central (vide pour l'effacer).
@@ -76,7 +74,10 @@ func _process(_delta: float) -> void:
 	var r := race.racer(truck)
 	if r == null:
 		return
-	_lap.text = "TOUR %d/%d" % [race.display_lap(truck), race.total_laps]
+	var head := "TOUR %d/%d" % [race.display_lap(truck), race.total_laps]
+	if race.racer_count() > 1:
+		head = "%s   POS %d/%d   %s" % [player_label, race.position(truck), race.racer_count(), head]
+	_lap.text = head
 	_lap_time.text = "Tour  %s" % chrono(race.current_lap_ticks(truck))
 	_times.text = "Meilleur  %s     Dernier  %s" % [chrono(r.best_lap), chrono(r.last_lap)]
 	_speed.text = "%d km/h" % roundi(absf(truck.get_speed_kmh()))
@@ -86,7 +87,7 @@ func _process(_delta: float) -> void:
 		_boost_label.text = "BOOST !"
 		_boost_bar.modulate = Color(1.0, 0.55, 0.1)
 	elif charge >= 1.0:
-		_boost_label.text = "BOOST PRET (LB / Maj)"
+		_boost_label.text = "BOOST PRET"
 		_boost_bar.modulate = Color(0.3, 1.0, 0.4)
 	else:
 		_boost_label.text = "recharge du boost"

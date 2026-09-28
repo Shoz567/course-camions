@@ -1,13 +1,9 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=9 format=3]
 
-[ext_resource type="Script" path="res://dev/track_drive.gd" id="1"]
+[ext_resource type="Script" path="res://dev/local_race.gd" id="1"]
 [ext_resource type="PackedScene" path="res://tracks/track_01_blockout.tscn" id="2"]
-[ext_resource type="PackedScene" path="res://vehicles/truck.tscn" id="3"]
-[ext_resource type="Script" path="res://gameplay/input/local_input_source.gd" id="4"]
-[ext_resource type="Script" path="res://gameplay/chase_camera.gd" id="5"]
-[ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="6"]
-[ext_resource type="Script" path="res://gameplay/race_laps.gd" id="7"]
-[ext_resource type="Script" path="res://ui/race_hud.gd" id="8"]
+[ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="3"]
+[ext_resource type="Script" path="res://gameplay/race_laps.gd" id="4"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_horizon_color = Color(0.66, 0.72, 0.78, 1)
@@ -25,6 +21,7 @@ fog_density = 0.0015
 
 [node name="TrackDrive" type="Node3D"]
 script = ExtResource("1")
+player_count = 1
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
@@ -36,24 +33,10 @@ directional_shadow_max_distance = 150.0
 
 [node name="Track01" parent="." instance=ExtResource("2")]
 
-[node name="Truck" parent="." instance=ExtResource("3")]
-
-[node name="LocalInput" type="Node" parent="."]
+[node name="RaceLaps" type="Node" parent="." node_paths=PackedStringArray("track")]
 script = ExtResource("4")
-
-[node name="ChaseCamera" type="Node3D" parent="." node_paths=PackedStringArray("target")]
-script = ExtResource("5")
-target = NodePath("../Truck")
+track = NodePath("../Track01")
 
 [node name="AutoReset" type="Node" parent="." node_paths=PackedStringArray("track")]
-script = ExtResource("6")
+script = ExtResource("3")
 track = NodePath("../Track01")
-
-[node name="RaceLaps" type="Node" parent="." node_paths=PackedStringArray("track")]
-script = ExtResource("7")
-track = NodePath("../Track01")
-
-[node name="RaceHud" type="CanvasLayer" parent="." node_paths=PackedStringArray("truck", "race")]
-script = ExtResource("8")
-truck = NodePath("../Truck")
-race = NodePath("../RaceLaps")

@@ -12,7 +12,7 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run sandbox clean-spike
+.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike
 
 help:
 	@echo "Cibles disponibles :"
@@ -22,7 +22,8 @@ help:
 	@echo "  make test-full  - suite complete : 5 runs par test physique"
 	@echo "  make test-selftest - verifie le socle de test lui-meme"
 	@echo "  make baseline   - mesure les metriques de conduite et les ECRIT dans baseline.json"
-	@echo "  make run        - lance le jeu (piste de test n1)"
+	@echo "  make run        - lance le jeu : course a 2 joueurs en ecran partage"
+	@echo "  make solo       - course a 1 joueur, plein ecran"
 	@echo "  make sandbox    - lance le bac a sable (arene, tremplin, camions gares)"
 	@echo "  make clean-spike- supprime spike/ (fin de phase 0.5)"
 
@@ -56,6 +57,9 @@ baseline:
 
 run:
 	$(GODOT) --path $(PROJECT)
+
+solo:
+	$(GODOT) --path $(PROJECT) res://dev/track_drive.tscn
 
 sandbox:
 	$(GODOT) --path $(PROJECT) res://dev/drive_sandbox.tscn

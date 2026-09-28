@@ -1,10 +1,15 @@
 class_name KeyboardInputSource
 extends InputSource
 
-## Clavier du joueur 1, pour le developpement (docs/INPUT_SPEC.md §3).
-## Touches par position physique : Z Q S D sur AZERTY (W A S D sur QWERTY),
-## ou les fleches. Espace drift (frein a main), Maj boost, H klaxon, C camera,
-## R reset.
+## Clavier, pour le developpement et le 2 joueurs sur un meme clavier
+## (docs/INPUT_SPEC.md §3). Touches par POSITION physique (clavier QWERTY de
+## reference) : Z Q S D sur AZERTY = W A S D sur QWERTY.
+##
+##   ZQSD    : Z Q S D, Espace drift, Maj gauche boost, H klaxon, C camera, R reset
+##   FLECHES : fleches, Ctrl droit drift, Maj droite boost, touche a gauche de
+##             Maj droite (! en AZERTY) klaxon, la suivante (: en AZERTY)
+##             camera, Retour arriere reset
+##   LES DEUX: les deux jeux de touches (joueur seul)
 ##
 ## Le clavier est binaire : steer et throttle montent en `ramp_ticks` ticks
 ## pour ne pas donner de coups de volant qu'aucune manette ne produit.
@@ -12,6 +17,9 @@ extends InputSource
 ## Changement de vue (local, hors InputFrame).
 signal camera_toggle_requested
 
+enum Layout { BOTH, ZQSD, ARROWS }
+
+@export var layout: Layout = Layout.BOTH
 @export_range(1, 30) var ramp_ticks: int = 8
 
 var _left: bool = false
@@ -29,28 +37,45 @@ func _input(event: InputEvent) -> void:
 	if key == null or key.echo:
 		return
 	var p := key.pressed
+	var right_side := key.location == KEY_LOCATION_RIGHT
+	var zqsd := layout != Layout.ARROWS
+	var arrows := layout != Layout.ZQSD
 	match key.physical_keycode:
-		KEY_A, KEY_LEFT:
-			_left = p
-		KEY_D, KEY_RIGHT:
-			_right = p
-		KEY_W, KEY_UP:
-			_up = p
-		KEY_S, KEY_DOWN:
-			_down = p
+		KEY_A:
+			if zqsd: _left = p
+		KEY_D:
+			if zqsd: _right = p
+		KEY_W:
+			if zqsd: _up = p
+		KEY_S:
+			if zqsd: _down = p
+		KEY_LEFT:
+			if arrows: _left = p
+		KEY_RIGHT:
+			if arrows: _right = p
+		KEY_UP:
+			if arrows: _up = p
+		KEY_DOWN:
+			if arrows: _down = p
 		KEY_SPACE:
-			_handbrake = p
+			if zqsd: _handbrake = p
+		KEY_CTRL:
+			if arrows and right_side: _handbrake = p
 		KEY_SHIFT:
-			_boost = p
+			if (zqsd and not right_side) or (arrows and right_side) or layout == Layout.BOTH:
+				_boost = p
 		KEY_H:
-			if p:
-				_honk_pending = true
+			if zqsd and p: _honk_pending = true
+		KEY_SLASH:
+			if arrows and p: _honk_pending = true
 		KEY_C:
-			if p:
-				camera_toggle_requested.emit()
+			if zqsd and p: camera_toggle_requested.emit()
+		KEY_PERIOD:
+			if arrows and p: camera_toggle_requested.emit()
 		KEY_R:
-			if p:
-				_reset_pending = true
+			if zqsd and p: _reset_pending = true
+		KEY_BACKSPACE:
+			if arrows and p: _reset_pending = true
 
 
 func poll(tick: int) -> InputFrame:
