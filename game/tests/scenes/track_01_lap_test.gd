@@ -8,7 +8,10 @@ extends PhysicsTest
 ##   - un tour complet, en 60 a 90 s (METRICS.md §4, duree de tour) ;
 ##   - jamais retourne (inclinaison < 45 deg), jamais hors de la chaussee,
 ##     aucun NaN ; le tremplin est sur la ligne de course et il est franchi ;
-##   - geometrie : boucle fermee, largeur >= 14 m et murs >= 0,3 m (METRICS §4).
+##   - geometrie : boucle fermee, largeur >= 14 m et murs >= 0,3 m (METRICS §4) ;
+##   - RaceLaps compte ce tour par les VRAIES Area3D de checkpoints (semi-remorque
+##     qui roule, saute, derape), temps coherent avec le chrono du test, et
+##     jamais MAUVAIS SENS.
 ## Camera :
 ##   - jamais masquee : aucun obstacle entre son pivot et elle ;
 ##   - toujours a bonne distance du camion (3 a 30 m : recul au-dela de la
@@ -26,6 +29,9 @@ var _track: TrackBlockout
 var _truck: Truck
 var _camera: ChaseCamera
 var _pilot: TrackAutopilot
+var _race: RaceLaps
+var _race_laps: PackedInt32Array = []
+var _wrong_way: bool = false
 
 var _prev_s: float = -1.0
 var _progress: float = 0.0
@@ -59,9 +65,17 @@ func _test_setup() -> void:
 	if g == null:
 		return
 	_pilot = TrackAutopilot.new(_track, _truck, float(g))
+	_race = RaceLaps.new()
+	_race.track = _track
+	add_child(_race)
+	_race.watch(_truck)
+	_race.lap_completed.connect(func(_t: Truck, _lap: int, ticks: int) -> void: _race_laps.append(ticks))
+	_race.wrong_way_changed.connect(func(_t: Truck, wrong: bool) -> void: _wrong_way = _wrong_way or wrong)
 
 
 func _test_tick(t: int) -> void:
+	if t == 1:
+		_race.start()
 	_truck.set_input(_pilot.drive(t))
 	var p := _truck.global_position
 	if not p.is_finite():
@@ -144,6 +158,11 @@ func _test_finish() -> void:
 	print("  INFO   longueur %.1f m, contact de caisse %d ticks, en l'air %d ticks"
 		% [_track.length(), _wall_ticks, _airborne])
 
+	check("RaceLaps : un tour compte par les checkpoints", _race_laps.size() == 1, "tours=%s" % [_race_laps])
+	if _race_laps.size() == 1 and _lap_end > 0:
+		check_near("RaceLaps : temps du tour 1 (depart -> ligne) vs chrono du test (ticks)",
+			_race_laps[0], _lap_end - 1, 60)
+	check("RaceLaps : jamais MAUVAIS SENS", not _wrong_way)
 	check("camera jamais masquee par la piste", _occluded == 0, "ticks=%d" % _occluded)
 	check("camera a bonne distance (3 .. 30 m)", _cam_dist_min >= 3.0 and _cam_dist_max <= 30.0,
 		"min=%.1f max=%.1f" % [_cam_dist_min, _cam_dist_max])

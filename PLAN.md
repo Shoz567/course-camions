@@ -126,12 +126,12 @@ rattrape. Sur un sol plat : pas encore de piste.
 |---|---|---|---|
 | 2.1 | Caméra de poursuite amortie (ne tremble jamais, ne passe pas dans les murs) | gameplay-engineer | `[x]` `ChaseCamera` |
 | 2.2 | Piste blockout n°1, dimensionnée sur `docs/METRICS.md` : virages variés, un saut | track-designer | `[x]` `track_01_blockout.tscn` |
-| 2.3 | Checkpoints ordonnés + ligne d'arrivée + détection du mauvais sens | track-designer | `[ ]` ligne d'arrivée visuelle seulement |
+| 2.3 | Checkpoints ordonnés + ligne d'arrivée + détection du mauvais sens | track-designer | `[x]` 20 `Area3D` (n°0 = ligne) ; mauvais sens par la ligne de course (`RaceLaps`) |
 | 2.4 | Zones de reset (hors-piste, vide) + points de réapparition | track-designer | `[x]` 204 `Area3D` au-delà des murs, signaux ; réapparition `get_respawn_transform()` |
-| 2.5 | Tours et chrono (dérivé des ticks), meilleur tour | gameplay-engineer | `[~]` chrono de dev dans `track_drive` (sans checkpoints) |
+| 2.5 | Tours et chrono (dérivé des ticks), meilleur tour | gameplay-engineer | `[x]` `RaceLaps` : 3 tours, ordre strict, réapparition bridée |
 | 2.6 | Reset manuel et automatique (retourné ou immobile hors piste pendant N ticks) | gameplay-engineer | `[x]` `AutoReset` : 30 ticks hors piste, 120 ticks couché |
-| 2.7 | HUD minimal : vitesse, tour, chrono | gameplay-engineer | `[~]` HUD de dev |
-| 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[~]` reset manuel et auto, grille, glissière, tour piloté ; checkpoints à faire |
+| 2.7 | HUD minimal : vitesse, tour, chrono | gameplay-engineer | `[x]` `RaceHud` : vitesse, tour 1/3, temps, meilleur, jauge de boost |
+| 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[x]` `race_laps_test`, tour piloté compté par les vraies `Area3D`, reset, glissière |
 
 **Piste n°1** (`game/tracks/track_01_blockout.tscn`, générée par `TrackBlockout`),
 redimensionnée le 2026-09-28 pour les semi-remorques : 2 033 m, **25 m** de large,
@@ -145,9 +145,15 @@ inchangées par la remorque (inertie imposée, VEHICLE_SPEC §5 bis).
 l'adhérence mesurée, semi-remorque comprise).
 
 **Critères de sortie**
-- Un joueur fait 3 tours chronométrés sur la piste n°1.
-- Un raccourci qui saute un checkpoint n'est jamais compté.
-- Un camion retourné ou tombé est remis en piste, n'importe où sur le circuit.
+- `[x]` Un joueur fait 3 tours chronométrés sur la piste n°1 (`make run` :
+  compte à rebours, 3 tours, arrivée, Start pour rejouer).
+- `[x]` Un raccourci qui saute un checkpoint n'est jamais compté (`race_laps_test`).
+- `[x]` Un camion retourné ou tombé est remis en piste, n'importe où sur le
+  circuit (`track_01_reset_test`), sans jamais sauter de checkpoint.
+
+En plus de la phase 2 (demande du 2026-09-28) : schéma de manette style Mario
+Kart (`INPUT_SPEC.md` §3), boost avec recharge (1,5 s / 4 s, +30 km/h mesurés),
+klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 
 ---
 

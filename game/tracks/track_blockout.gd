@@ -20,8 +20,8 @@ extends Node3D
 ##   "jump": m      tremplin a cette distance du debut du segment, cote droit.
 ##
 ## Genere : Geometry (chaussee, sol, tremplin), Walls (2 glissieres continues),
-## ResetZones (Area3D au-dela des murs, tout autour), StartGrid, RacingLine.
-## Checkpoints : tache 2.3.
+## ResetZones (Area3D au-dela des murs, tout autour), Checkpoints (Area3D
+## ordonnees, la n°0 est la ligne d'arrivee), StartGrid, RacingLine.
 ##
 ## La piste ne decide rien (track-designer.md) : elle EMET un signal quand un
 ## camion entre dans une zone de reset ou en sort ; le gameplay (AutoReset,
@@ -29,9 +29,13 @@ extends Node3D
 
 signal truck_entered_reset_zone(truck: Node3D)
 signal truck_exited_reset_zone(truck: Node3D)
+## Un camion entre dans le checkpoint `index` (0 = ligne d'arrivee). L'ordre et
+## les tours sont l'affaire du gameplay (RaceLaps).
+signal checkpoint_passed(truck: Node3D, index: int)
 
 const ROAD_LAYER := 1          # couche 1 `world` (VEHICLE_SPEC §7)
 const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
+const CHECKPOINT_LAYER := 3    # couche 3 `checkpoint`
 const VEHICLE_LAYER := 2
 const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 
@@ -69,6 +73,13 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var reset_zone_margin: float = 2.0
 @export var reset_zone_depth: float = 60.0
 @export var reset_zone_height: float = 40.0
+
+@export_group("Checkpoints")
+## Nombre de checkpoints, repartis regulierement ; le n°0 est la ligne.
+@export var checkpoint_count: int = 20
+@export var checkpoint_depth: float = 4.0
+## Haut : un camion en plein saut passe quand meme dedans.
+@export var checkpoint_height: float = 20.0
 
 @export_group("Grille")
 @export var grid_distance: float = 12.0
@@ -157,6 +168,18 @@ func line_offset(i: int) -> float:
 ## Indice de l'echantillon situe `distance` metres plus loin (sens de course).
 func sample_ahead(i: int, distance: float) -> int:
 	return posmod(i + roundi(distance / (_length / _pos.size())), _pos.size())
+
+
+## Indice de l'echantillon a l'abscisse curviligne `s` (m, modulo la longueur).
+func index_at_s(s: float) -> int:
+	_ensure_built()
+	return posmod(roundi(fposmod(s, _length) / (_length / _pos.size())), _pos.size())
+
+
+## Abscisse curviligne (m) du checkpoint k : ils sont repartis regulierement.
+func checkpoint_s(k: int) -> float:
+	_ensure_built()
+	return _length * posmod(k, checkpoint_count) / checkpoint_count
 
 
 ## Echantillon le plus proche. Avec `hint` >= 0, recherche locale (+/- 40 m) :
@@ -393,6 +416,7 @@ func _build_geometry() -> void:
 	var geometry := _group("Geometry")
 	var walls := _group("Walls")
 	var zones := _group("ResetZones")
+	var checkpoints := _group("Checkpoints")
 	var grid := _group("StartGrid")
 
 	# chaussee
@@ -452,6 +476,7 @@ func _build_geometry() -> void:
 		_build_jump(geometry, jmp.x, jmp.y)
 
 	_build_reset_zones(zones)
+	_build_checkpoints(checkpoints)
 
 	for slot in grid_lateral.size():
 		var m := Marker3D.new()
@@ -517,6 +542,32 @@ func _build_reset_zones(parent: Node3D) -> void:
 			parent.add_child(area)
 		k += 1
 		i += chunk
+
+
+## Checkpoints : une boite en travers de la piste, murs compris, orientee avec
+## la chaussee (devers), haute pour les sauts.
+func _build_checkpoints(parent: Node3D) -> void:
+	var span := width + 2.0 * (wall_thickness + wall_lean + 1.0)
+	for k in checkpoint_count:
+		var i := index_at_s(checkpoint_s(k))
+		var area := Area3D.new()
+		area.name = "CP%02d" % k
+		area.collision_layer = 1 << (CHECKPOINT_LAYER - 1)
+		area.collision_mask = 1 << (VEHICLE_LAYER - 1)
+		area.monitorable = false
+		var cs := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(span, checkpoint_height, checkpoint_depth)
+		cs.shape = box
+		cs.position = Vector3(0.0, checkpoint_height / 2.0 - 2.0, 0.0)
+		area.add_child(cs)
+		area.transform = frame_at(i, 0.0, 0.0)
+		area.body_entered.connect(_on_checkpoint_body_entered.bind(k))
+		parent.add_child(area)
+
+
+func _on_checkpoint_body_entered(body: Node3D, index: int) -> void:
+	checkpoint_passed.emit(body, index)
 
 
 func _on_reset_zone_body_entered(body: Node3D) -> void:

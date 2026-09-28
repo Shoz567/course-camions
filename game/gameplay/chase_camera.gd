@@ -13,6 +13,10 @@ extends Node3D
 ## - Un SpringArm3D la raccourcit quand un mur s'interpose : elle ne passe jamais
 ##   a travers la geometrie de la piste (couche 1 `world`).
 ## - Champ de vision un peu plus large a haute vitesse.
+## - Deux vues (toggle_view) : poursuite (3e personne) et cabine (1re personne,
+##   oeil derriere le pare-brise, orientation legerement amortie).
+
+enum View { CHASE, COCKPIT }
 
 @export var target: Truck
 ## Distance au pivot, et hauteur du pivot au-dessus du camion.
@@ -34,6 +38,17 @@ extends Node3D
 @export var fov_min: float = 70.0
 @export var fov_max: float = 80.0
 @export var fov_speed_kmh: float = 150.0
+
+@export_group("Vue cabine")
+## Position de l'oeil dans le repere du camion : dans la cabine, derriere le
+## pare-brise (cabine de collision : z de -2,9 a -0,7, haut a 3,15 m).
+@export var cockpit_offset: Vector3 = Vector3(0.0, 2.85, -1.8)
+@export var cockpit_fov: float = 78.0
+## Amortissement de l'orientation (1/s) : suit le camion sans les secousses.
+@export var cockpit_damping: float = 18.0
+
+var view: View = View.CHASE
+var _cockpit_basis: Basis = Basis.IDENTITY
 
 var _arm: SpringArm3D
 var _camera: Camera3D
@@ -74,6 +89,19 @@ func snap() -> void:
 	_initialized = false
 
 
+## Bascule poursuite <-> cabine.
+func toggle_view() -> void:
+	set_view(View.COCKPIT if view == View.CHASE else View.CHASE)
+
+
+func set_view(v: View) -> void:
+	view = v
+	var chase := v == View.CHASE
+	_arm.spring_length = distance if chase else 0.0
+	_arm.rotation.x = -deg_to_rad(pitch_deg) if chase else 0.0
+	snap()
+
+
 func _process(delta: float) -> void:
 	if target == null:
 		return
@@ -81,6 +109,9 @@ func _process(delta: float) -> void:
 	if xf.origin.distance_to(_last_target) > TELEPORT_DISTANCE:
 		_initialized = false
 	_last_target = xf.origin
+	if view == View.COCKPIT:
+		_process_cockpit(xf, delta)
+		return
 	var v := target.linear_velocity
 	var flat_v := Vector3(v.x, 0.0, v.z)
 	var focus := xf.origin + Vector3.UP * focus_height \
@@ -110,3 +141,14 @@ func _process(delta: float) -> void:
 	var speed_ratio := clampf(absf(forward_speed) * 3.6 / fov_speed_kmh, 0.0, 1.0)
 	var fov := lerpf(fov_min, fov_max, speed_ratio)
 	_camera.fov = lerpf(_camera.fov, fov, 1.0 - exp(-fov_damping * delta))
+
+
+func _process_cockpit(xf: Transform3D, delta: float) -> void:
+	var b := xf.basis.orthonormalized()
+	if not _initialized:
+		_initialized = true
+		_cockpit_basis = b
+	else:
+		_cockpit_basis = _cockpit_basis.slerp(b, 1.0 - exp(-cockpit_damping * delta)).orthonormalized()
+	global_transform = Transform3D(_cockpit_basis, xf * cockpit_offset)
+	_camera.fov = cockpit_fov

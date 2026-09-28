@@ -15,6 +15,10 @@ signal truck_reset(truck: Truck, reason: StringName)
 @export var flipped_ticks: int = 120
 @export var flipped_tilt_deg: float = 70.0
 @export var flipped_speed_kmh: float = 10.0
+## Optionnel : fournit la transformation de reapparition (Truck -> Transform3D),
+## par exemple RaceLaps.respawn_transform, qui ne fait jamais sauter de
+## checkpoint. Par defaut : la piste, au plus pres.
+var respawn_provider: Callable
 
 var _trucks: Array[Truck] = []
 var _zones: Dictionary = {}       # Truck -> nombre de zones chevauchees
@@ -60,7 +64,8 @@ func _physics_process(_delta: float) -> void:
 
 
 func _reset(t: Truck, reason: StringName) -> void:
-	t.reset_to(track.get_respawn_transform(t.global_position))
+	var xf: Transform3D = respawn_provider.call(t) if respawn_provider.is_valid() 			else track.get_respawn_transform(t.global_position)
+	t.reset_to(xf)
 	_in_zone[t] = 0
 	_flipped[t] = 0
 	truck_reset.emit(t, reason)

@@ -1,33 +1,31 @@
 extends Node3D
 
-## Scene de test de la piste n°1 (developpement) : un camion, la piste, la
-## camera de poursuite, l'input local (manette + clavier).
+## Course de 3 tours sur la piste n°1 (scene principale de test).
 ##
-##   RT / R2 ou Z (W)    gaz            stick gauche ou Q D   direction
-##   LT / L2 ou S        frein, puis marche arriere a l'arret
-##   A / Croix, Espace   frein a main (drift)
-##   Y / Triangle ou R   reset : sur la chaussee, dans le sens de course
-##                       (automatique hors piste ou camion couche : AutoReset)
-##   F1 .. F4            traces de debug
+## Compte a rebours, puis course : RaceLaps compte les tours (checkpoints dans
+## l'ordre), AutoReset replace hors piste ou retourne, RaceHud affiche. A
+## l'arrivee, Start / Entree relance. Commandes : voir DeviceInputSource
+## (manette, style Mario Kart) et KeyboardInputSource.
 ##
-## Chrono au tour : derive du compteur de ticks (CLAUDE.md §7), passage de la
-## ligne detecte par la progression le long de la ligne centrale. Les vrais
-## checkpoints et la regle des tours sont les taches 2.3 et 2.5.
+## Le compte a rebours et l'enchainement de la course migreront dans
+## RaceManager (tache 3.1) ; ici, le minimum pour courir.
+
+const COUNTDOWN_TICKS := 180      # 3 s
+const GO_TICKS := 60              # "GO !" reste 1 s
+
+enum State { COUNTDOWN, RACING, FINISHED }
 
 @onready var _track: TrackBlockout = $Track01
 @onready var _truck: Truck = $Truck
 @onready var _input: LocalInputSource = $LocalInput
 @onready var _camera: ChaseCamera = $ChaseCamera
-@onready var _hud: Label = $Hud/Label
 @onready var _auto_reset: AutoReset = $AutoReset
+@onready var _race: RaceLaps = $RaceLaps
+@onready var _hud: RaceHud = $RaceHud
 
-var _idx: int = -1
-var _lap_start_tick: int = -1
-var _last_lap: int = -1
-var _best_lap: int = -1
-var _laps: int = 0
-var _notice: String = ""
-var _notice_until: int = 0
+var _state: State = State.COUNTDOWN
+var _state_tick: int = 0
+var _neutral: InputFrame = InputFrame.new()
 
 
 func _ready() -> void:
@@ -36,14 +34,22 @@ func _ready() -> void:
 	_camera.snap()
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
+	_race.watch(_truck)
 	_auto_reset.watch(_truck)
-	_auto_reset.truck_reset.connect(func(_t: Truck, reason: StringName) -> void:
-		_notice = "replace automatiquement (%s)" % reason
-		_notice_until = Engine.get_physics_frames() + 120)
+	_auto_reset.respawn_provider = _race.respawn_transform
+	_input.camera_toggle_requested.connect(_camera.toggle_view)
+	_race.race_finished.connect(_on_race_finished)
+	_state_tick = Engine.get_physics_frames()
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
+	var pad := event as InputEventJoypadButton
+	var restart := (key != null and key.pressed and not key.echo and key.physical_keycode == KEY_ENTER) \
+			or (pad != null and pad.pressed and pad.button_index == JOY_BUTTON_START)
+	if restart and _state == State.FINISHED:
+		get_tree().reload_current_scene()
+		return
 	if key == null or not key.pressed or key.echo:
 		return
 	match key.physical_keycode:
@@ -64,41 +70,36 @@ func _toggle_channel(ch: StringName) -> void:
 func _physics_process(_delta: float) -> void:
 	var tick := Engine.get_physics_frames()
 	var f := _input.poll(tick)
+	if _state == State.COUNTDOWN:
+		# camion immobilise jusqu'au depart
+		_neutral.tick = tick
+		_truck.set_input(_neutral)
+		if tick - _state_tick >= COUNTDOWN_TICKS:
+			_race.start()
+			_state = State.RACING
+			_state_tick = tick
+		return
 	_truck.set_input(f)
 	if f.reset:
-		_truck.reset_to(_track.get_respawn_transform(_truck.global_position))
+		_truck.reset_to(_race.respawn_transform(_truck))
 		_camera.snap()
-	# passage de la ligne : l'echantillon le plus proche repasse de la fin au debut
-	var n := _track.sample_count()
-	var i := _track.closest_sample(_truck.global_position, _idx)
-	if _idx >= 0 and _idx > n * 0.75 and i < n * 0.25:
-		if _lap_start_tick >= 0:
-			_last_lap = tick - _lap_start_tick
-			_laps += 1
-			if _best_lap < 0 or _last_lap < _best_lap:
-				_best_lap = _last_lap
-		_lap_start_tick = tick
-	_idx = i
 
 
 func _process(_delta: float) -> void:
-	var tick := Engine.get_physics_frames()
-	var pad := _input.pad_name()
-	var current := tick - _lap_start_tick if _lap_start_tick >= 0 else -1
-	_hud.text = "\n".join([
-		"%5.0f km/h" % _truck.get_speed_kmh(),
-		"tour %d   en cours %s   dernier %s   meilleur %s" % [
-			_laps + 1, _chrono(current), _chrono(_last_lap), _chrono(_best_lap)],
-		"manette : %s" % (pad if pad != "" else "aucune (clavier : ZQSD, Espace, R)"),
-		"Y / Triangle / R : reset    A / Croix : frein a main    F1 : traces",
-		_notice if tick < _notice_until else "",
-	])
+	var elapsed := Engine.get_physics_frames() - _state_tick
+	match _state:
+		State.COUNTDOWN:
+			var n := 3 - floori(elapsed / 60.0)
+			_hud.set_center_message(str(maxi(n, 1)), Color(1.0, 0.85, 0.2))
+		State.RACING:
+			_hud.set_center_message("GO !" if elapsed < GO_TICKS else "", Color(0.4, 1.0, 0.4))
+		State.FINISHED:
+			var r := _race.racer(_truck)
+			_hud.set_center_message("ARRIVEE !\n%s   meilleur tour %s\nStart / Entree : rejouer" % [
+				RaceHud.chrono(r.finish_ticks), RaceHud.chrono(r.best_lap)], Color.WHITE)
 
 
-## Chrono affiche, derive des ticks : 60 ticks = 1 s.
-@warning_ignore("integer_division")
-static func _chrono(ticks: int) -> String:
-	if ticks < 0:
-		return "--:--.--"
-	var cs := ticks * 100 / 60
-	return "%d:%02d.%02d" % [cs / 6000, (cs / 100) % 60, cs % 100]
+func _on_race_finished(truck: Truck, _total: int) -> void:
+	if truck == _truck:
+		_state = State.FINISHED
+		_state_tick = Engine.get_physics_frames()
