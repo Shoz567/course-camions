@@ -100,6 +100,43 @@ rayons définis côté Godot ; on ne dérive jamais une masse, un centre de mass
 une forme de collision du maillage. Si le camion paraît trop haut, c'est la
 carrosserie qu'on ajuste, pas la suspension.
 
+### 4 bis. Modèle externe des camarades (`Assets_Visuels/`)
+
+Les modèles `Assets_Visuels/Camion/Camions_Course_Export/*.glb` sont faits à la
+main, hors pipeline Blender scripté, et **hors dépôt** (`.gitignore`, et le hook
+refuse tout `.glb`). `TruckVisual` (`game/vehicles/truck_visual.gd`) les charge
+**à l'exécution** s'ils existent ; sinon le camion garde ses boîtes de blockout.
+Un clone neuf et les tests ne dépendent donc d'aucun binaire. Un export du jeu
+ne les embarquera pas : à régler en phase 7 (import dans le projet, licence et
+origine confirmées).
+
+Mesuré sur `Camion_Bleu.glb` (2026-09-28), **le modèle ne suit pas la spec** :
+
+| Point du contrat | Spec | Modèle |
+|---|---|---|
+| Avant | −Z | +Z |
+| Échelle | appliquée (1,0) | ×1,25 non appliqué sur la racine |
+| Remorque | aucune | semi-remorque 3 essieux (11 m) |
+| Longueur du tracteur | 5,8 m | 6,1 m |
+| Largeur / hauteur | 2,5 / 3,2 m | 2,9 m (cabine), 3,7 m hors tout / 3,7 m (4,7 m échappements) |
+| Empattement / voie | 3,8 / 2,1 m | 3,1 / 2,4 m |
+| Rayon de roue | 0,55 m | 0,72 m (AV), 0,84 m (AR jumelées) |
+| Noms des roues | `Wheel_FL`… pivot au moyeu | `Roue_AV_G`… groupes sans pivot au moyeu ; « G » est à droite une fois l'avant en −Z |
+
+`TruckVisual` l'**ajuste** donc sans toucher à la physique : demi-tour,
+remorque retirée, échelle uniforme ×0,947 (tracteur de 5,8 m), centrage sur la
+caisse, bas des pneus au sol, pivot recalé au moyeu de chaque groupe de roues,
+roues associées aux rayons **par position** (pas par nom). Restent visibles :
+caisse visuelle plus large (3,5 m) et plus haute (4,4 m) que la collision, et
+roues visuelles à l'empattement du modèle (≈ 3,0 m) au lieu de 3,8 m.
+`truck_visual_test` vérifie l'ajustement ; il se saute sans le modèle.
+
+**À corriger à la source** (blender-modeler / camarades) : avant en −Z, échelle
+appliquée, remorque dans un fichier séparé, empattement 3,8 m, voie 2,1 m, roues
+de 0,55 m, objets `Body` + `Wheel_FL/FR/RL/RR` pivotés au moyeu (§4). **À
+vérifier** : les nœuds `Logo_001`, `Embleme_004/005` et `Plaque_AV_UE` ne
+doivent reproduire aucune marque existante (`CLAUDE.md` §1).
+
 ### Style
 
 Formes franches et lisibles de loin — en écran partagé à 4, chaque camion

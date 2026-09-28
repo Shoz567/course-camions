@@ -1,8 +1,9 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
 [ext_resource type="Script" path="res://vehicles/wheel_probe.gd" id="3"]
+[ext_resource type="Script" path="res://vehicles/truck_visual.gd" id="4"]
 
 [sub_resource type="BoxShape3D" id="shape_chassis"]
 size = Vector3(2.4, 1, 5.8)
@@ -75,6 +76,7 @@ target_position = Vector3(0, -1.15, 0)
 script = ExtResource("3")
 
 [node name="Visual" type="Node3D" parent="."]
+script = ExtResource("4")
 
 [node name="Body" type="Node3D" parent="Visual"]
 

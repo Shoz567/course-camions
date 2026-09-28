@@ -42,8 +42,6 @@ const DRAW_FORCE_SCALE := 1.0e-4
 ## Derniere consigne recue. Copiee, jamais partagee avec la source.
 var _input: InputFrame = InputFrame.new()
 var _probes: Array[WheelProbe] = []
-var _wheel_visuals: Array[Node3D] = []
-var _wheel_bases: Array[Basis] = []
 var _free_length: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
 var _k: float = 0.0
 var _c: float = 0.0
@@ -61,16 +59,15 @@ var _handbrake_blend: float = 0.0
 var _tire_force: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
 
 var _reset_pending: bool = false
+## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
+## de la nouvelle position, sinon le camion "glisse" a l'ecran jusqu'a elle.
+var _reset_applied: bool = false
 var _reset_xf: Transform3D = Transform3D.IDENTITY
 
 
 func _ready() -> void:
 	for n in TruckSpec.PROBE_NAMES:
 		_probes.append(get_node(NodePath(n)) as WheelProbe)
-	for n in TruckSpec.WHEEL_NAMES:
-		var v := get_node_or_null(NodePath("Visual/%s" % n)) as Node3D
-		_wheel_visuals.append(v)
-		_wheel_bases.append(v.transform.basis if v != null else Basis.IDENTITY)
 	if tuning == null:
 		push_error("Truck '%s' : aucun VehicleTuning" % name)
 		return
@@ -161,9 +158,13 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	state.transform = _reset_xf
 	state.linear_velocity = Vector3.ZERO
 	state.angular_velocity = Vector3.ZERO
+	_reset_applied = true
 
 
 func _physics_process(_delta: float) -> void:
+	if _reset_applied:
+		_reset_applied = false
+		reset_physics_interpolation()
 	_grounded = 0
 	for p in _probes:
 		p.probe()
@@ -186,9 +187,7 @@ func _physics_process(_delta: float) -> void:
 	var target_deg := 0.0
 	var steer_in := clampf(_input.steer, -1.0, 1.0)
 	if debug_steering:
-		var v2 := maxf(v_fwd * v_fwd, 1.0)
-		var grip_deg := rad_to_deg(atan(_wheelbase * t.lateral_grip_g * TruckSpec.GRAVITY / v2))
-		var max_deg := grip_deg * t.steer_grip_ratio
+		var max_deg := _grip_steer_deg(v_fwd)
 		# 1.6 contre-braquage permissif : du cote ou glisse le camion, la limite
 		# s'elargit de l'angle de derive. Les roues avant peuvent toujours
 		# s'aligner sur la trajectoire, et un derapage se rattrape au stick.
@@ -381,17 +380,15 @@ func _point_velocity(p: Vector3, com: Vector3) -> Vector3:
 	return linear_velocity + angular_velocity.cross(p - com)
 
 
-# --- visuel ------------------------------------------------------------------------
+## Angle de braquage qui fait tourner a la limite d'adherence a la vitesse
+## v_fwd, multiplie par steer_grip_ratio (tache 1.5).
+func _grip_steer_deg(v_fwd: float) -> float:
+	var v2 := maxf(v_fwd * v_fwd, 1.0)
+	var t := tuning
+	return rad_to_deg(atan(_wheelbase * t.lateral_grip_g * TruckSpec.GRAVITY / v2)) * t.steer_grip_ratio
 
-## Les roues suivent les rayons : debattement et braquage. Purement visuel.
-func _process(_delta: float) -> void:
-	for i in 4:
-		var v := _wheel_visuals[i]
-		if v == null:
-			continue
-		var a := TruckSpec.ANCHORS[i]
-		v.position = Vector3(a.x, a.y - _probes[i].hub_distance, a.z)
-		var b := _wheel_bases[i]
-		if i < 2:
-			b = Basis(Vector3.UP, -deg_to_rad(_steer_deg)) * b
-		v.transform.basis = b
+
+## Braquage max au plein stick a la vitesse actuelle, hors derive (deg).
+## Lecture seule : sert a un pilote (IA, test) a doser son stick.
+func get_max_steer_deg() -> float:
+	return minf(tuning.max_steer_deg, _grip_steer_deg(get_speed_kmh() / 3.6))
