@@ -13,38 +13,22 @@ extends Node3D
 ##   En l'air : stick gauche = lacet ; l'assiette se corrige seule
 ##   F1 traces de debug   F2 suspension   F3 forces de pneu   F4 centre de masse
 ##
-## La camera ici est un simple suivi de debug : la vraie camera de poursuite est
-## la tache 2.1. Ce script joue le role du gameplay (source d'input, reset) :
-## le camion, lui, ne lit jamais Input.*.
+## Ce script joue le role du gameplay (source d'input, reset) : le camion, lui,
+## ne lit jamais Input.*. La piste de test est dev/track_drive.tscn (make run).
 
 const ARENA_HALF := 150.0
 const WALL_THICKNESS := 0.3
 const WALL_HEIGHT := 1.5
 
 @onready var _truck: Truck = $Truck
-@onready var _pad: DeviceInputSource = $PadSource
-@onready var _keyboard: KeyboardInputSource = $KeyboardSource
-@onready var _camera: Camera3D = $Camera3D
+@onready var _input: LocalInputSource = $LocalInput
+@onready var _camera: ChaseCamera = $ChaseCamera
 @onready var _hud: Label = $Hud/Label
-
-var _merged: InputFrame = InputFrame.new()
 
 
 func _ready() -> void:
-	_pick_pad()
-	Input.joy_connection_changed.connect(func(_d: int, _c: bool) -> void: _pick_pad())
 	_build_arena()
-
-
-## Prend la premiere manette connectee, si la source n'en suit pas deja une.
-func _pick_pad() -> void:
-	var pads := Input.get_connected_joypads()
-	if pads.has(_pad.device_id):
-		_pad.connected = true
-		return
-	if not pads.is_empty():
-		_pad.device_id = pads[0]
-		_pad.connected = true
+	_camera.snap()
 
 
 ## Bascules des traces DebugDraw (outil de dev, pas une commande de conduite).
@@ -68,35 +52,18 @@ func _toggle_channel(ch: StringName) -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	var tick := Engine.get_physics_frames()
-	var k := _keyboard.poll(tick)
-	var p := _pad.poll(tick)
-	# Fusion manette + clavier : la commande la plus franche l'emporte.
-	_merged.tick = tick
-	_merged.steer = p.steer if absf(p.steer) > absf(k.steer) else k.steer
-	_merged.throttle = maxf(p.throttle, k.throttle)
-	_merged.brake = maxf(p.brake, k.brake)
-	_merged.handbrake = p.handbrake or k.handbrake
-	_merged.boost = p.boost or k.boost
-	_merged.reset = p.reset or k.reset
-	_truck.set_input(_merged)
-	if _merged.reset:
+	var f := _input.poll(Engine.get_physics_frames())
+	_truck.set_input(f)
+	if f.reset:
 		# remis droit sur place, cap conserve, 1 m au-dessus du sol
 		var pos := _truck.global_position
 		var yaw := _truck.global_rotation.y
 		_truck.reset_to(Transform3D(Basis(Vector3.UP, yaw), Vector3(pos.x, maxf(pos.y, 0.0) + 1.0, pos.z)))
+		_camera.snap()
 
 
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	var xf := _truck.global_transform
-	# derriere le camion, cap horizontal seulement : la camera ne roule pas avec lui
-	var back := xf.basis.z
-	back.y = 0.0
-	back = back.normalized() if back.length_squared() > 1e-4 else Vector3.BACK
-	var want := xf.origin + back * 14.0 + Vector3.UP * 5.5
-	_camera.global_position = _camera.global_position.lerp(want, clampf(delta * 5.0, 0.0, 1.0))
-	_camera.look_at(xf.origin + Vector3.UP * 1.5)
-
 	var f := _truck.get_input()
 	var v := _truck.linear_velocity
 	var slip := 0.0
@@ -104,9 +71,9 @@ func _process(delta: float) -> void:
 	if v_fwd > 1.0:
 		slip = rad_to_deg(atan2(v.dot(xf.basis.x), v_fwd))
 	var state := "au sol" if _truck.wheels_on_ground() > 0 else "EN L'AIR"
-	var pad_name := "aucune (clavier : ZQSD / fleches, Espace, R)"
-	if _pad.connected:
-		pad_name = "%d — %s" % [_pad.device_id, Input.get_joy_name(_pad.device_id)]
+	var pad_name := _input.pad_name()
+	if pad_name == "":
+		pad_name = "aucune (clavier : ZQSD / fleches, Espace, R)"
 	_hud.text = "\n".join([
 		"Manette : %s" % pad_name,
 		"%6.1f km/h   roues au sol %d   braquage %+.1f deg" % [

@@ -17,3 +17,7 @@ func _test_finish() -> void:
 	check("moteur physique = Jolt", engine == "Jolt Physics", "moteur=%s" % engine)
 	var renderer: String = ProjectSettings.get_setting("rendering/renderer/rendering_method", "")
 	check("renderer = Forward+", renderer == "forward_plus", "renderer=%s" % renderer)
+	# Rendu fluide au-dela de 60 Hz, et camera de poursuite sans a-coups
+	# (chase_camera.gd lit la transformation interpolee du camion).
+	check("interpolation physique active",
+		ProjectSettings.get_setting("physics/common/physics_interpolation", false) == true)

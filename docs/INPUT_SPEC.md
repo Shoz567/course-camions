@@ -8,10 +8,12 @@ Le code de conduite ne lit **jamais** `Input.*`. Il consomme une `InputFrame`
 fournie par une `InputSource`.
 
 ```
-LocalKeyboardSource ─┐
-DeviceInputSource ───┼──► InputFrame ──► TruckController ──► Truck (RigidBody3D)
+KeyboardInputSource ─┐
+DeviceInputSource ───┼──► InputFrame ──► Truck.set_input() ──► Truck (RigidBody3D)
 RemoteInputSource ───┤
 ScriptedInputSource ─┘
+
+LocalInputSource = première manette + clavier fusionnés (joueur solo, dev)
 ```
 
 C'est ce qui permet, sans toucher au camion :

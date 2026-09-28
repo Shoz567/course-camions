@@ -2,8 +2,8 @@
 
 [ext_resource type="Script" path="res://dev/drive_sandbox.gd" id="1"]
 [ext_resource type="PackedScene" path="res://vehicles/truck.tscn" id="2"]
-[ext_resource type="Script" path="res://gameplay/input/device_input_source.gd" id="3"]
-[ext_resource type="Script" path="res://gameplay/input/keyboard_input_source.gd" id="4"]
+[ext_resource type="Script" path="res://gameplay/input/local_input_source.gd" id="3"]
+[ext_resource type="Script" path="res://gameplay/chase_camera.gd" id="4"]
 
 [sub_resource type="BoxShape3D" id="shape_floor"]
 size = Vector3(400, 1, 400)
@@ -65,15 +65,12 @@ mesh = SubResource("mesh_floor")
 [node name="Truck" parent="." instance=ExtResource("2")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 40)
 
-[node name="PadSource" type="Node" parent="."]
+[node name="LocalInput" type="Node" parent="."]
 script = ExtResource("3")
 
-[node name="KeyboardSource" type="Node" parent="."]
+[node name="ChaseCamera" type="Node3D" parent="." node_paths=PackedStringArray("target")]
 script = ExtResource("4")
-
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.9, 0.44, 0, -0.44, 0.9, 0, 5.5, 54)
-fov = 70.0
+target = NodePath("../Truck")
 
 [node name="Hud" type="CanvasLayer" parent="."]
 

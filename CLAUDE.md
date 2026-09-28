@@ -148,6 +148,10 @@ d'emploi dans `.claude/agents/godot-qa.md`.
 - **Pas d'amortissement caché** : le camion est en `linear_damp_mode = REPLACE`,
   `linear_damp = 0`. Le défaut du projet (0,1) plafonnait sa vitesse vers
   167 km/h. La traînée est une force explicite de `VehicleTuning`.
+- **Interpolation physique activée** (`physics/common/physics_interpolation`) :
+  le rendu interpole entre deux ticks, donc pas d'à-coups au-delà de 60 Hz. La
+  caméra lit `get_global_transform_interpolated()`. Après toute téléportation,
+  `reset_physics_interpolation()` (le camion le fait seul après `reset_to`).
 - **Pas de téléportation d'un corps en mouvement** par `global_position`. Le
   reset d'un camion (retour sur la piste) passe par `state.transform` dans
   `_integrate_forces()`, avec les vitesses remises à zéro dans le même tick.
