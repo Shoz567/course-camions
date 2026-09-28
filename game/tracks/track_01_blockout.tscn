@@ -1,0 +1,70 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
+
+[node name="Track01" type="Node3D"]
+script = ExtResource("1")
+segments = Array[Dictionary]([{
+"length": 200.0,
+"name": "Ligne droite de depart",
+"type": "straight"
+}, {
+"angle": 180.0,
+"bank": 14.0,
+"name": "Epingle relevee (drift)",
+"radius": 35.0,
+"type": "arc"
+}, {
+"climb": 6.0,
+"length": 150.0,
+"name": "Montee",
+"type": "straight"
+}, {
+"angle": -90.0,
+"bank": 6.0,
+"name": "Devers inverse sur la crete",
+"radius": 70.0,
+"type": "arc"
+}, {
+"auto": true,
+"name": "Crete (longueur calculee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Gauche a plat",
+"radius": 50.0,
+"type": "arc"
+}, {
+"climb": -3.0,
+"length": 60.0,
+"name": "Descente",
+"type": "straight"
+}, {
+"angle": 45.0,
+"climb": -1.5,
+"name": "Chicane gauche",
+"radius": 60.0,
+"type": "arc"
+}, {
+"angle": -45.0,
+"climb": -1.5,
+"name": "Chicane droite",
+"radius": 60.0,
+"type": "arc"
+}, {
+"jump": 90.0,
+"length": 200.0,
+"line": 4.2,
+"name": "Ligne droite du tremplin (cote droit)",
+"type": "straight"
+}, {
+"angle": 180.0,
+"bank": 10.0,
+"name": "Grand virage releve",
+"radius": 110.0,
+"type": "arc"
+}, {
+"auto": true,
+"name": "Ligne droite des stands (longueur calculee)",
+"type": "straight"
+}])

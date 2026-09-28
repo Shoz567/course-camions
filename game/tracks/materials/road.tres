@@ -1,0 +1,28 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[sub_resource type="Shader" id="shader"]
+code = "shader_type spatial;
+
+// Chaussee de blockout. UV.x : 0 (bord gauche) .. 1 (bord droit).
+// UV.y : distance le long de la piste (m) ; ligne d'arrivee a 0.
+void fragment() {
+	vec3 asphalt = vec3(0.16, 0.16, 0.17);
+	vec3 col = asphalt;
+	float u = UV.x;
+	float s = UV.y;
+	// lignes de bord continues
+	if (u < 0.025 || u > 0.975) col = vec3(0.92);
+	// pointilles au centre : 6 m peints, 6 m vides
+	if (abs(u - 0.5) < 0.008 && mod(s, 12.0) < 6.0) col = vec3(0.92);
+	// ligne d'arrivee : damier sur 3 m
+	if (s >= 0.0 && s < 3.0) {
+		float c = mod(floor(u * 14.0) + floor(s * 2.0), 2.0);
+		col = mix(vec3(0.05), vec3(0.95), c);
+	}
+	ALBEDO = col;
+	ROUGHNESS = 0.85;
+}
+"
+
+[resource]
+shader = SubResource("shader")

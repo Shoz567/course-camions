@@ -89,7 +89,7 @@ rattrape. Sur un sol plat : pas encore de piste.
 | 1.5 | Direction (angle réduit avec la vitesse) et adhérence latérale, modulée par la surface | vehicle-physics-engineer | `[x]` |
 | 1.6 | Dérapage au frein à main, anti-retournement, contrôle en l'air | vehicle-physics-engineer | `[x]` |
 | 1.7 | Reset : remise sur les roues par `state.transform`, vitesses à zéro | vehicle-physics-engineer | `[x]` `reset_to()` ; le reset automatique est la 2.6 |
-| 1.8 | `InputFrame` de conduite + `ScriptedInputSource` (tests) + `LocalInputSource` | gameplay-engineer | `[~]` sources manette, clavier, scriptée ; `DeviceInputSource` anticipe la 4.1 |
+| 1.8 | `InputFrame` de conduite + `ScriptedInputSource` (tests) + `LocalInputSource` | gameplay-engineer | `[x]` + manette (`DeviceInputSource`) et clavier ; `LocalInputSource` les fusionne |
 | 1.9 | Branchement de `DebugDraw` : rayons de suspension, forces de pneu, centre de masse | vehicle-physics-engineer | `[x]` F1 à F4 dans le bac à sable |
 | 1.10 | Tests : stabilité à l'arrêt, hauteur de caisse, `handling_test` (métriques), virage, saut, haute vitesse, perf | godot-qa | `[x]` baseline de perf à écrire sur la machine de référence |
 
@@ -122,16 +122,25 @@ rattrape. Sur un sol plat : pas encore de piste.
 
 ## Phase 2 — Piste et tour solo
 
-| # | Tâche | Agent |
-|---|---|---|
-| 2.1 | Caméra de poursuite amortie (ne tremble jamais, ne passe pas dans les murs) | gameplay-engineer |
-| 2.2 | Piste blockout n°1, dimensionnée sur `docs/METRICS.md` : virages variés, un saut | track-designer |
-| 2.3 | Checkpoints ordonnés + ligne d'arrivée + détection du mauvais sens | track-designer |
-| 2.4 | Zones de reset (hors-piste, vide) + points de réapparition | track-designer |
-| 2.5 | Tours et chrono (dérivé des ticks), meilleur tour | gameplay-engineer |
-| 2.6 | Reset manuel et automatique (retourné ou immobile hors piste pendant N ticks) | gameplay-engineer |
-| 2.7 | HUD minimal : vitesse, tour, chrono | gameplay-engineer |
-| 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa |
+| # | Tâche | Agent | État |
+|---|---|---|---|
+| 2.1 | Caméra de poursuite amortie (ne tremble jamais, ne passe pas dans les murs) | gameplay-engineer | `[x]` `ChaseCamera` |
+| 2.2 | Piste blockout n°1, dimensionnée sur `docs/METRICS.md` : virages variés, un saut | track-designer | `[x]` `track_01_blockout.tscn` |
+| 2.3 | Checkpoints ordonnés + ligne d'arrivée + détection du mauvais sens | track-designer | `[ ]` ligne d'arrivée visuelle seulement |
+| 2.4 | Zones de reset (hors-piste, vide) + points de réapparition | track-designer | `[~]` pas de vide (herbe partout) ; réapparition `get_respawn_transform()` ; `Area3D` à faire |
+| 2.5 | Tours et chrono (dérivé des ticks), meilleur tour | gameplay-engineer | `[~]` chrono de dev dans `track_drive` (sans checkpoints) |
+| 2.6 | Reset manuel et automatique (retourné ou immobile hors piste pendant N ticks) | gameplay-engineer | `[~]` manuel fait ; automatique à faire |
+| 2.7 | HUD minimal : vitesse, tour, chrono | gameplay-engineer | `[~]` HUD de dev |
+| 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[~]` reset, grille, glissière, tour piloté ; checkpoints à faire |
+
+**Piste n°1** (`game/tracks/track_01_blockout.tscn`, générée par `TrackBlockout`) :
+1 828 m, 14 m de large, glissières continues de 0,3 m sans frottement. Épingle
+relevée (R 35 m, 14°), montée de 6 m, dévers inverse (R 70 m), chicane en
+descente, tremplin de 8° sur la moitié droite (ligne alternative), grand virage
+relevé (R 110 m, 10°), ligne droite des stands de 615 m. Rayons choisis sur
+`baseline.json` du 2026-09-26 (0,877 g, rayon mini 21,6 m à 50 km/h, 149,2 km/h).
+**Tour de référence : 70,75 s** (`track_01_lap_test`, pilote à 80 % de
+l'adhérence mesurée).
 
 **Critères de sortie**
 - Un joueur fait 3 tours chronométrés sur la piste n°1.
