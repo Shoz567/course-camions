@@ -47,6 +47,10 @@ dessine pas de piste qui en dépend »**, pas « prends la cible ».
 | Rayon de braquage mini | `min_turn_radius_m` | plein braquage à 50 km/h stabilisés, rayon du cercle décrit par le centre de masse |
 | Adhérence latérale max | `max_lateral_g` | accélération latérale max tenue sans dérapage, en g |
 
+**Boost** (mesuré par `truck_boost_test`, 2026-09-28) : vitesse max portée de
+149 à **179 km/h**, +32 km/h gagnés en 1,5 s. À prendre en compte pour les
+sauts et les freinages après une ligne droite.
+
 À ajouter quand les mécaniques existeront : portée d'un saut standard à vitesse
 max, vitesse max en dérapage, vitesse max par surface.
 

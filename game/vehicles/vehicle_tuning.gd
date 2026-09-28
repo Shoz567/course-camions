@@ -44,6 +44,16 @@ extends Resource
 ## Deceleration au frein. 100 -> 0 en < 45 m exige au moins 8,57 m/s2.
 @export_range(0.0, 30.0, 0.01, "suffix:m/s²") var brake_decel_ms2: float = 0.0
 
+@export_group("Boost")
+## Poussee ajoutee pendant le boost (m/s2), meme sans gaz.
+@export_range(0.0, 30.0, 0.01, "suffix:m/s²") var boost_accel_ms2: float = 0.0
+## Vitesse max relevee pendant le boost.
+@export_range(0.0, 100.0, 0.1, "suffix:km/h") var boost_top_speed_kmh: float = 0.0
+## Duree du boost, puis duree de recharge de la jauge (qui commence a la fin
+## du boost). 60 ticks = 1 s.
+@export_range(0.0, 600.0, 1.0, "suffix:ticks") var boost_duration_ticks: float = 0.0
+@export_range(0.0, 1200.0, 1.0, "suffix:ticks") var boost_recharge_ticks: float = 0.0
+
 @export_group("Resistances")
 ## Trainee aerodynamique : a = coef * v2 (1/m). Remplace le linear_damp du
 ## corps, force a 0 (docs/SPIKE.md A10).

@@ -1,9 +1,10 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
 [ext_resource type="Script" path="res://vehicles/wheel_probe.gd" id="3"]
 [ext_resource type="Script" path="res://vehicles/truck_visual.gd" id="4"]
+[ext_resource type="Script" path="res://vehicles/truck_horn.gd" id="5"]
 
 [sub_resource type="BoxShape3D" id="shape_chassis"]
 size = Vector3(2.4, 1, 5.8)
@@ -121,3 +122,7 @@ mesh = SubResource("mesh_wheel")
 [node name="Wheel_RR" type="MeshInstance3D" parent="Visual"]
 transform = Transform3D(0, -1, 0, 1, 0, 0, 0, 0, 1, 1.05, 0.55, 1.9)
 mesh = SubResource("mesh_wheel")
+
+[node name="Horn" type="AudioStreamPlayer3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, -2.5)
+script = ExtResource("5")

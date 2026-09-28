@@ -12,11 +12,16 @@ extends RigidBody3D
 ##   1.6 frein a main (derapage, contre-braquage permissif), anti-retournement
 ##       au sol, controle en l'air (assiette automatique, lacet au stick)
 ##   1.9 traces DebugDraw : rayons, contacts, forces, centre de masse
+##   boost : poussee et vitesse max relevees pendant boost_duration_ticks, puis
+##       jauge rechargee en boost_recharge_ticks (declenche a l'appui)
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
 ##   wheels_on_ground()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
+
+## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
+signal honked
 
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
@@ -33,6 +38,7 @@ const STOP_SPEED_MS := 0.5
 @export var debug_anti_roll: bool = true
 @export var debug_handbrake: bool = true
 @export var debug_air_control: bool = true
+@export var debug_boost: bool = true
 ## Traces DebugDraw du camion (actifs seulement si DebugDraw.enabled).
 @export var debug_draw: bool = true
 
@@ -56,6 +62,10 @@ var _grounded: int = 0
 var _active: bool = false
 ## 0 = adherence pleine, 1 = adherence de frein a main (train arriere).
 var _handbrake_blend: float = 0.0
+## Boost : ticks restants, jauge 0 .. 1 (1 = pret), appui precedent.
+var _boost_ticks: int = 0
+var _boost_charge: float = 1.0
+var _boost_was_pressed: bool = false
 var _tire_force: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
 
 var _reset_pending: bool = false
@@ -152,6 +162,16 @@ func get_handbrake_blend() -> float:
 	return _handbrake_blend
 
 
+## Jauge de boost : 1 = pret, 0 = vide (pendant le boost et au debut de la
+## recharge).
+func get_boost_charge() -> float:
+	return _boost_charge
+
+
+func is_boosting() -> bool:
+	return _boost_ticks > 0
+
+
 # --- simulation ------------------------------------------------------------------
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -234,9 +254,19 @@ func _physics_process(_delta: float) -> void:
 		elif thr <= 0.0:
 			var taper_r := clampf((_reverse_top_ms + v_fwd) / _taper_ms, 0.0, 1.0)
 			drive = -brk * (t.reverse_accel_ms2 * taper_r + resist)
+	# boost : declenche a l'appui si la jauge est pleine ; poussee ajoutee meme
+	# sans gaz, vitesse max relevee, resistances compensees.
+	_update_boost(t)
+	if _boost_ticks > 0 and debug_boost and v_fwd > -STOP_SPEED_MS:
+		var top_b := _top_speed_ms + t.boost_top_speed_kmh / 3.6
+		var taper_b := clampf((top_b - v_fwd) / _taper_ms, 0.0, 1.0)
+		drive = (thr * t.engine_accel_ms2 + t.boost_accel_ms2) * taper_b + resist
+		braking = 0.0 if brk <= 0.0 else braking
 	if not debug_drive:
 		drive = 0.0
 		braking = 0.0
+	if _input.honk:
+		honked.emit()
 
 	var m_wheel := mass / 4.0
 	for i in 4:
@@ -309,6 +339,18 @@ func _physics_process(_delta: float) -> void:
 	# 1.9 traces de debug
 	if debug_draw and DebugDraw.enabled:
 		_draw_debug(up, com)
+
+
+func _update_boost(t: VehicleTuning) -> void:
+	var pressed := _input.boost
+	if _boost_ticks > 0:
+		_boost_ticks -= 1
+	elif _boost_charge < 1.0:
+		_boost_charge = minf(1.0, _boost_charge + 1.0 / t.boost_recharge_ticks)
+	if pressed and not _boost_was_pressed and _boost_charge >= 1.0 and _boost_ticks == 0:
+		_boost_ticks = roundi(t.boost_duration_ticks)
+		_boost_charge = 0.0
+	_boost_was_pressed = pressed
 
 
 ## En l'air : ressort angulaire amorti critiquement vers l'horizontale (sans
