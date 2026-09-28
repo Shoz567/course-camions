@@ -66,10 +66,13 @@ Ces valeurs-là sont des **choix de design**, pas des mesures.
 
 | Grandeur | Valeur | Justification |
 |---|---|---|
-| Largeur minimale de piste | 14 m | 4 camions de 2,5 m de front, avec de la marge pour doubler |
-| Largeur de la grille de départ | 4 camions de front, rangs espacés de 9 m | un camion (5,8 m) + marge de freinage |
+| Largeur minimale de piste | **25 m** | décision du 2026-09-28 : semi-remorques de 16,4 m (VEHICLE_SPEC §2), drift à 4 en écran partagé |
+| Rayon des virages | 60 à 90 m | décision du 2026-09-28 : virages amples pour faire déraper des ensembles de 16 m |
+| Largeur de la grille de départ | 4 camions de front (écart 5,5 m), rangs espacés de 20 m | un ensemble (16,4 m) + marge de freinage |
 | Durée d'un tour | 60 à 90 s | assez court pour que les écarts restent lisibles, assez long pour varier les virages |
 | Épaisseur minimale d'un mur | **0,3 m** | choix de design (2026-09-26) : le spike V2 n'a mesuré aucune traversée jusqu'à 0,1 m à 200 km/h ; 0,3 m est la glissière de son protocole, avec de la marge |
+| Hauteur des murs | **2,8 m** | décision du 2026-09-28 : au-dessus du bas de la caisse de remorque (1,8 m), aucun passage par-dessus bord |
+| Frottement des murs | **0,5** | décision du 2026-09-28 : freine les impacts. Jolt retient le plus faible des deux frottements : effectif seulement avec une caisse de camion à 0,5 (`chassis_friction`) |
 
 Principe : **une piste trop large est ennuyeuse**. Les contacts entre camions
 font le sel du genre ; si tu hésites, resserre.

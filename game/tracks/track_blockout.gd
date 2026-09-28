@@ -20,9 +20,19 @@ extends Node3D
 ##   "jump": m      tremplin a cette distance du debut du segment, cote droit.
 ##
 ## Genere : Geometry (chaussee, sol, tremplin), Walls (2 glissieres continues),
-## StartGrid, RacingLine. Checkpoints et zones de reset : taches 2.3 et 2.4.
+## ResetZones (Area3D au-dela des murs, tout autour), StartGrid, RacingLine.
+## Checkpoints : tache 2.3.
+##
+## La piste ne decide rien (track-designer.md) : elle EMET un signal quand un
+## camion entre dans une zone de reset ou en sort ; le gameplay (AutoReset,
+## puis RaceManager) decide de le replacer.
+
+signal truck_entered_reset_zone(truck: Node3D)
+signal truck_exited_reset_zone(truck: Node3D)
 
 const ROAD_LAYER := 1          # couche 1 `world` (VEHICLE_SPEC §7)
+const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
+const VEHICLE_LAYER := 2
 const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 
 @export var segments: Array[Dictionary] = []
@@ -50,6 +60,15 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var jump_width: float = 4.8
 ## Decalage lateral du centre du tremplin (> 0 : a droite).
 @export var jump_offset: float = 4.2
+
+@export_group("Zones de reset")
+## Longueur d'une zone le long de la piste (courte : suit les courbes).
+@export var reset_zone_length: float = 20.0
+## Ecart entre le haut exterieur du mur et le bord interieur de la zone : une
+## remorque qui frotte le mur ne doit jamais y entrer.
+@export var reset_zone_margin: float = 2.0
+@export var reset_zone_depth: float = 60.0
+@export var reset_zone_height: float = 40.0
 
 @export_group("Grille")
 @export var grid_distance: float = 12.0
@@ -373,6 +392,7 @@ static func _smooth_loop(v: PackedFloat32Array, radius: float) -> PackedFloat32A
 func _build_geometry() -> void:
 	var geometry := _group("Geometry")
 	var walls := _group("Walls")
+	var zones := _group("ResetZones")
 	var grid := _group("StartGrid")
 
 	# chaussee
@@ -431,6 +451,8 @@ func _build_geometry() -> void:
 	for jmp in _jumps:
 		_build_jump(geometry, jmp.x, jmp.y)
 
+	_build_reset_zones(zones)
+
 	for slot in grid_lateral.size():
 		var m := Marker3D.new()
 		m.name = "Slot%d" % slot
@@ -459,6 +481,50 @@ func _wall_profile(i: int, side: float) -> PackedVector3Array:
 	var outer_top := inner_top + out * thick_top
 	var outer_bottom := Vector3(outer_top.x, minf(GROUND_Y - 0.1, edge.y - 0.3), outer_top.z)
 	return PackedVector3Array([inner_bottom, inner_top, outer_top, outer_bottom])
+
+
+## Zones de reset : une boite par troncon de piste et par cote, au-dela du mur,
+## orientee le long de la piste (courtes, pour suivre les virages sans jamais
+## deborder sur la chaussee). Du sol jusqu'a reset_zone_height au-dessus.
+func _build_reset_zones(parent: Node3D) -> void:
+	var n := _pos.size()
+	var step := _length / n
+	var chunk := maxi(1, roundi(reset_zone_length / step))
+	var inner := width / 2.0 + wall_thickness + wall_lean + reset_zone_margin
+	var k := 0
+	var i := 0
+	while i < n:
+		var mid := (i + floori(chunk / 2.0)) % n
+		var t := Vector3(_fwd[mid].x, 0.0, _fwd[mid].z).normalized()
+		var r := t.cross(Vector3.UP).normalized()
+		var zone_basis := Basis(r, Vector3.UP, -t)
+		for side: float in [-1.0, 1.0]:
+			var area := Area3D.new()
+			area.name = "Zone%03d%s" % [k, "L" if side < 0.0 else "R"]
+			area.collision_layer = 1 << (RESET_ZONE_LAYER - 1)
+			area.collision_mask = 1 << (VEHICLE_LAYER - 1)
+			area.monitorable = false
+			var cs := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = Vector3(reset_zone_depth, reset_zone_height, chunk * step + 2.0)
+			cs.shape = box
+			area.add_child(cs)
+			var center := _pos[mid] + r * side * (inner + reset_zone_depth / 2.0)
+			center.y = GROUND_Y - 2.0 + reset_zone_height / 2.0
+			area.transform = Transform3D(zone_basis, center)
+			area.body_entered.connect(_on_reset_zone_body_entered)
+			area.body_exited.connect(_on_reset_zone_body_exited)
+			parent.add_child(area)
+		k += 1
+		i += chunk
+
+
+func _on_reset_zone_body_entered(body: Node3D) -> void:
+	truck_entered_reset_zone.emit(body)
+
+
+func _on_reset_zone_body_exited(body: Node3D) -> void:
+	truck_exited_reset_zone.emit(body)
 
 
 ## Tremplin : prisme convexe, bord d'attaque au ras de la chaussee.

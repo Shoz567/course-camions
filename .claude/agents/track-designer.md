@@ -27,7 +27,8 @@ signifie « ne dessine rien qui en dépende », pas « prends la cible de la spe
 Si une métrique te manque, demande à `godot-qa` de l'ajouter à `handling_test`.
 
 Ce qui est ton choix (et reste dans `docs/METRICS.md` §4) : largeur de piste
-(14 m minimum), grille de départ, durée de tour (60 à 90 s).
+(25 m minimum depuis les semi-remorques), rayons (60 à 90 m), grille de départ,
+durée de tour (60 à 90 s), murs (0,3 m d'épaisseur, 2,8 m de haut).
 
 ## Principes de conception
 

@@ -10,61 +10,69 @@ segments = Array[Dictionary]([{
 "type": "straight"
 }, {
 "angle": 180.0,
-"bank": 14.0,
-"name": "Epingle relevee (drift)",
-"radius": 35.0,
+"bank": 10.0,
+"name": "Grand virage releve",
+"radius": 90.0,
 "type": "arc"
 }, {
 "climb": 6.0,
-"length": 150.0,
+"length": 200.0,
 "name": "Montee",
 "type": "straight"
 }, {
-"angle": -90.0,
+"angle": -30.0,
 "bank": 6.0,
-"name": "Devers inverse sur la crete",
-"radius": 70.0,
+"name": "S en devers inverse (droite)",
+"radius": 80.0,
 "type": "arc"
 }, {
-"auto": true,
-"name": "Crete (longueur calculee)",
-"type": "straight"
-}, {
-"angle": 90.0,
-"name": "Gauche a plat",
-"radius": 50.0,
+"angle": 30.0,
+"name": "S (gauche)",
+"radius": 80.0,
 "type": "arc"
 }, {
-"climb": -3.0,
-"length": 60.0,
-"name": "Descente",
+"length": 80.0,
+"name": "Crete",
 "type": "straight"
 }, {
 "angle": 45.0,
-"climb": -1.5,
-"name": "Chicane gauche",
-"radius": 60.0,
+"climb": -3.0,
+"name": "Chicane gauche (descente)",
+"radius": 90.0,
 "type": "arc"
+}, {
+"auto": true,
+"name": "Diagonale de la chicane (longueur calculee)",
+"type": "straight"
 }, {
 "angle": -45.0,
-"climb": -1.5,
-"name": "Chicane droite",
-"radius": 60.0,
+"climb": -3.0,
+"name": "Chicane droite (descente)",
+"radius": 90.0,
 "type": "arc"
 }, {
-"jump": 90.0,
-"length": 200.0,
-"line": 4.2,
+"jump": 80.0,
+"length": 250.0,
+"line": 7.0,
 "name": "Ligne droite du tremplin (cote droit)",
 "type": "straight"
 }, {
 "angle": 180.0,
-"bank": 10.0,
-"name": "Grand virage releve",
-"radius": 110.0,
+"bank": 14.0,
+"name": "Epingle relevee (drift)",
+"radius": 60.0,
 "type": "arc"
 }, {
 "auto": true,
 "name": "Ligne droite des stands (longueur calculee)",
 "type": "straight"
 }])
+width = 25.0
+wall_height = 2.8
+wall_friction = 0.5
+jump_length = 14.0
+jump_angle_deg = 7.0
+jump_width = 8.0
+jump_offset = 7.0
+grid_row_spacing = 20.0
+grid_lateral = PackedFloat32Array(-8.25, -2.75, 2.75, 8.25)
