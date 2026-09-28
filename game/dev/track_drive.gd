@@ -7,6 +7,7 @@ extends Node3D
 ##   LT / L2 ou S        frein, puis marche arriere a l'arret
 ##   A / Croix, Espace   frein a main (drift)
 ##   Y / Triangle ou R   reset : sur la chaussee, dans le sens de course
+##                       (automatique hors piste ou camion couche : AutoReset)
 ##   F1 .. F4            traces de debug
 ##
 ## Chrono au tour : derive du compteur de ticks (CLAUDE.md §7), passage de la
@@ -18,12 +19,15 @@ extends Node3D
 @onready var _input: LocalInputSource = $LocalInput
 @onready var _camera: ChaseCamera = $ChaseCamera
 @onready var _hud: Label = $Hud/Label
+@onready var _auto_reset: AutoReset = $AutoReset
 
 var _idx: int = -1
 var _lap_start_tick: int = -1
 var _last_lap: int = -1
 var _best_lap: int = -1
 var _laps: int = 0
+var _notice: String = ""
+var _notice_until: int = 0
 
 
 func _ready() -> void:
@@ -32,6 +36,10 @@ func _ready() -> void:
 	_camera.snap()
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
+	_auto_reset.watch(_truck)
+	_auto_reset.truck_reset.connect(func(_t: Truck, reason: StringName) -> void:
+		_notice = "replace automatiquement (%s)" % reason
+		_notice_until = Engine.get_physics_frames() + 120)
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -83,6 +91,7 @@ func _process(_delta: float) -> void:
 			_laps + 1, _chrono(current), _chrono(_last_lap), _chrono(_best_lap)],
 		"manette : %s" % (pad if pad != "" else "aucune (clavier : ZQSD, Espace, R)"),
 		"Y / Triangle / R : reset    A / Croix : frein a main    F1 : traces",
+		_notice if tick < _notice_until else "",
 	])
 
 

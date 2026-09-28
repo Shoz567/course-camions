@@ -127,20 +127,22 @@ rattrape. Sur un sol plat : pas encore de piste.
 | 2.1 | Caméra de poursuite amortie (ne tremble jamais, ne passe pas dans les murs) | gameplay-engineer | `[x]` `ChaseCamera` |
 | 2.2 | Piste blockout n°1, dimensionnée sur `docs/METRICS.md` : virages variés, un saut | track-designer | `[x]` `track_01_blockout.tscn` |
 | 2.3 | Checkpoints ordonnés + ligne d'arrivée + détection du mauvais sens | track-designer | `[ ]` ligne d'arrivée visuelle seulement |
-| 2.4 | Zones de reset (hors-piste, vide) + points de réapparition | track-designer | `[~]` pas de vide (herbe partout) ; réapparition `get_respawn_transform()` ; `Area3D` à faire |
+| 2.4 | Zones de reset (hors-piste, vide) + points de réapparition | track-designer | `[x]` 204 `Area3D` au-delà des murs, signaux ; réapparition `get_respawn_transform()` |
 | 2.5 | Tours et chrono (dérivé des ticks), meilleur tour | gameplay-engineer | `[~]` chrono de dev dans `track_drive` (sans checkpoints) |
-| 2.6 | Reset manuel et automatique (retourné ou immobile hors piste pendant N ticks) | gameplay-engineer | `[~]` manuel fait ; automatique à faire |
+| 2.6 | Reset manuel et automatique (retourné ou immobile hors piste pendant N ticks) | gameplay-engineer | `[x]` `AutoReset` : 30 ticks hors piste, 120 ticks couché |
 | 2.7 | HUD minimal : vitesse, tour, chrono | gameplay-engineer | `[~]` HUD de dev |
-| 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[~]` reset, grille, glissière, tour piloté ; checkpoints à faire |
+| 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[~]` reset manuel et auto, grille, glissière, tour piloté ; checkpoints à faire |
 
-**Piste n°1** (`game/tracks/track_01_blockout.tscn`, générée par `TrackBlockout`) :
-1 828 m, 14 m de large, glissières continues de 0,3 m sans frottement. Épingle
-relevée (R 35 m, 14°), montée de 6 m, dévers inverse (R 70 m), chicane en
-descente, tremplin de 8° sur la moitié droite (ligne alternative), grand virage
-relevé (R 110 m, 10°), ligne droite des stands de 615 m. Rayons choisis sur
-`baseline.json` du 2026-09-26 (0,877 g, rayon mini 21,6 m à 50 km/h, 149,2 km/h).
-**Tour de référence : 70,75 s** (`track_01_lap_test`, pilote à 80 % de
-l'adhérence mesurée).
+**Piste n°1** (`game/tracks/track_01_blockout.tscn`, générée par `TrackBlockout`),
+redimensionnée le 2026-09-28 pour les semi-remorques : 2 033 m, **25 m** de large,
+glissières continues de 0,3 m, **2,8 m** de haut, frottement 0,5. Grand virage
+relevé (R 90 m, 10°), montée de 6 m, S en dévers inverse (R 80 m), crête, chicane
+en descente (R 90 m), tremplin de 7° sur la moitié droite (ligne alternative),
+épingle relevée (R 60 m, 14°), ligne droite des stands de 766 m. Zones de reset
+tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g, 149,2 km/h),
+inchangées par la remorque (inertie imposée, VEHICLE_SPEC §5 bis).
+**Tour de référence : 71,4 s** (`track_01_lap_test`, pilote à 80 % de
+l'adhérence mesurée, semi-remorque comprise).
 
 **Critères de sortie**
 - Un joueur fait 3 tours chronométrés sur la piste n°1.
@@ -255,8 +257,10 @@ ajout discret au milieu d'une autre.
 
 - **IA / adversaires pilotés par l'ordinateur.** Sans IA, pas de mode solo
   contre des adversaires : à décider avant la phase 3.
-- **Remorques.** Changent profondément la conduite (attelage, mise en
-  portefeuille) et la physique (acquis A5 de `docs/SPIKE.md`).
+- **Remorques** — tranché le 2026-09-28 : semi-remorque **rigide** sur le même
+  corps que le tracteur (identité visuelle), inertie imposée pour garder la
+  conduite (VEHICLE_SPEC §2 et §5 bis). Une vraie articulation (attelage, mise
+  en portefeuille) reste possible plus tard, comme une phase à part entière.
 - **Boost / objets.** Arcade pur (boost, objets) ou course « propre » ?
 
 ## Ce qu'on ne fait volontairement pas (pour l'instant)

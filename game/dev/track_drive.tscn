@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://dev/track_drive.gd" id="1"]
 [ext_resource type="PackedScene" path="res://tracks/track_01_blockout.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://vehicles/truck.tscn" id="3"]
 [ext_resource type="Script" path="res://gameplay/input/local_input_source.gd" id="4"]
 [ext_resource type="Script" path="res://gameplay/chase_camera.gd" id="5"]
+[ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="6"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_horizon_color = Color(0.66, 0.72, 0.78, 1)
@@ -42,11 +43,15 @@ script = ExtResource("4")
 script = ExtResource("5")
 target = NodePath("../Truck")
 
+[node name="AutoReset" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("6")
+track = NodePath("../Track01")
+
 [node name="Hud" type="CanvasLayer" parent="."]
 
 [node name="Label" type="Label" parent="Hud"]
 offset_left = 16.0
 offset_top = 12.0
 offset_right = 1000.0
-offset_bottom = 140.0
+offset_bottom = 170.0
 theme_override_font_sizes/font_size = 20

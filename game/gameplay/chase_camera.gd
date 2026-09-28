@@ -16,10 +16,11 @@ extends Node3D
 
 @export var target: Truck
 ## Distance au pivot, et hauteur du pivot au-dessus du camion.
-@export var distance: float = 12.0
-@export var focus_height: float = 2.2
-## Plongee de la camera (deg).
-@export var pitch_deg: float = 14.0
+## Recul depuis le tracteur : au-dela de la semi-remorque (arriere a 13,4 m).
+@export var distance: float = 24.0
+@export var focus_height: float = 4.0
+## Plongee de la camera (deg) : assez pour voir par-dessus l'aileron (5,6 m).
+@export var pitch_deg: float = 13.0
 ## Amortissements (1/s) : plus grand = plus raide.
 @export var follow_damping: float = 14.0
 @export var height_damping: float = 2.5
