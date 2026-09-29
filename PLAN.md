@@ -278,7 +278,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 |---|---|---|
 | 7.1 | Menu principal, options, remapping | gameplay-engineer |
 | 7.2 | Personnalisation des camions (couleurs, pièces générées) | blender-modeler |
-| 7.3 | Sons et musique complets | — |
+| 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages à faire) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires | track-designer |
 | 7.6 | Profilage et optimisation | godot-qa |

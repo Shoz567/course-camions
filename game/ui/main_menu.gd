@@ -60,6 +60,8 @@ func _ready() -> void:
 	_spawn_trucks()
 	_build_ui()
 	set_sound(not AudioServer.is_bus_mute(_master_bus()))
+	# musique de course rendue en fond pendant le menu (sans effet en headless)
+	RaceMusic.prepare()
 	# on retrouve le dernier choix en revenant d'une course
 	select_players(GameState.requested_players if GameState.requested_players > 0 else 1)
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)

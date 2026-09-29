@@ -17,7 +17,8 @@ extends Node3D
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
 ## arrives : Options / Entree relance, Create / Echap revient au menu (Echap a tout
-## moment).
+## moment). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous ;
+## elle disparait avec la scene (menu, rejouer).
 ##
 ## Le nombre de joueurs vient du menu principal (GameState.requested_players)
 ## quand `players_from_menu` est vrai (dev/race.tscn) ; les scenes a nombre
@@ -77,6 +78,8 @@ var _state_tick: int = 0
 var _last_countdown_sec: int = -1
 var _neutral: InputFrame = InputFrame.new()
 var _finish_order: Array[Truck] = []
+## Musique de course : demarre au GO, fondu a l'arrivee (inerte en headless).
+var music: RaceMusic
 
 
 func _ready() -> void:
@@ -86,6 +89,10 @@ func _ready() -> void:
 	DebugDraw.enabled = false
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
+	music = RaceMusic.new()
+	music.name = "RaceMusic"
+	add_child(music)
+	RaceMusic.prepare()
 	split = _build_split_screen()
 	for i in player_count:
 		players.append(_add_player(i))
@@ -246,6 +253,7 @@ func _physics_process(_delta: float) -> void:
 			state = State.RACING
 			_state_tick = tick
 			CountdownSound.play_go()
+			music.play()
 		return
 	for p in players:
 		var f := p.input.poll(tick)
@@ -314,3 +322,4 @@ func _on_race_finished(truck: Truck, _total: int) -> void:
 	_finish_order.append(truck)
 	if _finish_order.size() == players.size():
 		state = State.FINISHED
+		music.fade_out()

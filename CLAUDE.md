@@ -187,6 +187,9 @@ supporter :
 - Committer des binaires : `*.glb`, `*.blend1`, `.godot/`, `builds/` sont
   git-ignorés (le hook `pre-commit` les refuse). Exception : `baseline.json`.
 - Télécharger des assets tiers (modèles, textures, sons).
+  Les sons et la musique **synthétisés par le code** (`MenuSound`,
+  `CountdownSound`, `RaceMusic`) ne sont pas des assets tiers ; la musique de
+  course a été demandée par l'utilisateur le 2026-09-30.
 - Refactorer une couche qui n'est pas dans la phase en cours de `PLAN.md`.
 - **Modifier `docs/VEHICLE_SPEC.md` ou `docs/METRICS.md`.** Ce sont des contrats
   entre plusieurs chaînes d'outils (physique, Blender, pistes). Un agent qui a
