@@ -74,6 +74,7 @@ var split: Container
 var leader_camera: ChaseCamera
 var _leader_label: Label
 var _state_tick: int = 0
+var _last_countdown_sec: int = -1
 var _neutral: InputFrame = InputFrame.new()
 var _finish_order: Array[Truck] = []
 
@@ -233,10 +234,16 @@ func _physics_process(_delta: float) -> void:
 		for p in players:
 			p.input.poll(tick)
 			p.truck.set_input(_neutral)
-		if tick - _state_tick >= COUNTDOWN_TICKS:
+		var elapsed := tick - _state_tick
+		var sec := 3 - floori(float(elapsed) / 60.0)
+		if sec != _last_countdown_sec and sec >= 1 and sec <= 3:
+			_last_countdown_sec = sec
+			CountdownSound.play_tick()
+		if elapsed >= COUNTDOWN_TICKS:
 			race.start()
 			state = State.RACING
 			_state_tick = tick
+			CountdownSound.play_go()
 		return
 	for p in players:
 		var f := p.input.poll(tick)

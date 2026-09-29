@@ -96,6 +96,8 @@ func _spawn_trucks() -> void:
 
 
 func _process(delta: float) -> void:
+	if not is_node_ready() or settings == null or title == null or _gear == null or camera == null or start_button == null or settings_button == null:
+		return
 	_time += delta
 	_orbit_angle = fmod(_orbit_angle + orbit_speed * delta, TAU)
 	_place_camera()
@@ -150,7 +152,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Nombre de joueurs (borne a 1..4) : bouton enfonce, camions montres.
 func select_players(n: int) -> void:
+	var prev := selected_players
 	selected_players = clampi(n, 1, 4)
+	if is_node_ready() and selected_players != prev:
+		MenuSound.play_select()
 	for i in player_buttons.size():
 		player_buttons[i].set_pressed_no_signal(i == selected_players - 1)
 	for i in trucks.size():
@@ -162,6 +167,7 @@ func select_players(n: int) -> void:
 
 
 func start_race() -> void:
+	MenuSound.play_confirm()
 	GameState.requested_players = selected_players
 	launch_requested.emit(selected_players)
 	if auto_change_scene:
@@ -174,6 +180,8 @@ func set_sound(on: bool) -> void:
 	sound_button.text = "SON : ON" if on else "SON : OFF"
 	if sound_check != null:
 		sound_check.set_pressed_no_signal(on)
+	if is_node_ready():
+		MenuSound.play_toggle()
 
 
 ## Volume general (0 a 100 %), sur le bus Master.
@@ -183,6 +191,7 @@ func set_volume(percent: float) -> void:
 
 func toggle_settings() -> void:
 	settings.visible = not settings.visible
+	MenuSound.play_toggle()
 	if settings.visible:
 		(settings.find_child("Back", true, false) as Button).grab_focus()
 	else:
