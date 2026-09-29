@@ -14,8 +14,8 @@ extends PhysicsTest
 ##     jamais MAUVAIS SENS.
 ## Camera :
 ##   - jamais masquee : aucun obstacle entre son pivot et elle ;
-##   - toujours a bonne distance du camion (3 a 30 m : recul au-dela de la
-##     semi-remorque) ;
+##   - toujours a bonne distance du camion (3 a 35 m : recul au-dela de la
+##     semi-remorque de 16 m) ;
 ##   - ne tremble pas : le tremblement est la part HAUTE FREQUENCE de la
 ##     hauteur (ecart a une moyenne glissante de 15 ticks, soit ce qui depasse
 ##     ~4 Hz : pompage, bosses, chocs de reception). Celle de la camera doit
@@ -164,7 +164,7 @@ func _test_finish() -> void:
 			_race_laps[0], _lap_end - 1, 60)
 	check("RaceLaps : jamais MAUVAIS SENS", not _wrong_way)
 	check("camera jamais masquee par la piste", _occluded == 0, "ticks=%d" % _occluded)
-	check("camera a bonne distance (3 .. 30 m)", _cam_dist_min >= 3.0 and _cam_dist_max <= 30.0,
+	check("camera a bonne distance (3 .. 35 m)", _cam_dist_min >= 3.0 and _cam_dist_max <= 35.0,
 		"min=%.1f max=%.1f" % [_cam_dist_min, _cam_dist_max])
 	var hf_truck := high_frequency_rms(_truck_y, 7)
 	var hf_cam := high_frequency_rms(_cam_y, 7)

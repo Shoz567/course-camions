@@ -35,19 +35,25 @@ autour de la sellette, angle borné à ±35° (§5 bis). Pas de mise en
 portefeuille. Les cotes ci-dessous sont celles du tracteur, sauf mention
 « ensemble » (ensemble dans l'axe).
 
+**Échelle × 1,2** (décision du 2026-09-30 : des camions imposants sur la piste
+de 75 m). Toutes les cotes de ce document sont les cotes d'origine × 1,2
+(`TruckSpec.SCALE`) ; la masse, l'inertie imposée et les cibles de conduite
+ne changent pas (métriques de `baseline.json` inchangées à 1 % près). Les
+modèles de l'équipe sont ajustés à la nouvelle longueur au chargement.
+
 | Grandeur | Valeur |
 |---|---|
-| Longueur (tracteur) | 5,8 m |
-| Longueur (ensemble) | **16,4 m** (de z = −2,9 à +13,5) |
-| Largeur (tracteur / remorque) | 2,5 m / 3,0 m |
-| Hauteur (cabine / remorque / aileron) | 3,2 m / 4,9 m / 5,8 m |
+| Longueur (tracteur) | 6,96 m |
+| Longueur (ensemble) | **19,7 m** (de z = −3,5 à +16,2) |
+| Largeur (tracteur / remorque) | 2,9 m / 3,6 m |
+| Hauteur (cabine / remorque / aileron) | 3,8 m / 5,9 m / 7,0 m |
 | Masse totale | **5 000 kg** |
-| Empattement | 3,8 m (essieu avant z = −1,9 ; arrière z = +1,9) |
-| Voie | 2,1 m (roues à x = ±1,05) |
+| Empattement | 4,56 m (essieu avant z = −2,28 ; arrière z = +2,28) |
+| Voie | 2,52 m (roues à x = ±1,26) |
 
 ## 3. Centre de masse
 
-**(0 ; 0,80 ; −0,30)** dans le repère du camion.
+**(0 ; 0,96 ; −0,36)** dans le repère du camion (× 1,2 depuis le 2026-09-30).
 
 Il est **volontairement plus bas** que celui d'un vrai camion (~1,3 m) : c'est
 le premier levier de stabilité d'un jeu arcade. Un camion qui se retourne au
@@ -68,34 +74,35 @@ sont purement visuels et suivent le rayon.
 
 | Roue | Nom (contrat) | Ancrage (x ; y ; z) |
 |---|---|---|
-| Avant gauche | `Wheel_FL` | (−1,05 ; 1,00 ; −1,90) |
-| Avant droite | `Wheel_FR` | (+1,05 ; 1,00 ; −1,90) |
-| Arrière gauche | `Wheel_RL` | (−1,05 ; 1,00 ; +1,90) |
-| Arrière droite | `Wheel_RR` | (+1,05 ; 1,00 ; +1,90) |
+| Avant gauche | `Wheel_FL` | (−1,26 ; 1,20 ; −2,28) |
+| Avant droite | `Wheel_FR` | (+1,26 ; 1,20 ; −2,28) |
+| Arrière gauche | `Wheel_RL` | (−1,26 ; 1,20 ; +2,28) |
+| Arrière droite | `Wheel_RR` | (+1,26 ; 1,20 ; +2,28) |
 
 | Grandeur | Valeur |
 |---|---|
-| Rayon de roue | 0,55 m |
-| Largeur de roue | 0,40 m |
-| Débattement max (ancrage → moyeu) | 0,60 m |
-| **Hauteur du moyeu au repos** | **0,55 m** (roue posée) |
-| Longueur du rayon | débattement + rayon de roue = 1,15 m |
+| Rayon de roue | 0,66 m |
+| Largeur de roue | 0,48 m |
+| Débattement max (ancrage → moyeu) | 0,72 m |
+| **Hauteur du moyeu au repos** | **0,66 m** (roue posée) |
+| Longueur du rayon | débattement + rayon de roue = 1,38 m |
 
 **La hauteur au repos est un contrat, la raideur est un réglage.** La longueur
 libre du ressort se *déduit* des deux, **essieu par essieu** : changer la
 raideur dans `VehicleTuning` ne doit jamais changer la hauteur de caisse au
 repos.
 
-Le centre de masse étant à z = −0,30 (§3), les essieux ne portent pas la même
-charge. Charge statique d'une roue, avec `a` = 1,9 + 0,3 = 2,2 m (CdM → essieu
-arrière) et `L` = 3,8 m (empattement) :
+Le centre de masse étant à z = −0,36 (§3), les essieux ne portent pas la même
+charge. Charge statique d'une roue, avec `a` = 2,28 + 0,36 = 2,64 m (CdM →
+essieu arrière) et `L` = 4,56 m (empattement) ; l'échelle ne change pas les
+proportions, donc pas les charges :
 
 | Essieu | Part de la masse | Charge par roue |
 |---|---|---|
 | avant | a / L = **57,9 %** | 14 199 N |
 | arrière | 1 − a / L = **42,1 %** | 10 326 N |
 
-`longueur libre = 0,45 m (ancrage → moyeu au repos) + charge de la roue / k`.
+`longueur libre = 0,54 m (ancrage → moyeu au repos) + charge de la roue / k`.
 Avec une longueur libre commune calculée sur M/4, le camion pique du nez
 (avant −1,5 cm, arrière +1,5 cm, ~0,46°) : mesuré au spike V1. La raideur `k`
 reste réglée en fréquence sur `m_roue` = M/4 (`vehicle-physics-engineer.md`) ;
@@ -114,9 +121,9 @@ Trois boîtes convexes, **jamais le maillage** :
 
 | Forme | Taille (x × y × z) | Centre (x ; y ; z) |
 |---|---|---|
-| Châssis | 2,4 × 1,00 × 5,8 | (0 ; 1,25 ; 0) |
-| Cabine | 2,4 × 1,40 × 2,2 | (0 ; 2,45 ; −1,8) |
-| Remorque | 3,0 × 3,10 × 13,0 | (0 ; 3,35 ; 6,9) au repos, pivote autour de la sellette (§5 bis) |
+| Châssis | 2,88 × 1,20 × 6,96 | (0 ; 1,50 ; 0) |
+| Cabine | 2,88 × 1,68 × 2,64 | (0 ; 2,94 ; −2,16) |
+| Remorque | 3,6 × 3,72 × 15,6 | (0 ; 4,02 ; 8,28) au repos, pivote autour de la sellette (§5 bis) |
 
 La boîte de remorque couvre la caisse du modèle de l'équipe mis à l'échelle du
 tracteur (arrière à 13,4 m, visuel à 13,46 m, vérifié par `truck_visual_test`).
@@ -145,7 +152,7 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
 
 | Grandeur | Valeur |
 |---|---|
-| Sellette (pivot) | **(0 ; 1,8 ; 1,2)**, lacet seulement |
+| Sellette (pivot) | **(0 ; 2,16 ; 1,44)**, lacet seulement |
 | Angle max | **±35°** (`trailer_max_angle_deg`) |
 | Suivi | ressort amorti 1,6 Hz, ζ = 0,8 (fluide, sans balancier ; 2026-09-30), inertie de lacet propre |
 | Consigne en virage | 10° vers l'extérieur par g d'accélération latérale |

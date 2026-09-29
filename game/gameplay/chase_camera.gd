@@ -20,9 +20,9 @@ enum View { CHASE, COCKPIT }
 
 @export var target: Truck
 ## Distance au pivot, et hauteur du pivot au-dessus du camion.
-## Recul depuis le tracteur : au-dela de la semi-remorque (arriere a 13,4 m).
-@export var distance: float = 24.0
-@export var focus_height: float = 4.0
+## Recul depuis le tracteur : au-dela de la semi-remorque (arriere a 16,1 m).
+@export var distance: float = 28.0
+@export var focus_height: float = 4.8
 ## Plongee de la camera (deg) : assez pour voir par-dessus l'aileron (5,6 m).
 @export var pitch_deg: float = 13.0
 ## Amortissements (1/s) : plus grand = plus raide.
@@ -42,7 +42,7 @@ enum View { CHASE, COCKPIT }
 @export_group("Vue cabine")
 ## Position de l'oeil dans le repere du camion : dans la cabine, derriere le
 ## pare-brise (cabine de collision : z de -2,9 a -0,7, haut a 3,15 m).
-@export var cockpit_offset: Vector3 = Vector3(0.0, 2.85, -1.8)
+@export var cockpit_offset: Vector3 = Vector3(0.0, 3.42, -2.16)
 @export var cockpit_fov: float = 78.0
 ## Amortissement de l'orientation (1/s) : suit le camion sans les secousses.
 @export var cockpit_damping: float = 18.0

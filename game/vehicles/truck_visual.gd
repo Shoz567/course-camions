@@ -45,7 +45,7 @@ extends Node3D
 ## ne doivent pas dependre d'un fichier hors depot. Un test peut forcer.
 static var load_external_in_headless: bool = false
 
-const SPEC_LENGTH := 5.8
+const SPEC_LENGTH := TruckSpec.CHASSIS_SIZE.z
 const MODEL_ROOT := &"ExternalModel"
 const TRAILER_PIVOT := &"TrailerPivot"
 

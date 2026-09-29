@@ -11,9 +11,9 @@ extends Node3D
 const PLATE_RADIUS := 20.0
 const PLATE_TOP := 0.5
 ## Ecart lateral entre deux camions exposes.
-const SLOT_SPACING := 7.2
+const SLOT_SPACING := 8.0
 ## Centre de l'ensemble semi-remorque (le tracteur est a l'avant, en -Z).
-const RIG_CENTER_Z := 5.3
+const RIG_CENTER_Z := 6.3
 
 @export var turn_speed: float = 0.12        # rad/s
 @export var city_seed: int = 11

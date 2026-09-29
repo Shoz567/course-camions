@@ -6,36 +6,40 @@ extends RefCounted
 ## le meme commit (CLAUDE.md §8). truck_scene_test verifie que truck.tscn s'y
 ## conforme.
 
-# §2 Gabarit, §3 centre de masse
+# §2 Gabarit : camions agrandis de 20 % (decision du 2026-09-30, presence sur
+# la piste de 75 m). Toutes les cotes ci-dessous sont les cotes de base x SCALE.
+const SCALE := 1.2
+
+# §3 centre de masse (masse inchangee)
 const MASS_KG := 5000.0
-const CENTER_OF_MASS := Vector3(0.0, 0.80, -0.30)
+const CENTER_OF_MASS := Vector3(0.0, 0.80, -0.30) * SCALE
 
 # §4 Roues : ordre FL, FR, RL, RR partout dans le code du camion
 const WHEEL_NAMES: Array[StringName] = [&"Wheel_FL", &"Wheel_FR", &"Wheel_RL", &"Wheel_RR"]
 const PROBE_NAMES: Array[StringName] = [&"Probe_FL", &"Probe_FR", &"Probe_RL", &"Probe_RR"]
 const ANCHORS: Array[Vector3] = [
-	Vector3(-1.05, 1.00, -1.90),
-	Vector3(1.05, 1.00, -1.90),
-	Vector3(-1.05, 1.00, 1.90),
-	Vector3(1.05, 1.00, 1.90),
+	Vector3(-1.05, 1.00, -1.90) * SCALE,
+	Vector3(1.05, 1.00, -1.90) * SCALE,
+	Vector3(-1.05, 1.00, 1.90) * SCALE,
+	Vector3(1.05, 1.00, 1.90) * SCALE,
 ]
-const WHEEL_RADIUS := 0.55
-const WHEEL_WIDTH := 0.40
-const SUSPENSION_TRAVEL := 0.60      # ancrage -> moyeu, debattement max
-const HUB_REST_HEIGHT := 0.55        # hauteur du moyeu au repos
-const RAY_LENGTH := SUSPENSION_TRAVEL + WHEEL_RADIUS   # 1,15 m
+const WHEEL_RADIUS := 0.55 * SCALE
+const WHEEL_WIDTH := 0.40 * SCALE
+const SUSPENSION_TRAVEL := 0.60 * SCALE      # ancrage -> moyeu, debattement max
+const HUB_REST_HEIGHT := 0.55 * SCALE        # hauteur du moyeu au repos
+const RAY_LENGTH := SUSPENSION_TRAVEL + WHEEL_RADIUS   # 1,38 m
 
 # §5 Formes de collision
-const CHASSIS_SIZE := Vector3(2.4, 1.00, 5.8)
-const CHASSIS_CENTER := Vector3(0.0, 1.25, 0.0)
-const CAB_SIZE := Vector3(2.4, 1.40, 2.2)
-const CAB_CENTER := Vector3(0.0, 2.45, -1.8)
+const CHASSIS_SIZE := Vector3(2.4, 1.00, 5.8) * SCALE
+const CHASSIS_CENTER := Vector3(0.0, 1.25, 0.0) * SCALE
+const CAB_SIZE := Vector3(2.4, 1.40, 2.2) * SCALE
+const CAB_CENTER := Vector3(0.0, 2.45, -1.8) * SCALE
 # §5 bis Semi-remorque articulee (caisse du modele de l'equipe, a l'echelle du
-# tracteur) : au repos de z = 0,4 a 13,4 m, de y = 1,8 a 4,9 m. Elle pivote en
-# lacet autour de la sellette (KINGPIN), angle borne par VehicleTuning.
-const TRAILER_SIZE := Vector3(3.0, 3.1, 13.0)
-const TRAILER_CENTER := Vector3(0.0, 3.35, 6.9)
-const KINGPIN := Vector3(0.0, 1.8, 1.2)
+# tracteur) : au repos de z = 0,48 a 16,08 m, de y = 2,16 a 5,88 m. Elle pivote
+# en lacet autour de la sellette (KINGPIN), angle borne par VehicleTuning.
+const TRAILER_SIZE := Vector3(3.0, 3.1, 13.0) * SCALE
+const TRAILER_CENTER := Vector3(0.0, 3.35, 6.9) * SCALE
+const KINGPIN := Vector3(0.0, 1.8, 1.2) * SCALE
 
 # §7 Couches (numeros de couche, 1 = bit 0)
 const LAYER_WORLD := 1

@@ -48,7 +48,7 @@ void fragment() {
 	_left_flame = MeshInstance3D.new()
 	_left_flame.mesh = cone
 	_left_flame.material_override = _flame_mat
-	_left_flame.position = Vector3(-1.15, 3.2, 0.4)
+	_left_flame.position = Vector3(-1.15, 3.2, 0.4) * TruckSpec.SCALE
 	_left_flame.rotation_degrees = Vector3(15.0, 0.0, 0.0)
 	_left_flame.visible = false
 	_left_flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -57,7 +57,7 @@ void fragment() {
 	_right_flame = MeshInstance3D.new()
 	_right_flame.mesh = cone
 	_right_flame.material_override = _flame_mat
-	_right_flame.position = Vector3(1.15, 3.2, 0.4)
+	_right_flame.position = Vector3(1.15, 3.2, 0.4) * TruckSpec.SCALE
 	_right_flame.rotation_degrees = Vector3(15.0, 0.0, 0.0)
 	_right_flame.visible = false
 	_right_flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -67,7 +67,7 @@ void fragment() {
 	_boost_light.light_color = Color(0.15, 0.85, 1.0)
 	_boost_light.light_energy = 3.5
 	_boost_light.omni_range = 14.0
-	_boost_light.position = Vector3(0.0, 3.0, 0.6)
+	_boost_light.position = Vector3(0.0, 3.0, 0.6) * TruckSpec.SCALE
 	_boost_light.visible = false
 	_boost_light.shadow_enabled = false
 	add_child(_boost_light)
