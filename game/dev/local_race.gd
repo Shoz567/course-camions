@@ -145,6 +145,8 @@ func _add_player(i: int) -> Player:
 	visual.external_model = MODELS[i]
 	visual.mock_tint = TINTS[i]
 	t.transform = track.get_start_transform(i)   # pose d'un camion immobile
+	# categorie de vitesse du menu (Normal par defaut : le reglage mesure)
+	t.tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
 	add_child(t)
 	p.truck = t
 	race.watch(t)
@@ -285,7 +287,9 @@ func _process(_delta: float) -> void:
 		var r := race.racer(p.truck)
 		p.hud.set_standings(standings)
 		if state == State.COUNTDOWN:
-			p.hud.set_center_message(str(maxi(3 - floori(elapsed / 60.0), 1)), Color(1.0, 0.85, 0.2))
+			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
+			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),
+				String(c["name"]).to_upper(), c["cc"]], Color(1.0, 0.85, 0.2))
 		elif r != null and r.finished:
 			var rank := _finish_order.find(p.truck) + 1
 			var more := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \

@@ -118,6 +118,12 @@ func _test_tick(t: int) -> void:
 			_click(_menu.sound_button, true)
 		45: _click(_menu.sound_button, false)
 		48: _seen["unmute"] = AudioServer.is_bus_mute(AudioServer.get_bus_index("Master"))
+		50: _click(_menu.speed_buttons[2], true)
+		51: _click(_menu.speed_buttons[2], false)
+		54:
+			_seen["speed"] = [GameState.speed_class, _menu.speed_buttons[2].button_pressed,
+				_menu.speed_buttons[1].button_pressed]
+			_menu.select_speed(GameStateNode.SpeedClass.NORMAL)
 		60: _click(_menu.settings_button, true)
 		61: _click(_menu.settings_button, false)
 		64:
@@ -169,6 +175,9 @@ func _test_finish() -> void:
 	check("clic sur 2 JOUEURS : choisi et seul enfonce", _seen["click2"] == [2, true, false], str(_seen["click2"]))
 	check("son : un clic coupe le bus Master", _seen["mute"] == [true, "SON : OFF"], str(_seen["mute"]))
 	check("son : un second clic le remet", _seen["unmute"] == false)
+	check("vitesse : 4 categories, clic sur RAPIDE : choisie et seule enfoncee",
+		_menu.speed_buttons.size() == 4 and _seen.get("speed", []) == [GameStateNode.SpeedClass.FAST, true, false],
+		str(_seen.get("speed", [])))
 	check("roue crantee : panneau ouvert, FERMER selectionne", _seen["settings_open"])
 	check("Rond referme le panneau, focus sur la roue", _seen["settings_closed"])
 	check("parametres : schema de la manette affiche", _seen.get("diagram", false))

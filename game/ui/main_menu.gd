@@ -36,6 +36,7 @@ const LocalRace := preload("res://dev/local_race.gd")
 var selected_players: int = 1
 var trucks: Array[Truck] = []
 var player_buttons: Array[Button] = []
+var speed_buttons: Array[Button] = []
 var title: Label
 var start_button: Button
 var sound_button: Button
@@ -153,6 +154,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_:
 				return
 		get_viewport().set_input_as_handled()
+
+
+## Categorie de vitesse (0 = Lent .. 3 = Ultrasonique), gardee dans GameState
+## pour la course et les suivantes.
+func select_speed(k: int) -> void:
+	GameState.speed_class = clampi(k, 0, GameStateNode.SPEED_CLASSES.size() - 1)
+	for i in speed_buttons.size():
+		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
 
 ## Nombre de joueurs (borne a 1..4) : bouton enfonce, camions montres.
@@ -289,6 +298,27 @@ func _build_ui() -> void:
 		b.pressed.connect(select_players.bind(i + 1))
 		row.add_child(b)
 		player_buttons.append(b)
+
+	# categorie de vitesse, facon cylindree
+	var speed_row := HBoxContainer.new()
+	speed_row.name = "Speeds"
+	speed_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	speed_row.add_theme_constant_override("separation", 12)
+	card_box.add_child(speed_row)
+	var speed_group := ButtonGroup.new()
+	for k in GameStateNode.SPEED_CLASSES.size():
+		var c: Dictionary = GameStateNode.SPEED_CLASSES[k]
+		var sbtn := Button.new()
+		sbtn.name = "Speed%d" % k
+		sbtn.text = "%s · %s" % [String(c["name"]).to_upper(), c["cc"]]
+		sbtn.toggle_mode = true
+		sbtn.button_group = speed_group
+		sbtn.custom_minimum_size = Vector2(0, 52)
+		_style_button(sbtn, Color(0.07, 0.09, 0.15, 0.88), Color(0.1, 0.6, 0.95), 18)
+		sbtn.pressed.connect(select_speed.bind(k))
+		speed_row.add_child(sbtn)
+		speed_buttons.append(sbtn)
+	select_speed(GameState.speed_class)
 
 	_pads_label = _label("", 20, 4)
 	_pads_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

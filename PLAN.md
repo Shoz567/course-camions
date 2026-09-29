@@ -199,7 +199,9 @@ Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course d
 (titre animé, choix du nombre de joueurs à la manette, au clavier ou à la
 souris, son on / off, écran des paramètres avec le schéma légendé de la manette
 et le volume, piste et camions en orbite derrière)
-lance `dev/race.tscn`. J1 camion bleu AZUR (manette 0 ou flèches), J2 rouge
+lance `dev/race.tscn`, dans la catégorie de vitesse choisie (Lent 50cc 110 km/h,
+Normal 100cc 150 km/h, Rapide 150cc 185 km/h, Ultrasonique 200cc 225 km/h ;
+`GameState.SPEED_CLASSES`). J1 camion bleu AZUR (manette 0 ou flèches), J2 rouge
 DURAND (manette 1 ou ZQSD), J3 jaune SOLEIL (manette 2), J4 vert (manette 3) ;
 compte à rebours, position (POS n/N) dans chaque HUD, classement affiché à tous
 dès la première arrivée ; Start / Entrée rejoue, − / Échap revient au menu.
