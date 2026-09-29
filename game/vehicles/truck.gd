@@ -14,14 +14,25 @@ extends RigidBody3D
 ##   1.9 traces DebugDraw : rayons, contacts, forces, centre de masse
 ##   boost : poussee et vitesse max relevees pendant boost_duration_ticks, puis
 ##       jauge rechargee en boost_recharge_ticks (declenche a l'appui)
+##   plaques : boost de plaque (coup de pouce immediat + vitesse max relevee),
+##       saut de plaque (impulsion verticale, assiette renforcee en l'air,
+##       reception amortie)
+##   remorque articulee : la caisse de la remorque pivote autour de la sellette
+##       (VEHICLE_SPEC §5 bis), avec sa propre inertie de lacet. Elle chasse
+##       vers l'exterieur en virage et en derapage, s'arrete contre les murs,
+##       et balaie les adversaires qu'elle touche.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
-##   wheels_on_ground()
+##   wheels_on_ground(), pad_boost(), jump_pad_launch()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
 signal honked
+## Un boost commence (jauge du joueur ou plaque de la piste).
+signal boosted
+## La remorque vient de balayer un adversaire (impulsion en N.s).
+signal trailer_shoved(other: Truck, impulse: float)
 
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
@@ -67,6 +78,35 @@ var _boost_ticks: int = 0
 var _boost_charge: float = 1.0
 var _boost_was_pressed: bool = false
 var _tire_force: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
+## Plaque de boost : ticks restants, vitesse ajoutee (m/s), coup de pouce a
+## donner au prochain tick.
+var _pad_boost_ticks: int = 0
+var _pad_boost_extra_ms: float = 0.0
+var _pad_kick_pending: bool = false
+## Saut de plaque : vitesse verticale a atteindre (0 = rien en attente), ticks
+## d'aide restants, ticks passes en l'air depuis l'impulsion, amortissement
+## renforce apres la reception.
+var _launch_up_ms: float = 0.0
+var _jump_assist_ticks: int = 0
+var _air_ticks: int = 0
+var _landing_damp_ticks: int = 0
+## Reception d'un saut de plaque : vitesse de chute juste avant l'amorti (m/s).
+var last_landing_fall_ms: float = 0.0
+
+## Remorque : angle par rapport au tracteur (rad, > 0 = arriere vers la droite
+## du tracteur) et vitesse de lacet DANS LE MONDE (rad/s) : elle a sa propre
+## inertie, le tracteur tourne sans l'entrainer instantanement.
+var _trailer_angle: float = 0.0
+var _trailer_yaw_rate: float = 0.0
+var _trailer_rel_rate: float = 0.0
+var _trailer_applied: float = 0.0
+## Acceleration laterale mesuree (m/s2, > 0 vers la gauche du tracteur),
+## filtree : vitesse du tick precedent pour la deriver.
+var _lat_accel: float = 0.0
+var _prev_velocity: Vector3 = Vector3.ZERO
+var _accel_ready: bool = false
+var _trailer_shape: CollisionShape3D
+var _trailer_query: PhysicsShapeQueryParameters3D
 
 var _reset_pending: bool = false
 ## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
@@ -78,6 +118,11 @@ var _reset_xf: Transform3D = Transform3D.IDENTITY
 func _ready() -> void:
 	for n in TruckSpec.PROBE_NAMES:
 		_probes.append(get_node(NodePath(n)) as WheelProbe)
+	_trailer_shape = get_node_or_null(^"Trailer") as CollisionShape3D
+	if _trailer_shape != null:
+		_trailer_query = PhysicsShapeQueryParameters3D.new()
+		_trailer_query.shape = _trailer_shape.shape
+		_trailer_query.exclude = [get_rid()]
 	if tuning == null:
 		push_error("Truck '%s' : aucun VehicleTuning" % name)
 		return
@@ -169,7 +214,45 @@ func get_boost_charge() -> float:
 
 
 func is_boosting() -> bool:
-	return _boost_ticks > 0
+	return _boost_ticks > 0 or _pad_boost_ticks > 0
+
+
+## Plaque de boost : +extra_kmh tout de suite (sans depasser la vitesse max
+## + extra_kmh), puis vitesse max relevee d'autant pendant `ticks`. La jauge du
+## joueur n'est pas touchee.
+func pad_boost(extra_kmh: float, ticks: int) -> void:
+	_pad_boost_extra_ms = extra_kmh / 3.6
+	_pad_boost_ticks = ticks
+	_pad_kick_pending = true
+	boosted.emit()
+
+
+## Plaque de saut : vitesse verticale portee a `up_speed_ms` (jamais reduite),
+## assiette automatique renforcee jusqu'a la reception, reception amortie.
+func jump_pad_launch(up_speed_ms: float) -> void:
+	_launch_up_ms = up_speed_ms
+	_jump_assist_ticks = roundi(tuning.jump_assist_max_ticks)
+
+
+func is_jump_assisted() -> bool:
+	return _jump_assist_ticks > 0
+
+
+## Angle de la remorque par rapport au tracteur (rad), > 0 : arriere de la
+## remorque vers la droite du tracteur.
+func get_trailer_angle() -> float:
+	return _trailer_angle
+
+
+func get_trailer_angle_deg() -> float:
+	return rad_to_deg(_trailer_angle)
+
+
+## Pose de la caisse de remorque dans le repere du camion, pour un angle donne :
+## rotation en lacet autour de la sellette.
+static func trailer_local_transform(angle: float) -> Transform3D:
+	var b := Basis(Vector3.UP, angle)
+	return Transform3D(b, TruckSpec.KINGPIN + b * (TruckSpec.TRAILER_CENTER - TruckSpec.KINGPIN))
 
 
 # --- simulation ------------------------------------------------------------------
@@ -188,6 +271,15 @@ func _physics_process(_delta: float) -> void:
 	if _reset_applied:
 		_reset_applied = false
 		reset_physics_interpolation()
+		# remis en piste : remorque dans l'axe, plus d'aide ni de boost de plaque
+		_trailer_yaw_rate = 0.0
+		_lat_accel = 0.0
+		_accel_ready = false
+		_set_trailer_angle(0.0)
+		_jump_assist_ticks = 0
+		_launch_up_ms = 0.0
+		_pad_boost_ticks = 0
+		_pad_kick_pending = false
 	_grounded = 0
 	for p in _probes:
 		p.probe()
@@ -245,9 +337,10 @@ func _physics_process(_delta: float) -> void:
 			braking = thr
 		else:
 			# poussee nette constante, puis decroissance lineaire sur la bande
-			# sous la vitesse max ; les resistances sont compensees.
+			# sous la vitesse max ; les resistances sont compensees jusqu'a la
+			# vitesse max, pas au-dela : apres un boost, le camion y redescend.
 			var taper := clampf((_top_speed_ms - v_fwd) / _taper_ms, 0.0, 1.0)
-			drive = thr * (t.engine_accel_ms2 * taper + resist)
+			drive = thr * (t.engine_accel_ms2 * taper + (resist if v_fwd <= _top_speed_ms else 0.0))
 	if brk > 0.0:
 		if v_fwd > STOP_SPEED_MS:
 			braking = maxf(braking, brk)
@@ -256,17 +349,60 @@ func _physics_process(_delta: float) -> void:
 			drive = -brk * (t.reverse_accel_ms2 * taper_r + resist)
 	# boost : declenche a l'appui si la jauge est pleine ; poussee ajoutee meme
 	# sans gaz, vitesse max relevee, resistances compensees.
+	# plaque de boost : meme mecanique, vitesse ajoutee par la plaque, et un
+	# coup de pouce immediat a l'entree sur la plaque.
 	_update_boost(t)
-	if _boost_ticks > 0 and debug_boost and v_fwd > -STOP_SPEED_MS:
-		var top_b := _top_speed_ms + t.boost_top_speed_kmh / 3.6
+	var boost_extra := 0.0
+	var boost_push := 0.0
+	if _boost_ticks > 0:
+		boost_extra = t.boost_top_speed_kmh / 3.6
+		boost_push = t.boost_accel_ms2
+	if _pad_boost_ticks > 0:
+		_pad_boost_ticks -= 1
+		boost_extra = maxf(boost_extra, _pad_boost_extra_ms)
+		boost_push = maxf(boost_push, t.pad_boost_accel_ms2)
+	if _pad_kick_pending:
+		_pad_kick_pending = false
+		if debug_boost:
+			var kick := clampf(_top_speed_ms + _pad_boost_extra_ms - v_fwd, 0.0, _pad_boost_extra_ms)
+			apply_central_impulse(fwd * kick * mass)
+	if boost_push > 0.0 and debug_boost and v_fwd > -STOP_SPEED_MS:
+		var top_b := _top_speed_ms + boost_extra
 		var taper_b := clampf((top_b - v_fwd) / _taper_ms, 0.0, 1.0)
-		drive = (thr * t.engine_accel_ms2 + t.boost_accel_ms2) * taper_b + resist
+		drive = (thr * t.engine_accel_ms2 + boost_push) * taper_b + (resist if v_fwd <= top_b else 0.0)
 		braking = 0.0 if brk <= 0.0 else braking
+	elif v_fwd > _top_speed_ms:
+		# frein moteur au-dessus de la vitesse max (rampe sur 2 m/s : pas de
+		# pompage autour de la vitesse max)
+		drive -= t.overspeed_decel_ms2 * clampf((v_fwd - _top_speed_ms) / 2.0, 0.0, 1.0)
 	if not debug_drive:
 		drive = 0.0
 		braking = 0.0
 	if _input.honk:
 		honked.emit()
+
+	# saut de plaque : impulsion verticale ; a la reception (apres un vrai vol),
+	# chute ramenee a jump_landing_max_down_ms et suspension plus amortie.
+	if _launch_up_ms > 0.0:
+		if linear_velocity.y < _launch_up_ms:
+			apply_central_impulse(Vector3.UP * (_launch_up_ms - linear_velocity.y) * mass)
+		_launch_up_ms = 0.0
+		_air_ticks = 0
+	var damp := _c
+	if _landing_damp_ticks > 0:
+		_landing_damp_ticks -= 1
+		damp *= t.jump_landing_damping_factor
+	if _jump_assist_ticks > 0:
+		_jump_assist_ticks -= 1
+		if _grounded == 0:
+			_air_ticks += 1
+		elif _air_ticks >= 8:   # un vrai vol, pas un rebond sur le bord de la rampe
+			_jump_assist_ticks = 0
+			_landing_damp_ticks = roundi(t.jump_landing_damping_ticks)
+			var fall := -linear_velocity.y
+			last_landing_fall_ms = fall
+			if fall > t.jump_landing_max_down_ms:
+				apply_central_impulse(Vector3.UP * (fall - t.jump_landing_max_down_ms) * mass)
 
 	var m_wheel := mass / 4.0
 	for i in 4:
@@ -286,7 +422,7 @@ func _physics_process(_delta: float) -> void:
 		var fs := 0.0
 		if debug_suspension:
 			var v_up := _point_velocity(anchor, com).dot(up)
-			fs = maxf(_k * (_free_length[i] - p.hub_distance) - _c * v_up, 0.0)
+			fs = maxf(_k * (_free_length[i] - p.hub_distance) - damp * v_up, 0.0)
 			apply_force(n * fs, anchor - origin)
 		p.load_n = fs
 
@@ -336,6 +472,10 @@ func _physics_process(_delta: float) -> void:
 	elif debug_air_control:
 		_apply_air_control(up, steer_in)
 
+	# remorque articulee : angle de la caisse, murs, adversaires balayes
+	if _trailer_shape != null:
+		_update_trailer(up, com, v_fwd, xf.basis.x)
+
 	# 1.9 traces de debug
 	if debug_draw and DebugDraw.enabled:
 		_draw_debug(up, com)
@@ -350,7 +490,113 @@ func _update_boost(t: VehicleTuning) -> void:
 	if pressed and not _boost_was_pressed and _boost_charge >= 1.0 and _boost_ticks == 0:
 		_boost_ticks = roundi(t.boost_duration_ticks)
 		_boost_charge = 0.0
+		boosted.emit()
 	_boost_was_pressed = pressed
+
+
+# --- remorque articulee --------------------------------------------------------
+
+## Angle de consigne : la remorque chasse vers l'exterieur du virage
+## (acceleration laterale du tracteur) et plus encore en derapage (angle de
+## derive). Elle le suit comme un ressort amorti avec sa propre inertie de
+## lacet : un coup de volant sec la laisse d'abord en arriere, puis elle
+## balaie vers l'exterieur et depasse sa consigne (effet de balancier). Angle
+## borne a +/- trailer_max_angle_deg. Un mur l'arrete ; un adversaire touche
+## en plein balayage recoit un choc (_shove).
+func _update_trailer(up: Vector3, com: Vector3, v_fwd: float, right: Vector3) -> void:
+	var t := tuning
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	var w := angular_velocity.dot(up)          # lacet du tracteur, > 0 a gauche
+	var max_a := deg_to_rad(t.trailer_max_angle_deg)
+	# acceleration laterale REELLE (variation de vitesse), pas v x lacet : en
+	# rattrapage de derapage, le camion tourne sur lui-meme sans que sa
+	# trajectoire tourne autant. Filtree (~0,1 s) : un choc ne fouette pas.
+	if _accel_ready:
+		var accel := (linear_velocity - _prev_velocity) / dt
+		_lat_accel = lerpf(_lat_accel, -accel.dot(right), 1.0 - exp(-dt / 0.1))
+	_prev_velocity = linear_velocity
+	_accel_ready = true
+	var target := 0.0
+	if _grounded > 0 and v_fwd > t.trailer_min_speed_ms:
+		# virage a gauche : acceleration vers la gauche, l'exterieur est a
+		# droite, angle > 0
+		var slip := atan2(linear_velocity.dot(right), v_fwd)   # > 0 : vitesse a droite du cap
+		target = deg_to_rad(t.trailer_sweep_deg_per_g) * _lat_accel / TruckSpec.GRAVITY 				+ t.trailer_drift_sweep_ratio * slip
+		target = clampf(target, -max_a, max_a)
+	var wn := TAU * t.trailer_frequency_hz
+	var rel := _trailer_yaw_rate - w
+	_trailer_yaw_rate += (-wn * wn * (_trailer_angle - target) - 2.0 * t.trailer_damping_ratio * wn * rel) * dt
+	rel = _trailer_yaw_rate - w
+	var angle := _trailer_angle + rel * dt
+	if absf(angle) > max_a:
+		angle = signf(angle) * max_a
+		rel = 0.0
+	# un mur arrete le balayage ; deja contre un mur, la remorque se replie
+	if absf(angle - _trailer_angle) > 1e-5 and _trailer_hits(angle, 1 << (TruckSpec.LAYER_WORLD - 1)):
+		if _trailer_hits(_trailer_angle, 1 << (TruckSpec.LAYER_WORLD - 1)):
+			angle = move_toward(_trailer_angle, 0.0, deg_to_rad(t.trailer_wall_fold_deg_per_tick))
+		else:
+			angle = _trailer_angle
+		rel = 0.0
+	if absf(rel) > 0.3:
+		rel = _shove(angle, rel, up, com)
+	_trailer_yaw_rate = w + rel
+	_trailer_rel_rate = rel
+	_set_trailer_angle(angle)
+
+
+## Remorque balayant un adversaire : la caisse ne connait pas de vitesse propre
+## pour le solveur (elle pivote dans le corps), on donne donc le choc a la main,
+## le long du balayage, au centre de masse de l'adversaire (pas de couple : il
+## glisse, il ne se couche pas). Retourne la vitesse de balayage restante.
+func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
+	var t := tuning
+	_trailer_query.transform = global_transform * trailer_local_transform(angle)
+	_trailer_query.collision_mask = 1 << (TruckSpec.LAYER_VEHICLE - 1)
+	var hits := get_world_3d().direct_space_state.intersect_shape(_trailer_query, 4)
+	if hits.is_empty():
+		return rel
+	var tb := global_basis * Basis(Vector3.UP, angle)
+	var kingpin := global_transform * TruckSpec.KINGPIN
+	var reach := TruckSpec.TRAILER_CENTER.z + TruckSpec.TRAILER_SIZE.z / 2.0 - TruckSpec.KINGPIN.z
+	for h: Dictionary in hits:
+		var other := h["collider"] as Truck
+		if other == null or other == self:
+			continue
+		var along := clampf((other.global_position - kingpin).dot(tb.z), 0.0, reach)
+		var point := kingpin + tb.z * along
+		var dir := tb.x * signf(rel)
+		dir = (dir - up * dir.dot(up)).normalized()
+		if (other.global_position - point).dot(dir) <= 0.0:
+			continue   # l'adversaire n'est pas du cote balaye
+		var v_sweep := absf(rel) * along
+		var v_sep := (other.linear_velocity - _point_velocity(point, com)).dot(dir)
+		if v_sweep - v_sep <= 0.5:
+			continue
+		var m_red := mass * other.mass / (mass + other.mass)
+		var j := minf(m_red * (v_sweep - v_sep) * (1.0 + t.trailer_shove_restitution),
+				other.mass * t.trailer_shove_max_dv_ms)
+		other.apply_central_impulse(dir * j)
+		apply_central_impulse(-dir * j * t.trailer_shove_reaction)
+		trailer_shoved.emit(other, j)
+		rel *= 0.3   # la remorque est freinee par le choc
+	return rel
+
+
+## Vrai si la caisse de remorque, a cet angle, touche un corps de `mask`.
+func _trailer_hits(angle: float, mask: int) -> bool:
+	_trailer_query.transform = global_transform * trailer_local_transform(angle)
+	_trailer_query.collision_mask = mask
+	return not get_world_3d().direct_space_state.intersect_shape(_trailer_query, 1).is_empty()
+
+
+## Pose la caisse de collision a l'angle donne. Jolt reconstruit la forme du
+## corps a chaque changement : on ne le fait qu'au-dela d'un centieme de degre.
+func _set_trailer_angle(angle: float) -> void:
+	_trailer_angle = angle
+	if _trailer_shape != null and absf(angle - _trailer_applied) > 1.7e-4:
+		_trailer_applied = angle
+		_trailer_shape.transform = trailer_local_transform(angle)
 
 
 ## En l'air : ressort angulaire amorti critiquement vers l'horizontale (sans
@@ -366,6 +612,8 @@ func _apply_air_control(up: Vector3, steer_in: float) -> void:
 	if axis.length_squared() > 1e-8:
 		axis = axis.normalized()
 		var k := t.air_level_strength
+		if _jump_assist_ticks > 0:
+			k *= t.jump_air_level_factor
 		alpha += axis * (k * tilt - 2.0 * sqrt(k) * angular_velocity.dot(axis))
 	# lacet : stick a droite = rotation horaire vue de dessus = -Y
 	var target_yaw := -steer_in * deg_to_rad(t.air_yaw_rate_deg_s)

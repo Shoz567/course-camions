@@ -18,6 +18,9 @@ extends Node3D
 ##   chaque groupe de roues du tracteur recoit un pivot au moyeu et est associe
 ##   au rayon le plus proche PAR POSITION (les noms du modele ne sont pas
 ##   fiables). Les roues de la remorque restent fixes.
+## - Remorque articulee : le noeud `Remorque` du modele (ou la boite de
+##   blockout) est accroche a un pivot pose sur la sellette (TruckSpec.KINGPIN)
+##   et tourne avec l'angle de remorque du camion, comme sa boite de collision.
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
 
 ## Chemin du modele, relatif au dossier du projet Godot (game/). Vide = boites.
@@ -30,6 +33,9 @@ extends Node3D
 @export var fit_exclude_prefixes: PackedStringArray = ["Remorque"]
 ## Prefixe des groupes de roues dans le modele.
 @export var wheel_group_prefix: String = "Roue"
+## Prefixe du noeud racine de la semi-remorque dans le modele : il pivote
+## autour de la sellette.
+@export var trailer_prefix: String = "Remorque"
 
 ## Couleur des boites de blockout quand le modele est absent (clone neuf) :
 ## transparente = couleurs d'origine. Distingue les joueurs sans le modele.
@@ -41,6 +47,7 @@ static var load_external_in_headless: bool = false
 
 const SPEC_LENGTH := 5.8
 const MODEL_ROOT := &"ExternalModel"
+const TRAILER_PIVOT := &"TrailerPivot"
 
 ## Chemin absolu -> PackedScene du modele ajuste (null si absent ou illisible).
 ## Une ressource, pas un noeud orphelin : rien ne fuit a la sortie.
@@ -51,6 +58,8 @@ var model_loaded: bool = false
 var fit_report: Dictionary = {}
 
 var _truck: Truck
+## Pivot de la remorque (modele ou boite), a la sellette.
+var _trailer_pivot: Node3D
 var _pivots: Array[Node3D] = []
 var _rest: Array[Transform3D] = []
 var _steers: Array[bool] = []
@@ -64,10 +73,11 @@ func _ready() -> void:
 	if external_model != "" and (DisplayServer.get_name() != "headless" or load_external_in_headless):
 		_attach_external()
 	if not model_loaded:
+		_trailer_pivot = get_node_or_null(NodePath(TRAILER_PIVOT)) as Node3D
 		if mock_tint.a > 0.0:
 			var mat := StandardMaterial3D.new()
 			mat.albedo_color = mock_tint
-			for mesh_name: String in ["Body/ChassisMesh", "Body/TrailerMesh"]:
+			for mesh_name: String in ["Body/ChassisMesh", "TrailerPivot/TrailerMesh"]:
 				var mi := get_node_or_null(NodePath(mesh_name)) as MeshInstance3D
 				if mi != null:
 					mi.material_override = mat
@@ -81,7 +91,11 @@ func _ready() -> void:
 ## Apres le camion (enfant : meme tick, apres ses forces). Les transformations
 ## posees ici sont interpolees au rendu (physics interpolation).
 func _physics_process(_delta: float) -> void:
-	if _truck == null or _pivots.is_empty():
+	if _truck == null:
+		return
+	if _trailer_pivot != null:
+		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle())
+	if _pivots.is_empty():
 		return
 	var steer := Basis(Vector3.UP, -deg_to_rad(_truck.get_steer_deg()))
 	var rest_hub := TruckSpec.rest_hub_distance()
@@ -105,13 +119,14 @@ func _probe_index(i: int) -> int:
 
 func _attach_external() -> void:
 	var path := ProjectSettings.globalize_path("res://").path_join(external_model).simplify_path()
-	var template := _template(path, strip_prefixes, fit_exclude_prefixes, wheel_group_prefix)
+	var template := _template(path, strip_prefixes, fit_exclude_prefixes, wheel_group_prefix, trailer_prefix)
 	if template == null:
 		return
 	var model := template.instantiate() as Node3D
 	model.name = MODEL_ROOT
 	add_child(model)
 	fit_report = model.get_meta(&"fit_report", {})
+	_trailer_pivot = model.get_node_or_null(NodePath(TRAILER_PIVOT)) as Node3D
 	# groupes de roues : pivot au moyeu, associe au rayon le plus proche
 	for pivot in model.find_children("WheelPivot_*", "Node3D", false, false):
 		var p := pivot as Node3D
@@ -127,7 +142,7 @@ func _attach_external() -> void:
 		_probe_of.append(best)
 		_steers.append(best < 2)
 	# les boites de blockout s'effacent, sans disparaitre (tests, repli)
-	for n in [&"Body", &"Wheel_FL", &"Wheel_FR", &"Wheel_RL", &"Wheel_RR"]:
+	for n in [&"Body", TRAILER_PIVOT, &"Wheel_FL", &"Wheel_FR", &"Wheel_RL", &"Wheel_RR"]:
 		var mock := get_node_or_null(NodePath(n)) as Node3D
 		if mock != null:
 			mock.visible = false
@@ -137,7 +152,7 @@ func _attach_external() -> void:
 ## Charge et ajuste le modele une seule fois par chemin ; les camions suivants
 ## dupliquent le resultat (maillages partages).
 static func _template(path: String, strip: PackedStringArray, exclude: PackedStringArray,
-		wheel_prefix: String) -> PackedScene:
+		wheel_prefix: String, trailer_prefix: String) -> PackedScene:
 	if _templates.has(path):
 		return _templates[path]
 	_templates[path] = null
@@ -152,7 +167,7 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	# on va deplacer des noeuds : plus de proprietaire le temps de l'ajustement
 	for n in raw.find_children("*", "", true, false):
 		n.owner = null
-	var fitted := _fit(raw, strip, exclude, wheel_prefix)
+	var fitted := _fit(raw, strip, exclude, wheel_prefix, trailer_prefix)
 	raw.free()
 	if fitted == null:
 		return null
@@ -165,9 +180,10 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	return packed
 
 
-## Construit un Node3D dans le repere du camion : corps ajuste + pivots de roue.
+## Construit un Node3D dans le repere du camion : corps ajuste, pivots de roue,
+## pivot de remorque a la sellette.
 static func _fit(raw: Node3D, strip: PackedStringArray, exclude: PackedStringArray,
-		wheel_prefix: String) -> Node3D:
+		wheel_prefix: String, trailer_prefix: String) -> Node3D:
 	# 1. retirer la remorque (et tout ce qui commence par un prefixe exclu)
 	for n in raw.find_children("*", "Node3D", true, false):
 		if not is_instance_valid(n):
@@ -235,6 +251,17 @@ static func _fit(raw: Node3D, strip: PackedStringArray, exclude: PackedStringArr
 		g.transform = Transform3D(group_xf[gi].basis, group_xf[gi].origin - hub_m)
 		pivot.add_child(g)
 		root.add_child(pivot)
+	# 5. la semi-remorque sous un pivot a la sellette (meme pose au repos)
+	var trailer := _first_with_prefix(raw, trailer_prefix)
+	if trailer != null:
+		var pivot := Node3D.new()
+		pivot.name = TRAILER_PIVOT
+		pivot.position = TruckSpec.KINGPIN
+		var acc := _transform_to(trailer, raw)
+		trailer.get_parent().remove_child(trailer)
+		trailer.transform = pivot.transform.affine_inverse() * f * acc
+		pivot.add_child(trailer)
+		root.add_child(pivot)
 	# le reste du modele sous le corps
 	for c in raw.get_children():
 		raw.remove_child(c)
@@ -261,6 +288,31 @@ static func _under_prefix(node: Node, root: Node, prefixes: PackedStringArray) -
 				return true
 		n = n.get_parent()
 	return false
+
+
+## Premier noeud (le moins profond) dont le nom commence par `prefix`.
+static func _first_with_prefix(root: Node, prefix: String) -> Node3D:
+	if prefix == "":
+		return null
+	var queue: Array[Node] = [root]
+	while not queue.is_empty():
+		var n: Node = queue.pop_front()
+		if n != root and n is Node3D and String(n.name).begins_with(prefix):
+			return n as Node3D
+		queue.append_array(n.get_children())
+	return null
+
+
+## Transformation de `node` dans le repere de `root` (celle de `root` exclue,
+## comme pour les boites englobantes).
+static func _transform_to(node: Node3D, root: Node) -> Transform3D:
+	var xf := Transform3D.IDENTITY
+	var n: Node = node
+	while n != null and n != root:
+		if n is Node3D:
+			xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	return xf
 
 
 static func _subtree_aabb(node: Node, xf: Transform3D) -> AABB:

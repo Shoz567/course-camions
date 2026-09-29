@@ -43,6 +43,9 @@ extends Resource
 @export_range(0.0, 100.0, 0.1, "suffix:km/h") var reverse_top_speed_kmh: float = 0.0
 ## Deceleration au frein. 100 -> 0 en < 45 m exige au moins 8,57 m/s2.
 @export_range(0.0, 30.0, 0.01, "suffix:m/s²") var brake_decel_ms2: float = 0.0
+## Au-dessus de la vitesse max, hors boost (fin de boost, descente) : frein
+## moteur qui y ramene le camion en quelques secondes.
+@export_range(0.0, 20.0, 0.01, "suffix:m/s²") var overspeed_decel_ms2: float = 0.0
 
 @export_group("Boost")
 ## Poussee ajoutee pendant le boost (m/s2), meme sans gaz.
@@ -53,6 +56,49 @@ extends Resource
 ## du boost). 60 ticks = 1 s.
 @export_range(0.0, 600.0, 1.0, "suffix:ticks") var boost_duration_ticks: float = 0.0
 @export_range(0.0, 1200.0, 1.0, "suffix:ticks") var boost_recharge_ticks: float = 0.0
+## Plaque de boost (piste) : poussee qui tient la vitesse max relevee pendant
+## la duree de la plaque (le coup de pouce initial est immediat).
+@export_range(0.0, 40.0, 0.01, "suffix:m/s²") var pad_boost_accel_ms2: float = 0.0
+
+@export_group("Remorque articulee")
+## Angle max de la remorque par rapport au tracteur, de chaque cote : au-dela,
+## tete-a-queue ingerable.
+@export_range(0.0, 90.0, 0.1, "suffix:°") var trailer_max_angle_deg: float = 0.0
+## La remorque suit son angle de consigne comme un ressort amorti, avec sa
+## propre inertie de lacet : le tracteur tourne, elle suit avec du retard.
+@export_range(0.0, 5.0, 0.01, "suffix:Hz") var trailer_frequency_hz: float = 0.0
+## 1 = critique ; en dessous, la remorque depasse sa consigne (effet de balancier).
+@export_range(0.0, 2.0, 0.01) var trailer_damping_ratio: float = 0.0
+## Consigne en virage : la remorque chasse vers l'exterieur, de tant de degres
+## par g d'acceleration laterale du tracteur.
+@export_range(0.0, 60.0, 0.1, "suffix:°/g") var trailer_sweep_deg_per_g: float = 0.0
+## En derapage : part de l'angle de derive du tracteur ajoutee a la consigne,
+## vers l'exterieur (balayage).
+@export_range(0.0, 3.0, 0.01) var trailer_drift_sweep_ratio: float = 0.0
+## Sous cette vitesse, la consigne est nulle : la remorque se realigne.
+@export_range(0.0, 20.0, 0.01, "suffix:m/s") var trailer_min_speed_ms: float = 0.0
+## Un mur arrete le balayage ; deja contre le mur, la remorque se replie vers
+## l'axe du tracteur a cette vitesse.
+@export_range(0.0, 10.0, 0.01, "suffix:°/tick") var trailer_wall_fold_deg_per_tick: float = 0.0
+## Remorque qui balaie un adversaire : coefficient de restitution du choc.
+@export_range(0.0, 1.0, 0.01) var trailer_shove_restitution: float = 0.0
+## Vitesse max donnee a l'adversaire par un coup de remorque.
+@export_range(0.0, 30.0, 0.01, "suffix:m/s") var trailer_shove_max_dv_ms: float = 0.0
+## Part du choc renvoyee au camion qui balaie (arcade : l'attaquant garde sa
+## ligne ; 1 = conservation de la quantite de mouvement).
+@export_range(0.0, 1.0, 0.01) var trailer_shove_reaction: float = 0.0
+
+@export_group("Sauts (plaques)")
+## Pendant un saut de plaque : raideur de l'assiette automatique multipliee.
+@export_range(0.0, 10.0, 0.01) var jump_air_level_factor: float = 0.0
+## A la reception d'un saut de plaque, vitesse de chute ramenee a cette valeur.
+@export_range(0.0, 20.0, 0.01, "suffix:m/s") var jump_landing_max_down_ms: float = 0.0
+## Apres cette reception, amortissement de suspension multiplie, pendant
+## jump_landing_damping_ticks : pas de rebond.
+@export_range(0.0, 5.0, 0.01) var jump_landing_damping_factor: float = 0.0
+@export_range(0.0, 120.0, 1.0, "suffix:ticks") var jump_landing_damping_ticks: float = 0.0
+## L'aide au saut s'eteint si le camion n'a pas atterri apres ce delai.
+@export_range(0.0, 1200.0, 1.0, "suffix:ticks") var jump_assist_max_ticks: float = 0.0
 
 @export_group("Resistances")
 ## Trainee aerodynamique : a = coef * v2 (1/m). Remplace le linear_damp du
@@ -148,6 +194,10 @@ func validate() -> PackedStringArray:
 		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:
 		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
+	if trailer_damping_ratio >= 2.0:
+		errors.append("trailer_damping_ratio = %s : >= 2, remorque figee" % trailer_damping_ratio)
+	if trailer_shove_restitution > 1.0 or trailer_shove_reaction > 1.0:
+		errors.append("trailer_shove_restitution / trailer_shove_reaction : au plus 1")
 	if reverse_top_speed_kmh >= top_speed_kmh:
 		errors.append("reverse_top_speed_kmh (%s) >= top_speed_kmh (%s)"
 			% [reverse_top_speed_kmh, top_speed_kmh])

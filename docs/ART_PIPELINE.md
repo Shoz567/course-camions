@@ -128,7 +128,10 @@ Mesuré sur `Camion_Bleu.glb` (2026-09-28), **le modèle ne suit pas la spec** :
 l'ensemble (semi-remorque exclue du calage mais affichée : 16,4 m hors tout),
 centrage sur la caisse du tracteur, bas des pneus au sol, pivot recalé au moyeu
 de chaque groupe de roues du tracteur, roues associées aux rayons **par
-position** (pas par nom) ; les roues de remorque restent fixes. Restent
+position** (pas par nom) ; les roues de remorque restent fixes. Le nœud
+`Remorque` (toute la semi-remorque, aileron et roues compris) est accroché à un
+pivot posé sur la sellette de la spec (0 ; 1,8 ; 1,2) et tourne avec l'angle de
+remorque du camion (VEHICLE_SPEC §5 bis). Restent
 visibles : cabine plus large (3,5 m) et plus haute (4,4 m) que sa collision, et
 roues visuelles à l'empattement du modèle (≈ 3,0 m) au lieu de 3,8 m.
 `truck_visual_test` vérifie l'ajustement ; il se saute sans le modèle.

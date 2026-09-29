@@ -1,10 +1,11 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
 [ext_resource type="Script" path="res://vehicles/wheel_probe.gd" id="3"]
 [ext_resource type="Script" path="res://vehicles/truck_visual.gd" id="4"]
 [ext_resource type="Script" path="res://vehicles/truck_horn.gd" id="5"]
+[ext_resource type="Script" path="res://vehicles/truck_boost_sound.gd" id="6"]
 
 [sub_resource type="BoxShape3D" id="shape_chassis"]
 size = Vector3(2.4, 1, 5.8)
@@ -103,8 +104,11 @@ mesh = SubResource("mesh_chassis")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.45, -1.8)
 mesh = SubResource("mesh_cab")
 
-[node name="TrailerMesh" type="MeshInstance3D" parent="Visual/Body"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.35, 6.9)
+[node name="TrailerPivot" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 1.2)
+
+[node name="TrailerMesh" type="MeshInstance3D" parent="Visual/TrailerPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.55, 5.7)
 mesh = SubResource("mesh_trailer")
 
 [node name="Wheel_FL" type="MeshInstance3D" parent="Visual"]
@@ -126,3 +130,7 @@ mesh = SubResource("mesh_wheel")
 [node name="Horn" type="AudioStreamPlayer3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, -2.5)
 script = ExtResource("5")
+
+[node name="BoostSound" type="AudioStreamPlayer3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 2)
+script = ExtResource("6")

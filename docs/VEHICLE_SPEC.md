@@ -29,9 +29,11 @@ corrige, pas le code qu'on contourne.
 
 **Tracteur à deux essieux + semi-remorque de course avec aileron** : c'est
 l'identité visuelle du jeu (décision du 2026-09-28, modèles de l'équipe). La
-semi-remorque est **rigide**, portée par le même corps que le tracteur (§5 bis) :
-pas d'articulation, pas de mise en portefeuille. Les cotes ci-dessous sont
-celles du tracteur, sauf mention « ensemble ».
+semi-remorque est **articulée** (décision du 2026-09-29) : sa caisse de
+collision fait partie du même corps que le tracteur, mais pivote en lacet
+autour de la sellette, angle borné à ±35° (§5 bis). Pas de mise en
+portefeuille. Les cotes ci-dessous sont celles du tracteur, sauf mention
+« ensemble » (ensemble dans l'axe).
 
 | Grandeur | Valeur |
 |---|---|
@@ -114,7 +116,7 @@ Trois boîtes convexes, **jamais le maillage** :
 |---|---|---|
 | Châssis | 2,4 × 1,00 × 5,8 | (0 ; 1,25 ; 0) |
 | Cabine | 2,4 × 1,40 × 2,2 | (0 ; 2,45 ; −1,8) |
-| Remorque | 3,0 × 3,10 × 13,0 | (0 ; 3,35 ; 6,9) |
+| Remorque | 3,0 × 3,10 × 13,0 | (0 ; 3,35 ; 6,9) au repos, pivote autour de la sellette (§5 bis) |
 
 La boîte de remorque couvre la caisse du modèle de l'équipe mis à l'échelle du
 tracteur (arrière à 13,4 m, visuel à 13,46 m, vérifié par `truck_visual_test`).
@@ -128,7 +130,7 @@ sur le ventre.
 Le corps du camion a **`continuous_cd = true`** (spike V2 : l'enfoncement dans
 un mur à 200 km/h passe de 0,87 m à 0,10 m, sans coût mesurable).
 
-## 5 bis. Semi-remorque rigide : inertie imposée
+## 5 bis. Semi-remorque articulée, inertie imposée
 
 Laissée à Godot, l'inertie se déduit des formes : la boîte de remorque multiplie
 l'inertie en lacet par 17 (16 450 → 285 873 kg·m²) et **tue le drift** (dérive au
@@ -139,8 +141,34 @@ tracteur, et les **moments d'inertie sont imposés** par `VehicleTuning`
 remorque reste **pleinement physique pour les contacts** (murs, autres camions).
 Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réception.
 
-Conséquence d'une remorque rigide : en braquant fort à basse vitesse, la queue
-balaie vers l'extérieur (11,5 m derrière l'essieu arrière).
+**Articulation** (décision du 2026-09-29, mécanique de blocage au conteneur) :
+
+| Grandeur | Valeur |
+|---|---|
+| Sellette (pivot) | **(0 ; 1,8 ; 1,2)**, lacet seulement |
+| Angle max | **±35°** (`trailer_max_angle_deg`) |
+| Suivi | ressort amorti 1,3 Hz, ζ = 0,4, inertie de lacet propre |
+| Consigne en virage | 16° vers l'extérieur par g d'accélération latérale |
+| Consigne en dérapage | + 0,9 × l'angle de dérive, vers l'extérieur |
+
+- La cabine réagit seule au volant : la remorque garde sa propre vitesse de
+  lacet (dans le monde) et rejoint sa consigne avec retard. Un coup de volant
+  sec la laisse d'abord en arrière, puis elle chasse vers l'extérieur et
+  dépasse sa consigne (effet de balancier) ; relâchée, elle se réaligne.
+- L'accélération latérale est **mesurée** (variation de vitesse, filtrée à
+  0,1 s), pas déduite du lacet : en rattrapage de dérapage, le camion tourne sur
+  lui-même sans que sa trajectoire tourne autant.
+- La **boîte de collision pivote avec le maillage** (`Truck.trailer_local_transform`).
+  Masse, centre de masse et inertie ne changent pas : l'articulation ne touche
+  pas à la conduite du tracteur (`handling_test` inchangé).
+- Un **mur arrête** le balayage (requête de forme avant chaque rotation) ; déjà
+  contre un mur, la remorque se replie vers l'axe.
+- Un **adversaire balayé** reçoit un choc le long du balayage, à son centre de
+  masse (pas de couple : il glisse, il ne se couche pas), plafonné à 8 m/s ;
+  35 % du choc revient au camion qui balaie (arcade : l'attaquant garde sa
+  ligne). La caisse pivotant dans le corps, le solveur ne voit pas sa vitesse
+  propre : ce choc la remplace.
+- Vérifié par `truck_trailer_test` (dérapage, coup de volant, mur, balayage).
 
 ## 5 ter. Amortissement du corps
 

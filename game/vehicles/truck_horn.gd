@@ -28,7 +28,10 @@ func _ready() -> void:
 
 
 func _on_honked() -> void:
-	play()
+	# en headless (tests), le pilote audio factice ne mixe jamais : une lecture
+	# ne serait jamais liberee (fuite signalee a la sortie). Rien a entendre.
+	if DisplayServer.get_name() != "headless":
+		play()
 
 
 static func _build_stream() -> AudioStreamWAV:
