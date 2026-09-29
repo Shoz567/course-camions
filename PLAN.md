@@ -163,7 +163,7 @@ comprise, plaques et pièges sans effet, relief compris).
   circuit (`track_01_reset_test`), sans jamais sauter de checkpoint.
 
 En plus de la phase 2 (demande du 2026-09-28) : schéma de manette style Mario
-Kart (`INPUT_SPEC.md` §3), boost avec recharge (1,5 s / 4 s, +30 km/h mesurés),
+Kart (`INPUT_SPEC.md` §3), boost avec recharge (1,5 s / 6 s depuis le 2026-09-30, +30 km/h mesurés),
 klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 
 ---

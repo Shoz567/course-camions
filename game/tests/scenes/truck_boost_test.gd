@@ -2,7 +2,7 @@ extends PhysicsTest
 
 ## Boost avec recharge, et klaxon.
 ##   A. 100 km/h tenus, boost a BOOST_AT : il dure boost_duration_ticks ; un
-##      nouvel appui pendant la recharge est ignore ; une fois la jauge pleine
+##      nouvel appui pendant la recharge est ignore (y compris 5 s apres) ; une fois la jauge pleine
 ##      (boost_recharge_ticks apres la fin), le boost repart.
 ##   B. jumeau de A sans boost : A gagne au moins la moitie du gain theorique
 ##      (boost_accel x duree) sur B pendant le boost.
@@ -12,6 +12,10 @@ extends PhysicsTest
 const HOLD_KMH := 100.0
 const BOOST_AT := 241
 const RETRY_AT := 350
+## Recharge du boost : 6 s (demande du 2026-09-30, au lieu de 4 s).
+const RECHARGE_TICKS := 360
+## Appui 5 s apres la fin du 1er boost : encore en recharge, ignore.
+const LATE_RETRY_AT := BOOST_AT + 90 + 300
 
 var _a: Truck
 var _b: Truck
@@ -48,7 +52,7 @@ func _test_tick(t: int) -> void:
 		f.tick = t
 		f.throttle = clampf((HOLD_KMH - tr.get_speed_kmh()) / 5.0, 0.0, 1.0) if hold else 1.0
 	_fa.boost = (t >= BOOST_AT and t < BOOST_AT + 10) or (t >= RETRY_AT and t < RETRY_AT + 10) \
-			or (t >= _second_at and t < _second_at + 10)
+			or (t >= LATE_RETRY_AT and t < LATE_RETRY_AT + 10) or (t >= _second_at and t < _second_at + 10)
 	_fb.honk = t == 100
 	_a.set_input(_fa)
 	_b.set_input(_fb)
@@ -74,6 +78,7 @@ func _test_tick(t: int) -> void:
 
 func _test_finish() -> void:
 	var tu := _a.tuning
+	check_near("recharge du boost : 6 s (ticks)", tu.boost_recharge_ticks, RECHARGE_TICKS, 0.5)
 	check("deux boosts : au 1er appui et apres recharge, pas pendant la recharge",
 		_starts.size() == 2, "debuts=%s" % [_starts])
 	if _starts.size() == 2:

@@ -18,7 +18,7 @@ extends InputSource
 ##   accelerer        R2, analogique de bout en bout
 ##   freiner, reculer L2, analogique
 ##   frein a main     Croix ou R1 (derapage)
-##   nitro boost      Carre (1,5 s, recharge 4 s)
+##   nitro boost      Carre (1,5 s, recharge 6 s)
 ##   largage remorque Triangle (recharge 30 s)
 ##   klaxon           L1
 ##   camera           R3, ou un coup franc du stick droit : signal local

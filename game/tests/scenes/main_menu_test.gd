@@ -187,7 +187,7 @@ func _test_finish() -> void:
 		keys[c["key"]] = c["text"]
 	var wanted := {"R2": "Accélérer (progressif)", "L2": "Freiner / marche arrière",
 		"Croix": "Frein à main / dérapage (drift)", "R1": "Frein à main / dérapage (drift)",
-		"Carré": "Nitro boost (recharge 4 s)",
+		"Carré": "Nitro boost (recharge 6 s)",
 		"Triangle": "Largage de remorque (recharge 30 s)", "L1": "Klaxon",
 		"R3 / stick droit": "Changer de vue (1re / 3e personne)", "Options": "Reset sur la piste",
 		"Create / pavé tactile": "Reset sur la piste"}

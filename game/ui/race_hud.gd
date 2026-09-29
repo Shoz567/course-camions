@@ -159,7 +159,9 @@ func _process(_delta: float) -> void:
 		_boost_label.text = "BOOST PRET"
 		_boost_bar.modulate = Color(0.3, 1.0, 0.4)
 	else:
-		_boost_label.text = "recharge du boost"
+		# recharge (6 s) : secondes restantes, derivees de la jauge
+		var left := ceili((1.0 - charge) * truck.tuning.boost_recharge_ticks / 60.0)
+		_boost_label.text = "recharge %d s" % maxi(left, 1)
 		_boost_bar.modulate = Color(0.6, 0.6, 0.6)
 	if _cargo != null:
 		# remorque : prete, larguee (compte a rebours du raccrochage), recharge

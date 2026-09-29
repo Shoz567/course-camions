@@ -66,7 +66,7 @@ const CALLOUTS: Array[Dictionary] = [
 		"ring": 13.0, "via": [[Vector2(720, 150)]]},
 	{"key": "Triangle", "text": "Largage de remorque (recharge 30 s)", "anchors": [P_TRIANGLE], "side": 1,
 		"row": 3, "ring": 20.0, "icon": "triangle", "via": [[Vector2(770, 190)]]},
-	{"key": "Carré", "text": "Nitro boost (recharge 4 s)", "anchors": [P_SQUARE], "side": 1, "row": 4,
+	{"key": "Carré", "text": "Nitro boost (recharge 6 s)", "anchors": [P_SQUARE], "side": 1, "row": 4,
 		"ring": 20.0, "icon": "square", "via": [[Vector2(645, 265)]]},
 	{"key": "Croix", "text": "Frein à main / dérapage (drift)", "anchors": [P_CROSS], "side": 1, "row": 5,
 		"ring": 20.0, "icon": "cross"},
