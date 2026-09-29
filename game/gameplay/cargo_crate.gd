@@ -84,25 +84,28 @@ func _on_body_entered(body: Node) -> void:
 	truck_hit.emit(truck)
 
 
-## Conteneur de chantier : bandes orange et noires, liseres lumineux (lisible
-## de loin, comme les plaques de la piste).
+## Caisse de danger : chevrons jaunes et noirs lumineux, aretes en neon
+## (lisible de nuit, comme les plaques de la piste).
 static func _material() -> ShaderMaterial:
 	if _shared_material != null:
 		return _shared_material
 	var sh := Shader.new()
 	sh.code = """shader_type spatial;
-varying vec3 local_pos;
-void vertex() { local_pos = VERTEX; }
+// Caisse de danger : chevrons jaunes et noirs lumineux qui pointent vers le
+// haut sur chaque face, aretes en neon jaune (Cyber City, visible de nuit).
+varying vec3 lp;
+varying vec3 ln;
+void vertex() { lp = VERTEX; ln = NORMAL; }
 void fragment() {
-	vec3 p = local_pos;
-	float stripe = step(0.5, fract((p.x + p.y + p.z) * 0.6));
-	vec3 c = mix(vec3(1.0, 0.45, 0.05), vec3(0.08, 0.07, 0.06), stripe * 0.85);
-	// lisere : au moins deux coordonnees au bord de la boite = une arete
-	vec3 a = abs(p) / vec3(1.5, 1.2, 1.5);
-	float edge = step(1.5, step(0.92, a.x) + step(0.92, a.y) + step(0.92, a.z));
-	ALBEDO = mix(c, vec3(1.0, 0.9, 0.2), edge);
-	EMISSION = vec3(1.0, 0.7, 0.1) * edge * 1.5;
-	ROUGHNESS = 0.6;
+	vec3 a = abs(lp) / vec3(1.5, 1.2, 1.5);
+	float across = abs(ln.x) > 0.5 ? lp.z : lp.x;
+	if (abs(ln.y) > 0.5) across = lp.x + lp.z;
+	float chevron = step(0.5, fract((abs(across) * 0.9 - lp.y * 0.9) * 0.8));
+	vec3 yellow = vec3(1.0, 0.8, 0.05);
+	float edge = step(1.5, step(0.93, a.x) + step(0.93, a.y) + step(0.93, a.z));
+	ALBEDO = mix(vec3(0.02), yellow, chevron);
+	EMISSION = yellow * (chevron * 0.9 + edge * 3.5);
+	ROUGHNESS = 0.55;
 }
 """
 	_shared_material = ShaderMaterial.new()

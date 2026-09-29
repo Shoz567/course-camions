@@ -1,24 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://dev/local_race.gd" id="1"]
 [ext_resource type="PackedScene" path="res://tracks/track_01_blockout.tscn" id="2"]
 [ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="3"]
 [ext_resource type="Script" path="res://gameplay/race_laps.gd" id="4"]
 [ext_resource type="Script" path="res://gameplay/pad_effects.gd" id="pads"]
-
-[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_horizon_color = Color(0.66, 0.72, 0.78, 1)
-ground_horizon_color = Color(0.66, 0.72, 0.78, 1)
-
-[sub_resource type="Sky" id="sky"]
-sky_material = SubResource("sky_mat")
-
-[sub_resource type="Environment" id="env"]
-background_mode = 2
-sky = SubResource("sky")
-ambient_light_source = 3
-fog_enabled = true
-fog_density = 0.0015
+[ext_resource type="Environment" path="res://tracks/cyber_night.tres" id="env"]
 
 [node name="Race" type="Node3D"]
 script = ExtResource("1")
@@ -26,10 +13,12 @@ player_count = 2
 players_from_menu = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("env")
+environment = ExtResource("env")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
+[node name="Moon" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 40, 0)
+light_color = Color(0.55, 0.62, 1, 1)
+light_energy = 0.45
 shadow_enabled = true
 directional_shadow_max_distance = 150.0
 

@@ -22,8 +22,11 @@ extends Node3D
 ##   "jump": m      rampe de saut a cette distance du debut du segment ;
 ##   "jump_offset": m  son decalage lateral (defaut : jump_offset).
 ##   "boost": [[m, lateral], ...]  plaques de boost (distance, decalage).
+##   "arch": m      arche lumineuse au-dessus de la piste a cette distance ;
+##   "arch_label": texte de son enseigne.
 ##
-## Genere : Geometry (chaussee, sol), Walls (2 glissieres continues), Pads
+## Genere : Geometry (chaussee, sol), Walls (2 glissieres continues, bord haut
+## en neon : cyan a gauche, magenta a droite), Arches (portiques neon), Pads
 ## (plaques de boost et rampes de saut a chevrons lumineux, avec leur Area3D),
 ## ResetZones (Area3D au-dela des murs, tout autour), Checkpoints (Area3D
 ## ordonnees, la n°0 est la ligne d'arrivee), StartGrid, RacingLine.
@@ -80,6 +83,10 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 ## Profondeur de la zone de declenchement, au sommet de la rampe.
 @export var jump_trigger_depth: float = 3.0
 
+@export_group("Arches")
+## Hauteur libre sous la poutre, au-dessus de la chaussee.
+@export var arch_height: float = 13.0
+
 @export_group("Plaques de boost")
 ## Largeur (en travers) et longueur (le long de la piste).
 @export var boost_pad_size: Vector2 = Vector2(8.0, 6.0)
@@ -120,6 +127,7 @@ var _line: PackedFloat32Array = []
 var _length: float = 0.0
 var _jumps: Array[Vector2] = []         # (s du tremplin, decalage)
 var _boosts: Array[Vector2] = []        # (s de la plaque, decalage)
+var _arches: Array[Dictionary] = []     # {s, label}
 var _auto_lengths: PackedFloat32Array = []
 
 
@@ -259,6 +267,17 @@ func boost_pad_transform(k: int) -> Transform3D:
 	return frame_at(index_at_s(_boosts[k].x), _boosts[k].y, 0.0)
 
 
+func arch_count() -> int:
+	_ensure_built()
+	return _arches.size()
+
+
+## Abscisse (m) de l'arche k.
+func arch_s(k: int) -> float:
+	_ensure_built()
+	return float(_arches[k]["s"])
+
+
 func jump_pad_count() -> int:
 	_ensure_built()
 	return _jumps.size()
@@ -318,6 +337,7 @@ func _build_centerline() -> bool:
 	# plaques et rampes : abscisse = debut du segment + distance demandee
 	_jumps.clear()
 	_boosts.clear()
+	_arches.clear()
 	var seg_start := 0.0
 	for k in segments.size():
 		var seg: Dictionary = segments[k]
@@ -325,6 +345,8 @@ func _build_centerline() -> bool:
 			_jumps.append(Vector2(seg_start + float(seg["jump"]), float(seg.get("jump_offset", jump_offset))))
 		for b: Array in seg.get("boost", []):
 			_boosts.append(Vector2(seg_start + float(b[0]), float(b[1])))
+		if seg.has("arch"):
+			_arches.append({"s": seg_start + float(seg["arch"]), "label": String(seg.get("arch_label", ""))})
 		seg_start += lengths[k]
 
 	# integration fine, puis reechantillonnage a pas regulier
@@ -487,7 +509,9 @@ func _build_geometry() -> void:
 		var l1 := _pos[j] - _right[j] * width / 2.0
 		var r1 := _pos[j] + _right[j] * width / 2.0
 		_quad(st, road_tris, l0, r0, r1, l1, Vector2(0, v0), Vector2(1, v0), Vector2(1, v1), Vector2(0, v1), _up[i])
-	var road := _static_body(geometry, "Road", st, road_tris, preload("res://tracks/materials/road.tres"), 1.0)
+	var road_mat := preload("res://tracks/materials/road.tres").duplicate() as ShaderMaterial
+	road_mat.set_shader_parameter("road_width", width)
+	var road := _static_body(geometry, "Road", st, road_tris, road_mat, 1.0)
 	road.set_meta(&"surface", &"asphalt")
 
 	# glissieres : profil vertical dans le monde (independant du devers),
@@ -512,9 +536,10 @@ func _build_geometry() -> void:
 		var wall := _static_body(walls, "WallLeft" if side < 0.0 else "WallRight", wst, wtris,
 			preload("res://tracks/materials/wall.tres"), wall_friction)
 		wall.set_meta(&"surface", &"asphalt")
+		_build_wall_neon(walls, side)
 
-	# sol d'herbe sous toute la piste (hors piste : lent, pas de vide)
-	var span := _bounds_span() + 200.0
+	# sol sous toute la piste et la ville (hors piste : lent, pas de vide)
+	var span := _bounds_span() + 2400.0
 	var gst := SurfaceTool.new()
 	gst.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var gtris := PackedVector3Array()
@@ -525,6 +550,10 @@ func _build_geometry() -> void:
 		Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector3.UP)
 	var ground := _static_body(geometry, "Ground", gst, gtris, preload("res://tracks/materials/grass.tres"), 1.0)
 	ground.set_meta(&"surface", &"grass")
+
+	var arches := _group("Arches")
+	for k in _arches.size():
+		_build_arch(arches, float(_arches[k]["s"]), String(_arches[k]["label"]), k)
 
 	var pads := _group("Pads")
 	for k in _jumps.size():
@@ -563,6 +592,107 @@ func _wall_profile(i: int, side: float) -> PackedVector3Array:
 	var outer_top := inner_top + out * thick_top
 	var outer_bottom := Vector3(outer_top.x, minf(GROUND_Y - 0.1, edge.y - 0.3), outer_top.z)
 	return PackedVector3Array([inner_bottom, inner_top, outer_top, outer_bottom])
+
+
+## Neon du bord haut de la glissiere : bandeau de 0,3 m en haut de la face
+## interieure, et tout le dessus du mur. Purement visuel (aucune collision).
+func _build_wall_neon(parent: Node3D, side: float) -> void:
+	var n := _pos.size()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tris := PackedVector3Array()
+	var z2 := Vector2.ZERO
+	var strip: Array[PackedVector3Array] = []
+	for i in n:
+		var prof := _wall_profile(i, side)
+		var down := (prof[0] - prof[1]).normalized()
+		var inward := -Vector3(_right[i].x, 0.0, _right[i].z).normalized() * side * 0.04
+		var lift := Vector3(0.0, 0.03, 0.0)
+		strip.append(PackedVector3Array([prof[1] + down * 0.32 + inward, prof[1] + inward + lift, prof[2] + lift]))
+	for i in n:
+		var a := strip[i]
+		var b := strip[(i + 1) % n]
+		_quad(st, tris, a[0], b[0], b[1], a[1], z2, z2, z2, z2, Vector3.ZERO)
+		_quad(st, tris, a[1], b[1], b[2], a[2], z2, z2, z2, z2, Vector3.ZERO)
+	var mi := MeshInstance3D.new()
+	mi.name = "NeonLeft" if side < 0.0 else "NeonRight"
+	mi.mesh = st.commit()
+	mi.material_override = preload("res://tracks/materials/neon_cyan.tres") if side < 0.0 \
+			else preload("res://tracks/materials/neon_magenta.tres")
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+
+## Arche lumineuse : deux piliers au-dela des murs, une poutre au-dessus de la
+## chaussee (arch_height de hauteur libre), tubes neon, enseigne tournee vers
+## les camions qui arrivent, et une lumiere qui colore la piste dessous.
+## Purement visuelle : aucune collision (ni camion, ni camera).
+func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
+	var i := index_at_s(s)
+	var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
+	var r := t.cross(Vector3.UP).normalized()
+	var arch_basis := Basis(r, Vector3.UP, -t)
+	var base := _pos[i]
+	var half := width / 2.0 + 3.0
+	var neon: Material = preload("res://tracks/materials/neon_magenta.tres") if index % 2 == 0 \
+			else preload("res://tracks/materials/neon_cyan.tres")
+	var neon_color := Color(1.0, 0.12, 0.78) if index % 2 == 0 else Color(0.08, 0.95, 1.0)
+	var root := Node3D.new()
+	root.name = "Arch%d" % index
+	root.transform = Transform3D(arch_basis, base)
+	parent.add_child(root)
+	var beam_y := arch_height + 1.2
+	var ground := GROUND_Y - base.y
+	for side: float in [-1.0, 1.0]:
+		var h := beam_y + 1.2 - ground
+		_box(root, Vector3(2.2, h, 2.2), Vector3(side * half, ground + h / 2.0, 0.0), _arch_metal())
+		# tube neon sur la face du pilier tournee vers la piste
+		_box(root, Vector3(0.25, h - 1.5, 0.25), Vector3(side * (half - 1.15), ground + h / 2.0, 0.0), neon)
+	_box(root, Vector3(half * 2.0 + 2.2, 2.4, 2.6), Vector3(0.0, beam_y, 0.0), _arch_metal())
+	for z: float in [-1.35, 1.35]:
+		_box(root, Vector3(half * 2.0, 0.22, 0.22), Vector3(0.0, beam_y - 1.25, z), neon)
+		_box(root, Vector3(half * 2.0, 0.22, 0.22), Vector3(0.0, beam_y + 1.25, z), neon)
+	if label != "":
+		var l := Label3D.new()
+		l.name = "Sign"
+		l.text = label
+		l.font_size = 220
+		l.pixel_size = 0.02
+		l.outline_size = 0
+		l.modulate = Color(neon_color.r * 2.2, neon_color.g * 2.2, neon_color.b * 2.2)
+		l.double_sided = false
+		# face avant vers les camions qui arrivent (-t = +Z local)
+		l.position = Vector3(0.0, beam_y, 1.32)
+		root.add_child(l)
+	var light := OmniLight3D.new()
+	light.light_color = neon_color
+	light.light_energy = 3.0
+	light.omni_range = 34.0
+	light.position = Vector3(0.0, beam_y - 2.0, 0.0)
+	root.add_child(light)
+
+
+static var _metal: StandardMaterial3D
+
+
+static func _arch_metal() -> StandardMaterial3D:
+	if _metal == null:
+		_metal = StandardMaterial3D.new()
+		_metal.albedo_color = Color(0.05, 0.055, 0.07)
+		_metal.metallic = 0.7
+		_metal.roughness = 0.35
+	return _metal
+
+
+static func _box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = mat
+	mi.position = pos
+	parent.add_child(mi)
+	return mi
 
 
 ## Zones de reset : une boite par troncon de piste et par cote, au-dela du mur,

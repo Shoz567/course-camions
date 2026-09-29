@@ -2,7 +2,10 @@ extends PhysicsTest
 
 ## Menu principal (ui/main_menu.tscn), par les vrais chemins d'entree
 ## (Input.parse_input_event : clavier, manette, clics souris) :
-##   - titre au centre, 4 boutons de joueurs, 1 joueur par defaut ;
+##   - titre dans la colonne de gauche (les camions sont exposes a droite),
+##     entierement a l'ecran ; 4 boutons de joueurs, 1 joueur par defaut ;
+##   - showroom : les camions sont sur le plateau tournant, qui tourne, et les
+##     camions montres restent centres sur le plateau ;
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
 ##     camions montres en decor aussi ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
@@ -80,10 +83,20 @@ func _test_tick(t: int) -> void:
 			_defaults_ok = _menu.selected_players == 1 and _visible_trucks() == 1 \
 					and _menu.player_buttons[0].button_pressed and not _menu.player_buttons[1].button_pressed
 			var title_center := _menu.title.get_global_rect().get_center().x
-			_seen["title_dx"] = absf(title_center - _menu.get_viewport().get_visible_rect().size.x / 2.0)
+			var vp := _menu.get_viewport().get_visible_rect()
+			var tr := _menu.title.get_global_rect()
+			_seen["title_left"] = title_center < vp.size.x / 2.0 and vp.encloses(tr)
+			_seen["plate_yaw"] = _menu.showroom.turntable.rotation.y
 		10: _key(KEY_3, true)
 		11: _key(KEY_3, false)
-		14: _seen["key3"] = [_menu.selected_players, _visible_trucks()]
+		14:
+			_seen["key3"] = [_menu.selected_players, _visible_trucks()]
+			var sum_x := 0.0
+			var on_plate := true
+			for k in 3:
+				sum_x += _menu.trucks[k].position.x
+				on_plate = on_plate and _menu.trucks[k].get_parent() == _menu.showroom.turntable
+			_seen["centered"] = absf(sum_x) < 0.01 and on_plate
 		20: _pad(JOY_BUTTON_RIGHT_SHOULDER, true)
 		21: _pad(JOY_BUTTON_RIGHT_SHOULDER, false)
 		24:
@@ -145,7 +158,9 @@ func _test_tick(t: int) -> void:
 func _test_finish() -> void:
 	check("1 joueur par defaut, 1 camion montre, bouton 1 enfonce", _defaults_ok)
 	check("4 boutons de joueurs", _menu.player_buttons.size() == 4)
-	check_below("titre centre horizontalement (px)", _seen["title_dx"], 4.0)
+	check("titre a gauche, entierement a l'ecran", _seen["title_left"])
+	check("showroom : camions sur le plateau, centres (3 camions)", _seen["centered"])
+	check("showroom : le plateau tourne", absf(_menu.showroom.turntable.rotation.y - _seen["plate_yaw"]) > 0.05)
 	check("titre anime (echelle ou rotation non neutres)",
 		_menu.title.scale != Vector2.ONE or _menu.title.rotation != 0.0)
 	check("touche 3 : 3 joueurs, 3 camions", _seen["key3"] == [3, 3], str(_seen["key3"]))

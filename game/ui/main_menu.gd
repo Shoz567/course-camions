@@ -2,9 +2,10 @@ class_name MainMenu
 extends Node3D
 
 ## Ecran d'accueil (tache 4.2, partiel) : titre anime, choix du nombre de
-## joueurs (1 a 4), START / COMMENCER, son on / off, parametres (factices pour
-## l'instant). En arriere-plan : la piste n°1, les camions des joueurs choisis
-## sur la grille, et une camera en orbite lente autour d'eux.
+## joueurs (1 a 4), START / COMMENCER, son on / off, parametres. Decor dedie
+## (Showroom) : les camions des joueurs choisis exposes sur un plateau tournant,
+## sur le toit d'une tour de Cyber City, sous les projecteurs ; camera en orbite
+## lente, decalee pour montrer les camions a droite, le menu a gauche.
 ##
 ## Manette : croix ou stick pour naviguer, A (ou B) pour valider, L / R pour
 ## changer le nombre de joueurs, + (Start) pour commencer, - pour fermer les
@@ -22,11 +23,13 @@ const LocalRace := preload("res://dev/local_race.gd")
 
 ## Faux pour les tests : COMMENCER emet `launch_requested` sans changer de scene.
 @export var auto_change_scene: bool = true
-@export var orbit_speed: float = 0.12        # rad/s
-@export var orbit_radius: float = 64.0
-@export var orbit_height: float = 15.0
+@export var orbit_speed: float = 0.06        # rad/s
+@export var orbit_radius: float = 46.0
+@export var orbit_height: float = 9.0
+## Decalage lateral de l'image (m) : les camions a droite, le menu a gauche.
+@export var frame_offset: float = -20.0
 
-@onready var track: TrackBlockout = $Track01
+@onready var showroom: Showroom = $Showroom
 @onready var camera: Camera3D = $OrbitCamera
 
 var selected_players: int = 1
@@ -76,22 +79,20 @@ static func _setup_menu_input() -> void:
 			InputMap.action_erase_event("ui_cancel", e)
 
 
-## Les 4 camions sur la grille, geles : du decor, pas de physique.
+## Les 4 camions sur le plateau tournant, geles : du decor, pas de physique.
 func _spawn_trucks() -> void:
-	var center := Vector3.ZERO
 	for i in 4:
 		var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 		t.name = "Truck%d" % (i + 1)
 		var visual := t.get_node("Visual") as TruckVisual
 		visual.external_model = LocalRace.MODELS[i]
 		visual.mock_tint = LocalRace.TINTS[i]
-		t.transform = track.get_start_transform(i)
+		t.transform = Showroom.slot(i, 4)
 		t.freeze = true
-		add_child(t)
+		showroom.turntable.add_child(t)
 		trucks.append(t)
-		center += t.global_position
-	# centre de l'orbite : milieu de la grille, recule vers les remorques
-	_orbit_center = center / 4.0 + trucks[0].global_basis.z * 5.0 + Vector3.UP * 2.0
+	_orbit_center = showroom.focus
+	camera.h_offset = frame_offset
 
 
 func _process(delta: float) -> void:
@@ -154,6 +155,9 @@ func select_players(n: int) -> void:
 		player_buttons[i].set_pressed_no_signal(i == selected_players - 1)
 	for i in trucks.size():
 		trucks[i].visible = i < selected_players
+		# les camions exposes restent centres sur le plateau
+		if i < selected_players:
+			trucks[i].transform = Showroom.slot(i, selected_players)
 	_update_pads_label()
 
 
@@ -223,8 +227,9 @@ func _build_ui() -> void:
 	# colonne centrale : titre, sous-titre, joueurs, manettes, COMMENCER
 	var column := VBoxContainer.new()
 	column.name = "Column"
-	column.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	column.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	column.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+	column.offset_left = 70
+	column.grow_horizontal = Control.GROW_DIRECTION_END
 	column.grow_vertical = Control.GROW_DIRECTION_BOTH
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_theme_constant_override("separation", 22)
@@ -232,15 +237,15 @@ func _build_ui() -> void:
 
 	# le titre s'anime (echelle, rotation) : hors conteneur, qui les remettrait a zero
 	var title_box := Control.new()
-	title_box.custom_minimum_size = Vector2(1200, 150)
+	title_box.custom_minimum_size = Vector2(980, 140)
 	column.add_child(title_box)
-	title = _label("COURSE DE CAMIONS", 112, 16)
+	title = _label("COURSE DE CAMIONS", 96, 14)
 	title.name = "Title"
 	title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_box.add_child(title)
-	var subtitle := _label("ARCADE   -   PISTE MEGA-LARGE 50 M   -   3 TOURS   -   1 A 4 JOUEURS", 26, 6)
+	var subtitle := _label("CYBER CITY   ·   PISTE DE 75 M   ·   3 TOURS   ·   1 À 4 JOUEURS", 26, 6)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color(1.0, 0.95, 0.8)
 	# carte translucide : lisible devant les camions du decor

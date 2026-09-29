@@ -140,3 +140,11 @@ script = ExtResource("6")
 
 [node name="Cargo" type="Node" parent="."]
 script = ExtResource("7")
+
+[node name="Headlights" type="SpotLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.990268, 0.139173, 0, -0.139173, 0.990268, 0, 1.4, -3.3)
+light_color = Color(1, 0.94, 0.85, 1)
+light_energy = 3.0
+spot_range = 55.0
+spot_angle = 32.0
+spot_attenuation = 0.8

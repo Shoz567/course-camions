@@ -3,7 +3,8 @@
 [sub_resource type="Shader" id="shader"]
 code = "shader_type spatial;
 
-// Herbe : damier de 8 m en coordonnees monde, pour lire la vitesse hors piste.
+// Sol de la ville, hors piste : dalle sombre quadrillee de fines lignes cyan
+// tous les 20 m (lecture de la vitesse), en coordonnees monde.
 varying vec3 world_pos;
 
 void vertex() {
@@ -11,9 +12,13 @@ void vertex() {
 }
 
 void fragment() {
-	float c = mod(floor(world_pos.x / 8.0) + floor(world_pos.z / 8.0), 2.0);
-	ALBEDO = mix(vec3(0.20, 0.36, 0.16), vec3(0.24, 0.42, 0.19), c);
-	ROUGHNESS = 0.95;
+	vec2 g = world_pos.xz / 20.0;
+	vec2 d = abs(fract(g - 0.5) - 0.5) / max(fwidth(g), vec2(1e-4));
+	float line = 1.0 - min(min(d.x, d.y), 1.0);
+	float tile = mod(floor(g.x) + floor(g.y), 2.0);
+	ALBEDO = vec3(0.02, 0.022, 0.034) + vec3(0.006) * tile + vec3(0.0, 0.04, 0.06) * line;
+	EMISSION = vec3(0.0, 0.3, 0.5) * line * 0.5;
+	ROUGHNESS = 0.75;
 }
 "
 

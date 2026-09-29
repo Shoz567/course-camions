@@ -1,10 +1,13 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
+[ext_resource type="Script" path="res://tracks/city_backdrop.gd" id="2"]
 
 [node name="Track01" type="Node3D"]
 script = ExtResource("1")
 segments = Array[Dictionary]([{
+"arch": 0.0,
+"arch_label": "CYBER CITY",
 "length": 200.0,
 "name": "Ligne droite de depart",
 "type": "straight"
@@ -32,6 +35,8 @@ segments = Array[Dictionary]([{
 "radius": 140.0,
 "type": "arc"
 }, {
+"arch": 40.0,
+"arch_label": "NEON RIDGE",
 "boost": [[40.0, -16.0]],
 "length": 80.0,
 "name": "Crete",
@@ -54,6 +59,8 @@ segments = Array[Dictionary]([{
 "radius": 160.0,
 "type": "arc"
 }, {
+"arch": 15.0,
+"arch_label": "SKY JUMP",
 "boost": [[150.0, -14.0]],
 "jump": 60.0,
 "jump_offset": 12.0,
@@ -86,3 +93,6 @@ jump_offset = 12.0
 boost_pad_size = Vector2(12, 8)
 grid_row_spacing = 20.0
 grid_lateral = PackedFloat32Array(-10, 10, -30, 30)
+
+[node name="CityBackdrop" type="Node3D" parent="."]
+script = ExtResource("2")
