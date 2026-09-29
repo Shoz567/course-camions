@@ -56,13 +56,25 @@ func _ready() -> void:
 	_boost_bar.offset_top = -52 * k
 	_boost_bar.offset_right = -24 * k
 	_boost_bar.offset_bottom = -30 * k
+	var b_bg := StyleBoxFlat.new()
+	b_bg.bg_color = Color(0.05, 0.07, 0.11, 0.85)
+	b_bg.border_color = Color(0.25, 0.35, 0.45, 0.7)
+	b_bg.set_border_width_all(roundi(maxf(1.0, 2.0 * k)))
+	b_bg.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
+	var b_fill := StyleBoxFlat.new()
+	b_fill.bg_color = Color(0.12, 0.88, 1.0)
+	b_fill.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
+	_boost_bar.add_theme_stylebox_override("background", b_bg)
+	_boost_bar.add_theme_stylebox_override("fill", b_fill)
 	add_child(_boost_bar)
+
 	_boost_label = _label(18, Vector2.ZERO)
 	_boost_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_boost_label.offset_left = -330 * k
 	_boost_label.offset_top = -80 * k
 	_boost_label.offset_right = -24 * k
 	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
 	# cargo : a gauche de la jauge de boost, meme hauteur
 	_cargo_bar = ProgressBar.new()
 	_cargo_bar.min_value = 0.0
@@ -73,7 +85,18 @@ func _ready() -> void:
 	_cargo_bar.offset_top = -52 * k
 	_cargo_bar.offset_right = -350 * k
 	_cargo_bar.offset_bottom = -30 * k
+	var c_bg := StyleBoxFlat.new()
+	c_bg.bg_color = Color(0.06, 0.06, 0.04, 0.85)
+	c_bg.border_color = Color(0.55, 0.45, 0.15, 0.7)
+	c_bg.set_border_width_all(roundi(maxf(1.0, 2.0 * k)))
+	c_bg.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
+	var c_fill := StyleBoxFlat.new()
+	c_fill.bg_color = Color(1.0, 0.75, 0.1)
+	c_fill.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
+	_cargo_bar.add_theme_stylebox_override("background", c_bg)
+	_cargo_bar.add_theme_stylebox_override("fill", c_fill)
 	add_child(_cargo_bar)
+
 	_cargo_label = _label(18, Vector2.ZERO)
 	_cargo_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_cargo_label.offset_left = -560 * k
@@ -119,7 +142,14 @@ func _process(_delta: float) -> void:
 	_lap.text = head
 	_lap_time.text = "Tour  %s" % chrono(race.current_lap_ticks(truck))
 	_times.text = "Meilleur  %s     Dernier  %s" % [chrono(r.best_lap), chrono(r.last_lap)]
-	_speed.text = "%d km/h" % roundi(absf(truck.get_speed_kmh()))
+	var spd := roundi(absf(truck.get_speed_kmh()))
+	_speed.text = "%d km/h" % spd
+	if truck.is_boosting():
+		_speed.modulate = Color(1.0, 0.65, 0.15)
+	elif spd >= 140:
+		_speed.modulate = Color(0.15, 0.95, 1.0)
+	else:
+		_speed.modulate = Color(0.95, 0.96, 0.98)
 	var charge := truck.get_boost_charge()
 	_boost_bar.value = charge
 	if truck.is_boosting():
@@ -142,8 +172,8 @@ func _process(_delta: float) -> void:
 	var text := _center_text
 	var color := _center_color
 	if text == "" and r.wrong_way:
-		text = "MAUVAIS SENS"
-		color = Color(1.0, 0.3, 0.2)
+		text = "«« MAUVAIS SENS »»"
+		color = Color(1.0, 0.25, 0.15)
 	_center.text = text
 	_center.modulate = color
 

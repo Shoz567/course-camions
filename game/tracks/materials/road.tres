@@ -52,10 +52,14 @@ void fragment() {
 		paint = 1.0;
 	}
 	ALBEDO = col;
+	// reflet rasant des neons des glissieres sur le bitume humide (cyan a gauche, magenta a droite)
+	float edge_left = smoothstep(10.0, 0.0, x);
+	float edge_right = smoothstep(road_width - 10.0, road_width, x);
+	vec3 neon_refl = (vec3(0.08, 0.95, 1.0) * edge_left + vec3(1.0, 0.12, 0.78) * edge_right) * 0.15;
 	// peinture a peine lumineuse : lisible dans la nuit
-	EMISSION = vec3(0.12) * paint;
-	ROUGHNESS = mix(0.32, 0.6, grain) + paint * 0.2;
-	SPECULAR = 0.6;
+	EMISSION = vec3(0.12) * paint + neon_refl * (1.0 - paint);
+	ROUGHNESS = mix(0.28, 0.55, grain) + paint * 0.2;
+	SPECULAR = 0.65;
 }
 "
 

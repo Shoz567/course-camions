@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://vehicles/truck_horn.gd" id="5"]
 [ext_resource type="Script" path="res://vehicles/truck_boost_sound.gd" id="6"]
 [ext_resource type="Script" path="res://gameplay/truck_cargo.gd" id="7"]
+[ext_resource type="Script" path="res://vehicles/truck_vfx.gd" id="8"]
 
 [sub_resource type="BoxShape3D" id="shape_chassis"]
 size = Vector3(2.4, 1, 5.8)
@@ -148,3 +149,6 @@ light_energy = 3.0
 spot_range = 55.0
 spot_angle = 32.0
 spot_attenuation = 0.8
+
+[node name="Vfx" type="Node3D" parent="."]
+script = ExtResource("8")

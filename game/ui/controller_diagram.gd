@@ -107,58 +107,175 @@ func _draw() -> void:
 					pts.append(v + shift)
 			var target: Vector2 = anchors[k] + shift
 			pts.append(target + (pts[pts.size() - 1] - target).normalized() * float(c["ring"]))
-			draw_polyline(pts, Color(0, 0, 0, 0.75), 5.0, true)
+			draw_polyline(pts, Color(0, 0, 0, 0.85), 6.0, true)
+			draw_polyline(pts, Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.4), 4.0, true)
 			draw_polyline(pts, ACCENT, 2.0, true)
-	# contour allume des commandes legendees
+	# contour allume des commandes legendees avec viseur radar
 	for c in CALLOUTS:
 		for a: Vector2 in c["anchors"]:
-			draw_arc(a + shift, float(c["ring"]), 0.0, TAU, 32, ACCENT, 3.0, true)
-		draw_circle(label_anchor(c), 4.0, ACCENT)
+			var center: Vector2 = a + shift
+			var ring_r: float = float(c["ring"])
+			# halo exterieur
+			draw_arc(center, ring_r + 3.0, 0.0, TAU, 32, Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.25), 2.0, true)
+			# anneau principal
+			draw_arc(center, ring_r, 0.0, TAU, 32, ACCENT, 2.5, true)
+			# point central
+			draw_circle(center, 2.5, ACCENT)
+			# micro-croisillons
+			for ang: float in [0.0, PI * 0.5, PI, PI * 1.5]:
+				var dir := Vector2(cos(ang), sin(ang))
+				draw_line(center + dir * (ring_r - 2.0), center + dir * (ring_r + 4.0), ACCENT, 2.0)
+		draw_circle(label_anchor(c), 5.0, ACCENT)
+		draw_circle(label_anchor(c), 2.5, Color.WHITE)
 	_draw_labels()
 
 
 func _draw_controller() -> void:
-	# ombre, contour, puis corps : bloc central arrondi et deux poignees
-	for pass_i in 2:
-		var grow := 5.0 if pass_i == 0 else 0.0
-		var col := BODY_EDGE if pass_i == 0 else BODY
-		_rounded_rect(Rect2(350 - grow, 150 - grow, 400 + grow * 2, 190 + grow * 2), 70.0 + grow, col)
-		draw_circle(Vector2(405, 350), 95.0 + grow, col)
-		draw_circle(Vector2(695, 350), 95.0 + grow, col)
-	# gachettes et boutons de tranche
-	_rounded_rect(Rect2(362, 100, 120, 22), 10.0, BUTTON.darkened(0.2))
-	_rounded_rect(Rect2(618, 100, 120, 22), 10.0, BUTTON.darkened(0.2))
-	_rounded_rect(Rect2(368, 129, 118, 20), 8.0, BUTTON)
-	_rounded_rect(Rect2(614, 129, 118, 20), 8.0, BUTTON)
-	_centered_text("ZL", Vector2(440, 111), 14, TEXT)
-	_centered_text("ZR", Vector2(660, 111), 14, TEXT)
+	# ombre portee sous la manette
+	_rounded_rect(Rect2(346, 146, 408, 198), 74.0, Color(0.0, 0.0, 0.0, 0.45))
+	draw_circle(Vector2(405, 355), 98.0, Color(0.0, 0.0, 0.0, 0.4))
+	draw_circle(Vector2(695, 355), 98.0, Color(0.0, 0.0, 0.0, 0.4))
+
+	# gachettes ZL et ZR (arriere-plan haut)
+	_rounded_rect(Rect2(358, 96, 126, 26), 12.0, Color(0.12, 0.14, 0.18))
+	_rounded_rect(Rect2(616, 96, 126, 26), 12.0, Color(0.12, 0.14, 0.18))
+	_rounded_rect(Rect2(362, 100, 118, 20), 10.0, BUTTON.darkened(0.35))
+	_rounded_rect(Rect2(620, 100, 118, 20), 10.0, BUTTON.darkened(0.35))
+	_centered_text("ZL", Vector2(440, 111), 14, Color(0.85, 0.88, 0.95))
+	_centered_text("ZR", Vector2(660, 111), 14, Color(0.85, 0.88, 0.95))
+
+	# boutons de tranche L et R
+	_rounded_rect(Rect2(364, 125, 122, 24), 9.0, BODY_EDGE.darkened(0.4))
+	_rounded_rect(Rect2(614, 125, 122, 24), 9.0, BODY_EDGE.darkened(0.4))
+	_rounded_rect(Rect2(368, 128, 116, 20), 8.0, BUTTON.darkened(0.1))
+	_rounded_rect(Rect2(616, 128, 116, 20), 8.0, BUTTON.darkened(0.1))
 	_centered_text("L", Vector2(445, 139), 14, TEXT)
 	_centered_text("R", Vector2(655, 139), 14, TEXT)
-	# sticks
-	for p: Vector2 in [P_LSTICK, P_RSTICK]:
-		draw_circle(p, 34.0, BUTTON.darkened(0.3))
-		draw_circle(p, 24.0, BUTTON)
-	# croix directionnelle
-	draw_rect(Rect2(P_DPAD.x - 9, P_DPAD.y - 28, 18, 56), BUTTON)
-	draw_rect(Rect2(P_DPAD.x - 28, P_DPAD.y - 9, 56, 18), BUTTON)
-	# - et +
-	draw_rect(Rect2(P_MINUS.x - 10, P_MINUS.y - 3, 20, 6), TEXT)
-	draw_rect(Rect2(P_PLUS.x - 10, P_PLUS.y - 3, 20, 6), TEXT)
-	draw_rect(Rect2(P_PLUS.x - 3, P_PLUS.y - 10, 6, 20), TEXT)
-	# boutons de face (couleurs facon Super Nintendo)
-	var faces := [[P_X, "X", Color(0.25, 0.45, 0.95)], [P_A, "A", Color(0.9, 0.2, 0.2)],
-		[P_B, "B", Color(0.95, 0.8, 0.15)], [P_Y, "Y", Color(0.2, 0.7, 0.3)]]
+
+	# chassis principal (corps ergonomique)
+	# contour chanfreine
+	_rounded_rect(Rect2(346, 146, 408, 198), 72.0, Color(0.28, 0.32, 0.40))
+	draw_circle(Vector2(405, 350), 97.0, Color(0.28, 0.32, 0.40))
+	draw_circle(Vector2(695, 350), 97.0, Color(0.28, 0.32, 0.40))
+	# coque matte principale
+	_rounded_rect(Rect2(350, 150, 400, 190), 70.0, Color(0.13, 0.15, 0.20))
+	draw_circle(Vector2(405, 350), 94.0, Color(0.13, 0.15, 0.20))
+	draw_circle(Vector2(695, 350), 94.0, Color(0.13, 0.15, 0.20))
+
+	# revetement antiderapant sur les poignees (panneaux de grip)
+	draw_circle(Vector2(395, 360), 72.0, Color(0.09, 0.10, 0.14))
+	draw_circle(Vector2(705, 360), 72.0, Color(0.09, 0.10, 0.14))
+	# micro-picots de prehension
+	for gx: float in [-1.0, 1.0]:
+		var hx: float = 550.0 + gx * 155.0
+		for r_row: int in 4:
+			for c_col: int in 3:
+				var dot_p := Vector2(hx + c_col * 9.0 * gx, 335.0 + r_row * 12.0)
+				draw_circle(dot_p, 1.5, Color(0.18, 0.21, 0.28))
+
+	# plaque centrale biseautee
+	_rounded_rect(Rect2(450, 160, 200, 160), 30.0, Color(0.11, 0.12, 0.16))
+
+	# sticks analogiques Switch Pro (gauche et droite)
+	_draw_stick(P_LSTICK)
+	_draw_stick(P_RSTICK)
+
+	# croix directionnelle (D-Pad)
+	_draw_dpad(P_DPAD)
+
+	# boutons de fonction centraux : Minus, Plus, Capture, Home
+	# Minus (-)
+	draw_circle(P_MINUS, 12.0, BUTTON.darkened(0.2))
+	draw_rect(Rect2(P_MINUS.x - 7, P_MINUS.y - 2, 14, 4), TEXT)
+	# Plus (+)
+	draw_circle(P_PLUS, 12.0, BUTTON.darkened(0.2))
+	draw_rect(Rect2(P_PLUS.x - 7, P_PLUS.y - 2, 14, 4), TEXT)
+	draw_rect(Rect2(P_PLUS.x - 2, P_PLUS.y - 7, 4, 14), TEXT)
+	# Capture (carre a gauche)
+	draw_rect(Rect2(Vector2(505, 230) - Vector2(7, 7), Vector2(14, 14)), BUTTON.darkened(0.3))
+	draw_circle(Vector2(505, 230), 3.5, BUTTON)
+	# Home (cercle avec anneau cyan a droite)
+	draw_circle(Vector2(595, 230), 9.0, BUTTON.darkened(0.3))
+	draw_arc(Vector2(595, 230), 6.5, 0.0, TAU, 16, Color(0.1, 0.8, 1.0, 0.7), 1.5)
+
+	# 4 voyants LED joueurs (centre bas)
+	for i: int in 4:
+		var led_pos := Vector2(532.0 + i * 12.0, 315.0)
+		draw_rect(Rect2(led_pos.x - 2.5, led_pos.y - 2.5, 5, 5), Color(0.08, 0.85, 0.45, 0.9 if i == 0 else 0.2))
+
+	# boutons de face (A, B, X, Y)
+	# puits sous les boutons
+	for p: Vector2 in [P_X, P_A, P_B, P_Y]:
+		draw_circle(p, FACE_R + 3.0, Color(0.08, 0.09, 0.12))
+	# boutons avec reflets et couleurs facon Super Nintendo / Switch
+	var faces: Array = [
+		[P_X, "X", Color(0.22, 0.48, 0.98)],
+		[P_A, "A", Color(0.95, 0.22, 0.22)],
+		[P_B, "B", Color(0.96, 0.80, 0.12)],
+		[P_Y, "Y", Color(0.18, 0.78, 0.36)]
+	]
 	for f: Array in faces:
-		draw_circle(f[0], FACE_R, f[2])
-		_centered_text(f[1], f[0], 16, Color.WHITE)
+		var pos: Vector2 = f[0]
+		var col: Color = f[2]
+		# bouton
+		draw_circle(pos, FACE_R, col.darkened(0.15))
+		draw_circle(pos - Vector2(1, 1), FACE_R - 2.0, col)
+		draw_circle(pos - Vector2(3, 3), FACE_R - 7.0, col.lightened(0.25))
+		_centered_text(f[1], pos + Vector2(0, 1), 16, Color.WHITE)
+
+
+func _draw_stick(p: Vector2) -> void:
+	# puits du stick
+	draw_circle(p, 38.0, Color(0.06, 0.07, 0.10))
+	draw_circle(p, 36.0, Color(0.20, 0.23, 0.29))
+	# bague caoutchouc externe avec 8 crans de grip
+	draw_circle(p, 32.0, Color(0.14, 0.16, 0.20))
+	for ang: int in 8:
+		var rad := ang * TAU / 8.0
+		var notch_p := p + Vector2(cos(rad), sin(rad)) * 30.0
+		draw_line(notch_p - Vector2(cos(rad), sin(rad)) * 3.0, notch_p, Color(0.3, 0.35, 0.42), 2.0)
+	# creux ergonomique concave
+	draw_circle(p, 24.0, Color(0.18, 0.21, 0.27))
+	draw_circle(p, 16.0, Color(0.13, 0.15, 0.19))
+	# micro-croix de centrage
+	draw_line(p - Vector2(6, 0), p + Vector2(6, 0), Color(0.28, 0.32, 0.40), 2.0)
+	draw_line(p - Vector2(0, 6), p + Vector2(0, 6), Color(0.28, 0.32, 0.40), 2.0)
+
+
+func _draw_dpad(p: Vector2) -> void:
+	# puits de la croix
+	draw_rect(Rect2(p.x - 12, p.y - 31, 24, 62), Color(0.06, 0.07, 0.10))
+	draw_rect(Rect2(p.x - 31, p.y - 12, 62, 24), Color(0.06, 0.07, 0.10))
+	# corps de la croix
+	draw_rect(Rect2(p.x - 10, p.y - 29, 20, 58), BUTTON)
+	draw_rect(Rect2(p.x - 29, p.y - 10, 58, 20), BUTTON)
+	# depression centrale
+	draw_circle(p, 7.0, BUTTON.darkened(0.25))
+	# fleches de direction blanches
+	_centered_text("▲", Vector2(p.x, p.y - 19), 11, TEXT)
+	_centered_text("▼", Vector2(p.x, p.y + 19), 11, TEXT)
+	_centered_text("◄", Vector2(p.x - 19, p.y), 11, TEXT)
+	_centered_text("►", Vector2(p.x + 19, p.y), 11, TEXT)
 
 
 func _draw_labels() -> void:
 	var font := get_theme_default_font()
 	for c in CALLOUTS:
 		var r := label_rect(c)
-		var align := HORIZONTAL_ALIGNMENT_RIGHT if int(c["side"]) < 0 else HORIZONTAL_ALIGNMENT_LEFT
-		draw_string(font, Vector2(r.position.x, r.position.y + 22.0), c["key"], align, r.size.x, 22, ACCENT)
+		var is_left := int(c["side"]) < 0
+		var align := HORIZONTAL_ALIGNMENT_RIGHT if is_left else HORIZONTAL_ALIGNMENT_LEFT
+		# fond translucide et liseret neon pour la touche
+		var key_str: String = c["key"]
+		var key_w := font.get_string_size(key_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 20.0
+		var badge_x := (r.end.x - key_w) if is_left else r.position.x
+		var badge_r := Rect2(badge_x, r.position.y + 2.0, key_w, 24.0)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.11, 0.16, 0.85)
+		sb.border_color = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.6)
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(6)
+		draw_style_box(sb, badge_r)
+		draw_string(font, Vector2(badge_x + 10.0, r.position.y + 20.0), key_str, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, ACCENT)
 		draw_string(font, Vector2(r.position.x, r.position.y + 48.0), c["text"], align, r.size.x, 18, TEXT)
 
 
