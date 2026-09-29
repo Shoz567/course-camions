@@ -24,11 +24,15 @@ extends RigidBody3D
 ##   anti-collage : apres wall_unstick_ticks de frottement continu contre un
 ##       mur, -25 % de vitesse et une impulsion vers l'interieur de la piste
 ##       (normale du mur) : le camion ne reste jamais aimante a la glissiere.
-##   caisse de cargo percutee (cargo_hit) : ralenti et deporte en lacet.
+##   remorque detachee (detach_trailer) : sa caisse de collision est coupee,
+##       le tracteur seul est plus rapide, plus vif et plus nerveux jusqu'a ce
+##       qu'elle se raccroche (reattach_trailer) ;
+##   remorque larguee percutee (cargo_hit) : ralenti et deporte en lacet.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
-##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit()
+##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit(),
+##   detach_trailer(), reattach_trailer()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -42,8 +46,11 @@ signal trailer_shoved(other: Truck, impulse: float)
 signal cargo_requested
 ## Decolle du mur apres un frottement continu (normale du mur, horizontale).
 signal wall_unstuck(normal: Vector3)
-## Vient de percuter une caisse de cargo.
+## Vient de percuter une remorque larguee.
 signal cargo_hit_taken
+## La remorque vient d'etre detachee / raccrochee.
+signal trailer_detached
+signal trailer_reattached
 
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
@@ -122,6 +129,8 @@ var _prev_heading_v: float = 0.0
 var _heading_ready: bool = false
 ## Dernier coup de remorque donne a chaque adversaire (id -> tick).
 var _shove_ticks: Dictionary = {}
+## Remorque larguee (pouvoir cargo) : tracteur seul.
+var _trailer_detached: bool = false
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 
@@ -265,8 +274,41 @@ func is_jump_assisted() -> bool:
 	return _jump_assist_ticks > 0
 
 
-## Caisse de cargo percutee (CargoCrate) : au prochain tick, vitesse reduite
-## a cargo_hit_speed_factor et coup de lacet du cote de la caisse.
+## Remorque detachee : pose monde de la remorque (repere de la sellette,
+## articulation comprise), pour poser la remorque larguee au meme endroit. La
+## caisse de collision est coupee ; le tracteur roule seul.
+func detach_trailer() -> Transform3D:
+	var xf := global_transform * Transform3D(Basis(Vector3.UP, _trailer_angle), TruckSpec.KINGPIN)
+	_trailer_detached = true
+	_trailer_yaw_rate = 0.0
+	_set_trailer_angle(0.0)
+	if _trailer_shape != null:
+		_trailer_shape.disabled = true
+	trailer_detached.emit()
+	return xf
+
+
+## Raccroche la remorque (dans l'axe). Refuse (faux) si sa caisse toucherait
+## un mur ou un camion : on reessaie au tick suivant.
+func reattach_trailer(force: bool = false) -> bool:
+	if not _trailer_detached:
+		return true
+	if not force and _trailer_shape != null and _trailer_hits(0.0,
+			(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1))):
+		return false
+	_trailer_detached = false
+	if _trailer_shape != null:
+		_trailer_shape.disabled = false
+	trailer_reattached.emit()
+	return true
+
+
+func is_trailer_detached() -> bool:
+	return _trailer_detached
+
+
+## Remorque larguee percutee (DetachedTrailer) : au prochain tick, vitesse
+## reduite a cargo_hit_speed_factor et coup de lacet du cote de l'obstacle.
 func cargo_hit(crate_position: Vector3) -> void:
 	_cargo_hit_pending = true
 	_cargo_hit_from = crate_position
@@ -348,6 +390,9 @@ func _physics_process(_delta: float) -> void:
 	var com := xf * center_of_mass
 	var v_fwd := linear_velocity.dot(fwd)
 	var t := tuning
+	# tracteur seul (remorque larguee) : plus leger, plus rapide, plus vif
+	var top_ms := _top_speed_ms * (t.solo_top_speed_factor if _trailer_detached else 1.0)
+	var accel_k := t.solo_accel_factor if _trailer_detached else 1.0
 
 	# 1.5 direction : l'angle max diminue avec la vitesse, borne par l'angle
 	# qui fait tourner a la limite d'adherence (tout le stick reste utile), et
@@ -355,7 +400,7 @@ func _physics_process(_delta: float) -> void:
 	var target_deg := 0.0
 	var steer_in := clampf(_input.steer, -1.0, 1.0)
 	if debug_steering:
-		var max_deg := _grip_steer_deg(v_fwd)
+		var max_deg := _grip_steer_deg(v_fwd) * (t.solo_steer_factor if _trailer_detached else 1.0)
 		# 1.6 contre-braquage permissif : du cote ou glisse le camion, la limite
 		# s'elargit de l'angle de derive. Les roues avant peuvent toujours
 		# s'aligner sur la trajectoire, et un derapage se rattrape au stick.
@@ -392,8 +437,8 @@ func _physics_process(_delta: float) -> void:
 			# poussee nette constante, puis decroissance lineaire sur la bande
 			# sous la vitesse max ; les resistances sont compensees jusqu'a la
 			# vitesse max, pas au-dela : apres un boost, le camion y redescend.
-			var taper := clampf((_top_speed_ms - v_fwd) / _taper_ms, 0.0, 1.0)
-			drive = thr * (t.engine_accel_ms2 * taper + (resist if v_fwd <= _top_speed_ms else 0.0))
+			var taper := clampf((top_ms - v_fwd) / _taper_ms, 0.0, 1.0)
+			drive = thr * (t.engine_accel_ms2 * accel_k * taper + (resist if v_fwd <= top_ms else 0.0))
 	if brk > 0.0:
 		if v_fwd > STOP_SPEED_MS:
 			braking = maxf(braking, brk)
@@ -417,17 +462,17 @@ func _physics_process(_delta: float) -> void:
 	if _pad_kick_pending:
 		_pad_kick_pending = false
 		if debug_boost:
-			var kick := clampf(_top_speed_ms + _pad_boost_extra_ms - v_fwd, 0.0, _pad_boost_extra_ms)
+			var kick := clampf(top_ms + _pad_boost_extra_ms - v_fwd, 0.0, _pad_boost_extra_ms)
 			apply_central_impulse(fwd * kick * mass)
 	if boost_push > 0.0 and debug_boost and v_fwd > -STOP_SPEED_MS:
-		var top_b := _top_speed_ms + boost_extra
+		var top_b := top_ms + boost_extra
 		var taper_b := clampf((top_b - v_fwd) / _taper_ms, 0.0, 1.0)
-		drive = (thr * t.engine_accel_ms2 + boost_push) * taper_b + (resist if v_fwd <= top_b else 0.0)
+		drive = (thr * t.engine_accel_ms2 * accel_k + boost_push) * taper_b + (resist if v_fwd <= top_b else 0.0)
 		braking = 0.0 if brk <= 0.0 else braking
-	elif v_fwd > _top_speed_ms:
+	elif v_fwd > top_ms:
 		# frein moteur au-dessus de la vitesse max (rampe sur 2 m/s : pas de
 		# pompage autour de la vitesse max)
-		drive -= t.overspeed_decel_ms2 * clampf((v_fwd - _top_speed_ms) / 2.0, 0.0, 1.0)
+		drive -= t.overspeed_decel_ms2 * clampf((v_fwd - top_ms) / 2.0, 0.0, 1.0)
 	if not debug_drive:
 		drive = 0.0
 		braking = 0.0
@@ -536,7 +581,7 @@ func _physics_process(_delta: float) -> void:
 		_apply_air_control(up, steer_in)
 
 	# remorque articulee : angle de la caisse, murs, adversaires balayes
-	if _trailer_shape != null:
+	if _trailer_shape != null and not _trailer_detached:
 		_update_trailer(up, com, v_fwd, xf.basis.x)
 
 	# 1.9 traces de debug

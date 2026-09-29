@@ -162,12 +162,14 @@ func _process(_delta: float) -> void:
 		_boost_label.text = "recharge du boost"
 		_boost_bar.modulate = Color(0.6, 0.6, 0.6)
 	if _cargo != null:
+		# remorque : prete, larguee (compte a rebours du raccrochage), recharge
 		_cargo_bar.value = _cargo.get_charge()
+		_cargo_label.text = _cargo.status_text()
 		if _cargo.is_ready():
-			_cargo_label.text = "CARGO PRET"
 			_cargo_bar.modulate = Color(1.0, 0.6, 0.1)
+		elif truck.is_trailer_detached():
+			_cargo_bar.modulate = Color(0.2, 0.9, 1.0)
 		else:
-			_cargo_label.text = "cargo %d s" % _cargo.seconds_left()
 			_cargo_bar.modulate = Color(0.6, 0.6, 0.6)
 	var text := _center_text
 	var color := _center_color

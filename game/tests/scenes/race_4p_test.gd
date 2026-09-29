@@ -9,7 +9,7 @@ extends PhysicsTest
 ##   - isolation (INPUT_SPEC §4) : la manette 3 fait avancer J4 et lui seul,
 ##     ZQSD fait avancer J2 et lui seul (pas J3, qui n'a pas de clavier) ; le
 ##     bouton camera de la manette 2 ne bascule que la vue de J3 ; Triangle de la
-##     manette 2 ne fait larguer une caisse qu'a J3, dont le HUD affiche la
+##     manette 2 ne fait larguer sa remorque qu'a J3, dont le HUD affiche la
 ##     recharge.
 
 var _scene: Node3D
@@ -135,11 +135,12 @@ func _test_finish() -> void:
 	for i in 4:
 		ready.append((_truck(i).get_node("Cargo") as TruckCargo).is_ready())
 	check("Triangle manette 2 : seul J3 a largue", ready == [true, true, false, true], str(ready))
-	var crates := _scene.find_children("CargoCrate*", "CargoCrate", false, false)
-	check("une caisse sur la piste, larguee par J3",
-		crates.size() == 1 and (crates[0] as CargoCrate).dropped_by == _truck(2), "%d caisse(s)" % crates.size())
+	var trailers := _scene.find_children("DetachedTrailer*", "DetachedTrailer", false, false)
+	check("une remorque sur la piste, larguee par J3, J3 en tracteur seul",
+		trailers.size() == 1 and (trailers[0] as DetachedTrailer).dropped_by == _truck(2)
+		and _truck(2).is_trailer_detached(), "%d remorque(s)" % trailers.size())
 	var hud_label := String((_players[2].hud as RaceHud).get("_cargo_label").text)
-	check("HUD de J3 : recharge du cargo affichee", hud_label.begins_with("cargo "), hud_label)
+	check("HUD de J3 : remorque larguee affichee", hud_label.begins_with("remorque larguee"), hud_label)
 	check("manette 2 : seule la camera de J3 passe en cabine",
 		views == [ChaseCamera.View.CHASE, ChaseCamera.View.CHASE, ChaseCamera.View.COCKPIT, ChaseCamera.View.CHASE],
 		str(views))

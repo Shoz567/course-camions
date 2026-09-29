@@ -192,8 +192,15 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
   +5 m/s le long de la normale du mur (vers la piste), nez ramené parallèle au
   mur. Détection : contacts du corps (`contact_monitor`) avec un corps statique
   à normale presque horizontale (le sol et les rampes ne comptent pas).
-- **Caisse de cargo percutée** : vitesse horizontale × 0,6 et coup de lacet de
-  1,4 rad/s du côté de la caisse, une fois par caisse.
+- **Remorque larguée** (pouvoir cargo, 2026-09-30) : la remorque entière se
+  détache (caisse de collision du camion coupée, visuel masqué) ; une
+  `DetachedTrailer` (9 000 kg, freinée, boîte pleine hauteur, couche 5
+  `hazard`) la remplace sur la route pendant 10 s, puis la remorque se
+  raccroche dès que sa place est libre. Tracteur seul pendant ce temps :
+  vitesse max × 1,12, poussée × 1,3, braquage × 1,15 (mesuré : +18 km/h
+  après 5 s). Recharge globale de 30 s depuis le largage.
+- **Remorque larguée percutée** : vitesse horizontale × 0,6 et coup de lacet
+  de 1,4 rad/s du côté de l'obstacle, une fois par remorque.
 - Vérifié par `truck_wall_unstick_test` et `truck_cargo_test`.
 
 ## 5 ter. Amortissement du corps
@@ -226,7 +233,7 @@ dessinées sur les valeurs mesurées (`docs/METRICS.md`), pas sur ces cibles.
 | 2 `vehicle` | châssis des camions |
 | 3 `checkpoint` | `Area3D` de checkpoint et ligne d'arrivée |
 | 4 `reset_zone` | `Area3D` hors-piste : eau, vide, zone interdite |
-| 5 `hazard` | objets mobiles dangereux : caisses de cargo larguées (`CargoCrate`) |
+| 5 `hazard` | objets mobiles dangereux : remorques larguées (`DetachedTrailer`) |
 
 Les rayons de suspension ne visent que la couche 1 : une roue ne « roule » ni
 sur un autre camion ni sur un checkpoint.

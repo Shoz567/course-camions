@@ -3,10 +3,10 @@ extends PhysicsTest
 ## Endurance a 4 camions sur la piste n°1, avec tout le gameplay d'une course :
 ## RaceLaps, AutoReset, plaques (PadEffects), remorques articulees, anti-collage
 ## et largage de cargo. Quatre pilotes (TrackAutopilot, par InputFrame) partent
-## de la grille, chacun sur sa voie, et roulent 25 s ; chacun largue une caisse.
+## de la grille, chacun sur sa voie, et roulent 25 s ; chacun largue sa remorque.
 ## Verifie la robustesse, pas un temps : aucun NaN, personne hors du monde ni
-## sur le toit plus de 2 s, tout le monde avance, toutes les caisses
-## disparaissent.
+## sur le toit plus de 2 s, tout le monde avance, toutes les remorques
+## larguees disparaissent.
 
 const DURATION := 1500
 const LANES: Array[float] = [-2.5, 2.5, -7.5, 7.5]
@@ -19,7 +19,7 @@ var _start_progress: PackedFloat32Array = []
 var _upside_ticks: PackedInt32Array = [0, 0, 0, 0]
 var _max_upside: PackedInt32Array = [0, 0, 0, 0]
 var _drops: int = 0
-var _crates: Array[CargoCrate] = []
+var _crates: Array[DetachedTrailer] = []
 var _nan: bool = false
 var _escaped: bool = false
 var _resets: int = 0
@@ -54,7 +54,7 @@ func _test_setup() -> void:
 		var p := TrackAutopilot.new(_track, t, float(g))
 		p.lane = LANES[i]
 		_pilots.append(p)
-		(t.get_node("Cargo") as TruckCargo).dropped.connect(func(c: CargoCrate) -> void:
+		(t.get_node("Cargo") as TruckCargo).dropped.connect(func(c: DetachedTrailer) -> void:
 			_drops += 1
 			_crates.append(c))
 		t.wall_unstuck.connect(func(_n: Vector3) -> void: _unsticks += 1)
@@ -103,4 +103,4 @@ func _test_finish() -> void:
 	check("tout le monde avance (> 400 m en 25 s)", slow.is_empty(), "lents : %s" % [slow])
 	check("jamais sur le toit plus de 2 s", Array(_max_upside).max() < 120, str(_max_upside))
 	check("4 largages de cargo", _drops == 4, "%d" % _drops)
-	check("toutes les caisses ont disparu", alive == 0, "%d restante(s)" % alive)
+	check("toutes les remorques larguees ont disparu", alive == 0, "%d restante(s)" % alive)

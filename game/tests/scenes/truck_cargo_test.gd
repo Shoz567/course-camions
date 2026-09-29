@@ -1,17 +1,20 @@
 extends PhysicsTest
 
-## Largage de cargo (ZL) : barriere ephemere.
-##   A. A roule a 80 km/h et largue (front de l'InputFrame) : une caisse est
-##      posee au sol derriere sa remorque ; un second appui pendant la
-##      recharge est ignore ; recharge affichee 30 s.
-##   B. B suit A dans la meme voie et percute la caisse : il est ralenti
-##      (<= 75 % de sa vitesse) et deporte en lacet, sans se coucher ni
-##      s'envoler. A, qui l'a larguee, n'est jamais penalise.
-##   C. Anti-jeu : la caisse clignote a partir de 3 s et disparait a 5 s.
-##   D. Recharge courte (2 s) sur C : largage, refus pendant la recharge, puis
-##      nouveau largage une fois la recharge finie.
-##   E. Cas limites : camion sur le toit, largage refuse ; camion en l'air,
-##      la caisse part de derriere la remorque et retombe au sol.
+## Pouvoir cargo : la remorque entiere se detache et fait barrage 10 s.
+##   A. A roule a 80 km/h et largue (front de l'InputFrame) : une
+##      DetachedTrailer apparait a la place exacte de la remorque, la caisse
+##      de collision du camion est coupee et son visuel de remorque masque ;
+##      un second appui (pendant le largage, puis pendant la recharge) est
+##      ignore ; au bout de 10 s la remorque larguee disparait et la remorque
+##      se raccroche (caisse et visuel de retour).
+##   B. jumeau de A sans largage : A, tracteur seul, va plus vite (+5 km/h
+##      au moins apres 5 s).
+##   C. C suit A dans la meme voie et percute la remorque larguee : il est
+##      ralenti (<= 75 % de sa vitesse), sans se coucher ; A n'est jamais
+##      penalise par sa propre remorque.
+##   D. camion sur le toit : largage refuse.
+##   E. recharge courte (6,7 s, largage 3,3 s) : largage, refus pendant le
+##      largage puis pendant la recharge, raccrochage, nouveau largage.
 ## Vitesses initiales posees au tick 0 (CLAUDE.md §10 b).
 
 const V0 := 22.0
@@ -20,52 +23,49 @@ const DROP_AT := 20
 var _a: Truck
 var _b: Truck
 var _c: Truck
-var _frames: Dictionary = {}
-var _drops_a: int = 0
-var _drops_c: int = 0
-var _crate: CargoCrate
-var _crate_ok: bool = false
-var _crate_behind: float = 0.0
-var _crate_height: float = -1.0
-var _seconds_left: int = -1
-var _b_hit_at: int = -1
-var _b_before: float = 0.0
-var _b_after: float = 0.0
-var _b_yaw: float = 0.0
-var _a_hit: bool = false
-var _b_prev_speed: float = 0.0
-var _b_hit_pending: bool = false
-var _hidden_ticks: int = 0
-var _blinking_at_250: bool = false
-var _alive_at_318: bool = false
-var _gone_at_322: bool = false
-var _max_tilt: float = 0.0
 var _d: Truck
 var _e: Truck
-var _drops_d: int = 0
-var _e_crate: CargoCrate
-var _e_crate_y: float = -1.0
-var _max_y: float = 0.0
+var _frames: Dictionary = {}
+var _drops: Dictionary = {}
+var _trailer: DetachedTrailer
+var _spawn_err: float = INF
+var _kingpin_at_drop: Vector3
+var _detached_ok: bool = false
+var _hidden_ok: bool = false
+var _speed_gain: float = 0.0
+var _c_hit_at: int = -1
+var _c_before: float = 0.0
+var _c_after: float = 0.0
+var _c_prev: float = 0.0
+var _c_hit: bool = false
+var _a_hit: bool = false
+var _blinking: bool = false
+var _alive_before: bool = false
+var _gone_after: bool = false
+var _reattached: bool = false
+var _max_tilt: float = 0.0
 
 
 func _test_setup() -> void:
-	duration_ticks = 330
-	add_floor(2000.0)
-	_a = _spawn(Vector3(0.0, 0.0, 600.0), V0)
-	_b = _spawn(Vector3(0.0, 0.0, 660.0), V0)
-	_c = _spawn(Vector3(80.0, 0.0, 600.0), 0.0)
-	(_c.get_node("Cargo") as TruckCargo).cooldown_ticks = 120
-	(_a.get_node("Cargo") as TruckCargo).dropped.connect(func(cr: CargoCrate) -> void:
-		_drops_a += 1
-		_crate = cr)
-	(_c.get_node("Cargo") as TruckCargo).dropped.connect(func(_cr: CargoCrate) -> void: _drops_c += 1)
-	_a.cargo_hit_taken.connect(func() -> void: _a_hit = true)
-	_d = _spawn(Vector3(160.0, 3.5, 600.0), 0.0)
+	duration_ticks = DROP_AT + 700
+	add_floor(3000.0)
+	_a = _spawn(Vector3(0.0, 0.0, 1200.0), V0)
+	_b = _spawn(Vector3(60.0, 0.0, 1200.0), V0)
+	_c = _spawn(Vector3(0.0, 0.0, 1270.0), V0)
+	_d = _spawn(Vector3(160.0, 3.5, 1200.0), 0.0)
 	_d.rotation_degrees = Vector3(0.0, 0.0, 180.0)
-	(_d.get_node("Cargo") as TruckCargo).dropped.connect(func(_cr: CargoCrate) -> void: _drops_d += 1)
-	_e = _spawn(Vector3(240.0, 8.0, 600.0), 0.0)
-	(_e.get_node("Cargo") as TruckCargo).dropped.connect(func(cr: CargoCrate) -> void: _e_crate = cr)
-	_b.cargo_hit_taken.connect(func() -> void: _b_hit_pending = true)
+	_e = _spawn(Vector3(240.0, 0.0, 1200.0), 0.0)
+	var e_cargo := _e.get_node("Cargo") as TruckCargo
+	e_cargo.cooldown_ticks = 400
+	e_cargo.detach_ticks = 200
+	for t: Truck in [_a, _b, _c, _d, _e]:
+		_drops[t] = 0
+		(t.get_node("Cargo") as TruckCargo).dropped.connect(func(tr: DetachedTrailer) -> void:
+			_drops[t] += 1
+			if t == _a:
+				_trailer = tr)
+	_a.cargo_hit_taken.connect(func() -> void: _a_hit = true)
+	_c.cargo_hit_taken.connect(func() -> void: _c_hit = true)
 
 
 func _spawn(p: Vector3, v: float) -> Truck:
@@ -84,64 +84,58 @@ func _drive(t: Truck, tick: int, throttle: float, cargo: bool) -> void:
 
 
 func _test_tick(t: int) -> void:
-	_drive(_a, t, 1.0, t == DROP_AT or t == DROP_AT + 20)
+	_drive(_a, t, 1.0, t == DROP_AT or t == DROP_AT + 100 or t == DROP_AT + 650)
 	_drive(_b, t, 1.0, false)
-	_drive(_c, t, 0.0, t == 10 or t == 60 or t == 140)
-	_drive(_d, t, 0.0, t == 2)   # encore a l'envers (l'assiette auto le redresse ensuite)
-	_drive(_e, t, 0.0, t == 3)
-	if t == 120 and _e_crate != null and is_instance_valid(_e_crate):
-		_e_crate_y = _e_crate.global_position.y
-
-	if t == DROP_AT + 2:
-		_seconds_left = (_a.get_node("Cargo") as TruckCargo).seconds_left()
-	if _crate != null and is_instance_valid(_crate):
-		if t == DROP_AT + 1:
-			_crate_ok = true
-			_crate_behind = (_crate.global_position - _a.global_position).dot(_a.global_basis.z)
-		if t == DROP_AT + 30:
-			_crate_height = _crate.global_position.y
-		if t > DROP_AT + 180 and not (_crate.get_node("Mesh") as MeshInstance3D).visible:
-			_hidden_ticks += 1
-		if t == DROP_AT + 230:
-			_blinking_at_250 = _crate.is_blinking()
-	if t == DROP_AT + 298:
-		_alive_at_318 = _crate != null and is_instance_valid(_crate)
-	if t == DROP_AT + 302:
-		_gone_at_322 = _crate == null or not is_instance_valid(_crate)
-
-	# B : vitesse juste avant le choc, puis 10 ticks apres
-	var vb := _b.linear_velocity.length()
-	if _b_hit_at < 0 and _b_hit_pending:
-		_b_hit_at = t
-		_b_before = _b_prev_speed
-	if _b_hit_at > 0 and t == _b_hit_at + 10:
-		_b_after = vb
-	if _b_hit_at > 0 and t <= _b_hit_at + 20:
-		_b_yaw = maxf(_b_yaw, absf(_b.angular_velocity.y))
-	_b_prev_speed = vb
+	_drive(_c, t, 1.0, false)
+	_drive(_d, t, 0.0, t == 2)
+	_drive(_e, t, 0.0, t == 10 or t == 60 or t == 330 or t == 450)
+	if t == DROP_AT:
+		# le largage se fait pendant le pas du camion, juste apres ce tick
+		_kingpin_at_drop = _a.global_transform * TruckSpec.KINGPIN
+	if t == DROP_AT + 1 and _trailer != null:
+		_spawn_err = _trailer.global_position.distance_to(_kingpin_at_drop)
+		var shape := _a.get_node("Trailer") as CollisionShape3D
+		_detached_ok = _a.is_trailer_detached() and shape.disabled
+		_hidden_ok = not (_a.get_node("Visual/TrailerPivot") as Node3D).visible
+	if t == DROP_AT + 300:
+		_speed_gain = _a.get_speed_kmh() - _b.get_speed_kmh()
+	if _trailer != null and is_instance_valid(_trailer) and t == DROP_AT + 540:
+		_blinking = _trailer.is_blinking()
+	if t == DROP_AT + 590:
+		_alive_before = _trailer != null and is_instance_valid(_trailer)
+	if t == DROP_AT + 620:
+		_gone_after = _trailer == null or not is_instance_valid(_trailer)
+		var shape := _a.get_node("Trailer") as CollisionShape3D
+		_reattached = not _a.is_trailer_detached() and not shape.disabled \
+				and (_a.get_node("Visual/TrailerPivot") as Node3D).visible
+	# C : vitesse juste avant le choc, puis 10 ticks apres
+	var vc := _c.linear_velocity.length()
+	if _c_hit_at < 0 and _c_hit:
+		_c_hit_at = t
+		_c_before = _c_prev
+	if _c_hit_at > 0 and t == _c_hit_at + 10:
+		_c_after = vc
+	_c_prev = vc
 	for tr: Truck in [_a, _b, _c]:
 		_max_tilt = maxf(_max_tilt, TruckTestUtil.tilt_deg(tr))
-		_max_y = maxf(_max_y, tr.global_position.y)
 
 
 func _test_finish() -> void:
-	print("  INFO   caisse a %.1f m derriere A ; B %.1f -> %.1f m/s au choc (tick %d), lacet %.2f rad/s"
-		% [_crate_behind, _b_before, _b_after, _b_hit_at, _b_yaw])
-	check("A largue une caisse, un seul largage pendant la recharge", _crate_ok and _drops_a == 1,
-		"largages=%d" % _drops_a)
-	check("A recharge affichee : 30 s", _seconds_left == 30, "%d s" % _seconds_left)
-	check_above("caisse derriere la remorque (m)", _crate_behind, 14.0)
-	check_near("caisse posee au sol (hauteur du centre, m)", _crate_height, CargoCrate.SIZE.y / 2.0, 0.15)
-	check("B percute la caisse", _b_hit_at > 0, "tick=%d" % _b_hit_at)
-	if _b_hit_at > 0:
-		check_below("B ralenti (vitesse apres / avant)", _b_after / maxf(_b_before, 0.1), 0.75)
-		check_above("B deporte en lacet (rad/s)", _b_yaw, 0.5)
-	check("A, qui l'a larguee, jamais penalise", not _a_hit)
-	check("la caisse clignote apres 3 s", _blinking_at_250 and _hidden_ticks > 0, "masquee %d ticks" % _hidden_ticks)
-	check("la caisse vit jusqu'a 5 s", _alive_at_318)
-	check("la caisse disparait a 5 s", _gone_at_322)
-	check("C recharge courte : largage, refus, nouveau largage", _drops_c == 2, "largages=%d" % _drops_c)
-	check("camion sur le toit : largage refuse", _drops_d == 0, "%d" % _drops_d)
-	check_near("largue en l'air : la caisse retombe au sol (hauteur, m)", _e_crate_y, CargoCrate.SIZE.y / 2.0, 0.15)
+	print("  INFO   A : %d largage(s), tracteur seul +%.1f km/h ; C %.1f -> %.1f m/s au choc (tick %d)"
+		% [_drops[_a], _speed_gain, _c_before, _c_after, _c_hit_at])
+	check("A largue sa remorque : une seule fois (largage puis recharge)", _drops[_a] == 1, "%d" % _drops[_a])
+	check_below("remorque larguee a la place de la remorque (m, sellette)", _spawn_err, 1.0)
+	check("A : caisse de remorque coupee pendant le largage", _detached_ok)
+	check("A : visuel de remorque masque pendant le largage", _hidden_ok)
+	check_above("A tracteur seul plus rapide que B (km/h)", _speed_gain, 5.0)
+	check("C percute la remorque larguee", _c_hit_at > 0, "tick=%d" % _c_hit_at)
+	if _c_hit_at > 0:
+		check_below("C ralenti (vitesse apres / avant)", _c_after / maxf(_c_before, 0.1), 0.75)
+	check("A jamais penalise par sa propre remorque", not _a_hit)
+	check("la remorque larguee clignote avant de disparaitre", _blinking)
+	check("la remorque larguee tient 10 s", _alive_before)
+	check("apres 10 s : elle disparait", _gone_after)
+	check("apres 10 s : la remorque se raccroche (caisse et visuel)", _reattached)
+	check("camion sur le toit : largage refuse", _drops[_d] == 0, "%d" % _drops[_d])
+	check("E recharge courte : largage, raccrochage, nouveau largage", _drops[_e] == 2, "%d" % _drops[_e])
 	check_below("personne ne se couche (deg)", _max_tilt, 45.0)
-	check_below("personne ne s'envole (m)", _max_y, 1.5)

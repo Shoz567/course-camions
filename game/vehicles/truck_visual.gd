@@ -95,6 +95,8 @@ func _physics_process(_delta: float) -> void:
 		return
 	if _trailer_pivot != null:
 		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle())
+		# remorque larguee : elle est sur la route, plus derriere le tracteur
+		_trailer_pivot.visible = not _truck.is_trailer_detached()
 	if _pivots.is_empty():
 		return
 	var steer := Basis(Vector3.UP, -deg_to_rad(_truck.get_steer_deg()))
@@ -109,6 +111,17 @@ func _physics_process(_delta: float) -> void:
 		if _steers[i]:
 			xf.basis = steer * xf.basis
 		p.transform = xf
+
+
+## Copie de la remorque (modele ou boite), dans le repere de la sellette : le
+## visuel de la remorque larguee. Maillages partages, rien n'est recharge.
+func make_trailer_copy() -> Node3D:
+	if _trailer_pivot == null:
+		return null
+	var copy := _trailer_pivot.duplicate() as Node3D
+	copy.transform = Transform3D.IDENTITY
+	copy.visible = true
+	return copy
 
 
 func _probe_index(i: int) -> int:

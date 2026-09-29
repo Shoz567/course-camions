@@ -106,6 +106,12 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var cargo_hit_speed_factor: float = 0.0
 @export_range(0.0, 10.0, 0.01, "suffix:rad/s") var cargo_hit_yaw_kick_rad_s: float = 0.0
 
+@export_group("Tracteur seul (remorque larguee)")
+## Bonus du tracteur sans sa remorque : vitesse max, poussee, braquage.
+@export_range(0.0, 3.0, 0.01) var solo_top_speed_factor: float = 0.0
+@export_range(0.0, 3.0, 0.01) var solo_accel_factor: float = 0.0
+@export_range(0.0, 3.0, 0.01) var solo_steer_factor: float = 0.0
+
 @export_group("Sauts (plaques)")
 ## Pendant un saut de plaque : raideur de l'assiette automatique multipliee.
 @export_range(0.0, 10.0, 0.01) var jump_air_level_factor: float = 0.0
