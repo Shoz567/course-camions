@@ -8,7 +8,7 @@ extends PhysicsTest
 ##   - depart : 4 camions sur la meme ligne, etales sur la largeur ;
 ##   - isolation (INPUT_SPEC §4) : la manette 3 fait avancer J4 et lui seul,
 ##     ZQSD fait avancer J2 et lui seul (pas J3, qui n'a pas de clavier) ; le
-##     bouton camera de la manette 2 ne bascule que la vue de J3 ; ZL de la
+##     bouton camera de la manette 2 ne bascule que la vue de J3 ; Triangle de la
 ##     manette 2 ne fait larguer une caisse qu'a J3, dont le HUD affiche la
 ##     recharge.
 
@@ -46,18 +46,18 @@ func _key(code: Key, pressed: bool) -> void:
 func _test_tick(t: int) -> void:
 	# depart au tick ~180 : manette 3 (A Switch) et Z de ZQSD pendant 200 ticks
 	if t == 200:
-		_pad(3, JOY_BUTTON_B, true)
+		_axis(3, JOY_AXIS_TRIGGER_RIGHT, 1.0)
 		_key(KEY_W, true)
 	elif t == 400:
-		_pad(3, JOY_BUTTON_B, false)
+		_axis(3, JOY_AXIS_TRIGGER_RIGHT, 0.0)
 		_key(KEY_W, false)
-		_pad(2, JOY_BUTTON_Y, true)
+		_pad(2, JOY_BUTTON_RIGHT_STICK, true)
 	elif t == 402:
-		_pad(2, JOY_BUTTON_Y, false)
+		_pad(2, JOY_BUTTON_RIGHT_STICK, false)
 	if t == 300:
-		_axis(2, JOY_AXIS_TRIGGER_LEFT, 1.0)
+		_pad(2, JOY_BUTTON_Y, true)
 	elif t == 303:
-		_axis(2, JOY_AXIS_TRIGGER_LEFT, 0.0)
+		_pad(2, JOY_BUTTON_Y, false)
 
 
 func _axis(device: int, axis: JoyAxis, value: float) -> void:
@@ -134,7 +134,7 @@ func _test_finish() -> void:
 	var ready := []
 	for i in 4:
 		ready.append((_truck(i).get_node("Cargo") as TruckCargo).is_ready())
-	check("ZL manette 2 : seul J3 a largue", ready == [true, true, false, true], str(ready))
+	check("Triangle manette 2 : seul J3 a largue", ready == [true, true, false, true], str(ready))
 	var crates := _scene.find_children("CargoCrate*", "CargoCrate", false, false)
 	check("une caisse sur la piste, larguee par J3",
 		crates.size() == 1 and (crates[0] as CargoCrate).dropped_by == _truck(2), "%d caisse(s)" % crates.size())

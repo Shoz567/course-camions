@@ -9,12 +9,12 @@ extends PhysicsTest
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
 ##     camions montres en decor aussi ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
-##   - roue crantee : ouvre l'ecran des parametres, - le referme ; rouvert, il
-##     montre le schema de la manette (les 8 commandes de la demande, legendes
+##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
+##     il montre la DualSense (les commandes Forza de la demande, legendes
 ##     sans chevauchement), regle le volume reel, et RETOUR ramene au menu ;
 ##   - camera d'orbite : tourne autour de la grille, a distance constante ;
-##   - + (Start) et A Switch (JOY_BUTTON_B, ajoute a ui_accept) lancent la
-##     course : signal avec le nombre choisi, ecrit dans GameState.
+##   - Options et Croix (JOY_BUTTON_A, ui_accept de Godot) lancent la course :
+##     signal avec le nombre choisi, ecrit dans GameState.
 
 var _menu: MainMenu
 var _launches: Array[int] = []
@@ -123,8 +123,8 @@ func _test_tick(t: int) -> void:
 		64:
 			var back := _menu.settings.find_child("Back", true, false) as Button
 			_seen["settings_open"] = _menu.settings.visible and back.has_focus()
-			_pad(JOY_BUTTON_BACK, true)
-		65: _pad(JOY_BUTTON_BACK, false)
+			_pad(JOY_BUTTON_B, true)
+		65: _pad(JOY_BUTTON_B, false)
 		68: _seen["settings_closed"] = not _menu.settings.visible and _menu.settings_button.has_focus()
 		72: _click(_menu.settings_button, true)
 		73: _click(_menu.settings_button, false)
@@ -145,8 +145,8 @@ func _test_tick(t: int) -> void:
 		114:
 			_seen["start"] = _launches.duplicate()
 			_menu.start_button.grab_focus()
-		116: _pad(JOY_BUTTON_B, true)
-		118: _pad(JOY_BUTTON_B, false)
+		116: _pad(JOY_BUTTON_A, true)
+		118: _pad(JOY_BUTTON_A, false)
 	if t >= 3:
 		_cam_dist.append(Vector2(cam.x - _menu._orbit_center.x, cam.z - _menu._orbit_center.z).length())
 	if t == 100:
@@ -170,20 +170,23 @@ func _test_finish() -> void:
 	check("son : un clic coupe le bus Master", _seen["mute"] == [true, "SON : OFF"], str(_seen["mute"]))
 	check("son : un second clic le remet", _seen["unmute"] == false)
 	check("roue crantee : panneau ouvert, FERMER selectionne", _seen["settings_open"])
-	check("- referme le panneau, focus sur la roue", _seen["settings_closed"])
+	check("Rond referme le panneau, focus sur la roue", _seen["settings_closed"])
 	check("parametres : schema de la manette affiche", _seen.get("diagram", false))
 	var callouts: Array = _seen.get("callouts", [])
 	var keys := {}
 	for c: Dictionary in callouts:
 		keys[c["key"]] = c["text"]
-	var wanted := {"A / Y": "Accélérer", "B": "Freiner / marche arrière", "R / ZR": "Dérapage (drift)",
-		"L": "Nitro boost (recharge 4 s)", "ZL": "Drop de cargo (recharge 30 s)",
-		"X": "Changer de vue (1re / 3e personne)", "-": "Reset sur la piste", "Croix": "Klaxon"}
+	var wanted := {"R2": "Accélérer (progressif)", "L2": "Freiner / marche arrière",
+		"Croix": "Frein à main / dérapage (drift)", "R1": "Frein à main / dérapage (drift)",
+		"Carré": "Nitro boost (recharge 4 s)",
+		"Triangle": "Largage de remorque (recharge 30 s)", "L1": "Klaxon",
+		"R3 / stick droit": "Changer de vue (1re / 3e personne)", "Options": "Reset sur la piste",
+		"Create / pavé tactile": "Reset sur la piste"}
 	var missing := []
 	for k: String in wanted:
 		if keys.get(k, "") != wanted[k]:
 			missing.append(k)
-	check("schema : les 8 commandes de la demande", missing.is_empty(), "manquent %s" % [missing])
+	check("schema DualSense : les commandes Forza de la demande", missing.is_empty(), "manquent %s" % [missing])
 	var overlap := false
 	var outside := false
 	var bounds := Rect2(0, 0, ControllerDiagram.W, ControllerDiagram.H)
@@ -199,15 +202,15 @@ func _test_finish() -> void:
 	check_above("camera en orbite : deplacement en 97 ticks (m)", _seen["cam_moved"], 3.0)
 	check_below("orbite a distance constante (ecart m)", _cam_dist.max() - _cam_dist.min(), 0.01)
 	check_above("la camera vise le centre de la grille (cos)", _seen["cam_aim"], 0.999)
-	check("A Switch (JOY_BUTTON_B) valide dans le menu",
-		InputMap.action_has_event("ui_accept", _switch_a()))
-	check("+ (Start) : lance la course a 3", _seen["start"] == [3], str(_seen["start"]))
-	check("A Switch sur COMMENCER : relance", _launches == [3, 3], str(_launches))
+	var cross := InputEventJoypadButton.new()
+	cross.device = -1
+	cross.button_index = JOY_BUTTON_A
+	var circle := InputEventJoypadButton.new()
+	circle.device = -1
+	circle.button_index = JOY_BUTTON_B
+	check("Croix valide, Rond revient (ui_accept / ui_cancel)", InputMap.action_has_event("ui_accept", cross)
+		and InputMap.action_has_event("ui_cancel", circle))
+	check("Options : lance la course a 3", _seen["start"] == [3], str(_seen["start"]))
+	check("Croix sur COMMENCER : relance", _launches == [3, 3], str(_launches))
 	check("choix ecrit dans GameState", GameState.requested_players == 3, str(GameState.requested_players))
 
-
-func _switch_a() -> InputEventJoypadButton:
-	var e := InputEventJoypadButton.new()
-	e.device = -1
-	e.button_index = JOY_BUTTON_B
-	return e

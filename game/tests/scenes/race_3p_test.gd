@@ -27,11 +27,11 @@ func _pad(device: int, button: JoyButton, pressed: bool) -> void:
 
 func _test_tick(t: int) -> void:
 	if t == 190:
-		_pad(1, JOY_BUTTON_B, true)
+		_send_axis(1, JOY_AXIS_TRIGGER_RIGHT, 1.0)
 
 
 func _test_finish() -> void:
-	_pad(1, JOY_BUTTON_B, false)
+	_send_axis(1, JOY_AXIS_TRIGGER_RIGHT, 0.0)
 	check("3 joueurs", _players.size() == 3, "%d" % _players.size())
 	var split := _scene.get("split") as GridContainer
 	check("grille 2 x 2 : 4 cases pour 3 joueurs", split != null and split.columns == 2 and split.get_child_count() == 4)
@@ -50,3 +50,11 @@ func _test_finish() -> void:
 	var label := _scene.get("_leader_label") as Label
 	check("camera TV : annonce du leader", label.text == "EN TETE : J2 DURAND", label.text)
 	check("pas de classement avant la premiere arrivee", _scene.call("standings_text") == "")
+
+
+func _send_axis(device: int, axis: JoyAxis, value: float) -> void:
+	var e := InputEventJoypadMotion.new()
+	e.device = device
+	e.axis = axis
+	e.axis_value = value
+	Input.parse_input_event(e)

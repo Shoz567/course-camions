@@ -73,33 +73,32 @@ frames. À prévoir dès la phase 1 dans `to_bytes()`, à implémenter en phase 
 
 ## 3. Mapping
 
-Profil **Mario Kart 8 Deluxe, disposition Switch** (décidé le 2026-09-28 pour le
-playtest). Godot (SDL) nomme les boutons **par position** :
-`JOY_BUTTON_A` = bas (B Switch), `JOY_BUTTON_B` = droite (A Switch),
-`JOY_BUTTON_X` = gauche (Y Switch), `JOY_BUTTON_Y` = haut (X Switch),
-`JOY_BUTTON_BACK` = − (Select). Chaque action est une **liste** de boutons
-exportée par `DeviceInputSource` : réaffectable sans code.
+Profil **Forza Horizon, manette PlayStation 5 DualSense** (décidé le
+2026-09-30 après le playtest ; avant : Mario Kart 8 sur Switch). Godot (SDL)
+nomme les boutons **par position** : `JOY_BUTTON_A` = bas (Croix),
+`JOY_BUTTON_B` = droite (Rond), `JOY_BUTTON_X` = gauche (Carré),
+`JOY_BUTTON_Y` = haut (Triangle), `JOY_BUTTON_BACK` = Create,
+`JOY_BUTTON_START` = Options. Une manette Xbox ou Switch fonctionne à la même
+position. Chaque action est une **liste** de boutons exportée par
+`DeviceInputSource` : réaffectable sans code.
 
-| Action | Manette (Switch) | Clavier J1 (flèches) | Clavier J2 / solo (ZQSD) |
+| Action | Manette (DualSense) | Clavier J1 (flèches) | Clavier J2 / solo (ZQSD) |
 |---|---|---|---|
 | `steer` | stick gauche, axe X | ← / → | Q / D |
-| `throttle` | **A ou Y**, ou ZR analogique | ↑ | Z |
-| `brake` (puis recul à l'arrêt) | **B** | ↓ | S |
-| `handbrake` (drift) | **R**, ou **ZR tant qu'on accélère au bouton** (A + ZR, comme MK8) | Ctrl droit | Espace |
-| `boost` | **L** (1,5 s, recharge 4 s) | Maj droite | Maj gauche |
-| `cargo` (largage, recharge 30 s) | **ZL** (au franchissement du seuil) | deux touches à gauche de Maj droite (;) | E |
-| `honk` (klaxon) | **croix** (n'importe quelle direction) | touche à gauche de Maj droite (!) | H |
-| caméra 1re / 3e personne | **X** (local, hors `InputFrame`) | touche suivante (:) | C |
-| `reset` | **−** | Retour arrière | R |
-| rejouer après l'arrivée | + (Start) | Entrée | Entrée |
+| `throttle` | **R2**, analogique | ↑ | Z |
+| `brake` (puis recul à l'arrêt) | **L2**, analogique | ↓ | S |
+| `handbrake` (frein à main, drift) | **Croix** ou **R1** | Ctrl droit | Espace |
+| `boost` (nitro) | **Carré** (1,5 s, recharge 4 s) | Maj droite | Maj gauche |
+| `cargo` (largage de la remorque, recharge 30 s) | **Triangle** | deux touches à gauche de Maj droite (;) | E |
+| `honk` (klaxon) | **L1** | touche à gauche de Maj droite (!) | H |
+| caméra 1re / 3e personne | **R3**, ou un coup franc du stick droit (local, hors `InputFrame`) | touche suivante (:) | C |
+| `reset` | **Options**, **Create** ou **pavé tactile** | Retour arrière | R |
+| rejouer après l'arrivée | Options | Entrée | Entrée |
+| revenir au menu après l'arrivée | Create | Échap | Échap |
 
-Deux conflits de la demande, résolus ainsi : ZR sert à accélérer **et** à
-drifter (→ accélérateur quand aucun bouton d'accélération n'est tenu, drift
-sinon) ; « klaxon : Select » et « reset : − » désignent le **même** bouton sur
-une manette Nintendo (`JOY_BUTTON_BACK`) → − reste le reset. Le 2026-09-29, ZL
-passe au largage de cargo et le klaxon sur la croix directionnelle (demande
-après le playtest à 4). Le schéma de la manette est affiché dans l'écran des
-paramètres du menu (`ControllerDiagram`).
+Rond n'a pas d'effet en course. Le schéma de la manette (DualSense dessinée,
+légendes reliées à chaque commande) est affiché dans l'écran des paramètres du
+menu (`ControllerDiagram`).
 
 En solo, le clavier accepte ZQSD **et** les flèches. En écran partagé, chaque
 joueur a sa manette (joueur N = device N − 1, de 0 à 3) ; J1 et J2 ont en plus
@@ -107,12 +106,12 @@ leur jeu de touches (flèches, ZQSD) : deux joueurs peuvent partager un clavier.
 J3 et J4 n'ont que leur manette (`KeyboardInputSource.Layout.NONE`).
 
 **Menu principal** (`ui/main_menu.tscn`) : navigation par les actions `ui_*` de
-Godot (croix, stick, flèches, souris). A Switch est le bouton **est**
-(`JOY_BUTTON_B`), que Godot range dans `ui_cancel` : le menu l'ajoute à
-`ui_accept` (et le retire de `ui_cancel`) au démarrage, A et B valident tous
-les deux. L / R changent le nombre de joueurs, + (Start) commence, − ferme les
-paramètres. En course : Échap revient au menu à tout moment ; après l'arrivée,
-Start / Entrée rejoue et − revient au menu.
+Godot (croix directionnelle, stick, flèches, souris). Godot 4.7 ne met aucun
+bouton de manette dans `ui_accept` ni `ui_cancel` : le menu y ajoute Croix
+(valider) et Rond (revenir) au démarrage. L1 / R1 changent le nombre de joueurs,
+Options commence, Rond ou Create ferment les paramètres. En course : Échap
+revient au menu à tout moment ; après l'arrivée, Options / Entrée rejoue et
+Create revient au menu.
 
 - **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
   utile), puis courbe de réponse légèrement exponentielle pour la précision en

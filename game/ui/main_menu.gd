@@ -7,10 +7,11 @@ extends Node3D
 ## sur le toit d'une tour de Cyber City, sous les projecteurs ; camera en orbite
 ## lente, decalee pour montrer les camions a droite, le menu a gauche.
 ##
-## Manette : croix ou stick pour naviguer, A (ou B) pour valider, L / R pour
-## changer le nombre de joueurs, + (Start) pour commencer, - pour fermer les
-## parametres. Clavier et souris : fleches + Entree, touches 1 a 4, clic ;
-## Echap ferme les parametres, sinon quitte le jeu.
+## Manette (PlayStation, positions SDL) : croix directionnelle ou stick pour
+## naviguer, Croix pour valider, Rond ou Create pour fermer les parametres,
+## L1 / R1 pour changer le nombre de joueurs, Options pour commencer.
+## Clavier et souris : fleches + Entree, touches 1 a 4, clic ; Echap ferme les
+## parametres, sinon quitte le jeu.
 ##
 ## COMMENCER ecrit le choix dans GameState.requested_players puis charge
 ## dev/race.tscn (LocalRace le lit). Le menu ne touche pas a la physique : les
@@ -65,19 +66,6 @@ func _ready() -> void:
 	_place_camera()
 
 
-## Manette Switch (positions SDL) : A est le bouton EST (JOY_BUTTON_B), que
-## Godot range dans ui_cancel. Au menu, A et B valident tous les deux.
-static func _setup_menu_input() -> void:
-	var accept := InputEventJoypadButton.new()
-	accept.device = -1
-	accept.button_index = JOY_BUTTON_B
-	if not InputMap.action_has_event("ui_accept", accept):
-		InputMap.action_add_event("ui_accept", accept)
-	for e: InputEvent in InputMap.action_get_events("ui_cancel"):
-		var jb := e as InputEventJoypadButton
-		if jb != null and jb.button_index == JOY_BUTTON_B:
-			InputMap.action_erase_event("ui_cancel", e)
-
 
 ## Les 4 camions sur le plateau tournant, geles : du decor, pas de physique.
 func _spawn_trucks() -> void:
@@ -118,6 +106,18 @@ func _place_camera() -> void:
 	camera.look_at(_orbit_center, Vector3.UP)
 
 
+## Godot 4.7 ne met aucun bouton de manette dans ui_accept / ui_cancel : le
+## menu ajoute Croix (bas, JOY_BUTTON_A) pour valider et Rond (droite,
+## JOY_BUTTON_B) pour revenir, comme sur PlayStation.
+static func _setup_menu_input() -> void:
+	for pair: Array in [["ui_accept", JOY_BUTTON_A], ["ui_cancel", JOY_BUTTON_B]]:
+		var e := InputEventJoypadButton.new()
+		e.device = -1
+		e.button_index = pair[1]
+		if not InputMap.action_has_event(pair[0], e):
+			InputMap.action_add_event(pair[0], e)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	var pad := event as InputEventJoypadButton
@@ -134,6 +134,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				return
 		get_viewport().set_input_as_handled()
 	elif pad != null and pad.pressed:
+		# Rond (ui_cancel par defaut de Godot) : ferme les parametres
+		if event.is_action_pressed("ui_cancel") and settings.visible:
+			toggle_settings()
+			get_viewport().set_input_as_handled()
+			return
 		match pad.button_index:
 			JOY_BUTTON_LEFT_SHOULDER:
 				select_players(selected_players - 1)
@@ -329,7 +334,7 @@ func _build_ui() -> void:
 	_gear.offset_bottom = -10
 	settings_button.add_child(_gear)
 
-	var help := _label("Manette : croix pour choisir, A pour valider, L / R nombre de joueurs, + commencer"
+	var help := _label("Manette : croix directionnelle pour choisir, Croix valider, Rond retour, L1 / R1 joueurs, Options commencer"
 			+ "      Clavier : fleches, Entree, 1 a 4, Echap pour quitter", 18, 4)
 	help.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	help.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -367,7 +372,7 @@ func _build_settings() -> Control:
 	var head := _label("PARAMÈTRES", 40, 6)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(head)
-	var sub := _label("Commandes — manette disposition Switch (profil Mario Kart 8)", 20, 0)
+	var sub := _label("Commandes — manette PlayStation 5 DualSense (disposition Forza Horizon)", 20, 0)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.modulate = Color(0.8, 0.82, 0.88)
 	box.add_child(sub)

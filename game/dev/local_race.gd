@@ -3,7 +3,7 @@ extends Node3D
 ## Course locale de 3 tours sur la piste n°1, de 1 a 4 joueurs.
 ##
 ##   1 joueur    : plein ecran, n'importe quelle manette + tout le clavier.
-##   2 joueurs   : ecran partage haut / bas (VBoxContainer, style MK8).
+##   2 joueurs   : ecran partage haut / bas (VBoxContainer).
 ##   3-4 joueurs : grille 2 x 2 (GridContainer). A 3, la 4e case suit le
 ##                 camion en tete (camera TV).
 ##
@@ -16,7 +16,7 @@ extends Node3D
 ## §4), son camion, sa camera, son HUD. Compte a rebours commun, puis course :
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
-## arrives : Start / Entree relance, - / Echap revient au menu (Echap a tout
+## arrives : Options / Entree relance, Create / Echap revient au menu (Echap a tout
 ## moment).
 ##
 ## Le nombre de joueurs vient du menu principal (GameState.requested_players)
@@ -38,7 +38,7 @@ const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT"
 ## Couleur des boites quand le modele est absent (clone neuf).
 const TINTS: Array[Color] = [Color(0.15, 0.35, 0.9), Color(0.85, 0.12, 0.1),
 	Color(0.95, 0.8, 0.1), Color(0.15, 0.7, 0.25)]
-const HELP_SOLO := "Manette (disposition Switch, style MK8) : A ou Y accelerer, B freiner / reculer, R ou A + ZR drift, L boost,\nZL cargo, croix klaxon, X camera, - reset.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, R reset.   Echap : menu"
+const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro,\nTriangle remorque, L1 klaxon, R3 camera, Options reset.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, R reset.   Echap : menu"
 const HELP_SPLIT: PackedStringArray = [
 	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset)",
 	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset)",
@@ -288,7 +288,7 @@ func _process(_delta: float) -> void:
 			p.hud.set_center_message(str(maxi(3 - floori(elapsed / 60.0), 1)), Color(1.0, 0.85, 0.2))
 		elif r != null and r.finished:
 			var rank := _finish_order.find(p.truck) + 1
-			var more := "\nStart / Entree : rejouer   - / Echap : menu" if state == State.FINISHED \
+			var more := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \
 					else "\nen attente des autres"
 			var place := ("%de" % rank) if player_count > 1 else "ARRIVEE"
 			if player_count > 1 and rank == 1:

@@ -44,16 +44,16 @@ func _test_tick(t: int) -> void:
 	var race: RaceLaps = _scene.get("race")
 	if _started_at < 0 and race.is_started():
 		_started_at = t
-	# apres le depart : la manette 1 (device 1) accelere (A Switch) et bascule
-	# sa camera (X Switch)
+	# apres le depart : la manette 1 (device 1) accelere (R2) et bascule sa
+	# camera (R3)
 	# (220 ticks de gaz : ~40 m, loin du seuil de 20 m)
 	if t == 200:
-		_send_button(1, JOY_BUTTON_B, true)
+		_send_axis(1, JOY_AXIS_TRIGGER_RIGHT, 1.0)
 	elif t == 420:
-		_send_button(1, JOY_BUTTON_B, false)
-		_send_button(1, JOY_BUTTON_Y, true)
+		_send_axis(1, JOY_AXIS_TRIGGER_RIGHT, 0.0)
+		_send_button(1, JOY_BUTTON_RIGHT_STICK, true)
 	elif t == 422:
-		_send_button(1, JOY_BUTTON_Y, false)
+		_send_button(1, JOY_BUTTON_RIGHT_STICK, false)
 
 
 func _test_finish() -> void:
@@ -82,3 +82,11 @@ func _test_finish() -> void:
 	check("chaque camera suit son camion", c1.target == _p1 and c2.target == _p2)
 	check("les cameras sont dans des vues distinctes",
 		c1.get_camera().get_viewport() != c2.get_camera().get_viewport())
+
+
+func _send_axis(device: int, axis: JoyAxis, value: float) -> void:
+	var e := InputEventJoypadMotion.new()
+	e.device = device
+	e.axis = axis
+	e.axis_value = value
+	Input.parse_input_event(e)

@@ -48,7 +48,9 @@ static func _ensure_init() -> void:
 	_player.bus = &"Master"
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null and tree.root != null:
-		tree.root.add_child(_player)
+		# differe : au _ready du menu, la racine est occupee a ajouter la scene
+		# (add_child direct refuse, et plus aucun son ne sortait ensuite)
+		tree.root.add_child.call_deferred(_player)
 
 
 static func _play(s: AudioStreamWAV) -> void:
