@@ -48,6 +48,8 @@ signal cargo_requested
 signal wall_unstuck(normal: Vector3)
 ## Vient de percuter une remorque larguee.
 signal cargo_hit_taken
+## Vient d'etre ralenti par la piste (flaque, panneau percute...).
+signal slowed_down
 ## La remorque vient d'etre detachee / raccrochee.
 signal trailer_detached
 signal trailer_reattached
@@ -131,6 +133,11 @@ var _heading_ready: bool = false
 var _shove_ticks: Dictionary = {}
 ## Remorque larguee (pouvoir cargo) : tracteur seul.
 var _trailer_detached: bool = false
+## Ralentissement impose par la piste : facteur immediat en attente, puis
+## deceleration supplementaire pendant quelques ticks.
+var _slow_factor_pending: float = 1.0
+var _slow_ticks: int = 0
+var _slow_decel: float = 0.0
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 
@@ -309,6 +316,15 @@ func is_trailer_detached() -> bool:
 
 ## Remorque larguee percutee (DetachedTrailer) : au prochain tick, vitesse
 ## reduite a cargo_hit_speed_factor et coup de lacet du cote de l'obstacle.
+## Ralentissement impose par la piste (flaque d'eau, panneau percute) : au
+## prochain tick, vitesse horizontale x speed_factor, puis extra_decel_ms2 de
+## freinage pendant `ticks`. Le plus fort des ralentissements en attente gagne.
+func apply_slowdown(speed_factor: float, ticks: int, extra_decel_ms2: float) -> void:
+	_slow_factor_pending = minf(_slow_factor_pending, clampf(speed_factor, 0.0, 1.0))
+	_slow_ticks = maxi(_slow_ticks, ticks)
+	_slow_decel = maxf(_slow_decel, extra_decel_ms2)
+
+
 func cargo_hit(crate_position: Vector3) -> void:
 	_cargo_hit_pending = true
 	_cargo_hit_from = crate_position
@@ -484,6 +500,17 @@ func _physics_process(_delta: float) -> void:
 	if _cargo_hit_pending:
 		_cargo_hit_pending = false
 		_apply_cargo_hit(t, up)
+	if _slow_factor_pending < 1.0:
+		var flat := linear_velocity - up * linear_velocity.dot(up)
+		apply_central_impulse(-flat * (1.0 - _slow_factor_pending) * mass)
+		_slow_factor_pending = 1.0
+		slowed_down.emit()
+	if _slow_ticks > 0:
+		_slow_ticks -= 1
+		if v_fwd > 2.0:
+			apply_central_force(-fwd * _slow_decel * mass)
+		if _slow_ticks == 0:
+			_slow_decel = 0.0
 
 	# saut de plaque : impulsion verticale ; a la reception (apres un vrai vol),
 	# chute ramenee a jump_landing_max_down_ms et suspension plus amortie.

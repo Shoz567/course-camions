@@ -74,6 +74,7 @@ Ces valeurs-là sont des **choix de design**, pas des mesures.
 | Rayon des virages | **120 à 160 m** | décision du 2026-09-29 ; avant : 100 à 120 m. Plusieurs ensembles de 16 m doivent pouvoir déraper côte à côte sans se coincer dans les murs |
 | Largeur de la grille de départ | 4 camions de front, J1 et J2 au centre (±10 m), J3 et J4 à l'extérieur (±30 m, à 7,5 m des murs), rangs espacés de 20 m | 20 m entre deux camions voisins : 4 ensembles partent de front sans se toucher, même remorques braquées ; un ensemble (16,4 m) + marge de freinage entre rangs |
 | Dévers | au plus **9°**, raccords de **120 m**, chaussée pivotant sur son bord **bas** | décision du 2026-09-29 : sur 75 m de large, un dévers autour de l'axe enfonçait le bord intérieur sous le sol (rétrécissement visible) ; le bord haut monte de 37,5 × sin(dévers), d'où des raccords longs |
+| Relief | **15 m** de dénivelé sur le tracé, pente ≤ **7,7 %** (mesurées par `track_hazards_test`, bornes 12 m et 9 %) | décision du 2026-09-30 : gérer l'inertie en côte et en descente ; raccords en S, jamais de marche |
 | Durée d'un tour | 60 à 90 s | assez court pour que les écarts restent lisibles, assez long pour varier les virages |
 | Épaisseur minimale d'un mur | **0,3 m** | choix de design (2026-09-26) : le spike V2 n'a mesuré aucune traversée jusqu'à 0,1 m à 200 km/h ; 0,3 m est la glissière de son protocole, avec de la marge |
 | Hauteur des murs | **2,8 m** | décision du 2026-09-28 : au-dessus du bas de la caisse de remorque (1,8 m), aucun passage par-dessus bord |

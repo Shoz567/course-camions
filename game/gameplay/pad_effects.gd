@@ -6,7 +6,11 @@ extends Node
 ##   - plaque de boost : +boost_extra_kmh tout de suite, vitesse max relevee
 ##     d'autant pendant boost_ticks (le camion joue son son de boost) ;
 ##   - rampe de saut : vitesse verticale portee a jump_up_speed_ms, assiette
-##     automatique renforcee jusqu'a la reception, reception amortie.
+##     automatique renforcee jusqu'a la reception, reception amortie ;
+##   - flaque d'eau : vitesse x puddle_speed_factor, puis freinage
+##     supplementaire pendant puddle_ticks (fort ralentissement temporaire) ;
+##   - panneau percute : vitesse divisee par 2 (sign_speed_factor), puis
+##     freinage supplementaire ; le panneau, lui, s'envole (RoadsideSign).
 ## Une meme plaque ne redeclenche pas pour le meme camion avant cooldown_ticks.
 
 @export var track: TrackBlockout
@@ -14,6 +18,12 @@ extends Node
 @export var boost_ticks: int = 90            # 1,5 s
 @export var jump_up_speed_ms: float = 8.0
 @export var cooldown_ticks: int = 60
+@export var puddle_speed_factor: float = 0.7
+@export var puddle_ticks: int = 45
+@export var puddle_decel_ms2: float = 5.0
+@export var sign_speed_factor: float = 0.5
+@export var sign_ticks: int = 30
+@export var sign_decel_ms2: float = 3.0
 
 ## Dernier declenchement : "b3:<id du camion>" -> tick physique.
 var _last: Dictionary = {}
@@ -25,6 +35,8 @@ func _ready() -> void:
 		return
 	track.boost_pad_entered.connect(_on_boost_pad)
 	track.jump_pad_entered.connect(_on_jump_pad)
+	track.puddle_entered.connect(_on_puddle)
+	track.sign_hit.connect(_on_sign)
 
 
 func _on_boost_pad(body: Node3D, index: int) -> void:
@@ -37,6 +49,18 @@ func _on_jump_pad(body: Node3D, index: int) -> void:
 	var truck := body as Truck
 	if truck != null and _fresh(truck, "j%d" % index):
 		truck.jump_pad_launch(jump_up_speed_ms)
+
+
+func _on_puddle(body: Node3D, index: int) -> void:
+	var truck := body as Truck
+	if truck != null and _fresh(truck, "p%d" % index):
+		truck.apply_slowdown(puddle_speed_factor, puddle_ticks, puddle_decel_ms2)
+
+
+func _on_sign(body: Node3D, index: int) -> void:
+	var truck := body as Truck
+	if truck != null and _fresh(truck, "s%d" % index):
+		truck.apply_slowdown(sign_speed_factor, sign_ticks, sign_decel_ms2)
 
 
 func _fresh(truck: Truck, pad: String) -> bool:

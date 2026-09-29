@@ -22,6 +22,8 @@ extends Node3D
 ##   "jump": m      rampe de saut a cette distance du debut du segment ;
 ##   "jump_offset": m  son decalage lateral (defaut : jump_offset).
 ##   "boost": [[m, lateral], ...]  plaques de boost (distance, decalage).
+##   "puddle": [[m, lateral, rayon], ...]  flaques d'eau (ralentissement).
+##   "signs": [[m, lateral], ...]  panneaux ejectables (vitesse / 2).
 ##   "arch": m      arche lumineuse au-dessus de la piste a cette distance ;
 ##   "arch_label": texte de son enseigne.
 ##
@@ -45,6 +47,10 @@ signal checkpoint_passed(truck: Node3D, index: int)
 signal boost_pad_entered(truck: Node3D, index: int)
 ## Un camion atteint le haut de la rampe de saut `index`.
 signal jump_pad_entered(truck: Node3D, index: int)
+## Un camion roule dans la flaque d'eau `index`.
+signal puddle_entered(truck: Node3D, index: int)
+## Un camion percute le panneau `index` (qui s'envole).
+signal sign_hit(truck: Node3D, index: int)
 
 const ROAD_LAYER := 1          # couche 1 `world` (VEHICLE_SPEC §7)
 const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
@@ -128,6 +134,8 @@ var _length: float = 0.0
 var _jumps: Array[Vector2] = []         # (s du tremplin, decalage)
 var _boosts: Array[Vector2] = []        # (s de la plaque, decalage)
 var _arches: Array[Dictionary] = []     # {s, label}
+var _puddles: Array[Vector3] = []       # (s, decalage, rayon)
+var _signs: Array[Vector2] = []         # (s, decalage)
 var _auto_lengths: PackedFloat32Array = []
 
 
@@ -278,6 +286,31 @@ func arch_s(k: int) -> float:
 	return float(_arches[k]["s"])
 
 
+func puddle_count() -> int:
+	_ensure_built()
+	return _puddles.size()
+
+
+## Centre de la flaque k, pose sur la chaussee ; rayon dans `puddle_radius`.
+func puddle_transform(k: int) -> Transform3D:
+	_ensure_built()
+	return frame_at(index_at_s(_puddles[k].x), _puddles[k].y, 0.0)
+
+
+func puddle_radius(k: int) -> float:
+	return _puddles[k].z
+
+
+func sign_count() -> int:
+	_ensure_built()
+	return _signs.size()
+
+
+## Le panneau k (noeud RoadsideSign), ou null avant la construction.
+func sign_node(k: int) -> RoadsideSign:
+	return get_node_or_null("Signs/Sign%d" % k) as RoadsideSign
+
+
 func jump_pad_count() -> int:
 	_ensure_built()
 	return _jumps.size()
@@ -338,6 +371,8 @@ func _build_centerline() -> bool:
 	_jumps.clear()
 	_boosts.clear()
 	_arches.clear()
+	_puddles.clear()
+	_signs.clear()
 	var seg_start := 0.0
 	for k in segments.size():
 		var seg: Dictionary = segments[k]
@@ -345,6 +380,10 @@ func _build_centerline() -> bool:
 			_jumps.append(Vector2(seg_start + float(seg["jump"]), float(seg.get("jump_offset", jump_offset))))
 		for b: Array in seg.get("boost", []):
 			_boosts.append(Vector2(seg_start + float(b[0]), float(b[1])))
+		for pd: Array in seg.get("puddle", []):
+			_puddles.append(Vector3(seg_start + float(pd[0]), float(pd[1]), float(pd[2])))
+		for sg: Array in seg.get("signs", []):
+			_signs.append(Vector2(seg_start + float(sg[0]), float(sg[1])))
 		if seg.has("arch"):
 			_arches.append({"s": seg_start + float(seg["arch"]), "label": String(seg.get("arch_label", ""))})
 		seg_start += lengths[k]
@@ -555,11 +594,17 @@ func _build_geometry() -> void:
 	for k in _arches.size():
 		_build_arch(arches, float(_arches[k]["s"]), String(_arches[k]["label"]), k)
 
+	var signs := _group("Signs")
+	for k in _signs.size():
+		_build_sign(signs, _signs[k].x, _signs[k].y, k)
+
 	var pads := _group("Pads")
 	for k in _jumps.size():
 		_build_jump(pads, _jumps[k].x, _jumps[k].y, k)
 	for k in _boosts.size():
 		_build_boost_pad(pads, _boosts[k].x, _boosts[k].y, k)
+	for k in _puddles.size():
+		_build_puddle(pads, _puddles[k], k)
 
 	_build_reset_zones(zones)
 	_build_checkpoints(checkpoints)
@@ -763,6 +808,74 @@ func _on_reset_zone_body_entered(body: Node3D) -> void:
 
 func _on_reset_zone_body_exited(body: Node3D) -> void:
 	truck_exited_reset_zone.emit(body)
+
+
+func _on_puddle_body_entered(body: Node3D, index: int) -> void:
+	puddle_entered.emit(body, index)
+
+
+func _on_sign_hit(truck: Truck, index: int) -> void:
+	sign_hit.emit(truck, index)
+
+
+## Flaque d'eau : disque irregulier (bord bruite, deterministe) a ras de la
+## chaussee, miroir sombre aux rides animees ; zone de declenchement
+## cylindrique. Aucune collision.
+func _build_puddle(parent: Node3D, p: Vector3, index: int) -> void:
+	var area := Area3D.new()
+	area.name = "Puddle%d" % index
+	area.collision_layer = 0
+	area.collision_mask = 1 << (VEHICLE_LAYER - 1)
+	area.monitorable = false
+	var cs := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = p.z
+	cyl.height = 3.0
+	cs.shape = cyl
+	cs.position = Vector3(0.0, 1.0, 0.0)
+	area.add_child(cs)
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 28
+	for k in n:
+		var a0 := TAU * k / n
+		var a1 := TAU * (k + 1) / n
+		var r0 := p.z * (1.0 + 0.12 * sin(a0 * 3.0 + index) + 0.06 * sin(a0 * 7.0 + index * 2.0))
+		var r1 := p.z * (1.0 + 0.12 * sin(a1 * 3.0 + index) + 0.06 * sin(a1 * 7.0 + index * 2.0))
+		# ellipse allongee le long de la piste
+		var v0 := Vector3(cos(a0) * r0 * 0.75, 0.05, sin(a0) * r0 * 1.2)
+		var v1 := Vector3(cos(a1) * r1 * 0.75, 0.05, sin(a1) * r1 * 1.2)
+		for v: Array in [[Vector3(0.0, 0.05, 0.0), Vector2(float(k) / n, 0.0)], [v1, Vector2(float(k + 1) / n, 1.0)],
+				[v0, Vector2(float(k) / n, 1.0)]]:
+			st.set_normal(Vector3.UP)
+			st.set_uv(v[1])
+			st.add_vertex(v[0])
+	var mi := MeshInstance3D.new()
+	mi.name = "Water"
+	mi.mesh = st.commit()
+	mi.material_override = preload("res://tracks/materials/puddle.tres")
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	area.add_child(mi)
+	area.transform = frame_at(index_at_s(p.x), p.y, 0.0)
+	area.body_entered.connect(_on_puddle_body_entered.bind(index))
+	parent.add_child(area)
+
+
+## Panneau ejectable au bord de la piste, face aux camions qui arrivent,
+## fleches vers le centre de la piste (le virage).
+func _build_sign(parent: Node3D, s: float, lateral: float, index: int) -> void:
+	var i := index_at_s(s)
+	var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
+	var r := t.cross(Vector3.UP).normalized()
+	var board := RoadsideSign.new()
+	board.name = "Sign%d" % index
+	# fleches vers le centre : a droite de la piste, elles pointent a gauche
+	# (vu de face, la gauche du panneau est la droite de la piste)
+	board.arrows_right = lateral < 0.0
+	var pos := _pos[i] + _right[i] * lateral
+	board.transform = Transform3D(Basis(r, Vector3.UP, -t), pos)
+	board.hit.connect(_on_sign_hit.bind(index))
+	parent.add_child(board)
 
 
 func _on_boost_pad_body_entered(body: Node3D, index: int) -> void:

@@ -141,13 +141,19 @@ crête, chicane en descente adoucie (R 160 m, ±35°), ligne droite du tremplin,
 épingle relevée (R 140 m, 9°), ligne droite des stands de 762 m. Le dévers
 pivote sur le bord bas, avec des raccords de 120 m : plus de chaussée enfoncée
 sous l'herbe (le « rétrécissement » après le départ). Grille de 4 de front
-(±10 m, ±30 m). **6 plaques de boost** (chevrons orange, +40 km/h pendant 1,5 s)
-et **2 rampes de saut** (chevrons cyan, impulsion verticale de 8 m/s, assiette
-renforcée en vol, réception amortie), effets appliqués par `PadEffects`. Zones de
+(±10 m, ±30 m). **6 plaques de boost** (chevrons orange, +40 km/h pendant 1,5 s),
+**4 rampes de saut** (chevrons cyan, impulsion verticale de 8 m/s, assiette
+renforcée en vol, réception amortie), **4 flaques d'eau** sur les mauvaises
+trajectoires (vitesse × 0,7 puis freinage) et **8 panneaux** à l'extérieur des
+virages (éjectés au contact, vitesse du camion divisée par 2) ; effets
+appliqués par `PadEffects`. Relief depuis le 2026-09-30 : 15 m de dénivelé,
+pente ≤ 7,7 % (grand virage en montée, montée de 10 m, S et chicane en
+descente, épingle en descente, bosse avant la ligne des stands). Zones de
 reset tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g,
 149,2 km/h), inchangées par la remorque (inertie imposée, VEHICLE_SPEC §5 bis).
 **Tour de référence : 85,2 s** (`track_01_lap_test`, pilote à 80 % de
-l'adhérence mesurée, semi-remorque articulée comprise, plaques sans effet).
+l'adhérence mesurée, camions à l'échelle 1,2, semi-remorque articulée
+comprise, plaques et pièges sans effet, relief compris).
 
 **Critères de sortie**
 - `[x]` Un joueur fait 3 tours chronométrés sur la piste n°1 (`make run` :

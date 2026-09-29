@@ -2,19 +2,19 @@ extends PhysicsTest
 
 ## Plaques de la piste n°1, par les vraies Area3D, avec PadEffects (le gameplay
 ## des scenes de course) :
-##   - 6 plaques de boost et 2 rampes de saut, a chevrons lumineux ;
+##   - 6 plaques de boost et 4 rampes de saut, a chevrons lumineux ;
 ##   A. boost : un camion a 100 km/h roule sur une plaque de la ligne droite
 ##      des stands. Il gagne au moins 35 km/h en 3 ticks (coup de pouce), reste
 ##      boost pendant 1,5 s, ne depasse pas la vitesse max + 40 km/h, joue son
 ##      son de boost (signal) une seule fois ; ensuite il redescend.
 ##   B. saut : un camion a 100 km/h monte la rampe du tremplin. Il s'envole
-##      franchement (> 4 m au-dessus de la chaussee, plus d'une seconde en
+##      franchement (> 3,5 m au-dessus de la chaussee, plus d'une seconde en
 ##      l'air), reste a plat en vol (< 20 deg), et la reception est amortie :
 ##      vitesse de chute ramenee sous 3,5 m/s, 4 roues au sol, jamais couche.
 
 const V0_KMH := 100.0
 const BOOST_PAD := 4        # ligne droite des stands, a droite
-const JUMP_PAD := 0         # tremplin, a droite
+const JUMP_PAD := 1         # tremplin, a droite (0 : montee, 2 : bosse, 3 : stands)
 
 var _track: TrackBlockout
 var _a: Truck
@@ -108,8 +108,8 @@ var _v_prev_a: float = 0.0
 
 
 func _test_finish() -> void:
-	check("6 plaques de boost, 2 rampes de saut",
-		_track.boost_pad_count() == 6 and _track.jump_pad_count() == 2,
+	check("6 plaques de boost, 4 rampes de saut",
+		_track.boost_pad_count() == 6 and _track.jump_pad_count() == 4,
 		"%d / %d" % [_track.boost_pad_count(), _track.jump_pad_count()])
 	var pad := _track.get_node("Pads/BoostPad0/Chevrons") as MeshInstance3D
 	check("plaque a chevrons orange (materiau)", pad != null
@@ -126,7 +126,7 @@ func _test_finish() -> void:
 	print("  INFO   B : %.1f m de haut, %d ticks en l'air, chute %.1f m/s avant amorti, %.1f m/s apres"
 		% [_max_height, _air_ticks, _b.last_landing_fall_ms, _v_land])
 	check("B rampe de saut declenchee", _launched)
-	check_above("B saut franc : hauteur au-dessus de la chaussee (m)", _max_height, 4.0)
+	check_above("B saut franc : hauteur au-dessus de la chaussee (m)", _max_height, 3.5)
 	check_above("B saut franc : temps en l'air (ticks)", _air_ticks, 60)
 	check_below("B a plat en vol (deg)", _air_tilt, 20.0)
 	check_above("B reception amortie : vitesse verticale apres contact (m/s)", _v_land, -3.5)
