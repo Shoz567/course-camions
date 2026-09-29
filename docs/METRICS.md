@@ -70,9 +70,10 @@ Ces valeurs-là sont des **choix de design**, pas des mesures.
 
 | Grandeur | Valeur | Justification |
 |---|---|---|
-| Largeur minimale de piste | **50 m** | décision du 2026-09-29 (méga-large, 1 à 4 joueurs) ; avant : 35 m (2026-09-28). Arène pour 4 semi-remorques de 16,4 m de front (VEHICLE_SPEC §2) |
+| Largeur minimale de piste | **75 m** | décision du 2026-09-29 (playtest à 4 : ×1,5) ; avant : 50 m, puis 35 m (2026-09-28). Arène pour 4 semi-remorques articulées de 16,4 m de front (VEHICLE_SPEC §2), remorques qui balaient jusqu'à 7 m de côté |
 | Rayon des virages | **120 à 160 m** | décision du 2026-09-29 ; avant : 100 à 120 m. Plusieurs ensembles de 16 m doivent pouvoir déraper côte à côte sans se coincer dans les murs |
-| Largeur de la grille de départ | 4 camions de front, J1 et J2 au centre (±6 m), J3 et J4 à l'extérieur (±18 m, à 7 m des murs), rangs espacés de 20 m | 12 m entre deux camions voisins : 4 ensembles partent de front sans se toucher ; un ensemble (16,4 m) + marge de freinage entre rangs |
+| Largeur de la grille de départ | 4 camions de front, J1 et J2 au centre (±10 m), J3 et J4 à l'extérieur (±30 m, à 7,5 m des murs), rangs espacés de 20 m | 20 m entre deux camions voisins : 4 ensembles partent de front sans se toucher, même remorques braquées ; un ensemble (16,4 m) + marge de freinage entre rangs |
+| Dévers | au plus **9°**, raccords de **120 m**, chaussée pivotant sur son bord **bas** | décision du 2026-09-29 : sur 75 m de large, un dévers autour de l'axe enfonçait le bord intérieur sous le sol (rétrécissement visible) ; le bord haut monte de 37,5 × sin(dévers), d'où des raccords longs |
 | Durée d'un tour | 60 à 90 s | assez court pour que les écarts restent lisibles, assez long pour varier les virages |
 | Épaisseur minimale d'un mur | **0,3 m** | choix de design (2026-09-26) : le spike V2 n'a mesuré aucune traversée jusqu'à 0,1 m à 200 km/h ; 0,3 m est la glissière de son protocole, avec de la marge |
 | Hauteur des murs | **2,8 m** | décision du 2026-09-28 : au-dessus du bas de la caisse de remorque (1,8 m), aucun passage par-dessus bord |

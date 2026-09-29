@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://tracks/materials/pad_chevrons.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/color_center = Color(0.55, 1, 1, 1)
+shader_parameter/color_edge = Color(0.05, 0.45, 1, 1)
+shader_parameter/base_color = Color(0.03, 0.05, 0.1, 1)
+shader_parameter/chevron_count = 4.0
+shader_parameter/slope = 0.9
+shader_parameter/speed = 1.4
+shader_parameter/glow = 2.6
+shader_parameter/border = 0.04

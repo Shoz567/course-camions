@@ -10,18 +10,19 @@ segments = Array[Dictionary]([{
 "type": "straight"
 }, {
 "angle": 180.0,
-"bank": 10.0,
+"bank": 7.0,
 "name": "Grand virage releve",
 "radius": 160.0,
 "type": "arc"
 }, {
+"boost": [[90.0, 16.0]],
 "climb": 6.0,
 "length": 200.0,
 "name": "Montee",
 "type": "straight"
 }, {
 "angle": -40.0,
-"bank": 6.0,
+"bank": 3.0,
 "name": "S en devers inverse (droite)",
 "radius": 140.0,
 "type": "arc"
@@ -31,48 +32,57 @@ segments = Array[Dictionary]([{
 "radius": 140.0,
 "type": "arc"
 }, {
+"boost": [[40.0, -16.0]],
 "length": 80.0,
 "name": "Crete",
 "type": "straight"
 }, {
-"angle": 45.0,
+"angle": 35.0,
 "climb": -3.0,
 "name": "Chicane gauche (descente)",
-"radius": 120.0,
+"radius": 160.0,
 "type": "arc"
 }, {
 "auto": true,
+"boost": [[40.0, 0.0]],
 "name": "Diagonale de la chicane (longueur calculee)",
 "type": "straight"
 }, {
-"angle": -45.0,
+"angle": -35.0,
 "climb": -3.0,
 "name": "Chicane droite (descente)",
-"radius": 120.0,
+"radius": 160.0,
 "type": "arc"
 }, {
-"jump": 120.0,
+"boost": [[150.0, -14.0]],
+"jump": 60.0,
+"jump_offset": 12.0,
 "length": 250.0,
-"line": 8.0,
+"line": 12.0,
 "name": "Ligne droite du tremplin (cote droit)",
 "type": "straight"
 }, {
 "angle": 180.0,
-"bank": 14.0,
+"bank": 9.0,
 "name": "Epingle relevee (drift)",
 "radius": 140.0,
 "type": "arc"
 }, {
 "auto": true,
+"boost": [[380.0, 16.0], [480.0, -16.0]],
+"jump": 200.0,
+"jump_offset": -14.0,
 "name": "Ligne droite des stands (longueur calculee)",
 "type": "straight"
 }])
-width = 50.0
+width = 75.0
+bank_blend_length = 120.0
 wall_height = 2.8
 wall_friction = 0.5
 jump_length = 14.0
 jump_angle_deg = 7.0
 jump_width = 14.0
-jump_offset = 8.0
+jump_offset = 12.0
+boost_pad_size = Vector2(12, 8)
 grid_row_spacing = 20.0
-grid_lateral = PackedFloat32Array(-6, 6, -18, 18)
+grid_lateral = PackedFloat32Array(-10, 10, -30, 30)

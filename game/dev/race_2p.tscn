@@ -1,9 +1,10 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://dev/local_race.gd" id="1"]
 [ext_resource type="PackedScene" path="res://tracks/track_01_blockout.tscn" id="2"]
 [ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="3"]
 [ext_resource type="Script" path="res://gameplay/race_laps.gd" id="4"]
+[ext_resource type="Script" path="res://gameplay/pad_effects.gd" id="pads"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_horizon_color = Color(0.66, 0.72, 0.78, 1)
@@ -39,4 +40,8 @@ track = NodePath("../Track01")
 
 [node name="AutoReset" type="Node" parent="." node_paths=PackedStringArray("track")]
 script = ExtResource("3")
+track = NodePath("../Track01")
+
+[node name="PadEffects" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("pads")
 track = NodePath("../Track01")

@@ -23,8 +23,8 @@ const LocalRace := preload("res://dev/local_race.gd")
 ## Faux pour les tests : COMMENCER emet `launch_requested` sans changer de scene.
 @export var auto_change_scene: bool = true
 @export var orbit_speed: float = 0.12        # rad/s
-@export var orbit_radius: float = 44.0
-@export var orbit_height: float = 11.0
+@export var orbit_radius: float = 64.0
+@export var orbit_height: float = 15.0
 
 @onready var track: TrackBlockout = $Track01
 @onready var camera: Camera3D = $OrbitCamera

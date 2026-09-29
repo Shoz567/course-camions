@@ -8,7 +8,8 @@ extends PhysicsTest
 ##    tombe dans l'herbe au pied de la crete (6 m plus bas), sont remis par
 ##    get_respawn_transform() : sur la chaussee, dans le sens de course
 ##    (cap a < 5 deg de la piste), sur leurs 4 roues.
-## C. Glissiere : un camion a 120 km/h qui vise le mur droit a 20 deg glisse le
+## C. Glissiere : un camion a 120 km/h, a 12 m du mur droit, qui le vise a
+##    20 deg, glisse le
 ##    long sans s'y encastrer : 60 ticks apres le premier contact, il avance
 ##    encore a >= 50 % de sa vitesse d'entree le long de la piste, sans jamais
 ##    grimper (< 1,5 m au-dessus de la chaussee) ni se coucher (< 45 deg).
@@ -49,13 +50,14 @@ func _test_setup() -> void:
 	var flip := _track.frame_at(i_hairpin, 5.0, 2.0)
 	flip.basis = flip.basis * Basis(Vector3.FORWARD, PI)
 	_flipped = _spawn(flip)
-	# B. dans l'herbe, 10 m a cote de la chaussee sur la crete (s = 600 m)
-	var i_crest := _index_at(600.0)
-	var side := _track.sample_position(i_crest) + _track.sample_right(i_crest) * 18.0
+	# B. dans l'herbe, 10 m a cote de la chaussee au milieu de la crete
+	var i_crest := _index_at(_segment_start("Crete") + 40.0)
+	var side := _track.sample_position(i_crest) + _track.sample_right(i_crest) * (_track.width / 2.0 + 10.0)
 	_fallen = _spawn(Transform3D(Basis.IDENTITY, Vector3(side.x, 0.2, side.z)))
-	# C. ligne droite de depart (s = 60 m), cap tourne de 20 deg vers la droite
+	# C. ligne droite de depart (s = 60 m), a 12 m du mur droit, cap tourne de
+	# 20 deg vers la droite
 	var i_wall := _index_at(60.0)
-	var xf := _track.frame_at(i_wall, 0.0, 0.0)
+	var xf := _track.frame_at(i_wall, _track.width / 2.0 - 12.0, 0.0)
 	xf.basis = Basis(Vector3.UP, -deg_to_rad(WALL_ANGLE_DEG)) * xf.basis
 	_wall = _spawn(xf)
 	_wall.linear_velocity = -xf.basis.z * WALL_KMH / 3.6
@@ -68,6 +70,23 @@ func _spawn(xf: Transform3D) -> Truck:
 	t.transform = xf
 	add_child(t)
 	return t
+
+
+## Abscisse du debut du segment nomme (droites auto comprises).
+func _segment_start(seg_name: String) -> float:
+	var s := 0.0
+	var auto := 0
+	for seg: Dictionary in _track.segments:
+		if seg.get("name", "") == seg_name:
+			return s
+		if seg.get("type", "straight") == "arc":
+			s += float(seg["radius"]) * deg_to_rad(absf(float(seg["angle"])))
+		elif seg.get("auto", false):
+			s += _track._auto_lengths[auto]
+			auto += 1
+		else:
+			s += float(seg.get("length", 0.0))
+	return -1.0
 
 
 func _index_at(s: float) -> int:

@@ -14,12 +14,17 @@ extends Node3D
 ##   {"type": "arc", "radius": m, "angle": deg}  (angle > 0 : a gauche)
 ## Options de segment :
 ##   "bank": deg    devers : > 0 leve le bord DROIT (virage a gauche releve,
-##                  ou virage a droite en devers inverse). Raccord progressif.
+##                  ou virage a droite en devers inverse). Raccord progressif
+##                  sur bank_blend_length. La chaussee pivote sur son bord BAS :
+##                  il reste a la hauteur du trace, jamais sous le sol.
 ##   "climb": m     denivele sur le segment (raccord en S, pentes douces).
 ##   "line": m      decalage lateral de la ligne de course (> 0 a droite).
-##   "jump": m      tremplin a cette distance du debut du segment, cote droit.
+##   "jump": m      rampe de saut a cette distance du debut du segment ;
+##   "jump_offset": m  son decalage lateral (defaut : jump_offset).
+##   "boost": [[m, lateral], ...]  plaques de boost (distance, decalage).
 ##
-## Genere : Geometry (chaussee, sol, tremplin), Walls (2 glissieres continues),
+## Genere : Geometry (chaussee, sol), Walls (2 glissieres continues), Pads
+## (plaques de boost et rampes de saut a chevrons lumineux, avec leur Area3D),
 ## ResetZones (Area3D au-dela des murs, tout autour), Checkpoints (Area3D
 ## ordonnees, la n°0 est la ligne d'arrivee), StartGrid, RacingLine.
 ##
@@ -32,6 +37,11 @@ signal truck_exited_reset_zone(truck: Node3D)
 ## Un camion entre dans le checkpoint `index` (0 = ligne d'arrivee). L'ordre et
 ## les tours sont l'affaire du gameplay (RaceLaps).
 signal checkpoint_passed(truck: Node3D, index: int)
+## Un camion roule sur la plaque de boost `index` (ordre du trace). L'effet
+## est l'affaire du gameplay (PadEffects).
+signal boost_pad_entered(truck: Node3D, index: int)
+## Un camion atteint le haut de la rampe de saut `index`.
+signal jump_pad_entered(truck: Node3D, index: int)
 
 const ROAD_LAYER := 1          # couche 1 `world` (VEHICLE_SPEC §7)
 const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
@@ -44,8 +54,11 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var width: float = 14.0
 ## Pas d'echantillonnage de la ligne centrale.
 @export var sample_step: float = 2.0
-## Longueur des raccords de devers et de ligne de course.
+## Longueur des raccords de ligne de course.
 @export var blend_length: float = 30.0
+## Longueur des raccords de devers : sur une piste large, le bord haut monte de
+## (largeur / 2) x sin(devers) ; un raccord long garde des pentes douces.
+@export var bank_blend_length: float = 30.0
 
 @export_group("Glissieres")
 ## Epaisseur a hauteur de chaussee (METRICS.md §4 : 0,3 m minimum).
@@ -64,6 +77,14 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var jump_width: float = 4.8
 ## Decalage lateral du centre du tremplin (> 0 : a droite).
 @export var jump_offset: float = 4.2
+## Profondeur de la zone de declenchement, au sommet de la rampe.
+@export var jump_trigger_depth: float = 3.0
+
+@export_group("Plaques de boost")
+## Largeur (en travers) et longueur (le long de la piste).
+@export var boost_pad_size: Vector2 = Vector2(8.0, 6.0)
+## Hauteur de la zone de declenchement au-dessus de la chaussee.
+@export var boost_pad_height: float = 3.0
 
 @export_group("Zones de reset")
 ## Longueur d'une zone le long de la piste (courte : suit les courbes).
@@ -98,6 +119,7 @@ var _curv: PackedFloat32Array = []      # courbure signee (1/m), > 0 a gauche
 var _line: PackedFloat32Array = []
 var _length: float = 0.0
 var _jumps: Array[Vector2] = []         # (s du tremplin, decalage)
+var _boosts: Array[Vector2] = []        # (s de la plaque, decalage)
 var _auto_lengths: PackedFloat32Array = []
 
 
@@ -226,6 +248,28 @@ func get_start_transform(slot: int) -> Transform3D:
 	return frame_at(i, grid_lateral[col], 0.0)
 
 
+func boost_pad_count() -> int:
+	_ensure_built()
+	return _boosts.size()
+
+
+## Centre de la plaque de boost k, pose sur la chaussee, dans le sens de course.
+func boost_pad_transform(k: int) -> Transform3D:
+	_ensure_built()
+	return frame_at(index_at_s(_boosts[k].x), _boosts[k].y, 0.0)
+
+
+func jump_pad_count() -> int:
+	_ensure_built()
+	return _jumps.size()
+
+
+## Bord d'attaque de la rampe de saut k, au milieu, dans le sens de course.
+func jump_pad_transform(k: int) -> Transform3D:
+	_ensure_built()
+	return frame_at(index_at_s(_jumps[k].x), _jumps[k].y, 0.0)
+
+
 ## Reapparition au plus pres de `p` : sur la chaussee, dans le sens de course,
 ## ecart lateral conserve mais ramene a 2 m des murs, 1 m au-dessus du sol.
 func get_respawn_transform(p: Vector3) -> Transform3D:
@@ -271,6 +315,17 @@ func _build_centerline() -> bool:
 	var end := _endpoint(lengths)
 	if end.length() > 0.05:
 		push_warning("TrackBlockout : la boucle ne se referme pas (ecart %.2f m)" % end.length())
+	# plaques et rampes : abscisse = debut du segment + distance demandee
+	_jumps.clear()
+	_boosts.clear()
+	var seg_start := 0.0
+	for k in segments.size():
+		var seg: Dictionary = segments[k]
+		if seg.has("jump"):
+			_jumps.append(Vector2(seg_start + float(seg["jump"]), float(seg.get("jump_offset", jump_offset))))
+		for b: Array in seg.get("boost", []):
+			_boosts.append(Vector2(seg_start + float(b[0]), float(b[1])))
+		seg_start += lengths[k]
 
 	# integration fine, puis reechantillonnage a pas regulier
 	var fine_p: Array[Vector2] = []
@@ -322,8 +377,6 @@ func _build_centerline() -> bool:
 		yb += float(segments[k].get("climb", 0.0))
 	if absf(yb) > 0.01:
 		push_warning("TrackBlockout : le denivele total n'est pas nul (%.2f m)" % yb)
-	_jumps.clear()
-	var jump_done: Dictionary = {}
 	var f := 0
 	for i in count:
 		var si := i * ds
@@ -343,11 +396,12 @@ func _build_centerline() -> bool:
 			_curv[i] = signf(float(seg["angle"])) / float(seg["radius"])
 		raw_bank[i] = float(seg.get("bank", 0.0))
 		raw_line[i] = float(seg.get("line", 0.0))
-		if seg.has("jump") and not jump_done.has(k) and u * lengths[k] >= float(seg["jump"]):
-			jump_done[k] = true
-			_jumps.append(Vector2(si, jump_offset))
-	var bank := _smooth_loop(_smooth_loop(raw_bank, blend_length / ds / 2.0), blend_length / ds / 2.0)
+	var bank := _smooth_loop(_smooth_loop(raw_bank, bank_blend_length / ds / 2.0), bank_blend_length / ds / 2.0)
 	_line = _smooth_loop(_smooth_loop(raw_line, blend_length / ds), blend_length / ds)
+	# devers pivote sur le bord bas : le trace monte d'autant, le bord bas reste
+	# a sa hauteur (sinon, sur 75 m de large, il plonge sous le sol d'herbe)
+	for i in count:
+		_pos[i].y += width / 2.0 * sin(absf(deg_to_rad(bank[i])))
 
 	# reperes : tangente, lateral horizontal, puis devers autour de la tangente
 	_fwd.resize(count)
@@ -472,8 +526,11 @@ func _build_geometry() -> void:
 	var ground := _static_body(geometry, "Ground", gst, gtris, preload("res://tracks/materials/grass.tres"), 1.0)
 	ground.set_meta(&"surface", &"grass")
 
-	for jmp in _jumps:
-		_build_jump(geometry, jmp.x, jmp.y)
+	var pads := _group("Pads")
+	for k in _jumps.size():
+		_build_jump(pads, _jumps[k].x, _jumps[k].y, k)
+	for k in _boosts.size():
+		_build_boost_pad(pads, _boosts[k].x, _boosts[k].y, k)
 
 	_build_reset_zones(zones)
 	_build_checkpoints(checkpoints)
@@ -578,9 +635,18 @@ func _on_reset_zone_body_exited(body: Node3D) -> void:
 	truck_exited_reset_zone.emit(body)
 
 
-## Tremplin : prisme convexe, bord d'attaque au ras de la chaussee.
-func _build_jump(parent: Node3D, s: float, offset: float) -> void:
-	var i := roundi(s / (_length / _pos.size())) % _pos.size()
+func _on_boost_pad_body_entered(body: Node3D, index: int) -> void:
+	boost_pad_entered.emit(body, index)
+
+
+func _on_jump_pad_body_entered(body: Node3D, index: int) -> void:
+	jump_pad_entered.emit(body, index)
+
+
+## Rampe de saut : prisme convexe, bord d'attaque au ras de la chaussee, face de
+## roulement a chevrons bleus lumineux ; zone de declenchement au sommet.
+func _build_jump(parent: Node3D, s: float, offset: float, index: int) -> void:
+	var i := index_at_s(s)
 	var f := _fwd[i]
 	var r := _right[i]
 	var u := _up[i]
@@ -592,16 +658,19 @@ func _build_jump(parent: Node3D, s: float, offset: float) -> void:
 		base - r * hw + f * jump_length + u * top, base + r * hw + f * jump_length + u * top,  # sommet
 		base - r * hw + f * jump_length - u * 0.3, base + r * hw + f * jump_length - u * 0.3,  # pied arriere
 	])
+	var face := SurfaceTool.new()
+	face.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var tris := PackedVector3Array()
 	var z2 := Vector2.ZERO
-	_quad(st, tris, p[0], p[1], p[3], p[2], z2, z2, z2, z2, Vector3.ZERO)   # rampe
+	_quad(face, tris, p[0], p[1], p[3], p[2],                                 # rampe
+		Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1), Vector3.ZERO)
 	_quad(st, tris, p[2], p[3], p[5], p[4], z2, z2, z2, z2, Vector3.ZERO)   # dos
 	_tri(st, tris, p[0], p[2], p[4])                                        # flancs
 	_tri(st, tris, p[1], p[5], p[3])
 	var body := StaticBody3D.new()
-	body.name = "Jump"
+	body.name = "JumpPad%d" % index
 	body.collision_layer = 1 << (ROAD_LAYER - 1)
 	body.collision_mask = 0
 	body.set_meta(&"surface", &"asphalt")
@@ -615,7 +684,62 @@ func _build_jump(parent: Node3D, s: float, offset: float) -> void:
 	mi.mesh = st.commit()
 	mi.material_override = preload("res://tracks/materials/jump.tres")
 	body.add_child(mi)
+	var fmi := MeshInstance3D.new()
+	fmi.name = "Chevrons"
+	face.generate_normals()
+	fmi.mesh = face.commit()
+	fmi.material_override = preload("res://tracks/materials/jump_pad.tres")
+	body.add_child(fmi)
 	parent.add_child(body)
+	# declenchement : les derniers metres de la rampe, jusqu'a 3 m au-dessus
+	var area := Area3D.new()
+	area.name = "JumpTrigger%d" % index
+	area.collision_layer = 0
+	area.collision_mask = 1 << (VEHICLE_LAYER - 1)
+	area.monitorable = false
+	var acs := CollisionShape3D.new()
+	var abox := BoxShape3D.new()
+	abox.size = Vector3(jump_width, 4.0, jump_trigger_depth)
+	acs.shape = abox
+	area.add_child(acs)
+	area.transform = Transform3D(Basis(r, u, -f),
+		base + f * (jump_length - jump_trigger_depth / 2.0) + u * (top + 1.0))
+	area.body_entered.connect(_on_jump_pad_body_entered.bind(index))
+	parent.add_child(area)
+
+
+## Plaque de boost : dalle a chevrons orange et jaunes lumineux, a ras de la
+## chaussee (aucune collision), et sa zone de declenchement.
+func _build_boost_pad(parent: Node3D, s: float, lateral: float, index: int) -> void:
+	var area := Area3D.new()
+	area.name = "BoostPad%d" % index
+	area.collision_layer = 0
+	area.collision_mask = 1 << (VEHICLE_LAYER - 1)
+	area.monitorable = false
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(boost_pad_size.x, boost_pad_height, boost_pad_size.y)
+	cs.shape = box
+	cs.position = Vector3(0.0, boost_pad_height / 2.0 - 0.5, 0.0)
+	area.add_child(cs)
+	# dalle dans le repere de la plaque : x en travers, avant en -Z
+	var hw := boost_pad_size.x / 2.0
+	var hl := boost_pad_size.y / 2.0
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tris := PackedVector3Array()
+	_quad(st, tris, Vector3(-hw, 0.04, hl), Vector3(hw, 0.04, hl), Vector3(hw, 0.04, -hl), Vector3(-hw, 0.04, -hl),
+		Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1), Vector3.UP)
+	var mi := MeshInstance3D.new()
+	mi.name = "Chevrons"
+	st.generate_normals()
+	mi.mesh = st.commit()
+	mi.material_override = preload("res://tracks/materials/boost_pad.tres")
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	area.add_child(mi)
+	area.transform = frame_at(index_at_s(s), lateral, 0.0)
+	area.body_entered.connect(_on_boost_pad_body_entered.bind(index))
+	parent.add_child(area)
 
 
 # --- utilitaires ------------------------------------------------------------------
