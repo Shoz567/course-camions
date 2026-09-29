@@ -10,6 +10,7 @@ extends InputSource
 ##             Maj droite (! en AZERTY) klaxon, la suivante (: en AZERTY)
 ##             camera, Retour arriere reset
 ##   LES DEUX: les deux jeux de touches (joueur seul)
+##   AUCUN   : pas de clavier (J3 et J4, manette seulement)
 ##
 ## Le clavier est binaire : steer et throttle montent en `ramp_ticks` ticks
 ## pour ne pas donner de coups de volant qu'aucune manette ne produit.
@@ -17,7 +18,7 @@ extends InputSource
 ## Changement de vue (local, hors InputFrame).
 signal camera_toggle_requested
 
-enum Layout { BOTH, ZQSD, ARROWS }
+enum Layout { BOTH, ZQSD, ARROWS, NONE }
 
 @export var layout: Layout = Layout.BOTH
 @export_range(1, 30) var ramp_ticks: int = 8
@@ -34,7 +35,7 @@ var _honk_pending: bool = false
 
 func _input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or key.echo:
+	if key == null or key.echo or layout == Layout.NONE:
 		return
 	var p := key.pressed
 	var right_side := key.location == KEY_LOCATION_RIGHT

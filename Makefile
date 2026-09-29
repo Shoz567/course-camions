@@ -22,8 +22,8 @@ help:
 	@echo "  make test-full  - suite complete : 5 runs par test physique"
 	@echo "  make test-selftest - verifie le socle de test lui-meme"
 	@echo "  make baseline   - mesure les metriques de conduite et les ECRIT dans baseline.json"
-	@echo "  make run        - lance le jeu : course a 2 joueurs en ecran partage"
-	@echo "  make solo       - course a 1 joueur, plein ecran"
+	@echo "  make run        - lance le jeu : menu principal, puis course de 1 a 4 joueurs"
+	@echo "  make solo       - course a 1 joueur, plein ecran, sans passer par le menu"
 	@echo "  make sandbox    - lance le bac a sable (arene, tremplin, camions gares)"
 	@echo "  make clean-spike- supprime spike/ (fin de phase 0.5)"
 

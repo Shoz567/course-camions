@@ -8,7 +8,9 @@ extends Node
 ## pendant toute la course (cf. docs/INPUT_SPEC.md §5). Ne reattribue jamais
 ## un slot en cours de course.
 ##
-## Volontairement vide pour l'instant. Rempli en phase 4 (ecran partage).
+## Pour l'instant : le nombre de joueurs choisi dans le menu principal, lu par
+## la course locale. Le mapping device -> slot est fixe (joueur i = manette i).
 
-func _ready() -> void:
-	pass
+## Nombre de joueurs demande par le menu (1 a 4). 0 = rien de demande : la
+## scene de course garde sa propre valeur (tests, lancement direct).
+var requested_players: int = 0

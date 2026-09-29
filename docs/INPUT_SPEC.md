@@ -96,8 +96,17 @@ sinon) ; « klaxon : Select » et « reset : − » désignent le **même** bout
 une manette Nintendo (`JOY_BUTTON_BACK`) → − reste le reset, ZL seul klaxonne.
 
 En solo, le clavier accepte ZQSD **et** les flèches. En écran partagé, chaque
-joueur a sa manette (J1 = device 0, J2 = device 1) **et** son jeu de touches :
-deux joueurs peuvent partager un clavier.
+joueur a sa manette (joueur N = device N − 1, de 0 à 3) ; J1 et J2 ont en plus
+leur jeu de touches (flèches, ZQSD) : deux joueurs peuvent partager un clavier.
+J3 et J4 n'ont que leur manette (`KeyboardInputSource.Layout.NONE`).
+
+**Menu principal** (`ui/main_menu.tscn`) : navigation par les actions `ui_*` de
+Godot (croix, stick, flèches, souris). A Switch est le bouton **est**
+(`JOY_BUTTON_B`), que Godot range dans `ui_cancel` : le menu l'ajoute à
+`ui_accept` (et le retire de `ui_cancel`) au démarrage, A et B valident tous
+les deux. L / R changent le nombre de joueurs, + (Start) commence, − ferme les
+paramètres. En course : Échap revient au menu à tout moment ; après l'arrivée,
+Start / Entrée rejoue et − revient au menu.
 
 - **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
   utile), puis courbe de réponse légèrement exponentielle pour la précision en

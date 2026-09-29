@@ -11,6 +11,8 @@ extends CanvasLayer
 ## Nom affiche (ecran partage) et aide des commandes de CE joueur.
 @export var player_label: String = ""
 @export_multiline var help_text: String = ""
+## Echelle du HUD : 1 en plein ecran, moins dans une vue d'ecran partage.
+@export var ui_scale: float = 1.0
 
 var _lap: Label
 var _lap_time: Label
@@ -20,14 +22,16 @@ var _boost_bar: ProgressBar
 var _boost_label: Label
 var _center: Label
 var _help: Label
+var _standings: Label
 var _center_text: String = ""
 var _center_color: Color = Color.WHITE
 
 
 func _ready() -> void:
-	_lap = _label(40, Vector2(24, 16))
-	_lap_time = _label(28, Vector2(24, 68))
-	_times = _label(20, Vector2(24, 108))
+	var k := ui_scale
+	_lap = _label(40, Vector2(24, 16) * k)
+	_lap_time = _label(28, Vector2(24, 68) * k)
+	_times = _label(20, Vector2(24, 108) * k)
 	_center = _label(72, Vector2.ZERO)
 	_center.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_center.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -35,31 +39,41 @@ func _ready() -> void:
 	_center.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_speed = _label(64, Vector2.ZERO)
 	_speed.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_speed.offset_left = -330
-	_speed.offset_top = -150
-	_speed.offset_right = -24
+	_speed.offset_left = -330 * k
+	_speed.offset_top = -150 * k
+	_speed.offset_right = -24 * k
 	_speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_boost_bar = ProgressBar.new()
 	_boost_bar.min_value = 0.0
 	_boost_bar.max_value = 1.0
 	_boost_bar.show_percentage = false
 	_boost_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_boost_bar.offset_left = -330
-	_boost_bar.offset_top = -52
-	_boost_bar.offset_right = -24
-	_boost_bar.offset_bottom = -30
+	_boost_bar.offset_left = -330 * k
+	_boost_bar.offset_top = -52 * k
+	_boost_bar.offset_right = -24 * k
+	_boost_bar.offset_bottom = -30 * k
 	add_child(_boost_bar)
 	_boost_label = _label(18, Vector2.ZERO)
 	_boost_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_boost_label.offset_left = -330
-	_boost_label.offset_top = -80
-	_boost_label.offset_right = -24
+	_boost_label.offset_left = -330 * k
+	_boost_label.offset_top = -80 * k
+	_boost_label.offset_right = -24 * k
 	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_help = _label(14, Vector2.ZERO)
 	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_help.offset_left = 24
-	_help.offset_top = -30.0 - 18.0 * help_text.count("\n")
+	_help.offset_left = 24 * k
+	_help.offset_top = (-30.0 - 18.0 * help_text.count("\n")) * k
 	_help.text = help_text
+	_standings = _label(26, Vector2.ZERO)
+	_standings.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_standings.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_standings.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_standings.offset_top = 150 * k
+
+
+## Classement (liste multiligne, vide pour l'effacer), en haut au centre.
+func set_standings(text: String) -> void:
+	_standings.text = text
 
 
 ## Message central (vide pour l'effacer).
@@ -113,6 +127,7 @@ static func chrono(ticks: int) -> String:
 func _label(size: int, pos: Vector2) -> Label:
 	var l := Label.new()
 	l.position = pos
+	size = maxi(10, roundi(size * ui_scale))
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	l.add_theme_constant_override("outline_size", maxi(4, roundi(size / 6.0)))

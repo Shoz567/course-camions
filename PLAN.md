@@ -134,15 +134,16 @@ rattrape. Sur un sol plat : pas encore de piste.
 | 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[x]` `race_laps_test`, tour piloté compté par les vraies `Area3D`, reset, glissière |
 
 **Piste n°1** (`game/tracks/track_01_blockout.tscn`, générée par `TrackBlockout`),
-redimensionnée le 2026-09-28 pour les semi-remorques : 2 033 m, **25 m** de large,
+élargie le 2026-09-29 (méga-large, 1 à 4 joueurs) : 2 821 m, **50 m** de large,
 glissières continues de 0,3 m, **2,8 m** de haut, frottement 0,5. Grand virage
-relevé (R 90 m, 10°), montée de 6 m, S en dévers inverse (R 80 m), crête, chicane
-en descente (R 90 m), tremplin de 7° sur la moitié droite (ligne alternative),
-épingle relevée (R 60 m, 14°), ligne droite des stands de 766 m. Zones de reset
-tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g, 149,2 km/h),
-inchangées par la remorque (inertie imposée, VEHICLE_SPEC §5 bis).
-**Tour de référence : 71,4 s** (`track_01_lap_test`, pilote à 80 % de
-l'adhérence mesurée, semi-remorque comprise).
+relevé (R 160 m, 10°), montée de 6 m, S en dévers inverse (R 140 m, ±40°), crête,
+chicane en descente (R 120 m, ±45°), tremplin de 7° à 120 m dans la ligne droite
+côté droit (ligne alternative, 8 m du centre), épingle relevée (R 140 m, 14°),
+ligne droite des stands de 715 m. Grille de 4 de front (±6 m, ±18 m). Zones de
+reset tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g,
+149,2 km/h), inchangées par la remorque (inertie imposée, VEHICLE_SPEC §5 bis).
+**Tour de référence : 84,1 s** (`track_01_lap_test`, pilote à 80 % de
+l'adhérence mesurée, semi-remorque comprise, aucun contact avec les murs).
 
 **Critères de sortie**
 - `[x]` Un joueur fait 3 tours chronométrés sur la piste n°1 (`make run` :
@@ -184,16 +185,21 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 | # | Tâche | Agent | État |
 |---|---|---|---|
 | 4.1 | `DeviceInputSource` : routage des `InputEvent` par `device` id (`docs/INPUT_SPEC.md`) | gameplay-engineer | `[x]` + profil MK8 Switch, jeux de touches par joueur |
-| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[ ]` 2 joueurs fixes pour le playtest (`race_2p.tscn`) |
-| 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[~]` 2 vues haut / bas (`LocalRace`) ; 3 et 4 vues : disposition en grille à faire |
+| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[~]` menu principal (`ui/main_menu.tscn`) : choix de 1 à 4 joueurs, couleur fixe par joueur, joueur N = manette N ; « appuyez sur A pour rejoindre » à faire |
+| 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[x]` `LocalRace` : plein écran, 2 vues haut / bas, grille 2 × 2 à 3-4 (à 3, 4e case = caméra TV sur le leader), HUD réduit |
 | 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer | `[~]` débranchement : roue libre (testé en solo) ; rebranchement en course non testé |
-| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[~]` isolation à 2 joueurs (`race_scene_test`) ; perf de rendu : spike V3 |
+| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[~]` isolation à 2 et 4 joueurs (`race_scene_test`, `race_4p_test`), grille à 3 (`race_3p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 |
 
-Anticipé le 2026-09-28 pour le playtest : **course à 2 joueurs en écran partagé**
-(`make run`, scène principale `dev/race_2p.tscn`) : J1 camion bleu AZUR (manette
-0 ou flèches, vue du haut), J2 camion rouge DURAND (manette 1 ou ZQSD, vue du
-bas), départ côte à côte, compte à rebours, position (POS 1/2) dans chaque HUD.
-Le solo reste dans `dev/track_drive.tscn` (`make solo`).
+Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course de
+1 à 4 joueurs** (`make run`, scène principale `ui/main_menu.tscn`). Le menu
+(titre animé, choix du nombre de joueurs à la manette, au clavier ou à la
+souris, son on / off, paramètres factices, piste et camions en orbite derrière)
+lance `dev/race.tscn`. J1 camion bleu AZUR (manette 0 ou flèches), J2 rouge
+DURAND (manette 1 ou ZQSD), J3 jaune SOLEIL (manette 2), J4 vert (manette 3) ;
+compte à rebours, position (POS n/N) dans chaque HUD, classement affiché à tous
+dès la première arrivée ; Start / Entrée rejoue, − / Échap revient au menu.
+Accès directs : `make solo` (`dev/track_drive.tscn`), `dev/race_2p.tscn`.
+Affichage : base 1920 × 1080, étirement `canvas_items` (fenêtre 1280 × 720).
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).
