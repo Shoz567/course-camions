@@ -410,13 +410,20 @@ func _physics_process(_delta: float) -> void:
 	var top_ms := _top_speed_ms * (t.solo_top_speed_factor if _trailer_detached else 1.0)
 	var accel_k := t.solo_accel_factor if _trailer_detached else 1.0
 
+	# 1.6 frein a main : engagement rapide, relacher plus lent (relance propre).
+	var hb_target := 1.0 if (_input.handbrake and debug_handbrake) else 0.0
+	var hb_step := 1.0 / (t.handbrake_engage_ticks if hb_target > _handbrake_blend else t.handbrake_release_ticks)
+	_handbrake_blend = move_toward(_handbrake_blend, hb_target, hb_step)
+	var rear_grip := lerpf(1.0, t.handbrake_rear_grip_factor, _handbrake_blend)
+
 	# 1.5 direction : l'angle max diminue avec la vitesse, borne par l'angle
-	# qui fait tourner a la limite d'adherence (tout le stick reste utile), et
-	# les roues tournent a vitesse bornee (pas de coup de volant instantane).
+	# qui fait tourner a la limite d'adherence (tout le stick reste utile), sans
+	# descendre sous steer_floor_deg (direction jamais figee a haute vitesse),
+	# et les roues tournent a vitesse bornee (pas de coup de volant instantane).
 	var target_deg := 0.0
 	var steer_in := clampf(_input.steer, -1.0, 1.0)
 	if debug_steering:
-		var max_deg := _grip_steer_deg(v_fwd) * (t.solo_steer_factor if _trailer_detached else 1.0)
+		var max_deg := maxf(_grip_steer_deg(v_fwd), t.steer_floor_deg) 				* (t.solo_steer_factor if _trailer_detached else 1.0)
 		# 1.6 contre-braquage permissif : du cote ou glisse le camion, la limite
 		# s'elargit de l'angle de derive. Les roues avant peuvent toujours
 		# s'aligner sur la trajectoire, et un derapage se rattrape au stick.
@@ -426,18 +433,18 @@ func _physics_process(_delta: float) -> void:
 			slip_deg = rad_to_deg(atan2(v_right, v_fwd))
 		if steer_in * slip_deg > 0.0:
 			max_deg += absf(slip_deg)
+		# drift au frein a main : train avant debride jusqu'a drift_steer_deg,
+		# des deux cotes (jamais moins qu'hors drift). Le joueur inscrit le nez
+		# vers la corde, et la traction des roues avant (4 roues motrices,
+		# poussee dans l'axe de chaque roue) tire vers l'interieur. Au-dela de
+		# ~16 deg, les roues avant freinent en travers : le drift perd son elan.
+		max_deg = lerpf(max_deg, maxf(max_deg, t.drift_steer_deg), _handbrake_blend)
 		target_deg = steer_in * minf(t.max_steer_deg, max_deg)
 		# contre-braquage automatique, stick au neutre : relance propre
 		target_deg += (1.0 - absf(steer_in)) * t.auto_countersteer_ratio * slip_deg
 		target_deg = clampf(target_deg, -t.max_steer_deg, t.max_steer_deg)
 	_steer_deg = move_toward(_steer_deg, target_deg, t.steer_rate_deg_per_tick)
 	var steer_rad := deg_to_rad(_steer_deg)
-
-	# 1.6 frein a main : engagement rapide, relacher plus lent (relance propre).
-	var hb_target := 1.0 if (_input.handbrake and debug_handbrake) else 0.0
-	var hb_step := 1.0 / (t.handbrake_engage_ticks if hb_target > _handbrake_blend else t.handbrake_release_ticks)
-	_handbrake_blend = move_toward(_handbrake_blend, hb_target, hb_step)
-	var rear_grip := lerpf(1.0, t.handbrake_rear_grip_factor, _handbrake_blend)
 
 	# 1.4 consigne longitudinale, en m/s2 pour tout le camion.
 	var drive := 0.0     # > 0 vers l'avant
@@ -913,7 +920,9 @@ func _grip_steer_deg(v_fwd: float) -> float:
 	return rad_to_deg(atan(_wheelbase * t.lateral_grip_g * TruckSpec.GRAVITY / v2)) * t.steer_grip_ratio
 
 
-## Braquage max au plein stick a la vitesse actuelle, hors derive (deg).
-## Lecture seule : sert a un pilote (IA, test) a doser son stick.
+## Braquage max au plein stick a la vitesse actuelle, hors derive et hors
+## frein a main (deg). Lecture seule : sert a un pilote (IA, test) a doser son
+## stick.
 func get_max_steer_deg() -> float:
-	return minf(tuning.max_steer_deg, _grip_steer_deg(get_speed_kmh() / 3.6))
+	return minf(tuning.max_steer_deg,
+		maxf(_grip_steer_deg(get_speed_kmh() / 3.6), tuning.steer_floor_deg))

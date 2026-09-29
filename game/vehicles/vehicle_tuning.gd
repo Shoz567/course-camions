@@ -167,6 +167,10 @@ extends Resource
 ## au plein stick, sur. L'angle reel est le plus petit des deux limites : tout
 ## le stick reste utile a toutes les vitesses.
 @export_range(0.0, 3.0, 0.01) var steer_grip_ratio: float = 0.0
+## Plancher de l'angle limite a haute vitesse : au-dela de ~115 km/h, l'angle
+## d'adherence limite tombe sous 3 deg et le camion (sous-vireur : remorque,
+## charge a l'avant) n'utilisait plus que 0,4 a 0,6 g au plein stick.
+@export_range(0.0, 30.0, 0.1, "suffix:°") var steer_floor_deg: float = 0.0
 ## Contre-braquage automatique, stick au neutre : fraction de l'angle de
 ## derive que les roues avant suivent d'elles-memes (comme la chasse d'un vrai
 ## train avant). S'efface a mesure que le joueur braque. Rend la relance propre
@@ -176,6 +180,10 @@ extends Resource
 @export_range(0.0, 20.0, 0.01, "suffix:°/tick") var steer_rate_deg_per_tick: float = 0.0
 
 @export_group("Derapage maitrise")
+## Au frein a main, angle limite des roues avant (au lieu de l'angle
+## d'adherence, 2 a 6 deg a haute vitesse) : le nez s'inscrit vers la corde.
+## Mesure : 16 deg garde 74 % de la vitesse sur 4 s de drift, 32 deg 54 %.
+@export_range(0.0, 60.0, 0.1, "suffix:°") var drift_steer_deg: float = 0.0
 ## Derive tenue au frein a main, au plein braquage (proportionnelle au stick).
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
 ## Derive jamais depassee, frein a main ou non : pas de tete-a-queue.
@@ -232,6 +240,8 @@ func validate() -> PackedStringArray:
 		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:
 		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
+	if drift_steer_deg > max_steer_deg:
+		errors.append("drift_steer_deg (%s) > max_steer_deg (%s)" % [drift_steer_deg, max_steer_deg])
 	if drift_target_slip_deg >= drift_max_slip_deg:
 		errors.append("drift_target_slip_deg (%s) >= drift_max_slip_deg (%s)"
 			% [drift_target_slip_deg, drift_max_slip_deg])

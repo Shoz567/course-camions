@@ -181,14 +181,23 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
 ## 5 quater bis. Direction et dérapage maîtrisé (2026-09-30)
 
 - Train avant vif : roues à 4°/tick (braquage complet en 8 ticks), angle à
-  haute vitesse × 1,35 de l'angle d'adhérence limite. Mesuré : 90 % du lacet
-  établi en 11 ticks.
+  haute vitesse × 1,35 de l'angle d'adhérence limite, **jamais sous 3°**
+  (`steer_floor_deg`, décision du 2026-09-30 : au-delà de ~115 km/h l'angle
+  d'adhérence tombait sous 3° et le camion ne tenait que 0,41 à 0,65 g au plein
+  stick ; mesuré avec le plancher : 0,82 à 0,92 g de 140 à 225 km/h, toutes
+  catégories). Mesuré : 90 % du lacet établi en 9 ticks.
 - Dérapage : au frein à main, le lacet est piloté vers une dérive cible
-  (28° au plein braquage, proportionnelle au stick) ; mesuré : 31° tenus, à
-  vitesse gardée, retour sous 5° en 41 ticks au relâcher.
-- Anti tête-à-queue : la dérive prévue à 0,3 s ne dépasse jamais 40°, frein à
-  main ou non (14 rad/s² d'autorité). Mesuré : un choc de 4 rad/s en lacet
-  plafonne à 36°.
+  (**35°** au plein braquage, proportionnelle au stick, 8 rad/s² d'autorité)
+  et le train avant est **débridé jusqu'à 16°** (`drift_steer_deg`, au lieu
+  des 2 à 6° d'adhérence à haute vitesse) : le nez s'inscrit vers la corde.
+  Mesuré : 30° de dérive en 34 ticks, 39° tenus, 74 % de la vitesse gardée
+  sur 4 s de drift à 90 km/h, retour sous 5° en 40 ticks au relâcher ; rayon
+  de drift à 100 km/h : 104 m (119 m avant). Débridé à 32°, la ligne n'était
+  guère plus serrée (102 m) mais les roues avant freinaient en travers
+  (54 % de la vitesse gardée) : choix de l'utilisateur, 16°.
+- Anti tête-à-queue : la dérive prévue à 0,3 s ne dépasse jamais **47°**,
+  frein à main ou non (14 rad/s² d'autorité). Mesuré : un choc de 4 rad/s en
+  lacet plafonne à 41°.
 - Vérifié par `truck_drift_control_test`.
 
 ## 5 quater. Murs et obstacles (arcade)
