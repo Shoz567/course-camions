@@ -485,9 +485,10 @@ func _physics_process(_delta: float) -> void:
 		var taper_b := clampf((top_b - v_fwd) / _taper_ms, 0.0, 1.0)
 		drive = (thr * t.engine_accel_ms2 * accel_k + boost_push) * taper_b + (resist if v_fwd <= top_b else 0.0)
 		braking = 0.0 if brk <= 0.0 else braking
-	elif v_fwd > top_ms:
+	elif v_fwd > top_ms and fwd.y > -0.03:
 		# frein moteur au-dessus de la vitesse max (rampe sur 2 m/s : pas de
-		# pompage autour de la vitesse max)
+		# pompage autour de la vitesse max). Pas en descente : la gravite doit
+		# pouvoir y emballer le camion.
 		drive -= t.overspeed_decel_ms2 * clampf((v_fwd - top_ms) / 2.0, 0.0, 1.0)
 	if not debug_drive:
 		drive = 0.0

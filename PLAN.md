@@ -134,11 +134,13 @@ rattrape. Sur un sol plat : pas encore de piste.
 | 2.8 | Tests : tour compté seulement si les checkpoints sont passés dans l'ordre ; raccourci refusé ; reset replace sur la piste | godot-qa | `[x]` `race_laps_test`, tour piloté compté par les vraies `Area3D`, reset, glissière |
 
 **Piste n°1** (`game/tracks/track_01_blockout.tscn`, générée par `TrackBlockout`),
-élargie le 2026-09-29 (playtest à 4 : ×1,5) : 2 908 m, **75 m** de large,
+élargie le 2026-09-29 (playtest à 4 : ×1,5) : 3 008 m, **75 m** de large,
 glissières continues de 0,3 m, **2,8 m** de haut, frottement 0,5. Grand virage
-relevé (R 160 m, 7°), montée de 6 m, S en dévers inverse (R 140 m, ±40°, 3°),
-crête, chicane en descente adoucie (R 160 m, ±35°), ligne droite du tremplin,
-épingle relevée (R 140 m, 9°), ligne droite des stands de 762 m. Le dévers
+relevé (R 160 m, 7°) en montée, plongeon de compression, **grande montée** de
+240 m (+40 m), S en dévers inverse (R 140 m, ±40°, 3°), crête à 43 m,
+**chicane en descente plongeante** (R 160 m, ±35°, −38 m face aux gratte-ciel),
+ligne droite du tremplin, épingle relevée (R 140 m, 9°), bosse et ligne droite
+des stands de 602 m, grille de départ à plat (100 m). Le dévers
 pivote sur le bord bas, avec des raccords de 120 m : plus de chaussée enfoncée
 sous l'herbe (le « rétrécissement » après le départ). Grille de 4 de front
 (±10 m, ±30 m). **6 plaques de boost** (chevrons orange, +40 km/h pendant 1,5 s),
@@ -146,12 +148,15 @@ sous l'herbe (le « rétrécissement » après le départ). Grille de 4 de front
 renforcée en vol, réception amortie), **4 flaques d'eau** sur les mauvaises
 trajectoires (vitesse × 0,7 puis freinage) et **8 panneaux** à l'extérieur des
 virages (éjectés au contact, vitesse du camion divisée par 2) ; effets
-appliqués par `PadEffects`. Relief depuis le 2026-09-30 : 15 m de dénivelé,
-pente ≤ 7,7 % (grand virage en montée, montée de 10 m, S et chicane en
-descente, épingle en descente, bosse avant la ligne des stands). Zones de
+appliqués par `PadEffects`. **Collines** depuis le 2026-09-30 (demande
+utilisateur « Hills ») : 43 m de dénivelé, pente max 19,4 %, raccords
+de pente lissés sur 30 m (`climb_blend_length`) : compression franche au creux
+avant la grande montée (moyeu à 0,04 m de sa butée à 110 km/h), un camion lâché
+sans gaz en haut de la chicane prend +9 km/h en 3 s ; pas de frein de
+survitesse en descente. Zones de
 reset tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g,
 149,2 km/h), inchangées par la remorque (inertie imposée, VEHICLE_SPEC §5 bis).
-**Tour de référence : 85,2 s** (`track_01_lap_test`, pilote à 80 % de
+**Tour de référence : 87,7 s** (`track_01_lap_test`, pilote à 80 % de
 l'adhérence mesurée, camions à l'échelle 1,2, semi-remorque articulée
 comprise, plaques et pièges sans effet, relief compris).
 

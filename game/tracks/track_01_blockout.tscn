@@ -8,37 +8,42 @@ script = ExtResource("1")
 segments = Array[Dictionary]([{
 "arch": 0.0,
 "arch_label": "CYBER CITY",
-"length": 200.0,
+"length": 150.0,
 "name": "Ligne droite de depart",
 "type": "straight"
 }, {
 "angle": 180.0,
 "bank": 7.0,
-"climb": 4.0,
+"climb": 10.0,
 "name": "Grand virage releve (en montee)",
 "puddle": [[400.0, 27.0, 8.0]],
 "radius": 160.0,
 "signs": [[150.0, 32.0], [330.0, 32.0]],
 "type": "arc"
 }, {
+"climb": -10.0,
+"length": 60.0,
+"name": "Plongeon (compression)",
+"type": "straight"
+}, {
 "boost": [[90.0, 16.0]],
-"climb": 10.0,
 "jump": 60.0,
 "jump_offset": -18.0,
-"length": 200.0,
-"name": "Montee",
+"length": 240.0,
+"climb": 42.0,
+"name": "Grande montee",
 "type": "straight"
 }, {
 "angle": -40.0,
 "bank": 3.0,
-"climb": -2.0,
+"climb": -5.0,
 "name": "S en devers inverse (droite)",
 "radius": 140.0,
 "signs": [[60.0, -32.0]],
 "type": "arc"
 }, {
 "angle": 40.0,
-"climb": -2.0,
+"climb": 6.0,
 "name": "S (gauche)",
 "puddle": [[50.0, 24.0, 7.0]],
 "radius": 140.0,
@@ -53,19 +58,20 @@ segments = Array[Dictionary]([{
 "type": "straight"
 }, {
 "angle": 35.0,
-"climb": -4.0,
-"name": "Chicane gauche (descente)",
+"climb": -18.0,
+"name": "Chicane gauche (descente plongeante)",
 "radius": 160.0,
 "signs": [[50.0, 32.0]],
 "type": "arc"
 }, {
 "auto": true,
 "boost": [[40.0, 0.0]],
+"climb": -14.0,
 "name": "Diagonale de la chicane (longueur calculee)",
 "type": "straight"
 }, {
 "angle": -35.0,
-"climb": -4.0,
+"climb": -6.0,
 "name": "Chicane droite (descente)",
 "puddle": [[50.0, -24.0, 7.0]],
 "radius": 160.0,
@@ -75,40 +81,44 @@ segments = Array[Dictionary]([{
 "arch": 15.0,
 "arch_label": "SKY JUMP",
 "boost": [[150.0, -14.0]],
-"climb": 3.0,
 "jump": 60.0,
 "jump_offset": 12.0,
-"length": 250.0,
+"length": 200.0,
 "line": 12.0,
+"climb": -5.0,
 "name": "Ligne droite du tremplin (cote droit)",
 "type": "straight"
 }, {
 "angle": 180.0,
 "bank": 9.0,
-"climb": -5.0,
-"name": "Epingle relevee (drift, en descente)",
+"name": "Epingle relevee (drift)",
 "puddle": [[220.0, -26.0, 8.0]],
 "radius": 140.0,
 "signs": [[120.0, 32.0], [300.0, 32.0]],
 "type": "arc"
 }, {
-"climb": 5.0,
 "jump": 110.0,
 "jump_offset": 16.0,
 "length": 160.0,
+"climb": 6.0,
 "name": "Bosse des stands",
 "type": "straight"
 }, {
 "auto": true,
 "boost": [[280.0, 16.0], [380.0, -16.0]],
-"climb": -5.0,
 "jump": 120.0,
 "jump_offset": -14.0,
+"climb": -6.0,
 "name": "Ligne droite des stands (longueur calculee)",
+"type": "straight"
+}, {
+"length": 100.0,
+"name": "Grille de depart (a plat)",
 "type": "straight"
 }])
 width = 75.0
 bank_blend_length = 120.0
+climb_blend_length = 30.0
 wall_height = 2.8
 wall_friction = 0.5
 jump_length = 14.0

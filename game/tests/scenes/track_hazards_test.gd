@@ -1,8 +1,14 @@
 extends PhysicsTest
 
 ## Relief et pieges de la piste n°1 (demande du playtest), avec PadEffects :
-##   - relief : au moins 12 m de denivele sur le trace, pente jamais au-dela
-##     de 9 % ; 4 flaques d'eau, 8 panneaux ;
+##   - collines (demande du 2026-09-30) : au moins 30 m de denivele, une
+##     vraie cote raide (pente max entre 12 et 20 %) ; 4 flaques, 8 panneaux ;
+##   C. descente plongeante : un camion lache sans gaz ni frein en haut de la
+##      chicane (volant tenu par l'autopilote) accelere sous l'effet de la
+##      gravite (+8 km/h en 3 s au moins) ;
+##   D. compression : au pied de la grande montee, a 110 km/h, la suspension
+##      s'enfonce nettement (moyeu a moins de 0,4 m de l'ancrage, contre
+##      0,54 au repos) ;
 ##   A. flaque : un camion a 100 km/h qui y roule perd au moins 25 % de sa
 ##      vitesse tout de suite, une seule fois ;
 ##   B. panneau : un camion a 80 km/h qui le percute voit sa vitesse divisee
@@ -32,6 +38,13 @@ var _sign_home: Vector3
 var _sign_rise: float = 0.0
 var _sign_back: bool = false
 var _max_tilt: float = 0.0
+var _c: Truck
+var _c_v0: float = 0.0
+var _c_v3: float = 0.0
+var _d: Truck
+var _d_min_hub: float = INF
+var _fd: InputFrame = InputFrame.new()
+var _c_pilot: TrackAutopilot
 
 
 func _test_setup() -> void:
@@ -47,6 +60,13 @@ func _test_setup() -> void:
 		if _a_hit_at < 0:
 			_a_hit_at = tick
 			_a_before = _a_prev)
+	# C : haut de la descente plongeante, 90 km/h, sans gaz
+	var i_top := _track.index_at_s(_track.segment_start_s("Chicane gauche (descente plongeante)"))
+	_c = _spawn_before(_track.frame_at(i_top, 0.0, 0.0), 0.0, 90.0)
+	_c_pilot = TrackAutopilot.new(_track, _c, 0.877)
+	# D : 60 m avant le pied de la grande montee, 110 km/h, plein gaz
+	var i_foot := _track.index_at_s(_track.segment_start_s("Grande montee"))
+	_d = _spawn_before(_track.frame_at(i_foot, -6.0, 0.0), 60.0, 110.0)
 	var board := _track.sign_node(SIGN)
 	_sign_home = board.global_position
 	_b = _spawn_before(board.global_transform, 24.0, 80.0)
@@ -76,6 +96,20 @@ func _test_tick(t: int) -> void:
 	_fb.throttle = 0.0 if _b_hit_at >= 0 else 0.5
 	_fb.brake = 1.0 if _b_hit_at >= 0 else 0.0
 	_b.set_input(_fb)
+	var fc := _c_pilot.drive(t)
+	fc.throttle = 0.0
+	fc.brake = 0.0
+	_c.set_input(fc)
+	_fd.tick = t
+	_fd.throttle = 1.0
+	_d.set_input(_fd)
+	if t == 2:
+		_c_v0 = _c.get_speed_kmh()
+	if t == 182:
+		_c_v3 = _c.get_speed_kmh()
+	if t < 150:
+		for k in 4:
+			_d_min_hub = minf(_d_min_hub, _d.get_probe(k).hub_distance)
 	var va := _a.linear_velocity.length()
 	var vb := _b.linear_velocity.length()
 	if _a_hit_at >= 0 and t == _a_hit_at + 3:
@@ -90,7 +124,7 @@ func _test_tick(t: int) -> void:
 	if _b_hit_at >= 0 and t == _b_hit_at + 330:
 		_sign_back = not board.knocked and board.freeze \
 				and board.global_position.distance_to(_sign_home) < 0.1
-	for tr: Truck in [_a, _b]:
+	for tr: Truck in [_a, _b, _c, _d]:
 		_max_tilt = maxf(_max_tilt, TruckTestUtil.tilt_deg(tr))
 
 
@@ -109,8 +143,13 @@ func _test_finish() -> void:
 		grade = maxf(grade, absf(q.y - p.y) / Vector2(q.x - p.x, q.z - p.z).length())
 	print("  INFO   relief %.1f m, pente max %.1f %% ; flaque %.1f -> %.1f m/s ; panneau %.1f -> %.1f m/s, envol %.1f m"
 		% [hi - lo, grade * 100.0, _a_before, _a_after, _b_before, _b_after, _sign_rise])
-	check_above("relief : denivele du trace (m)", hi - lo, 12.0)
-	check_below("relief : pente max (%)", grade * 100.0, 9.0)
+	print("  INFO   C descente : %.0f -> %.0f km/h sans gaz ; D pied de cote : moyeu a %.2f m (repos %.2f)"
+		% [_c_v0, _c_v3, _d_min_hub, TruckSpec.rest_hub_distance()])
+	check_above("collines : denivele du trace (m)", hi - lo, 30.0)
+	check_above("collines : vraie cote raide, pente max (%)", grade * 100.0, 12.0)
+	check_below("collines : pente max reste roulable (%)", grade * 100.0, 20.0)
+	check_above("C descente plongeante : la gravite accelere (km/h en 3 s)", _c_v3 - _c_v0, 8.0)
+	check_below("D compression au pied de la cote : moyeu (m)", _d_min_hub, 0.40)
 	check("4 flaques, 8 panneaux", _track.puddle_count() == 4 and _track.sign_count() == 8,
 		"%d / %d" % [_track.puddle_count(), _track.sign_count()])
 	check("A flaque : ralenti une seule fois", _a_slowed == 1, "%d" % _a_slowed)

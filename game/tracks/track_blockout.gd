@@ -17,7 +17,11 @@ extends Node3D
 ##                  ou virage a droite en devers inverse). Raccord progressif
 ##                  sur bank_blend_length. La chaussee pivote sur son bord BAS :
 ##                  il reste a la hauteur du trace, jamais sous le sol.
-##   "climb": m     denivele sur le segment (raccord en S, pentes douces).
+##   "climb": m     denivele sur le segment. Par defaut, raccord en S sur le
+##                  segment (plat a ses deux bouts). Avec climb_blend_length > 0 :
+##                  pente constante sur le segment, raccords lisses sur toute la
+##                  boucle (plusieurs segments enchaines font une seule longue
+##                  cote ou descente ; crêtes et creux sur climb_blend_length).
 ##   "line": m      decalage lateral de la ligne de course (> 0 a droite).
 ##   "jump": m      rampe de saut a cette distance du debut du segment ;
 ##   "jump_offset": m  son decalage lateral (defaut : jump_offset).
@@ -68,6 +72,10 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 ## Longueur des raccords de devers : sur une piste large, le bord haut monte de
 ## (largeur / 2) x sin(devers) ; un raccord long garde des pentes douces.
 @export var bank_blend_length: float = 30.0
+## 0 : chaque montee en S sur son segment. > 0 : pentes constantes par segment,
+## raccordees sur cette longueur (plus court = crete et compression plus
+## franches).
+@export var climb_blend_length: float = 0.0
 
 @export_group("Glissieres")
 ## Epaisseur a hauteur de chaussee (METRICS.md §4 : 0,3 m minimum).
@@ -134,6 +142,7 @@ var _length: float = 0.0
 var _jumps: Array[Vector2] = []         # (s du tremplin, decalage)
 var _boosts: Array[Vector2] = []        # (s de la plaque, decalage)
 var _arches: Array[Dictionary] = []     # {s, label}
+var _segment_starts: Dictionary = {}    # nom -> abscisse du debut (m)
 var _puddles: Array[Vector3] = []       # (s, decalage, rayon)
 var _signs: Array[Vector2] = []         # (s, decalage)
 var _auto_lengths: PackedFloat32Array = []
@@ -275,6 +284,12 @@ func boost_pad_transform(k: int) -> Transform3D:
 	return frame_at(index_at_s(_boosts[k].x), _boosts[k].y, 0.0)
 
 
+## Abscisse (m) du debut du segment nomme ("name"), -1 s'il n'existe pas.
+func segment_start_s(seg_name: String) -> float:
+	_ensure_built()
+	return float(_segment_starts.get(seg_name, -1.0))
+
+
 func arch_count() -> int:
 	_ensure_built()
 	return _arches.size()
@@ -371,11 +386,13 @@ func _build_centerline() -> bool:
 	_jumps.clear()
 	_boosts.clear()
 	_arches.clear()
+	_segment_starts.clear()
 	_puddles.clear()
 	_signs.clear()
 	var seg_start := 0.0
 	for k in segments.size():
 		var seg: Dictionary = segments[k]
+		_segment_starts[String(seg.get("name", "%d" % k))] = seg_start
 		if seg.has("jump"):
 			_jumps.append(Vector2(seg_start + float(seg["jump"]), float(seg.get("jump_offset", jump_offset))))
 		for b: Array in seg.get("boost", []):
@@ -448,7 +465,8 @@ func _build_centerline() -> bool:
 		var k := fine_seg[f + 1]
 		var seg: Dictionary = segments[k]
 		var u := lerpf(fine_u[f], fine_u[f + 1], w) if fine_seg[f] == k else w * fine_u[f + 1]
-		var y := climb_base[k] + float(seg.get("climb", 0.0)) * smoothstep(0.0, 1.0, u)
+		var rise := u if climb_blend_length > 0.0 else smoothstep(0.0, 1.0, u)
+		var y := climb_base[k] + float(seg.get("climb", 0.0)) * rise
 		_pos[i] = Vector3(p2.x, y, p2.y)
 		_s[i] = si
 		seg_of[i] = k
@@ -457,6 +475,16 @@ func _build_centerline() -> bool:
 			_curv[i] = signf(float(seg["angle"])) / float(seg["radius"])
 		raw_bank[i] = float(seg.get("bank", 0.0))
 		raw_line[i] = float(seg.get("line", 0.0))
+	if climb_blend_length > 0.0:
+		# pentes constantes par segment, raccordees sur toute la boucle
+		var ys := PackedFloat32Array()
+		ys.resize(count)
+		for i in count:
+			ys[i] = _pos[i].y
+		var rc := climb_blend_length / ds / 2.0
+		ys = _smooth_loop(_smooth_loop(ys, rc), rc)
+		for i in count:
+			_pos[i].y = ys[i]
 	var bank := _smooth_loop(_smooth_loop(raw_bank, bank_blend_length / ds / 2.0), bank_blend_length / ds / 2.0)
 	_line = _smooth_loop(_smooth_loop(raw_line, blend_length / ds), blend_length / ds)
 	# devers pivote sur le bord bas : le trace monte d'autant, le bord bas reste

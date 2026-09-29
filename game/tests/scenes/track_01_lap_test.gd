@@ -17,8 +17,9 @@ extends PhysicsTest
 ##   - toujours a bonne distance du camion (3 a 35 m : recul au-dela de la
 ##     semi-remorque de 16 m) ;
 ##   - ne tremble pas : le tremblement est la part HAUTE FREQUENCE de la
-##     hauteur (ecart a une moyenne glissante de 15 ticks, soit ce qui depasse
-##     ~4 Hz : pompage, bosses, chocs de reception). Celle de la camera doit
+##     hauteur (ecart a un lissage quadratique glissant de 15 ticks, qui
+##     conserve les collines, cretes et creux : il ne reste que les secousses,
+##     bosses, chocs de reception). Celle de la camera doit
 ##     etre au plus la moitie de celle du camion (ratio mesure dans la scene).
 ##     Les mouvements lents (collines, parabole du saut) sont suivis : c'est
 ##     voulu.
@@ -124,16 +125,22 @@ func _test_tick(t: int) -> void:
 		_truck_y.append(_truck.get_global_transform_interpolated().origin.y)
 
 
-## Ecart quadratique moyen a la moyenne glissante (+/- `half` echantillons) :
-## la part haute frequence du signal.
+## Part haute frequence d'un signal : ecart quadratique moyen a son lissage
+## quadratique glissant (Savitzky-Golay, +/- `half` echantillons). Ce lissage
+## conserve exactement les courbes lentes (collines, cretes, creux, parabole
+## d'un saut) : il ne reste que les secousses rapides.
 static func high_frequency_rms(y: PackedFloat32Array, half: int) -> float:
+	var n_w := 2 * half + 1
+	var weights := PackedFloat32Array()
+	var norm := float((2 * half - 1) * (2 * half + 1) * (2 * half + 3))
+	for k in range(-half, half + 1):
+		weights.append((3.0 * (3 * half * half + 3 * half - 1) - 15.0 * k * k) / norm)
 	var acc := 0.0
 	var n := 0
 	for i in range(half, y.size() - half):
 		var m := 0.0
-		for k in range(-half, half + 1):
-			m += y[i + k]
-		m /= 2 * half + 1
+		for k in n_w:
+			m += y[i + k - half] * weights[k]
 		acc += (y[i] - m) * (y[i] - m)
 		n += 1
 	return sqrt(acc / maxi(n, 1))
