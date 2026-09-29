@@ -37,6 +37,9 @@ var start_button: Button
 var sound_button: Button
 var settings_button: Button
 var settings: Control
+## Ecran des parametres : case du son (miroir du bouton du menu), volume.
+var sound_check: CheckButton
+var volume_slider: HSlider
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -165,12 +168,19 @@ func set_sound(on: bool) -> void:
 	AudioServer.set_bus_mute(_master_bus(), not on)
 	sound_button.set_pressed_no_signal(on)
 	sound_button.text = "SON : ON" if on else "SON : OFF"
+	if sound_check != null:
+		sound_check.set_pressed_no_signal(on)
+
+
+## Volume general (0 a 100 %), sur le bus Master.
+func set_volume(percent: float) -> void:
+	AudioServer.set_bus_volume_db(_master_bus(), linear_to_db(maxf(percent, 0.001) / 100.0))
 
 
 func toggle_settings() -> void:
 	settings.visible = not settings.visible
 	if settings.visible:
-		(settings.find_child("Close", true, false) as Button).grab_focus()
+		(settings.find_child("Back", true, false) as Button).grab_focus()
 	else:
 		settings_button.grab_focus()
 
@@ -187,7 +197,7 @@ func _update_pads_label() -> void:
 	if _pads_label == null:
 		return
 	var pads := Input.get_connected_joypads().size()
-	var text := "Manettes detectees : %d" % pads
+	var text := "Manettes détectées : %d" % pads
 	var warn := selected_players > 2 and pads < selected_players
 	if warn:
 		text += "   -   il en faut %d pour %d joueurs (J1 et J2 peuvent jouer au clavier)" \
@@ -318,60 +328,109 @@ func _build_ui() -> void:
 	root.add_child(settings)
 
 
-## Panneau de parametres : factice pour l'instant (rien n'est branche).
+## Ecran des parametres : schema de la manette (chaque commande legendee),
+## touches du clavier, son (coupure et volume reels), reglages a venir, et
+## RETOUR vers le menu. Couvre le menu : ses clics ne passent pas au travers.
 func _build_settings() -> Control:
 	var layer := Control.new()
 	layer.name = "SettingsPanel"
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.visible = false
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
+	dim.color = Color(0, 0, 0, 0.7)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(dim)                   # arrete aussi les clics vers le menu
 	var panel := PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	panel.custom_minimum_size = Vector2(560, 0)
-	panel.add_theme_stylebox_override("panel", _box(Color(0.06, 0.08, 0.13, 0.97), Color(0.95, 0.55, 0.1), 3))
+	panel.custom_minimum_size = Vector2(1500, 0)
+	panel.add_theme_stylebox_override("panel", _box(Color(0.05, 0.07, 0.11, 0.97), Color(0.95, 0.55, 0.1), 3))
 	layer.add_child(panel)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 16)
+	box.add_theme_constant_override("separation", 14)
 	panel.add_child(box)
-	var head := _label("PARAMETRES", 38, 6)
+	var head := _label("PARAMÈTRES", 40, 6)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(head)
-	var music := HBoxContainer.new()
-	music.add_child(_label("Volume musique", 22, 0))
-	var slider := HSlider.new()
-	slider.value = 80
-	slider.custom_minimum_size = Vector2(240, 0)
-	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	music.add_child(slider)
-	box.add_child(music)
+	var sub := _label("Commandes — manette disposition Switch (profil Mario Kart 8)", 20, 0)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.modulate = Color(0.8, 0.82, 0.88)
+	box.add_child(sub)
+	var diagram := ControllerDiagram.new()
+	diagram.name = "ControllerDiagram"
+	diagram.custom_minimum_size = Vector2(1260, 470)
+	diagram.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(diagram)
+
+	# bas : clavier a gauche, reglages a droite
+	var bottom := HBoxContainer.new()
+	bottom.add_theme_constant_override("separation", 40)
+	box.add_child(bottom)
+	var keys := VBoxContainer.new()
+	keys.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	keys.add_theme_constant_override("separation", 6)
+	bottom.add_child(keys)
+	keys.add_child(_section("Clavier"))
+	for line: String in [
+		"J1 — flèches · Ctrl droit drift · Maj droite boost · ; cargo · ! klaxon · : vue · Retour arrière reset",
+		"J2 — Z Q S D · Espace drift · Maj gauche boost · E cargo · H klaxon · C vue · R reset",
+		"Seul : les deux jeux de touches · Échap : menu · Entrée : rejouer",
+	]:
+		var l := _label(line, 17, 0)
+		l.modulate = Color(0.9, 0.9, 0.94)
+		keys.add_child(l)
+	var opts := VBoxContainer.new()
+	opts.custom_minimum_size = Vector2(430, 0)
+	opts.add_theme_constant_override("separation", 6)
+	bottom.add_child(opts)
+	opts.add_child(_section("Son et réglages"))
+	sound_check = CheckButton.new()
+	sound_check.name = "SoundCheck"
+	sound_check.text = "Son"
+	sound_check.add_theme_font_size_override("font_size", 19)
+	sound_check.toggled.connect(set_sound)
+	opts.add_child(sound_check)
+	var vol := HBoxContainer.new()
+	vol.add_child(_label("Volume", 19, 0))
+	volume_slider = HSlider.new()
+	volume_slider.name = "Volume"
+	volume_slider.min_value = 0.0
+	volume_slider.max_value = 100.0
+	volume_slider.step = 5.0
+	volume_slider.value = roundf(db_to_linear(AudioServer.get_bus_volume_db(_master_bus())) * 100.0)
+	volume_slider.custom_minimum_size = Vector2(260, 0)
+	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	volume_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	volume_slider.value_changed.connect(set_volume)
+	vol.add_child(volume_slider)
+	opts.add_child(vol)
 	var rumble := CheckButton.new()
-	rumble.text = "Vibrations manette"
+	rumble.text = "Vibrations manette (bientôt)"
 	rumble.button_pressed = true
-	rumble.add_theme_font_size_override("font_size", 22)
-	box.add_child(rumble)
+	rumble.add_theme_font_size_override("font_size", 19)
+	opts.add_child(rumble)
 	var quality := OptionButton.new()
-	for q: String in ["Qualite graphique : haute", "Qualite graphique : moyenne", "Qualite graphique : basse"]:
+	for q: String in ["Qualité graphique : haute", "Qualité graphique : moyenne", "Qualité graphique : basse"]:
 		quality.add_item(q)
-	quality.add_theme_font_size_override("font_size", 22)
-	box.add_child(quality)
-	var note := _label("Reglages factices : bientot branches.", 16, 0)
-	note.modulate = Color(0.7, 0.7, 0.75)
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(note)
-	var close := Button.new()
-	close.name = "Close"
-	close.text = "FERMER"
-	close.custom_minimum_size = Vector2(220, 56)
-	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_style_button(close, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 24)
-	close.pressed.connect(toggle_settings)
-	box.add_child(close)
+	quality.add_theme_font_size_override("font_size", 19)
+	opts.add_child(quality)
+
+	var back := Button.new()
+	back.name = "Back"
+	back.text = "RETOUR"
+	back.custom_minimum_size = Vector2(260, 60)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_style_button(back, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 26)
+	back.pressed.connect(toggle_settings)
+	box.add_child(back)
 	return layer
+
+
+func _section(text: String) -> Label:
+	var l := _label(text.to_upper(), 20, 0)
+	l.modulate = Color(1.0, 0.62, 0.12)
+	return l
 
 
 func _label(text: String, size: int, outline: int) -> Label:
