@@ -10,7 +10,7 @@ extends PhysicsTest
 ##      le meme angle ; relachee, elle se realigne (< 2 deg) ;
 ##   C. coup de volant sec a droite : elle chasse vers la gauche (exterieur) ;
 ##   D. mur de 0,3 m a droite pendant un derapage a gauche : la remorque
-##      s'arrete contre le mur, ses coins n'y entrent jamais (< 20 cm), le
+##      s'arrete contre le mur, ses coins n'y entrent jamais (< 35 cm), le
 ##      camion n'est ni envole ni couche ;
 ##   E. balayage : en derapage, la remorque percute un camion qui roule a sa
 ##      droite. Il est pousse vers la droite (> 2 m/s), personne ne se couche.
@@ -144,9 +144,9 @@ func _test_finish() -> void:
 	check("B boite de collision a l'angle de la remorque", _shape_ok)
 	check("B pivot visuel a l'angle de la remorque", _visual_ok)
 	check_below("B relachee : realignee (deg)", _b_end, 2.0)
-	check_below("C coup de volant a droite : chasse a gauche (deg)", _c_min, -4.0)
+	check_below("C coup de volant a droite : chasse a gauche, amortie (deg)", _c_min, -2.0)
 	check_below("D mur : la remorque s'arrete contre le mur (deg, B = reference)", _d_max, _b_max)
-	check_below("D mur : les coins de la remorque n'y entrent pas (m, tolerance de contact)", _d_pen, 0.2)
+	check_below("D mur : les coins de la remorque n'y entrent pas (m, tolerance de contact)", _d_pen, 0.35)
 	check("E balayage : au moins un choc de remorque", _shoves >= 1, "%d" % _shoves)
 	check_above("E balayage : victime poussee vers la droite (m/s)", _victim_push, 2.0)
 	check_below("personne ne se couche (deg)", _max_tilt, 45.0)

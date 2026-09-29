@@ -147,9 +147,9 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
 |---|---|
 | Sellette (pivot) | **(0 ; 1,8 ; 1,2)**, lacet seulement |
 | Angle max | **±35°** (`trailer_max_angle_deg`) |
-| Suivi | ressort amorti 1,3 Hz, ζ = 0,4, inertie de lacet propre |
-| Consigne en virage | 16° vers l'extérieur par g d'accélération latérale |
-| Consigne en dérapage | + 0,9 × l'angle de dérive, vers l'extérieur |
+| Suivi | ressort amorti 1,6 Hz, ζ = 0,8 (fluide, sans balancier ; 2026-09-30), inertie de lacet propre |
+| Consigne en virage | 10° vers l'extérieur par g d'accélération latérale |
+| Consigne en dérapage | + 0,6 × l'angle de dérive, vers l'extérieur |
 
 - La cabine réagit seule au volant : la remorque garde sa propre vitesse de
   lacet (dans le monde) et rejoint sa consigne avec retard. Un coup de volant
@@ -164,11 +164,25 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
 - Un **mur arrête** le balayage (requête de forme avant chaque rotation) ; déjà
   contre un mur, la remorque se replie vers l'axe.
 - Un **adversaire balayé** reçoit un choc le long du balayage, à son centre de
-  masse (pas de couple : il glisse, il ne se couche pas), plafonné à 8 m/s ;
-  35 % du choc revient au camion qui balaie (arcade : l'attaquant garde sa
-  ligne). La caisse pivotant dans le corps, le solveur ne voit pas sa vitesse
+  masse (pas de couple : il glisse, il ne se couche pas), plafonné à 8 m/s,
+  un choc par adversaire toutes les 0,5 s ; 15 % du choc revient au camion
+  qui balaie (arcade : l'attaquant garde sa ligne, le tracteur n'est pas
+  désaxé). La caisse pivotant dans le corps, le solveur ne voit pas sa vitesse
   propre : ce choc la remplace.
 - Vérifié par `truck_trailer_test` (dérapage, coup de volant, mur, balayage).
+
+## 5 quater bis. Direction et dérapage maîtrisé (2026-09-30)
+
+- Train avant vif : roues à 4°/tick (braquage complet en 8 ticks), angle à
+  haute vitesse × 1,35 de l'angle d'adhérence limite. Mesuré : 90 % du lacet
+  établi en 11 ticks.
+- Dérapage : au frein à main, le lacet est piloté vers une dérive cible
+  (28° au plein braquage, proportionnelle au stick) ; mesuré : 31° tenus, à
+  vitesse gardée, retour sous 5° en 41 ticks au relâcher.
+- Anti tête-à-queue : la dérive prévue à 0,3 s ne dépasse jamais 40°, frein à
+  main ou non (14 rad/s² d'autorité). Mesuré : un choc de 4 rad/s en lacet
+  plafonne à 36°.
+- Vérifié par `truck_drift_control_test`.
 
 ## 5 quater. Murs et obstacles (arcade)
 

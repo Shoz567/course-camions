@@ -84,6 +84,8 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var trailer_shove_restitution: float = 0.0
 ## Vitesse max donnee a l'adversaire par un coup de remorque.
 @export_range(0.0, 30.0, 0.01, "suffix:m/s") var trailer_shove_max_dv_ms: float = 0.0
+## Delai entre deux coups de remorque au meme adversaire.
+@export_range(0.0, 600.0, 1.0, "suffix:ticks") var trailer_shove_cooldown_ticks: float = 0.0
 ## Part du choc renvoyee au camion qui balaie (arcade : l'attaquant garde sa
 ## ligne ; 1 = conservation de la quantite de mouvement).
 @export_range(0.0, 1.0, 0.01) var trailer_shove_reaction: float = 0.0
@@ -167,6 +169,20 @@ extends Resource
 ## Vitesse de rotation des roues directrices.
 @export_range(0.0, 20.0, 0.01, "suffix:°/tick") var steer_rate_deg_per_tick: float = 0.0
 
+@export_group("Derapage maitrise")
+## Derive tenue au frein a main, au plein braquage (proportionnelle au stick).
+@export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
+## Derive jamais depassee, frein a main ou non : pas de tete-a-queue.
+@export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
+## Raideur du retour vers la derive cible (1/s).
+@export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
+## Acceleration angulaire max de l'aide (une aide, pas un rail).
+@export_range(0.0, 30.0, 0.01, "suffix:rad/s²") var drift_assist_accel: float = 0.0
+## Garde anti tete-a-queue (derive prevue au-dela de la limite) : autorite.
+@export_range(0.0, 60.0, 0.01, "suffix:rad/s²") var spin_guard_accel: float = 0.0
+## En dessous, pas d'aide (manoeuvres a basse vitesse).
+@export_range(0.0, 30.0, 0.01, "suffix:m/s") var drift_min_speed_ms: float = 0.0
+
 @export_group("Aides arcade")
 ## Inclinaison (roulis et tangage) au-dela de laquelle l'anti-retournement agit.
 ## Mesuree par rapport au sol sous les roues quand 3 roues touchent (une rampe
@@ -210,6 +226,9 @@ func validate() -> PackedStringArray:
 		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:
 		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
+	if drift_target_slip_deg >= drift_max_slip_deg:
+		errors.append("drift_target_slip_deg (%s) >= drift_max_slip_deg (%s)"
+			% [drift_target_slip_deg, drift_max_slip_deg])
 	if wall_unstick_speed_factor >= 1.0 or cargo_hit_speed_factor >= 1.0:
 		errors.append("wall_unstick_speed_factor / cargo_hit_speed_factor : doivent etre < 1")
 	if trailer_damping_ratio >= 2.0:

@@ -117,6 +117,11 @@ var _trailer_applied: float = 0.0
 var _lat_accel: float = 0.0
 var _prev_velocity: Vector3 = Vector3.ZERO
 var _accel_ready: bool = false
+## Cap de la vitesse au tick precedent (rotation de la trajectoire).
+var _prev_heading_v: float = 0.0
+var _heading_ready: bool = false
+## Dernier coup de remorque donne a chaque adversaire (id -> tick).
+var _shove_ticks: Dictionary = {}
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 
@@ -518,6 +523,10 @@ func _physics_process(_delta: float) -> void:
 	if debug_drag:
 		apply_central_force(-linear_velocity * linear_velocity.length() * t.aero_drag_per_m * mass)
 
+	# derapage maitrise : cible de derive au frein a main, jamais de tete-a-queue
+	if debug_handbrake:
+		_apply_drift_assist(t, up, fwd, steer_in, v_fwd)
+
 	# 1.6 au sol : anti-retournement (prioritaire : les camions se percutent
 	# souvent). En l'air : assiette automatique et lacet au stick.
 	if _grounded > 0:
@@ -580,6 +589,49 @@ func _apply_cargo_hit(t: VehicleTuning, up: Vector3) -> void:
 		side = 1.0
 	apply_torque_impulse(up * (-side * t.cargo_hit_yaw_kick_rad_s) * t.inertia_yaw_kgm2)
 	cargo_hit_taken.emit()
+
+
+## Derapage maitrise (demande du playtest : plus de tetes-a-queue). La derive
+## (angle entre le cap et la vitesse, > 0 : vitesse a droite du cap) varie
+## comme lacet - rotation de la trajectoire ; on pilote donc le lacet :
+##   - au frein a main, vers une derive cible proportionnelle au braquage
+##     (drift_target_slip_deg au plein stick) : le drift tient, previsible ;
+##   - a tout moment, jamais au-dela de drift_max_slip_deg : retour vers la
+##     limite, meme sans frein a main (apres un choc, par exemple).
+## Acceleration angulaire bornee (drift_assist_accel) : une aide, pas un rail.
+func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float, v_fwd: float) -> void:
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	var flat := linear_velocity - up * linear_velocity.dot(up)
+	var speed := flat.length()
+	var heading_v := atan2(-flat.x, -flat.z)
+	var path_rate := 0.0
+	if _heading_ready and speed > 2.0:
+		path_rate = wrapf(heading_v - _prev_heading_v, -PI, PI) / dt
+	_prev_heading_v = heading_v
+	_heading_ready = speed > 2.0
+	if _grounded < 2 or speed < t.drift_min_speed_ms or v_fwd <= 0.0:
+		return
+	var slip := atan2(flat.dot(fwd.cross(up)), flat.dot(fwd))
+	var max_slip := deg_to_rad(t.drift_max_slip_deg)
+	var w := angular_velocity.dot(up)
+	var target := 0.0
+	var gain := 0.0
+	var limit := t.drift_assist_accel
+	if _handbrake_blend > 0.2:
+		target = clampf(-steer_in * deg_to_rad(t.drift_target_slip_deg), -max_slip, max_slip)
+		gain = _handbrake_blend
+	# garde anti tete-a-queue : derive PREVUE a 0,3 s (un choc lance la rotation
+	# trop vite pour attendre la limite), autorite plus forte
+	var predicted := slip + (w - path_rate) * 0.3
+	if absf(predicted) > max_slip:
+		target = signf(predicted) * max_slip
+		gain = 1.0
+		limit = t.spin_guard_accel
+	if gain <= 0.0:
+		return
+	var desired_w := path_rate + t.drift_assist_gain * (target - slip)
+	var alpha := clampf((desired_w - w) * 8.0, -limit, limit) * gain
+	apply_torque(up * alpha * t.inertia_yaw_kgm2)
 
 
 func _update_boost(t: VehicleTuning) -> void:
@@ -657,12 +709,17 @@ func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 	var hits := get_world_3d().direct_space_state.intersect_shape(_trailer_query, 4)
 	if hits.is_empty():
 		return rel
+	var now := Engine.get_physics_frames()
 	var tb := global_basis * Basis(Vector3.UP, angle)
 	var kingpin := global_transform * TruckSpec.KINGPIN
 	var reach := TruckSpec.TRAILER_CENTER.z + TruckSpec.TRAILER_SIZE.z / 2.0 - TruckSpec.KINGPIN.z
 	for h: Dictionary in hits:
 		var other := h["collider"] as Truck
 		if other == null or other == self:
+			continue
+		# un choc par adversaire et par balayage, pas une rafale
+		var last: int = _shove_ticks.get(other.get_instance_id(), -100000)
+		if now - last < roundi(t.trailer_shove_cooldown_ticks):
 			continue
 		var along := clampf((other.global_position - kingpin).dot(tb.z), 0.0, reach)
 		var point := kingpin + tb.z * along
@@ -677,6 +734,7 @@ func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 		var m_red := mass * other.mass / (mass + other.mass)
 		var j := minf(m_red * (v_sweep - v_sep) * (1.0 + t.trailer_shove_restitution),
 				other.mass * t.trailer_shove_max_dv_ms)
+		_shove_ticks[other.get_instance_id()] = now
 		other.apply_central_impulse(dir * j)
 		apply_central_impulse(-dir * j * t.trailer_shove_reaction)
 		trailer_shoved.emit(other, j)
