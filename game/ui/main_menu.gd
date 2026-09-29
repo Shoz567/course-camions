@@ -248,7 +248,7 @@ func _build_ui() -> void:
 	var title_box := Control.new()
 	title_box.custom_minimum_size = Vector2(980, 140)
 	column.add_child(title_box)
-	title = _label("COURSE DE CAMIONS", 96, 14)
+	title = _label("CRAZY WHEELS", 96, 14)
 	title.name = "Title"
 	title.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

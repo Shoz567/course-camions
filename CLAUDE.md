@@ -1,4 +1,4 @@
-# CLAUDE.md — Course de camions arcade
+# CLAUDE.md — Crazy Wheels (course de camions arcade)
 
 Règles de travail pour Claude Code sur ce dépôt. Lis ce fichier en entier avant
 toute modification. En cas de contradiction avec une demande ponctuelle de
@@ -13,7 +13,7 @@ spectaculaire (dérapages, sauts, contacts entre camions), multijoueur **local
 en écran partagé d'abord** (2 à 4 manettes), **online host-autoritaire**
 ensuite.
 
-*Titre provisoire : « Course de camions ».* Aucun nom, logo, véhicule ou circuit
+*Titre : « Crazy Wheels » (anciennement « Course de camions »).* Aucun nom, logo, véhicule ou circuit
 d'un jeu ou d'une marque existants ne doit apparaître dans le code, les assets
 ou l'UI.
 
