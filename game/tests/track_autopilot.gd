@@ -24,6 +24,9 @@ var truck: Truck
 var frame: InputFrame = InputFrame.new()
 var index: int = -1
 var target_speed: float = 0.0
+## Decalage lateral ajoute a la ligne de course (m, > 0 a droite) : plusieurs
+## pilotes sur des voies differentes.
+var lane: float = 0.0
 var _lateral_accel: float
 
 
@@ -40,7 +43,7 @@ func drive(tick: int) -> InputFrame:
 	# direction : poursuite pure vers la ligne de course
 	var look := 10.0 + v * 0.45
 	var j := track.sample_ahead(index, look)
-	var aim := track.sample_position(j) + track.sample_right(j) * track.line_offset(j)
+	var aim := track.sample_position(j) + track.sample_right(j) * (track.line_offset(j) + lane)
 	var local := truck.global_transform.affine_inverse() * aim
 	var ld2 := maxf(local.x * local.x + local.z * local.z, 1.0)
 	var curvature := 2.0 * local.x / ld2

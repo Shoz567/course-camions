@@ -197,7 +197,8 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course de
 1 à 4 joueurs** (`make run`, scène principale `ui/main_menu.tscn`). Le menu
 (titre animé, choix du nombre de joueurs à la manette, au clavier ou à la
-souris, son on / off, paramètres factices, piste et camions en orbite derrière)
+souris, son on / off, écran des paramètres avec le schéma légendé de la manette
+et le volume, piste et camions en orbite derrière)
 lance `dev/race.tscn`. J1 camion bleu AZUR (manette 0 ou flèches), J2 rouge
 DURAND (manette 1 ou ZQSD), J3 jaune SOLEIL (manette 2), J4 vert (manette 3) ;
 compte à rebours, position (POS n/N) dans chaque HUD, classement affiché à tous
@@ -283,7 +284,9 @@ ajout discret au milieu d'une autre.
   tracteur, inertie imposée), puis le 2026-09-29 : **articulée** à la sellette,
   ±35°, la caisse de collision pivote et balaie les adversaires (VEHICLE_SPEC
   §2 et §5 bis). Pas de mise en portefeuille ni de corps séparé.
-- **Boost / objets.** Arcade pur (boost, objets) ou course « propre » ?
+- **Boost / objets.** Arcade retenu : boost à jauge (L), plaques de boost et de
+  saut, largage de cargo (ZL, barrière éphémère de 5 s, recharge 30 s). Pas
+  encore d'objets à ramasser.
 
 ## Ce qu'on ne fait volontairement pas (pour l'instant)
 

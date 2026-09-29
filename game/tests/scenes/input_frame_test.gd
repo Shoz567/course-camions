@@ -2,8 +2,9 @@ extends PhysicsTest
 
 ## InputFrame (format 6 octets, groupement par 3), ScriptedInputSource,
 ## DeviceInputSource (isolation par device, zone morte, schema de boutons style
-## Mario Kart, fronts de reset et de klaxon, camera hors InputFrame,
-## debranchement). docs/INPUT_SPEC.md.
+## Mario Kart, fronts de reset, de klaxon et de cargo, camera hors InputFrame,
+## debranchement), KeyboardInputSource (touches de cargo par jeu de touches).
+## docs/INPUT_SPEC.md.
 
 var _pad0: DeviceInputSource
 var _pad1: DeviceInputSource
@@ -34,6 +35,7 @@ func _test_bytes() -> void:
 	f.handbrake = true
 	f.reset = true
 	f.honk = true
+	f.cargo = true
 	var b := f.to_bytes()
 	check("taille d'une frame", b.size() == InputFrame.SIZE, "octets=%d" % b.size())
 	var g := InputFrame.from_bytes(b)
@@ -41,7 +43,13 @@ func _test_bytes() -> void:
 	check_near("steer quantifie", g.steer, -0.5, 1.0 / 127.0)
 	check_near("throttle quantifie", g.throttle, 0.3, 1.0 / 255.0)
 	check_near("brake quantifie", g.brake, 1.0, 1.0 / 255.0)
-	check("bits handbrake/boost/reset/klaxon", g.handbrake and not g.boost and g.reset and g.honk)
+	check("bits handbrake/boost/reset/klaxon/cargo",
+		g.handbrake and not g.boost and g.reset and g.honk and g.cargo)
+	var c := InputFrame.new()
+	c.copy_from(g)
+	check("copie : cargo recopie", c.cargo)
+	c.clear()
+	check("neutre : plus de cargo", not c.cargo)
 
 	f.steer = 3.0
 	check_near("steer borne a 1", InputFrame.from_bytes(f.to_bytes()).steer, 1.0, 1e-6)
@@ -100,11 +108,28 @@ func _test_device() -> void:
 	check("reset (-) : vrai un seul tick", r1 and not r2, "%s puis %s" % [r1, r2])
 	_send_button(0, JOY_BUTTON_BACK, false)
 	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 1.0)
-	var h1 := _pad0.poll(7).honk
-	var h2 := _pad0.poll(8).honk
-	check("klaxon (ZL) : vrai un seul tick", h1 and not h2, "%s puis %s" % [h1, h2])
+	# poll() rend toujours la meme InputFrame : lire avant le tick suivant
+	var z1 := _pad0.poll(7)
+	var c1 := z1.cargo
+	var h1 := z1.honk
+	var c2 := _pad0.poll(8).cargo
+	check("cargo (ZL) : vrai un seul tick, sans klaxon", c1 and not c2 and not h1,
+		"%s puis %s" % [c1, c2])
 	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 0.0)
 	check("ZL ne freine pas (profil MK8)", _pad0.poll(8).brake == 0.0)
+	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 1.0)
+	check("ZL maintenu puis rappuye : un seul largage par appui", _pad0.poll(8).cargo)
+	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 0.8)
+	check("ZL maintenu : pas de second largage", not _pad0.poll(8).cargo)
+	_send_axis(0, JOY_AXIS_TRIGGER_LEFT, 0.0)
+	var honks := 0
+	for d: JoyButton in [JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]:
+		_send_button(0, d, true)
+		var fh := _pad0.poll(8)
+		honks += 1 if (fh.honk and not fh.cargo) else 0
+		_send_button(0, d, false)
+	check("klaxon : chaque direction de la croix", honks == 4, "%d / 4" % honks)
+	check("klaxon : vrai un seul tick", not _pad0.poll(8).honk)
 	_send_axis(0, JOY_AXIS_TRIGGER_RIGHT, 0.0)
 	_send_button(0, JOY_BUTTON_B, true)
 	var fa := _pad0.poll(9)
@@ -141,6 +166,25 @@ func _test_device() -> void:
 	_pad0._on_joy_connection_changed(0, false)
 	var fu := _pad0.poll(18)
 	check("manette debranchee : neutre", fu.throttle == 0.0 and fu.steer == 0.0 and not _pad0.connected)
+	_test_keyboard_cargo()
+
+
+## Cargo au clavier : E (ZQSD), ; en AZERTY (FLECHES), aucun pour AUCUN.
+func _test_keyboard_cargo() -> void:
+	var got := []
+	for pair: Array in [[KeyboardInputSource.Layout.ZQSD, KEY_E], [KeyboardInputSource.Layout.ARROWS, KEY_COMMA],
+			[KeyboardInputSource.Layout.ZQSD, KEY_COMMA], [KeyboardInputSource.Layout.NONE, KEY_E]]:
+		var kb := KeyboardInputSource.new()
+		kb.layout = pair[0]
+		var e := InputEventKey.new()
+		e.physical_keycode = pair[1]
+		e.pressed = true
+		kb._input(e)
+		got.append(kb.poll(1).cargo)
+		got.append(kb.poll(2).cargo)
+		kb.free()
+	check("clavier : E (ZQSD) et ; (FLECHES) larguent, un seul tick ; rien ailleurs",
+		got == [true, false, true, false, false, false, false, false], str(got))
 
 
 func _send_button(device: int, button: JoyButton, pressed: bool) -> void:

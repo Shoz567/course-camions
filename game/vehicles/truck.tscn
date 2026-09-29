@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://vehicles/truck_visual.gd" id="4"]
 [ext_resource type="Script" path="res://vehicles/truck_horn.gd" id="5"]
 [ext_resource type="Script" path="res://vehicles/truck_boost_sound.gd" id="6"]
+[ext_resource type="Script" path="res://gameplay/truck_cargo.gd" id="7"]
 
 [sub_resource type="BoxShape3D" id="shape_chassis"]
 size = Vector3(2.4, 1, 5.8)
@@ -55,6 +56,8 @@ center_of_mass_mode = 1
 center_of_mass = Vector3(0, 0.8, -0.3)
 can_sleep = false
 continuous_cd = true
+contact_monitor = true
+max_contacts_reported = 8
 linear_damp_mode = 1
 script = ExtResource("1")
 tuning = ExtResource("2")
@@ -134,3 +137,6 @@ script = ExtResource("5")
 [node name="BoostSound" type="AudioStreamPlayer3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 2)
 script = ExtResource("6")
+
+[node name="Cargo" type="Node" parent="."]
+script = ExtResource("7")

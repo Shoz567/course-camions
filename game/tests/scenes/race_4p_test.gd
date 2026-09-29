@@ -8,7 +8,9 @@ extends PhysicsTest
 ##   - depart : 4 camions sur la meme ligne, etales sur la largeur ;
 ##   - isolation (INPUT_SPEC §4) : la manette 3 fait avancer J4 et lui seul,
 ##     ZQSD fait avancer J2 et lui seul (pas J3, qui n'a pas de clavier) ; le
-##     bouton camera de la manette 2 ne bascule que la vue de J3.
+##     bouton camera de la manette 2 ne bascule que la vue de J3 ; ZL de la
+##     manette 2 ne fait larguer une caisse qu'a J3, dont le HUD affiche la
+##     recharge.
 
 var _scene: Node3D
 var _players: Array = []
@@ -52,6 +54,18 @@ func _test_tick(t: int) -> void:
 		_pad(2, JOY_BUTTON_Y, true)
 	elif t == 402:
 		_pad(2, JOY_BUTTON_Y, false)
+	if t == 300:
+		_axis(2, JOY_AXIS_TRIGGER_LEFT, 1.0)
+	elif t == 303:
+		_axis(2, JOY_AXIS_TRIGGER_LEFT, 0.0)
+
+
+func _axis(device: int, axis: JoyAxis, value: float) -> void:
+	var e := InputEventJoypadMotion.new()
+	e.device = device
+	e.axis = axis
+	e.axis_value = value
+	Input.parse_input_event(e)
 
 
 func _truck(i: int) -> Truck:
@@ -117,6 +131,15 @@ func _test_finish() -> void:
 	var views := []
 	for p: Object in _players:
 		views.append((p.get("camera") as ChaseCamera).view)
+	var ready := []
+	for i in 4:
+		ready.append((_truck(i).get_node("Cargo") as TruckCargo).is_ready())
+	check("ZL manette 2 : seul J3 a largue", ready == [true, true, false, true], str(ready))
+	var crates := _scene.find_children("CargoCrate*", "CargoCrate", false, false)
+	check("une caisse sur la piste, larguee par J3",
+		crates.size() == 1 and (crates[0] as CargoCrate).dropped_by == _truck(2), "%d caisse(s)" % crates.size())
+	var hud_label := String((_players[2].hud as RaceHud).get("_cargo_label").text)
+	check("HUD de J3 : recharge du cargo affichee", hud_label.begins_with("cargo "), hud_label)
 	check("manette 2 : seule la camera de J3 passe en cabine",
 		views == [ChaseCamera.View.CHASE, ChaseCamera.View.CHASE, ChaseCamera.View.COCKPIT, ChaseCamera.View.CHASE],
 		str(views))

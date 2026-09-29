@@ -5,10 +5,12 @@ extends InputSource
 ## (docs/INPUT_SPEC.md §3). Touches par POSITION physique (clavier QWERTY de
 ## reference) : Z Q S D sur AZERTY = W A S D sur QWERTY.
 ##
-##   ZQSD    : Z Q S D, Espace drift, Maj gauche boost, H klaxon, C camera, R reset
+##   ZQSD    : Z Q S D, Espace drift, Maj gauche boost, E cargo, H klaxon,
+##             C camera, R reset
 ##   FLECHES : fleches, Ctrl droit drift, Maj droite boost, touche a gauche de
 ##             Maj droite (! en AZERTY) klaxon, la suivante (: en AZERTY)
-##             camera, Retour arriere reset
+##             camera, encore la suivante (; en AZERTY) cargo, Retour arriere
+##             reset
 ##   LES DEUX: les deux jeux de touches (joueur seul)
 ##   AUCUN   : pas de clavier (J3 et J4, manette seulement)
 ##
@@ -31,6 +33,7 @@ var _handbrake: bool = false
 var _boost: bool = false
 var _reset_pending: bool = false
 var _honk_pending: bool = false
+var _cargo_pending: bool = false
 
 
 func _input(event: InputEvent) -> void:
@@ -73,6 +76,10 @@ func _input(event: InputEvent) -> void:
 			if zqsd and p: camera_toggle_requested.emit()
 		KEY_PERIOD:
 			if arrows and p: camera_toggle_requested.emit()
+		KEY_E:
+			if zqsd and p: _cargo_pending = true
+		KEY_COMMA:
+			if arrows and p: _cargo_pending = true
 		KEY_R:
 			if zqsd and p: _reset_pending = true
 		KEY_BACKSPACE:
@@ -90,6 +97,8 @@ func poll(tick: int) -> InputFrame:
 	frame.boost = _boost
 	frame.reset = _reset_pending
 	frame.honk = _honk_pending
+	frame.cargo = _cargo_pending
 	_reset_pending = false
 	_honk_pending = false
+	_cargo_pending = false
 	return frame

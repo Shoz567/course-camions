@@ -21,10 +21,14 @@ extends RigidBody3D
 ##       (VEHICLE_SPEC §5 bis), avec sa propre inertie de lacet. Elle chasse
 ##       vers l'exterieur en virage et en derapage, s'arrete contre les murs,
 ##       et balaie les adversaires qu'elle touche.
+##   anti-collage : apres wall_unstick_ticks de frottement continu contre un
+##       mur, -25 % de vitesse et une impulsion vers l'interieur de la piste
+##       (normale du mur) : le camion ne reste jamais aimante a la glissiere.
+##   caisse de cargo percutee (cargo_hit) : ralenti et deporte en lacet.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
-##   wheels_on_ground(), pad_boost(), jump_pad_launch()
+##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -33,6 +37,13 @@ signal honked
 signal boosted
 ## La remorque vient de balayer un adversaire (impulsion en N.s).
 signal trailer_shoved(other: Truck, impulse: float)
+## Largage de cargo demande dans l'InputFrame (le cargo est l'affaire du
+## gameplay : TruckCargo, enfant du camion).
+signal cargo_requested
+## Decolle du mur apres un frottement continu (normale du mur, horizontale).
+signal wall_unstuck(normal: Vector3)
+## Vient de percuter une caisse de cargo.
+signal cargo_hit_taken
 
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
@@ -50,6 +61,7 @@ const STOP_SPEED_MS := 0.5
 @export var debug_handbrake: bool = true
 @export var debug_air_control: bool = true
 @export var debug_boost: bool = true
+@export var debug_wall_unstick: bool = true
 ## Traces DebugDraw du camion (actifs seulement si DebugDraw.enabled).
 @export var debug_draw: bool = true
 
@@ -107,6 +119,16 @@ var _prev_velocity: Vector3 = Vector3.ZERO
 var _accel_ready: bool = false
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
+
+## Mur touche au dernier pas physique (lu dans _integrate_forces) : normale
+## moyenne, horizontale, tournee vers le camion. ZERO = aucun mur.
+var _wall_normal: Vector3 = Vector3.ZERO
+## Ticks de frottement continu contre un mur, ticks sans contact depuis.
+var _wall_ticks: int = 0
+var _wall_gap: int = 0
+## Caisse de cargo percutee : position de la caisse, choc a appliquer.
+var _cargo_hit_pending: bool = false
+var _cargo_hit_from: Vector3 = Vector3.ZERO
 
 var _reset_pending: bool = false
 ## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
@@ -238,6 +260,18 @@ func is_jump_assisted() -> bool:
 	return _jump_assist_ticks > 0
 
 
+## Caisse de cargo percutee (CargoCrate) : au prochain tick, vitesse reduite
+## a cargo_hit_speed_factor et coup de lacet du cote de la caisse.
+func cargo_hit(crate_position: Vector3) -> void:
+	_cargo_hit_pending = true
+	_cargo_hit_from = crate_position
+
+
+## Ticks de frottement continu contre un mur (0 = libre).
+func get_wall_contact_ticks() -> int:
+	return _wall_ticks
+
+
 ## Angle de la remorque par rapport au tracteur (rad), > 0 : arriere de la
 ## remorque vers la droite du tracteur.
 func get_trailer_angle() -> float:
@@ -258,6 +292,20 @@ static func trailer_local_transform(angle: float) -> Transform3D:
 # --- simulation ------------------------------------------------------------------
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	# contacts avec un mur : corps statique, normale presque horizontale (le
+	# sol et les rampes ont une normale verticale)
+	var n_sum := Vector3.ZERO
+	for i in state.get_contact_count():
+		if not (state.get_contact_collider_object(i) is StaticBody3D):
+			continue
+		var n := state.get_contact_local_normal(i)
+		if absf(n.y) > 0.6:
+			continue
+		n.y = 0.0
+		if n.dot(state.transform.origin - state.get_contact_local_position(i)) < 0.0:
+			n = -n
+		n_sum += n.normalized()
+	_wall_normal = n_sum.normalized() if n_sum.length_squared() > 1e-6 else Vector3.ZERO
 	if not _reset_pending:
 		return
 	_reset_pending = false
@@ -380,6 +428,12 @@ func _physics_process(_delta: float) -> void:
 		braking = 0.0
 	if _input.honk:
 		honked.emit()
+	if _input.cargo:
+		cargo_requested.emit()
+	_update_wall_unstick(t)
+	if _cargo_hit_pending:
+		_cargo_hit_pending = false
+		_apply_cargo_hit(t, up)
 
 	# saut de plaque : impulsion verticale ; a la reception (apres un vrai vol),
 	# chute ramenee a jump_landing_max_down_ms et suspension plus amortie.
@@ -481,6 +535,53 @@ func _physics_process(_delta: float) -> void:
 		_draw_debug(up, com)
 
 
+## Anti-collage : le frottement continu contre un mur (quelques ticks sans
+## contact toleres) declenche, au-dela de wall_unstick_ticks, une perte de
+## vitesse et une impulsion vers l'interieur de la piste. La vitesse qui
+## rentre dans le mur est annulee, le nez est ramene parallele au mur.
+func _update_wall_unstick(t: VehicleTuning) -> void:
+	if _wall_normal != Vector3.ZERO:
+		_wall_ticks += 1
+		_wall_gap = 0
+	else:
+		_wall_gap += 1
+		if _wall_gap > roundi(t.wall_contact_grace_ticks):
+			_wall_ticks = 0
+	if not debug_wall_unstick or _wall_ticks < roundi(t.wall_unstick_ticks) or _wall_normal == Vector3.ZERO:
+		return
+	var n := _wall_normal
+	var v := linear_velocity
+	var target := v * t.wall_unstick_speed_factor
+	var into := target.dot(n)
+	if into < 0.0:
+		target -= n * into   # plus rien vers le mur
+	target += n * t.wall_bump_speed_ms
+	apply_central_impulse((target - v) * mass)
+	# nez vers le mur : ramene parallele au mur (vers l'interieur de la piste)
+	var fwd := -global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	if fwd.dot(n) < -0.05:
+		var along := (fwd - n * fwd.dot(n)).normalized()
+		var turn := signf(fwd.cross(along).y) * minf(fwd.angle_to(along) * 3.0, t.wall_bump_align_rad_s)
+		var w_up := angular_velocity.y
+		apply_torque_impulse(Vector3.UP * (turn - w_up) * t.inertia_yaw_kgm2)
+	_wall_ticks = 0
+	wall_unstuck.emit(n)
+
+
+func _apply_cargo_hit(t: VehicleTuning, up: Vector3) -> void:
+	var v := linear_velocity
+	var flat := v - up * v.dot(up)
+	apply_central_impulse(-flat * (1.0 - t.cargo_hit_speed_factor) * mass)
+	# coup de lacet du cote de la caisse (la caisse retient ce cote)
+	var side := signf((_cargo_hit_from - global_position).dot(global_basis.x))
+	if side == 0.0:
+		side = 1.0
+	apply_torque_impulse(up * (-side * t.cargo_hit_yaw_kick_rad_s) * t.inertia_yaw_kgm2)
+	cargo_hit_taken.emit()
+
+
 func _update_boost(t: VehicleTuning) -> void:
 	var pressed := _input.boost
 	if _boost_ticks > 0:
@@ -571,8 +672,8 @@ func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 			continue   # l'adversaire n'est pas du cote balaye
 		var v_sweep := absf(rel) * along
 		var v_sep := (other.linear_velocity - _point_velocity(point, com)).dot(dir)
-		if v_sweep - v_sep <= 0.5:
-			continue
+		if v_sweep - v_sep <= 1.5:
+			continue   # frottement cote a cote : le solveur s'en charge
 		var m_red := mass * other.mass / (mass + other.mass)
 		var j := minf(m_red * (v_sweep - v_sep) * (1.0 + t.trailer_shove_restitution),
 				other.mass * t.trailer_shove_max_dv_ms)

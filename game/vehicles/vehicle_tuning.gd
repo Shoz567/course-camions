@@ -88,6 +88,22 @@ extends Resource
 ## ligne ; 1 = conservation de la quantite de mouvement).
 @export_range(0.0, 1.0, 0.01) var trailer_shove_reaction: float = 0.0
 
+@export_group("Murs et obstacles")
+## Frottement continu contre un mur au-dela duquel le camion est decolle
+## (90 ticks = 1,5 s).
+@export_range(0.0, 600.0, 1.0, "suffix:ticks") var wall_unstick_ticks: float = 0.0
+## Ticks sans contact toleres dans un frottement (rebonds sur la glissiere).
+@export_range(0.0, 60.0, 1.0, "suffix:ticks") var wall_contact_grace_ticks: float = 0.0
+## Vitesse gardee au decollage (0,75 = -25 %).
+@export_range(0.0, 1.0, 0.01) var wall_unstick_speed_factor: float = 0.0
+## Vitesse donnee vers l'interieur de la piste, le long de la normale du mur.
+@export_range(0.0, 20.0, 0.01, "suffix:m/s") var wall_bump_speed_ms: float = 0.0
+## Lacet max pour ramener le nez parallele au mur.
+@export_range(0.0, 5.0, 0.01, "suffix:rad/s") var wall_bump_align_rad_s: float = 0.0
+## Caisse de cargo percutee : vitesse gardee, et coup de lacet.
+@export_range(0.0, 1.0, 0.01) var cargo_hit_speed_factor: float = 0.0
+@export_range(0.0, 10.0, 0.01, "suffix:rad/s") var cargo_hit_yaw_kick_rad_s: float = 0.0
+
 @export_group("Sauts (plaques)")
 ## Pendant un saut de plaque : raideur de l'assiette automatique multipliee.
 @export_range(0.0, 10.0, 0.01) var jump_air_level_factor: float = 0.0
@@ -194,6 +210,8 @@ func validate() -> PackedStringArray:
 		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:
 		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
+	if wall_unstick_speed_factor >= 1.0 or cargo_hit_speed_factor >= 1.0:
+		errors.append("wall_unstick_speed_factor / cargo_hit_speed_factor : doivent etre < 1")
 	if trailer_damping_ratio >= 2.0:
 		errors.append("trailer_damping_ratio = %s : >= 2, remorque figee" % trailer_damping_ratio)
 	if trailer_shove_restitution > 1.0 or trailer_shove_reaction > 1.0:

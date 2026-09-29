@@ -2,8 +2,9 @@ class_name RaceHud
 extends CanvasLayer
 
 ## HUD de course (tache 2.7). Lit, ne decide rien (CLAUDE.md §7) : vitesse,
-## tour (1/3), temps du tour, meilleur et dernier tour, jauge de boost, et un
-## message central (compte a rebours, mauvais sens, arrivee) pose par la scene.
+## tour (1/3), temps du tour, meilleur et dernier tour, jauges de boost et de
+## cargo, et un message central (compte a rebours, mauvais sens, arrivee) pose
+## par la scene.
 ## Les temps affiches derivent des ticks : 60 ticks = 1 s.
 
 @export var truck: Truck
@@ -20,6 +21,9 @@ var _times: Label
 var _speed: Label
 var _boost_bar: ProgressBar
 var _boost_label: Label
+var _cargo_bar: ProgressBar
+var _cargo_label: Label
+var _cargo: TruckCargo
 var _center: Label
 var _help: Label
 var _standings: Label
@@ -59,6 +63,27 @@ func _ready() -> void:
 	_boost_label.offset_top = -80 * k
 	_boost_label.offset_right = -24 * k
 	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# cargo : a gauche de la jauge de boost, meme hauteur
+	_cargo_bar = ProgressBar.new()
+	_cargo_bar.min_value = 0.0
+	_cargo_bar.max_value = 1.0
+	_cargo_bar.show_percentage = false
+	_cargo_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_cargo_bar.offset_left = -560 * k
+	_cargo_bar.offset_top = -52 * k
+	_cargo_bar.offset_right = -350 * k
+	_cargo_bar.offset_bottom = -30 * k
+	add_child(_cargo_bar)
+	_cargo_label = _label(18, Vector2.ZERO)
+	_cargo_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_cargo_label.offset_left = -560 * k
+	_cargo_label.offset_top = -80 * k
+	_cargo_label.offset_right = -350 * k
+	_cargo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if truck != null:
+		_cargo = truck.get_node_or_null(^"Cargo") as TruckCargo
+	_cargo_bar.visible = _cargo != null
+	_cargo_label.visible = _cargo != null
 	_help = _label(14, Vector2.ZERO)
 	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_help.offset_left = 24 * k
@@ -106,6 +131,14 @@ func _process(_delta: float) -> void:
 	else:
 		_boost_label.text = "recharge du boost"
 		_boost_bar.modulate = Color(0.6, 0.6, 0.6)
+	if _cargo != null:
+		_cargo_bar.value = _cargo.get_charge()
+		if _cargo.is_ready():
+			_cargo_label.text = "CARGO PRET"
+			_cargo_bar.modulate = Color(1.0, 0.6, 0.1)
+		else:
+			_cargo_label.text = "cargo %d s" % _cargo.seconds_left()
+			_cargo_bar.modulate = Color(0.6, 0.6, 0.6)
 	var text := _center_text
 	var color := _center_color
 	if text == "" and r.wrong_way:

@@ -170,6 +170,18 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
   propre : ce choc la remplace.
 - Vérifié par `truck_trailer_test` (dérapage, coup de volant, mur, balayage).
 
+## 5 quater. Murs et obstacles (arcade)
+
+- **Anti-collage** (2026-09-29) : un camion qui frotte un mur sans
+  interruption (8 ticks sans contact tolérés) pendant `wall_unstick_ticks`
+  (96 ticks, 1,6 s) est décollé : vitesse × 0,75, vitesse vers le mur annulée,
+  +5 m/s le long de la normale du mur (vers la piste), nez ramené parallèle au
+  mur. Détection : contacts du corps (`contact_monitor`) avec un corps statique
+  à normale presque horizontale (le sol et les rampes ne comptent pas).
+- **Caisse de cargo percutée** : vitesse horizontale × 0,6 et coup de lacet de
+  1,4 rad/s du côté de la caisse, une fois par caisse.
+- Vérifié par `truck_wall_unstick_test` et `truck_cargo_test`.
+
 ## 5 ter. Amortissement du corps
 
 `linear_damp_mode = REPLACE`, **`linear_damp = 0`**. Le défaut du projet
@@ -200,7 +212,7 @@ dessinées sur les valeurs mesurées (`docs/METRICS.md`), pas sur ces cibles.
 | 2 `vehicle` | châssis des camions |
 | 3 `checkpoint` | `Area3D` de checkpoint et ligne d'arrivée |
 | 4 `reset_zone` | `Area3D` hors-piste : eau, vide, zone interdite |
-| 5 `hazard` | objets mobiles dangereux |
+| 5 `hazard` | objets mobiles dangereux : caisses de cargo larguées (`CargoCrate`) |
 
 Les rayons de suspension ne visent que la couche 1 : une roue ne « roule » ni
 sur un autre camion ni sur un checkpoint.

@@ -13,6 +13,7 @@ const BIT_HANDBRAKE := 1
 const BIT_BOOST := 2
 const BIT_RESET := 4
 const BIT_HONK := 8
+const BIT_CARGO := 16
 
 var tick: int = 0
 var steer: float = 0.0        # -1 (gauche) .. +1 (droite), zone morte appliquee
@@ -22,6 +23,7 @@ var handbrake: bool = false   # etat maintenu
 var boost: bool = false       # etat maintenu
 var reset: bool = false       # front montant : vrai un seul tick
 var honk: bool = false        # front montant : coup de klaxon (vu des autres joueurs)
+var cargo: bool = false       # front montant : largage de cargo
 
 
 func copy_from(other: InputFrame) -> void:
@@ -33,6 +35,7 @@ func copy_from(other: InputFrame) -> void:
 	boost = other.boost
 	reset = other.reset
 	honk = other.honk
+	cargo = other.cargo
 
 
 ## Remet toutes les commandes au neutre (manette debranchee : roue libre).
@@ -44,6 +47,7 @@ func clear() -> void:
 	boost = false
 	reset = false
 	honk = false
+	cargo = false
 
 
 func to_bytes() -> PackedByteArray:
@@ -74,6 +78,8 @@ func write_to(buf: PackedByteArray, offset: int) -> void:
 		bits |= BIT_RESET
 	if honk:
 		bits |= BIT_HONK
+	if cargo:
+		bits |= BIT_CARGO
 	buf.encode_u8(offset + 5, bits)
 
 
@@ -88,3 +94,4 @@ func read_from(buf: PackedByteArray, offset: int) -> void:
 	boost = (bits & BIT_BOOST) != 0
 	reset = (bits & BIT_RESET) != 0
 	honk = (bits & BIT_HONK) != 0
+	cargo = (bits & BIT_CARGO) != 0

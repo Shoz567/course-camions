@@ -34,8 +34,10 @@ var steer: float = 0.0        # -1 (gauche) .. +1 (droite), zone morte appliqué
 var throttle: float = 0.0     # 0 .. 1
 var brake: float = 0.0        # 0 .. 1 ; à l'arrêt, freiner = marche arrière
 var handbrake: bool = false   # état maintenu : dérapage
-var boost: bool = false       # état maintenu (si le design retient le boost)
+var boost: bool = false       # état maintenu
 var reset: bool = false       # front montant : vrai un seul tick
+var honk: bool = false        # front montant : coup de klaxon
+var cargo: bool = false       # front montant : largage de cargo
 
 func to_bytes() -> PackedByteArray
 static func from_bytes(b: PackedByteArray) -> InputFrame
@@ -52,7 +54,7 @@ elle ne modifie pas la simulation, elle reste locale au joueur.
 | `steer` | `int8` (−127..127) | 1 |
 | `throttle` | `uint8` (0..255) | 1 |
 | `brake` | `uint8` (0..255) | 1 |
-| `handbrake`, `boost`, `reset`, `honk` (klaxon), réserve | bitfield | 1 |
+| `handbrake`, `boost`, `reset`, `honk` (klaxon), `cargo`, réserve | bitfield | 1 |
 | **Total** | | **6** |
 
 À 60 Hz : 360 octets/s de charge utile par joueur. Négligeable.
@@ -85,7 +87,8 @@ exportée par `DeviceInputSource` : réaffectable sans code.
 | `brake` (puis recul à l'arrêt) | **B** | ↓ | S |
 | `handbrake` (drift) | **R**, ou **ZR tant qu'on accélère au bouton** (A + ZR, comme MK8) | Ctrl droit | Espace |
 | `boost` | **L** (1,5 s, recharge 4 s) | Maj droite | Maj gauche |
-| `honk` (klaxon) | **ZL** (au franchissement du seuil) | touche à gauche de Maj droite (!) | H |
+| `cargo` (largage, recharge 30 s) | **ZL** (au franchissement du seuil) | deux touches à gauche de Maj droite (;) | E |
+| `honk` (klaxon) | **croix** (n'importe quelle direction) | touche à gauche de Maj droite (!) | H |
 | caméra 1re / 3e personne | **X** (local, hors `InputFrame`) | touche suivante (:) | C |
 | `reset` | **−** | Retour arrière | R |
 | rejouer après l'arrivée | + (Start) | Entrée | Entrée |
@@ -93,7 +96,10 @@ exportée par `DeviceInputSource` : réaffectable sans code.
 Deux conflits de la demande, résolus ainsi : ZR sert à accélérer **et** à
 drifter (→ accélérateur quand aucun bouton d'accélération n'est tenu, drift
 sinon) ; « klaxon : Select » et « reset : − » désignent le **même** bouton sur
-une manette Nintendo (`JOY_BUTTON_BACK`) → − reste le reset, ZL seul klaxonne.
+une manette Nintendo (`JOY_BUTTON_BACK`) → − reste le reset. Le 2026-09-29, ZL
+passe au largage de cargo et le klaxon sur la croix directionnelle (demande
+après le playtest à 4). Le schéma de la manette est affiché dans l'écran des
+paramètres du menu (`ControllerDiagram`).
 
 En solo, le clavier accepte ZQSD **et** les flèches. En écran partagé, chaque
 joueur a sa manette (joueur N = device N − 1, de 0 à 3) ; J1 et J2 ont en plus

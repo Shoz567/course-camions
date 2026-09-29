@@ -62,4 +62,5 @@ func poll(tick: int) -> InputFrame:
 	frame.boost = p.boost or k.boost
 	frame.reset = p.reset or k.reset
 	frame.honk = p.honk or k.honk
+	frame.cargo = p.cargo or k.cargo
 	return frame
