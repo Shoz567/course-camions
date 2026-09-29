@@ -12,7 +12,7 @@ segments = Array[Dictionary]([{
 "angle": 180.0,
 "bank": 10.0,
 "name": "Grand virage releve",
-"radius": 120.0,
+"radius": 160.0,
 "type": "arc"
 }, {
 "climb": 6.0,
@@ -23,12 +23,12 @@ segments = Array[Dictionary]([{
 "angle": -40.0,
 "bank": 6.0,
 "name": "S en devers inverse (droite)",
-"radius": 120.0,
+"radius": 140.0,
 "type": "arc"
 }, {
 "angle": 40.0,
 "name": "S (gauche)",
-"radius": 120.0,
+"radius": 140.0,
 "type": "arc"
 }, {
 "length": 80.0,
@@ -38,7 +38,7 @@ segments = Array[Dictionary]([{
 "angle": 45.0,
 "climb": -3.0,
 "name": "Chicane gauche (descente)",
-"radius": 110.0,
+"radius": 120.0,
 "type": "arc"
 }, {
 "auto": true,
@@ -48,31 +48,31 @@ segments = Array[Dictionary]([{
 "angle": -45.0,
 "climb": -3.0,
 "name": "Chicane droite (descente)",
-"radius": 110.0,
+"radius": 120.0,
 "type": "arc"
 }, {
-"jump": 80.0,
+"jump": 120.0,
 "length": 250.0,
-"line": 10.0,
+"line": 8.0,
 "name": "Ligne droite du tremplin (cote droit)",
 "type": "straight"
 }, {
 "angle": 180.0,
 "bank": 14.0,
 "name": "Epingle relevee (drift)",
-"radius": 100.0,
+"radius": 140.0,
 "type": "arc"
 }, {
 "auto": true,
 "name": "Ligne droite des stands (longueur calculee)",
 "type": "straight"
 }])
-width = 35.0
+width = 50.0
 wall_height = 2.8
 wall_friction = 0.5
 jump_length = 14.0
 jump_angle_deg = 7.0
-jump_width = 10.0
-jump_offset = 10.0
+jump_width = 14.0
+jump_offset = 8.0
 grid_row_spacing = 20.0
-grid_lateral = PackedFloat32Array(-4.5, 4.5, -13.5, 13.5)
+grid_lateral = PackedFloat32Array(-6, 6, -18, 18)

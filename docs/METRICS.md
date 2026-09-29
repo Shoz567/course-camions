@@ -70,9 +70,9 @@ Ces valeurs-là sont des **choix de design**, pas des mesures.
 
 | Grandeur | Valeur | Justification |
 |---|---|---|
-| Largeur minimale de piste | **35 m** | décision du 2026-09-28 (playtest) : arène spacieuse pour 2 à 4 semi-remorques de 16,4 m (VEHICLE_SPEC §2) |
-| Rayon des virages | **100 à 120 m** | décision du 2026-09-28 (playtest) : deux ensembles de 16 m doivent pouvoir déraper côte à côte sans se coincer dans les murs |
-| Largeur de la grille de départ | 4 camions de front, les deux premières cases au centre (±4,5 m, puis ±13,5 m), rangs espacés de 20 m | départ à 2 côte à côte au centre ; un ensemble (16,4 m) + marge de freinage |
+| Largeur minimale de piste | **50 m** | décision du 2026-09-29 (méga-large, 1 à 4 joueurs) ; avant : 35 m (2026-09-28). Arène pour 4 semi-remorques de 16,4 m de front (VEHICLE_SPEC §2) |
+| Rayon des virages | **120 à 160 m** | décision du 2026-09-29 ; avant : 100 à 120 m. Plusieurs ensembles de 16 m doivent pouvoir déraper côte à côte sans se coincer dans les murs |
+| Largeur de la grille de départ | 4 camions de front, J1 et J2 au centre (±6 m), J3 et J4 à l'extérieur (±18 m, à 7 m des murs), rangs espacés de 20 m | 12 m entre deux camions voisins : 4 ensembles partent de front sans se toucher ; un ensemble (16,4 m) + marge de freinage entre rangs |
 | Durée d'un tour | 60 à 90 s | assez court pour que les écarts restent lisibles, assez long pour varier les virages |
 | Épaisseur minimale d'un mur | **0,3 m** | choix de design (2026-09-26) : le spike V2 n'a mesuré aucune traversée jusqu'à 0,1 m à 200 km/h ; 0,3 m est la glissière de son protocole, avec de la marge |
 | Hauteur des murs | **2,8 m** | décision du 2026-09-28 : au-dessus du bas de la caisse de remorque (1,8 m), aucun passage par-dessus bord |
