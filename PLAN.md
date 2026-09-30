@@ -159,6 +159,15 @@ reset tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g,
 **Tour de référence : 87,7 s** (`track_01_lap_test`, pilote à 80 % de
 l'adhérence mesurée, camions à l'échelle 1,2, semi-remorque articulée
 comprise, plaques et pièges sans effet, relief compris).
+**Décors de course** (2026-09-30, `RaceDecor`, purement visuels, aucune
+collision) : 3 ponts routiers et un échangeur à deux niveaux enjambent la piste
+(tablier à 20 m au-dessus du point le plus haut de la chaussée survolée, piles
+au-delà des murs, arc porteur, néons, circulation en points de lumière), chacun
+avec un **méga-écran holographique** dont la publicité alterne ; 4 **tribunes**
+de part et d'autre du départ (environ 3 000 spectateurs en un MultiMesh : ils sautent,
+font la ola, prennent des photos ; projecteurs sans ombres) ; 8 **faisceaux**
+qui balaient le ciel. Coût GPU mesuré sur la grille à 6 joueurs (Radeon 780M,
+1920 × 1200, qualité haute) : 16,3 ms.
 
 **Piste n°2, « Playa Del Sol »** (2026-09-30, `game/tracks/track_02_playa.tscn`,
 même générateur, thème `TrackTheme.PLAYA_DEL_SOL`) : une île en plein soleil,
@@ -176,7 +185,8 @@ mer** calculé sur le tracé (terre à 130 m autour, intérieur de la boucle, ba
 de 105 m creusée sous les tabliers), talus de roche sous les portions hautes,
 segments `"bridge"` (tablier sur piles dès 3 m de haut). Décor
 (`PlayaBackdrop`, 6 MultiMesh, aucune collision) : palmiers, parasols, rochers
-au large, phare. Environnement `playa_sun.tres`, soleil avec ombres
+au large, phare ; tribunes de jour au départ (`RaceDecor`, sans faisceaux
+ni projecteurs). Environnement `playa_sun.tres`, soleil avec ombres
 (`dev/race_playa.tscn`). **Tour de référence : 76,7 s** (`track_02_lap_test`,
 mêmes règles que la piste n°1). Le circuit se choisit au menu
 (`GameState.selected_track`, `GameState.TRACKS`).

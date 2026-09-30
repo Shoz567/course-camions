@@ -12,7 +12,8 @@ extends PhysicsTest
 ##     talus de roche sous les portions hautes, sans collision ;
 ##   - decor (force en headless) : au moins 150 palmiers, tous sur la terre et
 ##     au-dela des murs ; au moins 30 rochers, tous dans l'eau ; aucun corps
-##     physique ;
+##     physique ; tribunes de jour au depart (ni faisceaux, ni projecteurs,
+##     ni pont routier) ;
 ##   - grille : les 6 camions se posent sans se toucher ni bouger ;
 ##   - banc de sable : un camion a 100 km/h qui y roule perd au moins 25 % de
 ##     sa vitesse, une seule fois (le banc remplace la flaque de Cyber City).
@@ -36,9 +37,11 @@ var _max_tilt: float = 0.0
 func _test_setup() -> void:
 	duration_ticks = 240
 	PlayaBackdrop.generate_in_headless = true
+	RaceDecor.generate_in_headless = true
 	_track = (load("res://tracks/track_02_playa.tscn") as PackedScene).instantiate() as TrackBlockout
 	add_child(_track)
 	PlayaBackdrop.generate_in_headless = false
+	RaceDecor.generate_in_headless = false
 	var pads := PadEffects.new()
 	pads.track = _track
 	add_child(pads)
@@ -200,5 +203,12 @@ func _check_decor() -> void:
 	check_above("decor : palmiers", palms.size(), 149)
 	check("decor : tous les palmiers sur la terre, au-dela des murs", wet == 0 and inside == 0,
 		"%d dans l'eau, %d sur la piste" % [wet, inside])
+	var decor := _track.get_node("RaceDecor") as RaceDecor
+	var stands := decor.get_child(0).get_node_or_null("Grandstands") as Node3D
+	check("tribunes de jour au depart : ni faisceaux, ni projecteurs, ni pont routier", stands != null
+		and stands.find_children("Stand*", "Node3D", false, false).size() == 4
+		and decor.beams.is_empty() and decor.screen_labels.is_empty()
+		and decor.find_children("*", "OmniLight3D", true, false).is_empty()
+		and decor.find_children("*", "CollisionObject3D", true, false).is_empty())
 	check_above("decor : rochers au large", rocks.size(), 29)
 	check("decor : tous les rochers dans l'eau", dry == 0, "%d a sec" % dry)

@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
 [ext_resource type="Script" path="res://tracks/playa_backdrop.gd" id="2"]
+[ext_resource type="Script" path="res://tracks/race_decor.gd" id="3"]
 
 [node name="Track02" type="Node3D"]
 script = ExtResource("1")
@@ -120,3 +121,8 @@ grid_back_lateral = PackedFloat32Array(-20, 20)
 
 [node name="PlayaBackdrop" type="Node3D" parent="."]
 script = ExtResource("2")
+
+[node name="RaceDecor" type="Node3D" parent="."]
+script = ExtResource("3")
+sky_beams = false
+night = false

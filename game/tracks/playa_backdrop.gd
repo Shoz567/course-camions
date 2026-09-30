@@ -70,23 +70,27 @@ func _generate(track: TrackBlockout) -> void:
 		var r := t.cross(Vector3.UP).normalized()
 		# la ou la route est haute (talus, pont), pas de palmier au pied du mur
 		var low := p.y < 2.0 and not track.is_bridge_deck(i)
+		# les tribunes occupent le bord de piste autour de la ligne de depart
+		var stands := s < 124.0 or s > length - 116.0
 		for side: float in [-1.0, 1.0]:
 			# bordure : un palmier pres du mur, un autre plus loin
 			for row in 2:
-				if row == 0 and not low:
+				if row == 0 and (not low or stands):
 					continue
 				if row == 1 and _rand() < 0.45:
 					continue
 				var lat := beyond + (_range(3.0, 9.0) if row == 0 else _range(22.0, 70.0))
 				if row == 1 and not low:
 					lat += 55.0
+				if row == 1 and stands:
+					lat += 8.0
 				var c := p + r * side * lat + t * _range(-5.0, 5.0)
 				c.y = ground
 				if track.is_water(c) or not _clear_of_track(track, c, beyond + 2.0, i):
 					continue
 				_add_palm(palms, crowns, c)
 			# parasols sur le sable, entre la piste et la mer
-			if low and _rand() < 0.6:
+			if low and not stands and _rand() < 0.6:
 				var c := p + r * side * (beyond + _range(14.0, 60.0)) + t * _range(-6.0, 6.0)
 				c.y = ground
 				if not track.is_water(c) and _clear_of_track(track, c, beyond + 6.0, i):
