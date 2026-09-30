@@ -128,6 +128,7 @@ jump_offset = 12.0
 boost_pad_size = Vector2(12, 8)
 grid_row_spacing = 20.0
 grid_lateral = PackedFloat32Array(-10, 10, -30, 30)
+grid_back_lateral = PackedFloat32Array(-20, 20)
 
 [node name="CityBackdrop" type="Node3D" parent="."]
 script = ExtResource("2")

@@ -3,11 +3,12 @@ extends PhysicsTest
 ## Menu principal (ui/main_menu.tscn), par les vrais chemins d'entree
 ## (Input.parse_input_event : clavier, manette, clics souris) :
 ##   - titre dans la colonne de gauche (les camions sont exposes a droite),
-##     entierement a l'ecran ; 4 boutons de joueurs, 1 joueur par defaut ;
+##     entierement a l'ecran ; 6 boutons de joueurs, 1 joueur par defaut ;
 ##   - showroom : les camions sont sur le plateau tournant, qui tourne, et les
 ##     camions montres restent centres sur le plateau ;
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
-##     camions montres en decor aussi ;
+##     camions montres en decor aussi ; touche 6 : les 6 camions tiennent sur
+##     le plateau ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
 ##     il montre la DualSense (les commandes Forza de la demande, legendes
@@ -146,6 +147,16 @@ func _test_tick(t: int) -> void:
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
 		82: _seen["back"] = not _menu.settings.visible
+		86: _key(KEY_6, true)
+		87: _key(KEY_6, false)
+		90:
+			# coin le plus eloigne de chaque ensemble (3,6 m de large, ~20 m de long)
+			var reach := 0.0
+			for truck in _menu.trucks:
+				reach = maxf(reach, Vector2(absf(truck.position.x) + 1.8, 9.9).length())
+			_seen["key6"] = [_menu.selected_players, _visible_trucks(), reach < Showroom.PLATE_RADIUS]
+			_key(KEY_3, true)
+		91: _key(KEY_3, false)
 		110: _pad(JOY_BUTTON_START, true)
 		111: _pad(JOY_BUTTON_START, false)
 		114:
@@ -163,7 +174,12 @@ func _test_tick(t: int) -> void:
 
 func _test_finish() -> void:
 	check("1 joueur par defaut, 1 camion montre, bouton 1 enfonce", _defaults_ok)
-	check("4 boutons de joueurs", _menu.player_buttons.size() == 4)
+	check("6 boutons de joueurs", _menu.player_buttons.size() == 6)
+	check("touche 6 : 6 joueurs, 6 camions, tous sur le plateau", _seen.get("key6", []) == [6, 6, true],
+		str(_seen.get("key6", [])))
+	var row := _menu.player_buttons[0].get_parent() as Control
+	check("les 6 boutons tiennent dans la moitie gauche de l'ecran",
+		row.get_global_rect().end.x < 1920.0 * 0.6, "%.0f px" % row.get_global_rect().end.x)
 	check("titre a gauche, entierement a l'ecran", _seen["title_left"])
 	check("showroom : camions sur le plateau, centres (3 camions)", _seen["centered"])
 	check("showroom : le plateau tourne", absf(_menu.showroom.turntable.rotation.y - _seen["plate_yaw"]) > 0.05)

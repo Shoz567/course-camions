@@ -2,7 +2,7 @@ class_name MainMenu
 extends Node3D
 
 ## Ecran d'accueil (tache 4.2, partiel) : titre anime, choix du nombre de
-## joueurs (1 a 4), START / COMMENCER, son on / off, parametres. Decor dedie
+## joueurs (1 a 6), START / COMMENCER, son on / off, parametres. Decor dedie
 ## (Showroom) : les camions des joueurs choisis exposes sur un plateau tournant,
 ## sur le toit d'une tour de Cyber City, sous les projecteurs ; camera en orbite
 ## lente, decalee pour montrer les camions a droite, le menu a gauche.
@@ -10,7 +10,7 @@ extends Node3D
 ## Manette (PlayStation, positions SDL) : croix directionnelle ou stick pour
 ## naviguer, Croix pour valider, Rond ou Create pour fermer les parametres,
 ## L1 / R1 pour changer le nombre de joueurs, Options pour commencer.
-## Clavier et souris : fleches + Entree, touches 1 a 4, clic ; Echap ferme les
+## Clavier et souris : fleches + Entree, touches 1 a 6, clic ; Echap ferme les
 ## parametres, sinon quitte le jeu.
 ##
 ## COMMENCER ecrit le choix dans GameState.requested_players puis charge
@@ -29,6 +29,9 @@ const LocalRace := preload("res://dev/local_race.gd")
 @export var orbit_height: float = 9.0
 ## Decalage lateral de l'image (m) : les camions a droite, le menu a gauche.
 @export var frame_offset: float = -20.0
+## Champ de la camera : normal, et elargi quand 5 ou 6 camions sont exposes.
+@export var fov_deg: float = 55.0
+@export var fov_wide_deg: float = 72.0
 
 @onready var showroom: Showroom = $Showroom
 @onready var camera: Camera3D = $OrbitCamera
@@ -50,6 +53,7 @@ var _pads_label: Label
 var _orbit_center: Vector3
 var _orbit_angle: float = 0.0
 var _time: float = 0.0
+var _fov_target: float = 55.0
 
 
 func _ready() -> void:
@@ -70,15 +74,13 @@ func _ready() -> void:
 
 
 
-## Les 4 camions sur le plateau tournant, geles : du decor, pas de physique.
+## Les 6 camions sur le plateau tournant, geles : du decor, pas de physique.
 func _spawn_trucks() -> void:
-	for i in 4:
+	for i in LocalRace.MAX_PLAYERS:
 		var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 		t.name = "Truck%d" % (i + 1)
-		var visual := t.get_node("Visual") as TruckVisual
-		visual.external_model = LocalRace.MODELS[i]
-		visual.mock_tint = LocalRace.TINTS[i]
-		t.transform = Showroom.slot(i, 4)
+		LocalRace.dress(t.get_node("Visual") as TruckVisual, i)
+		t.transform = Showroom.slot(i, LocalRace.MAX_PLAYERS)
 		t.freeze = true
 		showroom.turntable.add_child(t)
 		trucks.append(t)
@@ -92,6 +94,7 @@ func _process(delta: float) -> void:
 	_time += delta
 	_orbit_angle = fmod(_orbit_angle + orbit_speed * delta, TAU)
 	_place_camera()
+	camera.fov = lerpf(camera.fov, _fov_target, 1.0 - exp(-5.0 * delta))
 	# titre arcade : pulsation, balancement, couleur chaude qui varie
 	title.pivot_offset = title.size / 2.0
 	var s := 1.0 + 0.045 * sin(_time * 3.2)
@@ -126,7 +129,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var pad := event as InputEventJoypadButton
 	if key != null and key.pressed and not key.echo:
 		match key.physical_keycode:
-			KEY_1, KEY_2, KEY_3, KEY_4:
+			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6:
 				select_players(key.physical_keycode - KEY_0)
 			KEY_ESCAPE:
 				if settings.visible:
@@ -166,14 +169,15 @@ func select_speed(k: int) -> void:
 		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
 
-## Nombre de joueurs (borne a 1..4) : bouton enfonce, camions montres.
+## Nombre de joueurs (borne a 1..6) : bouton enfonce, camions montres.
 func select_players(n: int) -> void:
 	var prev := selected_players
-	selected_players = clampi(n, 1, 4)
+	selected_players = clampi(n, 1, LocalRace.MAX_PLAYERS)
 	if is_node_ready() and selected_players != prev:
 		MenuSound.play_select()
 	for i in player_buttons.size():
 		player_buttons[i].set_pressed_no_signal(i == selected_players - 1)
+	_fov_target = fov_deg if selected_players <= 4 else fov_wide_deg
 	for i in trucks.size():
 		trucks[i].visible = i < selected_players
 		# les camions exposes restent centres sur le plateau
@@ -270,7 +274,7 @@ func _build_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_box.add_child(title)
-	var subtitle := _label("CYBER CITY   ·   PISTE DE 75 M   ·   3 TOURS   ·   1 À 4 JOUEURS", 26, 6)
+	var subtitle := _label("CYBER CITY   ·   PISTE DE 75 M   ·   3 TOURS   ·   1 À 6 JOUEURS", 26, 6)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color(1.0, 0.95, 0.8)
 	# carte translucide : lisible devant les camions du decor
@@ -286,17 +290,17 @@ func _build_ui() -> void:
 	var row := HBoxContainer.new()
 	row.name = "Players"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 10)
 	card_box.add_child(row)
 	var group := ButtonGroup.new()
-	for i in 4:
+	for i in LocalRace.MAX_PLAYERS:
 		var b := Button.new()
 		b.name = "Players%d" % (i + 1)
 		b.text = "%d JOUEUR%s" % [i + 1, "S" if i > 0 else ""]
 		b.toggle_mode = true
 		b.button_group = group
-		b.custom_minimum_size = Vector2(200, 72)
-		_style_button(b, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 26)
+		b.custom_minimum_size = Vector2(150, 72)
+		_style_button(b, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 20)
 		b.pressed.connect(select_players.bind(i + 1))
 		row.add_child(b)
 		player_buttons.append(b)
@@ -367,7 +371,7 @@ func _build_ui() -> void:
 	settings_button.add_child(_gear)
 
 	var help := _label("Manette : croix directionnelle pour choisir, Croix valider, Rond retour, L1 / R1 joueurs, Options commencer"
-			+ "      Clavier : fleches, Entree, 1 a 4, Echap pour quitter", 18, 4)
+			+ "      Clavier : fleches, Entree, 1 a 6, Echap pour quitter", 18, 4)
 	help.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	help.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	help.grow_vertical = Control.GROW_DIRECTION_BEGIN

@@ -41,6 +41,13 @@ extends Node3D
 ## transparente = couleurs d'origine. Distingue les joueurs sans le modele.
 @export var mock_tint: Color = Color(0, 0, 0, 0)
 
+## Livree : repeint le modele externe sans nouveau fichier (deux camions de
+## plus que de modeles). Par prefixe de nom de materiau du modele
+## ("Peinture_Cabine", "Jante"...), un dictionnaire de proprietes : "albedo",
+## "metallic", "roughness", "clearcoat", "emission", "emission_energy".
+## Vide : le modele garde ses couleurs.
+@export var livery: Dictionary = {}
+
 ## En headless (tests), le modele n'est pas charge : rien a voir, et les tests
 ## ne doivent pas dependre d'un fichier hors depot. Un test peut forcer.
 static var load_external_in_headless: bool = false
@@ -139,6 +146,8 @@ func _attach_external() -> void:
 	model.name = MODEL_ROOT
 	add_child(model)
 	fit_report = model.get_meta(&"fit_report", {})
+	if not livery.is_empty():
+		apply_livery(model, livery)
 	_trailer_pivot = model.get_node_or_null(NodePath(TRAILER_PIVOT)) as Node3D
 	# groupes de roues : pivot au moyeu, associe au rayon le plus proche
 	for pivot in model.find_children("WheelPivot_*", "Node3D", false, false):
@@ -160,6 +169,56 @@ func _attach_external() -> void:
 		if mock != null:
 			mock.visible = false
 	model_loaded = true
+
+
+## Repeint les surfaces de `root` dont le materiau porte un nom commencant par
+## une cle de `paint` : copie du materiau (celui du modele, partage, n'est
+## jamais modifie), posee en surcharge de surface. Renvoie le nombre de
+## surfaces repeintes.
+static func apply_livery(root: Node, paint: Dictionary) -> int:
+	var painted := 0
+	var copies := {}   # materiau d'origine -> copie repeinte (ou null)
+	var meshes := root.find_children("*", "MeshInstance3D", true, false)
+	if root is MeshInstance3D:
+		meshes.append(root)
+	for n in meshes:
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for s in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(s) as BaseMaterial3D
+			if src == null:
+				continue
+			if not copies.has(src):
+				copies[src] = _painted(src, paint)
+			if copies[src] != null:
+				mi.set_surface_override_material(s, copies[src])
+				painted += 1
+	return painted
+
+
+static func _painted(src: BaseMaterial3D, paint: Dictionary) -> BaseMaterial3D:
+	for prefix: String in paint:
+		if not src.resource_name.begins_with(prefix):
+			continue
+		var props: Dictionary = paint[prefix]
+		var m := src.duplicate() as BaseMaterial3D
+		if props.has("albedo"):
+			m.albedo_color = props["albedo"]
+		if props.has("metallic"):
+			m.metallic = props["metallic"]
+		if props.has("roughness"):
+			m.roughness = props["roughness"]
+		if props.has("clearcoat"):
+			m.clearcoat_enabled = true
+			m.clearcoat = props["clearcoat"]
+			m.clearcoat_roughness = 0.1
+		if props.has("emission"):
+			m.emission_enabled = true
+			m.emission = props["emission"]
+			m.emission_energy_multiplier = float(props.get("emission_energy", 1.0))
+		return m
+	return null
 
 
 ## Charge et ajuste le modele une seule fois par chemin ; les camions suivants

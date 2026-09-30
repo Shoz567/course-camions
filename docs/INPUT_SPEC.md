@@ -150,7 +150,7 @@ Le clavier a `device == -1` par convention (les manettes commencent à 0).
 2. Première pression d'un device inconnu → création d'un slot joueur lié à ce
    `device_id`, attribution d'une couleur de camion.
 3. B pour quitter son slot. Start (joueur 1) pour lancer.
-4. Entre 1 et 4 joueurs.
+4. Entre 1 et 6 joueurs (décision du 2026-09-30 ; J5 et J6 : manettes 4 et 5, pas de clavier).
 
 Le mapping `device_id → player_slot` est détenu par `GameState` et **persiste
 pendant toute la course**.

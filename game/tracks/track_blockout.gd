@@ -127,6 +127,9 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var grid_distance: float = 12.0
 @export var grid_row_spacing: float = 9.0
 @export var grid_lateral: PackedFloat32Array = [-4.5, -1.5, 1.5, 4.5]
+## Couloirs des rangs suivants (vide : les memes). En quinconce, un camion du
+## 2e rang a la voie libre devant lui, entre deux camions du 1er.
+@export var grid_back_lateral: PackedFloat32Array = []
 
 @export_tool_button("Reconstruire") var _rebuild_button: Callable = rebuild
 
@@ -262,7 +265,8 @@ func frame_at(i: int, lateral: float, lift: float) -> Transform3D:
 	return Transform3D(Basis(r, u, -f), sample_position(i) + r * lateral + u * lift)
 
 
-## Case de depart `slot` (0 = pole) : rangs de 4 derriere la ligne.
+## Case de depart `slot` (0 = pole) : rangs derriere la ligne, le 1er dans les
+## couloirs `grid_lateral`, les suivants dans `grid_back_lateral`.
 @warning_ignore("integer_division")
 func get_start_transform(slot: int) -> Transform3D:
 	_ensure_built()
@@ -270,7 +274,10 @@ func get_start_transform(slot: int) -> Transform3D:
 	var col := slot % grid_lateral.size()
 	var s := _length - grid_distance - row * grid_row_spacing
 	var i := roundi(s / (_length / _pos.size()))
-	return frame_at(i, grid_lateral[col], 0.0)
+	var lateral := grid_lateral[col]
+	if row > 0 and not grid_back_lateral.is_empty():
+		lateral = grid_back_lateral[col % grid_back_lateral.size()]
+	return frame_at(i, lateral, 0.0)
 
 
 func boost_pad_count() -> int:

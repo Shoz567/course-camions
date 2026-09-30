@@ -28,7 +28,7 @@ const SPEED_CLASSES: Array[Dictionary] = [
 ## Categorie choisie dans le menu (garde entre deux courses).
 var speed_class: int = SpeedClass.NORMAL
 
-## Nombre de joueurs demande par le menu (1 a 4). 0 = rien de demande : la
+## Nombre de joueurs demande par le menu (1 a 6). 0 = rien de demande : la
 ## scene de course garde sa propre valeur (tests, lancement direct).
 var requested_players: int = 0
 
