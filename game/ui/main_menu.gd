@@ -13,7 +13,8 @@ extends Node3D
 ## L1 / R1 pour changer le nombre de joueurs, Triangle pour changer de circuit,
 ## Options pour commencer.
 ## Clavier et souris : fleches + Entree, touches 1 a 6, T (circuit), clic ;
-## Echap ferme les parametres, sinon quitte le jeu.
+## F11 : plein ecran / fenetre ; Echap ferme les parametres, sinon quitte le
+## jeu.
 ##
 ## COMMENCER ecrit le choix dans GameState (requested_players, selected_track)
 ## puis charge la scene de course du circuit (LocalRace le lit). Le menu ne touche pas a la physique : les
@@ -51,6 +52,7 @@ var settings: Control
 ## Ecran des parametres : case du son (miroir du bouton du menu), volume.
 var sound_check: CheckButton
 var volume_slider: HSlider
+var quality_option: OptionButton
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -66,6 +68,7 @@ func _ready() -> void:
 	camera.current = true
 	_spawn_trucks()
 	_build_ui()
+	set_quality(GameState.graphics_quality)
 	set_sound(not AudioServer.is_bus_mute(_master_bus()))
 	# musique de course rendue en fond pendant le menu (sans effet en headless)
 	RaceMusic.prepare()
@@ -137,6 +140,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_T:
 				if not settings.visible:
 					select_track((GameState.selected_track + 1) % GameStateNode.TRACKS.size())
+			KEY_F11:
+				GraphicsSettings.toggle_fullscreen()
 			KEY_ESCAPE:
 				if settings.visible:
 					toggle_settings()
@@ -231,6 +236,18 @@ func set_sound(on: bool) -> void:
 		sound_check.set_pressed_no_signal(on)
 	if is_node_ready():
 		MenuSound.play_toggle()
+
+
+## Qualite graphique (GraphicsSettings.Quality), gardee dans GameState pour les
+## courses ; appliquee tout de suite au decor du menu (une seule vue).
+func set_quality(q: int) -> void:
+	GameState.graphics_quality = clampi(q, 0, GraphicsSettings.NAMES.size() - 1)
+	if quality_option != null:
+		quality_option.select(GameState.graphics_quality)
+	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world != null:
+		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, 1)
+	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
 
 
 ## Volume general (0 a 100 %), sur le bus Master.
@@ -480,7 +497,7 @@ func _build_settings() -> Control:
 	for line: String in [
 		"J1 — flèches · Ctrl droit drift · Maj droite boost · ; cargo · ! klaxon · : vue · Retour arrière reset",
 		"J2 — Z Q S D · Espace drift · Maj gauche boost · E cargo · H klaxon · C vue · R reset",
-		"Seul : les deux jeux de touches · Échap : menu · Entrée : rejouer",
+		"Seul : les deux jeux de touches · Échap : menu · Entrée : rejouer · F11 : plein écran / fenêtre",
 	]:
 		var l := _label(line, 17, 0)
 		l.modulate = Color(0.9, 0.9, 0.94)
@@ -515,11 +532,15 @@ func _build_settings() -> Control:
 	rumble.button_pressed = true
 	rumble.add_theme_font_size_override("font_size", 19)
 	opts.add_child(rumble)
-	var quality := OptionButton.new()
-	for q: String in ["Qualité graphique : haute", "Qualité graphique : moyenne", "Qualité graphique : basse"]:
-		quality.add_item(q)
-	quality.add_theme_font_size_override("font_size", 19)
-	opts.add_child(quality)
+	quality_option = OptionButton.new()
+	quality_option.name = "Quality"
+	for q: String in GraphicsSettings.NAMES:
+		quality_option.add_item("Qualité graphique : %s" % q)
+	quality_option.tooltip_text = "Haute : reflets, éclairage indirect, occlusion. Moyenne : occlusion. Basse : aucun effet."
+	quality_option.add_theme_font_size_override("font_size", 19)
+	quality_option.select(GameState.graphics_quality)
+	quality_option.item_selected.connect(set_quality)
+	opts.add_child(quality_option)
 
 	var back := Button.new()
 	back.name = "Back"

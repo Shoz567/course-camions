@@ -244,7 +244,19 @@ quinconce (±20 m) ;
 compte à rebours, position (POS n/N) dans chaque HUD, classement affiché à tous
 dès la première arrivée ; Start / Entrée rejoue, − / Échap revient au menu.
 Accès directs : `make solo` (`dev/track_drive.tscn`), `dev/race_2p.tscn`.
-Affichage : base 1920 × 1080, étirement `canvas_items` (fenêtre 1280 × 720).
+Affichage (2026-09-30) : base 1920 × 1080, étirement `canvas_items`, **plein
+écran sans bordure** à la résolution de l'écran (plus de fenêtre 1280 × 720
+imposée ; F11 : fenêtre), **MSAA 2x** sur la fenêtre et sur chaque vue de
+l'écran partagé. Éclairage : les deux environnements activent les reflets
+(**SSR**), l'éclairage indirect (**SSIL**) et l'occlusion ambiante (**SSAO**) ;
+`GraphicsSettings` en retire selon la qualité choisie dans les paramètres
+(haute, moyenne : SSAO seul, basse : aucun effet, FXAA) et, en qualité haute,
+selon le nombre de vues : SSIL jusqu'à 2 vues, SSR jusqu'à 4, SSAO toujours.
+Coût GPU mesuré le 2026-09-30 sur la machine de développement (Radeon 780M,
+1920 × 1200 ; **pas** la machine de référence, rien n'est écrit dans
+`baseline.json`) : 1 joueur 8 ms sans effet, 11 à 15 ms avec tout ; 4 joueurs
+10 ms → 14 ms (SSR + SSAO) → 16 ms (tout) ; 6 joueurs 12 ms → 15 ms (SSAO) →
+19 ms (tout), d'où ces seuils pour tenir 60 images par seconde.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).

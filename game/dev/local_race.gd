@@ -133,6 +133,7 @@ func _ready() -> void:
 		player_count = clampi(GameState.requested_players, 1, MAX_PLAYERS)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
+	_apply_graphics()
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
 	music = RaceMusic.new()
@@ -176,6 +177,16 @@ func _build_split_screen() -> Container:
 	return box
 
 
+## Effets de l'environnement et anticrenelage selon la qualite choisie et le
+## nombre de vues (la case de la camera TV compte).
+func _apply_graphics() -> void:
+	var views := player_count + (1 if player_count == 3 or player_count == 5 else 0)
+	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world != null:
+		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, views)
+	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
+
+
 ## Une case de l'ecran partage : SubViewportContainer etire + SubViewport.
 func _new_view(view_name: String, listener: bool) -> SubViewport:
 	var container := SubViewportContainer.new()
@@ -186,6 +197,7 @@ func _new_view(view_name: String, listener: bool) -> SubViewport:
 	var vp := SubViewport.new()
 	vp.name = view_name
 	vp.audio_listener_enable_3d = listener
+	GraphicsSettings.apply_viewport(vp, GameState.graphics_quality)
 	container.add_child(vp)
 	return vp
 
@@ -285,6 +297,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key_down and key.physical_keycode == KEY_F1:
 		DebugDraw.enabled = not DebugDraw.enabled
+	if key_down and key.physical_keycode == KEY_F11:
+		GraphicsSettings.toggle_fullscreen()
 
 
 func _physics_process(_delta: float) -> void:

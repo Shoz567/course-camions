@@ -64,6 +64,10 @@ func _test_finish() -> void:
 			vps[vp] = true
 	check("6 SubViewport distincts, chaque camera dans sa vue", vps.size() == 6, "%d" % vps.size())
 	check("pas de camera TV a 6 joueurs", _scene.get("leader_camera") == null)
+	var env := (_scene.get_node("WorldEnvironment") as WorldEnvironment).environment
+	check("6 vues : MSAA 2x par vue, occlusion seule (ni reflets ni eclairage indirect)",
+		(_players[5].viewport as SubViewport).msaa_3d == Viewport.MSAA_2X
+		and env.ssao_enabled and not env.ssr_enabled and not env.ssil_enabled)
 	check_near("HUD a l'echelle 0,5", (_players[5].hud as RaceHud).ui_scale, 0.5, 0.001)
 
 	check("J5 VIOLET NÉO-TOKYO, J6 ORANGE CARBO",

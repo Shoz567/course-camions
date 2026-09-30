@@ -16,6 +16,8 @@ extends PhysicsTest
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
 ##     il montre la DualSense (les commandes Forza de la demande, legendes
 ##     sans chevauchement), regle le volume reel, et RETOUR ramene au menu ;
+##   - parametres : la qualite graphique choisie est gardee dans GameState et
+##     regle l'environnement du menu (basse : plus aucun effet) ;
 ##   - camera d'orbite : tourne autour de la grille, a distance constante ;
 ##   - Options et Croix (JOY_BUTTON_A, ui_accept de Godot) lancent la course :
 ##     signal avec le nombre choisi, ecrit dans GameState.
@@ -151,6 +153,12 @@ func _test_tick(t: int) -> void:
 			_seen["volume_db"] = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
 			_menu.volume_slider.value = 100.0
 			_seen["sound_check"] = _menu.sound_check.button_pressed
+			var env := (_menu.get_node("WorldEnvironment") as WorldEnvironment).environment
+			var was := [GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
+			_menu.quality_option.select(GraphicsSettings.Quality.LOW)
+			_menu.quality_option.item_selected.emit(GraphicsSettings.Quality.LOW)
+			_seen["quality"] = [was, GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
+			_menu.set_quality(GraphicsSettings.Quality.HIGH)
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
 		82: _seen["back"] = not _menu.settings.visible
@@ -244,6 +252,9 @@ func _test_finish() -> void:
 	check("schema : legendes sans chevauchement, dans le cadre", not overlap and not outside)
 	check_near("parametres : volume a 50 % (dB)", _seen.get("volume_db", 0.0), linear_to_db(0.5), 0.01)
 	check("parametres : case Son synchronisee avec le bouton", _seen.get("sound_check", false))
+	check("parametres : qualite haute par defaut (tout), basse choisie : gardee, plus aucun effet",
+		_seen.get("quality", []) == [[GraphicsSettings.Quality.HIGH, true, true, true], GraphicsSettings.Quality.LOW,
+		false, false, false], str(_seen.get("quality", [])))
 	check("RETOUR ramene au menu", _seen.get("back", false))
 	check_above("camera en orbite : deplacement en 97 ticks (m)", _seen["cam_moved"], 3.0)
 	check_below("orbite a distance constante (ecart m)", _cam_dist.max() - _cam_dist.min(), 0.01)

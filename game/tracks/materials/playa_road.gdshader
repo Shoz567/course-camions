@@ -6,8 +6,12 @@ shader_type spatial;
 // distance le long de la piste (m) ; ligne d'arrivee a 0.
 uniform float road_width = 75.0;
 
+// hachage sans sinus : reste precis loin de l'origine (a 2 km du depart, un
+// sin() de grand argument donnait des blocs a bords nets au lieu d'un bruit)
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 float vnoise(vec2 p) {
@@ -34,6 +38,8 @@ void fragment() {
 	// sable souffle par le vent le long des murs
 	float edge = min(x, road_width - x);
 	float drift = smoothstep(7.0, 0.5, edge + (vnoise(p * 0.12) - 0.5) * 7.0);
+	// pas de sable sur les ponts (COLOR.r > 0) : il ne vole pas jusque-la
+	drift *= 1.0 - smoothstep(0.1, 0.4, COLOR.r);
 	asphalt = mix(asphalt, vec3(0.8, 0.7, 0.48) * (0.9 + 0.2 * grain), drift * 0.85);
 
 	// platelage : planches de 0,6 m, lames de 9 m decalees d'un rang sur deux
