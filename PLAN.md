@@ -160,6 +160,27 @@ reset tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g,
 l'adhérence mesurée, camions à l'échelle 1,2, semi-remorque articulée
 comprise, plaques et pièges sans effet, relief compris).
 
+**Piste n°2, « Playa Del Sol »** (2026-09-30, `game/tracks/track_02_playa.tscn`,
+même générateur, thème `TrackTheme.PLAYA_DEL_SOL`) : une île en plein soleil,
+2 673 m, 75 m de large, 40 m de dénivelé, pente max 14 %. Promenade du front de
+mer (départ, océan à droite), montée de la corniche (R 160 m, 5°), corniche
+(+26 m, 11 %), virage du belvédère (R 140 m, 7°) à 36 m, **descente des
+falaises** face à la mer et aux îlots, S des palmiers (R 150 m, ±45°), plage,
+**grand pont de la baie** (R 200 m, 6°, tablier de béton sur piles au-dessus de
+l'eau), **jetée en bois** sur pieux avec 2 tremplins, grille à plat. 6 plaques
+de boost, 4 tremplins, 8 panneaux, et 4 **bancs de sable** (liseré rouge et
+blanc) à la place des flaques : même ralentissement (`PadEffects`). Le thème
+habille le générateur sans toucher au tracé ni à la physique : chaussée de
+jour et planches sur les ponts, glissières blanches à vibreurs, **masque terre /
+mer** calculé sur le tracé (terre à 130 m autour, intérieur de la boucle, baie
+de 105 m creusée sous les tabliers), talus de roche sous les portions hautes,
+segments `"bridge"` (tablier sur piles dès 3 m de haut). Décor
+(`PlayaBackdrop`, 6 MultiMesh, aucune collision) : palmiers, parasols, rochers
+au large, phare. Environnement `playa_sun.tres`, soleil avec ombres
+(`dev/race_playa.tscn`). **Tour de référence : 76,7 s** (`track_02_lap_test`,
+mêmes règles que la piste n°1). Le circuit se choisit au menu
+(`GameState.selected_track`, `GameState.TRACKS`).
+
 **Critères de sortie**
 - `[x]` Un joueur fait 3 tours chronométrés sur la piste n°1 (`make run` :
   compte à rebours, 3 tours, arrivée, Start pour rejouer).
@@ -207,10 +228,11 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 
 Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course de
 1 à 6 joueurs** (6 depuis le 2026-09-30 ; `make run`, scène principale `ui/main_menu.tscn`). Le menu
-(titre animé, choix du nombre de joueurs à la manette, au clavier ou à la
-souris, son on / off, écran des paramètres avec le schéma légendé de la manette
+(titre animé, choix du **circuit** (Cyber City ou Playa Del Sol ; Triangle ou
+T) et du nombre de joueurs à la manette, au clavier ou à la souris, son on / off, écran des paramètres avec le schéma légendé de la manette
 et le volume, piste et camions en orbite derrière)
-lance `dev/race.tscn`, dans la catégorie de vitesse choisie (Lent 50cc 110 km/h,
+lance la scène de course du circuit (`dev/race.tscn` ou `dev/race_playa.tscn`),
+dans la catégorie de vitesse choisie (Lent 50cc 110 km/h,
 Normal 100cc 150 km/h, Rapide 150cc 185 km/h, Ultrasonique 200cc 225 km/h ;
 `GameState.SPEED_CLASSES`). J1 camion bleu AZUR (manette 0 ou flèches), J2 rouge
 DURAND (manette 1 ou ZQSD), J3 jaune SOLEIL (manette 2), J4 vert (manette 3),

@@ -1,25 +1,26 @@
 class_name MainMenu
 extends Node3D
 
-## Ecran d'accueil (tache 4.2, partiel) : titre anime, choix du nombre de
-## joueurs (1 a 6), START / COMMENCER, son on / off, parametres. Decor dedie
+## Ecran d'accueil (tache 4.2, partiel) : titre anime, choix du circuit (Cyber
+## City ou Playa Del Sol), du nombre de joueurs (1 a 6), de la categorie de
+## vitesse, START / COMMENCER, son on / off, parametres. Decor dedie
 ## (Showroom) : les camions des joueurs choisis exposes sur un plateau tournant,
 ## sur le toit d'une tour de Cyber City, sous les projecteurs ; camera en orbite
 ## lente, decalee pour montrer les camions a droite, le menu a gauche.
 ##
 ## Manette (PlayStation, positions SDL) : croix directionnelle ou stick pour
 ## naviguer, Croix pour valider, Rond ou Create pour fermer les parametres,
-## L1 / R1 pour changer le nombre de joueurs, Options pour commencer.
-## Clavier et souris : fleches + Entree, touches 1 a 6, clic ; Echap ferme les
-## parametres, sinon quitte le jeu.
+## L1 / R1 pour changer le nombre de joueurs, Triangle pour changer de circuit,
+## Options pour commencer.
+## Clavier et souris : fleches + Entree, touches 1 a 6, T (circuit), clic ;
+## Echap ferme les parametres, sinon quitte le jeu.
 ##
-## COMMENCER ecrit le choix dans GameState.requested_players puis charge
-## dev/race.tscn (LocalRace le lit). Le menu ne touche pas a la physique : les
+## COMMENCER ecrit le choix dans GameState (requested_players, selected_track)
+## puis charge la scene de course du circuit (LocalRace le lit). Le menu ne touche pas a la physique : les
 ## camions de decor sont geles.
 
 signal launch_requested(players: int)
 
-const RACE_SCENE := "res://dev/race.tscn"
 const LocalRace := preload("res://dev/local_race.gd")
 
 ## Faux pour les tests : COMMENCER emet `launch_requested` sans changer de scene.
@@ -40,6 +41,8 @@ var selected_players: int = 1
 var trucks: Array[Truck] = []
 var player_buttons: Array[Button] = []
 var speed_buttons: Array[Button] = []
+var track_buttons: Array[Button] = []
+var subtitle: Label
 var title: Label
 var start_button: Button
 var sound_button: Button
@@ -131,6 +134,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		match key.physical_keycode:
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6:
 				select_players(key.physical_keycode - KEY_0)
+			KEY_T:
+				if not settings.visible:
+					select_track((GameState.selected_track + 1) % GameStateNode.TRACKS.size())
 			KEY_ESCAPE:
 				if settings.visible:
 					toggle_settings()
@@ -150,6 +156,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				select_players(selected_players - 1)
 			JOY_BUTTON_RIGHT_SHOULDER:
 				select_players(selected_players + 1)
+			JOY_BUTTON_Y:
+				if not settings.visible:
+					select_track((GameState.selected_track + 1) % GameStateNode.TRACKS.size())
 			JOY_BUTTON_START:
 				if not settings.visible:
 					start_race()
@@ -159,6 +168,26 @@ func _unhandled_input(event: InputEvent) -> void:
 			_:
 				return
 		get_viewport().set_input_as_handled()
+
+
+## Circuit (GameState.TRACKS), garde dans GameState pour la course et les
+## suivantes ; le sous-titre annonce son ambiance.
+func select_track(k: int) -> void:
+	var prev := GameState.selected_track
+	GameState.selected_track = clampi(k, 0, GameStateNode.TRACKS.size() - 1)
+	if is_node_ready() and GameState.selected_track != prev:
+		MenuSound.play_select()
+	for i in track_buttons.size():
+		track_buttons[i].set_pressed_no_signal(i == GameState.selected_track)
+	if subtitle != null:
+		var t: Dictionary = GameStateNode.TRACKS[GameState.selected_track]
+		subtitle.text = "%s   ·   %s   ·   3 TOURS   ·   1 À 6 JOUEURS" \
+				% [String(t["name"]).to_upper(), String(t["tagline"]).to_upper()]
+
+
+## Scene de course du circuit choisi.
+func race_scene() -> String:
+	return GameStateNode.track_scene(GameState.selected_track)
 
 
 ## Categorie de vitesse (0 = Lent .. 3 = Ultrasonique), gardee dans GameState
@@ -191,7 +220,7 @@ func start_race() -> void:
 	GameState.requested_players = selected_players
 	launch_requested.emit(selected_players)
 	if auto_change_scene:
-		get_tree().change_scene_to_file(RACE_SCENE)
+		get_tree().change_scene_to_file(race_scene())
 
 
 func set_sound(on: bool) -> void:
@@ -274,7 +303,7 @@ func _build_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_box.add_child(title)
-	var subtitle := _label("CYBER CITY   ·   PISTE DE 75 M   ·   3 TOURS   ·   1 À 6 JOUEURS", 26, 6)
+	subtitle = _label("", 20, 6)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color(1.0, 0.95, 0.8)
 	# carte translucide : lisible devant les camions du decor
@@ -286,6 +315,27 @@ func _build_ui() -> void:
 	card_box.add_theme_constant_override("separation", 16)
 	card.add_child(card_box)
 	card_box.add_child(subtitle)
+
+	# circuit
+	var track_row := HBoxContainer.new()
+	track_row.name = "Tracks"
+	track_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	track_row.add_theme_constant_override("separation", 12)
+	card_box.add_child(track_row)
+	var track_group := ButtonGroup.new()
+	for k in GameStateNode.TRACKS.size():
+		var tb := Button.new()
+		tb.name = "Track%d" % k
+		tb.text = String(GameStateNode.TRACKS[k]["name"]).to_upper()
+		tb.toggle_mode = true
+		tb.button_group = track_group
+		tb.custom_minimum_size = Vector2(300, 60)
+		_style_button(tb, Color(0.07, 0.09, 0.15, 0.88),
+			Color(0.62, 0.2, 0.9) if k == 0 else Color(0.0, 0.62, 0.62), 24)
+		tb.pressed.connect(select_track.bind(k))
+		track_row.add_child(tb)
+		track_buttons.append(tb)
+	select_track(GameState.selected_track)
 
 	var row := HBoxContainer.new()
 	row.name = "Players"
@@ -370,8 +420,8 @@ func _build_ui() -> void:
 	_gear.offset_bottom = -10
 	settings_button.add_child(_gear)
 
-	var help := _label("Manette : croix directionnelle pour choisir, Croix valider, Rond retour, L1 / R1 joueurs, Options commencer"
-			+ "      Clavier : fleches, Entree, 1 a 6, Echap pour quitter", 18, 4)
+	var help := _label("Manette : croix directionnelle pour choisir, Croix valider, Rond retour, L1 / R1 joueurs, Triangle circuit, Options commencer"
+			+ "      Clavier : fleches, Entree, 1 a 6, T circuit, Echap pour quitter", 18, 4)
 	help.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	help.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	help.grow_vertical = Control.GROW_DIRECTION_BEGIN

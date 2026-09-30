@@ -9,6 +9,9 @@ extends PhysicsTest
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
 ##     camions montres en decor aussi ; touche 6 : les 6 camions tiennent sur
 ##     le plateau ;
+##   - circuit : Cyber City par defaut ; un clic sur PLAYA DEL SOL le choisit
+##     (GameState.selected_track, scene de course, sous-titre), Triangle
+##     revient a Cyber City ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
 ##     il montre la DualSense (les commandes Forza de la demande, legendes
@@ -22,6 +25,7 @@ var _launches: Array[int] = []
 var _cam_start: Vector3
 var _cam_dist: Array[float] = []
 var _defaults_ok: bool = false
+var _defaults_track: bool = false
 var _seen: Dictionary = {}
 
 
@@ -31,6 +35,7 @@ func _test_setup() -> void:
 	# (1920 x 1080, display/window/size) pour que les boutons soient a l'ecran
 	get_window().size = Vector2i(1920, 1080)
 	GameState.requested_players = 0
+	GameState.selected_track = 0
 	_menu = (load("res://ui/main_menu.tscn") as PackedScene).instantiate() as MainMenu
 	_menu.auto_change_scene = false
 	_menu.launch_requested.connect(func(n: int) -> void: _launches.append(n))
@@ -83,6 +88,8 @@ func _test_tick(t: int) -> void:
 			_cam_start = cam
 			_defaults_ok = _menu.selected_players == 1 and _visible_trucks() == 1 \
 					and _menu.player_buttons[0].button_pressed and not _menu.player_buttons[1].button_pressed
+			_defaults_track = GameState.selected_track == 0 and _menu.track_buttons[0].button_pressed \
+					and _menu.race_scene() == "res://dev/race.tscn"
 			var title_center := _menu.title.get_global_rect().get_center().x
 			var vp := _menu.get_viewport().get_visible_rect()
 			var tr := _menu.title.get_global_rect()
@@ -147,7 +154,15 @@ func _test_tick(t: int) -> void:
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
 		82: _seen["back"] = not _menu.settings.visible
-		86: _key(KEY_6, true)
+		83: _click(_menu.track_buttons[1], true)
+		84: _click(_menu.track_buttons[1], false)
+		85:
+			_seen["track_click"] = [GameState.selected_track, _menu.track_buttons[1].button_pressed,
+				_menu.track_buttons[0].button_pressed, _menu.race_scene(), _menu.subtitle.text.contains("PLAYA DEL SOL")]
+			_pad(JOY_BUTTON_Y, true)
+		86:
+			_pad(JOY_BUTTON_Y, false)
+			_key(KEY_6, true)
 		87: _key(KEY_6, false)
 		90:
 			# coin le plus eloigne de chaque ensemble (3,6 m de large, ~20 m de long)
@@ -155,6 +170,7 @@ func _test_tick(t: int) -> void:
 			for truck in _menu.trucks:
 				reach = maxf(reach, Vector2(absf(truck.position.x) + 1.8, 9.9).length())
 			_seen["key6"] = [_menu.selected_players, _visible_trucks(), reach < Showroom.PLATE_RADIUS]
+			_seen["track_pad"] = [GameState.selected_track, _menu.race_scene(), _menu.subtitle.text.contains("CYBER CITY")]
 			_key(KEY_3, true)
 		91: _key(KEY_3, false)
 		110: _pad(JOY_BUTTON_START, true)
@@ -189,6 +205,11 @@ func _test_finish() -> void:
 	check("manette R : 4 joueurs", _seen["r"] == 4, str(_seen["r"]))
 	check("manette L : 3 joueurs", _seen["l"] == 3, str(_seen["l"]))
 	check("clic sur 2 JOUEURS : choisi et seul enfonce", _seen["click2"] == [2, true, false], str(_seen["click2"]))
+	check("circuit : 2 boutons, Cyber City par defaut", _menu.track_buttons.size() == 2 and _defaults_track)
+	check("circuit : clic sur PLAYA DEL SOL (GameState, scene, sous-titre)",
+		_seen.get("track_click", []) == [1, true, false, "res://dev/race_playa.tscn", true], str(_seen.get("track_click", [])))
+	check("circuit : Triangle revient a Cyber City",
+		_seen.get("track_pad", []) == [0, "res://dev/race.tscn", true], str(_seen.get("track_pad", [])))
 	check("son : un clic coupe le bus Master", _seen["mute"] == [true, "SON : OFF"], str(_seen["mute"]))
 	check("son : un second clic le remet", _seen["unmute"] == false)
 	check("vitesse : 4 categories, clic sur RAPIDE : choisie et seule enfoncee",

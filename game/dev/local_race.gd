@@ -105,7 +105,10 @@ class Player:
 ## Vrai : le nombre de joueurs choisi dans le menu remplace `player_count`.
 @export var players_from_menu: bool = false
 
-@onready var track: TrackBlockout = $Track01
+## Le circuit de la scene (Track01 en ville, Track02 a la plage).
+@export var track_path: NodePath = ^"Track01"
+
+@onready var track: TrackBlockout = get_node(track_path) as TrackBlockout
 @onready var race: RaceLaps = $RaceLaps
 @onready var auto_reset: AutoReset = $AutoReset
 
