@@ -26,6 +26,7 @@ var _max_roll_turn: float = -INF
 var _max_abs: float = 0.0
 var _rest_abs: float = 0.0
 var _applied_roll: float = 0.0
+var _trailer_roll: float = 0.0
 
 
 func _test_setup() -> void:
@@ -70,6 +71,10 @@ func _test_tick(t: int) -> void:
 		var body := _trucks[3].get_node(^"Visual/Body") as Node3D
 		var rel := _trucks[3].global_basis.inverse() * body.global_basis
 		_applied_roll = maxf(_applied_roll, rad_to_deg(asin(clampf(rel.x.y, -1.0, 1.0))))
+		# la semi-remorque suit le roulis (c'est elle qu'on voit de derriere)
+		var trailer := _trucks[3].get_node(^"Visual/TrailerPivot") as Node3D
+		var rel_t := _trucks[3].global_basis.inverse() * trailer.global_basis
+		_trailer_roll = maxf(_trailer_roll, rad_to_deg(asin(clampf(rel_t.x.y, -1.0, 1.0))))
 	for i in [1, 2, 3, 5]:
 		var l: Vector2 = lean.call(i)
 		_max_abs = maxf(_max_abs, maxf(absf(l.x), absf(l.y)))
@@ -82,6 +87,7 @@ func _test_finish() -> void:
 	check_below("freinage : le nez plonge (deg)", _min_pitch_brake, -1.0)
 	check_above("virage a droite : penche vers l'exterieur (roulis, deg)", _max_roll_turn, 1.0)
 	check_above("roulis bien applique au noeud Body (deg)", _applied_roll, 0.5)
+	check_above("la semi-remorque suit le roulis (deg)", _trailer_roll, 0.5)
 	check_below("plafond respecte (deg)", _max_abs, vis.lean_max_deg + 1.0)
 
 	# purement visuel : 3 (penche actif) et 4 (desactive) roulent pareil, au

@@ -85,6 +85,11 @@ var _probe_of: PackedInt32Array = []
 ## carrosserie se balance legerement avant de se poser : c'est voulu.
 @export_range(0.1, 5.0, 0.01, "suffix:Hz") var lean_frequency_hz: float = 1.3
 @export_range(0.0, 2.0, 0.01) var lean_damping_ratio: float = 0.45
+## Part du ROULIS reprise par la semi-remorque (autour de la sellette). C'est
+## elle qu'on voit depuis la camera de poursuite : sans elle, le penche serait
+## presque invisible avec le modele externe (constate sur capture). Pas de
+## tangage : l'arriere de la remorque se souleverait au freinage.
+@export_range(0.0, 1.5, 0.01) var lean_trailer_roll_ratio: float = 1.0
 
 var _body: Node3D
 var _body_rest: Transform3D
@@ -131,7 +136,8 @@ func _physics_process(delta: float) -> void:
 		return
 	_update_lean(delta)
 	if _trailer_pivot != null:
-		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle())
+		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle()) \
+			* Basis(Vector3.BACK, deg_to_rad(_lean.y * lean_trailer_roll_ratio))
 		# remorque larguee : elle est sur la route, plus derriere le tracteur
 		_trailer_pivot.visible = not _truck.is_trailer_detached()
 	if _pivots.is_empty():
