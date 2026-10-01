@@ -10,7 +10,7 @@ extends PhysicsTest
 ##     camions montres en decor aussi ; touche 6 : les 6 camions tiennent sur
 ##     le plateau ;
 ##   - circuit : Cyber City par defaut ; un clic sur PLAYA DEL SOL le choisit
-##     (GameState.selected_track, scene de course, sous-titre), Triangle
+##     (GameState.selected_track, scene de course, ambiance du sous-titre), Triangle
 ##     revient a Cyber City ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
@@ -166,7 +166,7 @@ func _test_tick(t: int) -> void:
 		84: _click(_menu.track_buttons[1], false)
 		85:
 			_seen["track_click"] = [GameState.selected_track, _menu.track_buttons[1].button_pressed,
-				_menu.track_buttons[0].button_pressed, _menu.race_scene(), _menu.subtitle.text.contains("PLAYA DEL SOL")]
+				_menu.track_buttons[0].button_pressed, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[1]["tagline"])]
 			_pad(JOY_BUTTON_Y, true)
 		86:
 			_pad(JOY_BUTTON_Y, false)
@@ -178,7 +178,7 @@ func _test_tick(t: int) -> void:
 			for truck in _menu.trucks:
 				reach = maxf(reach, Vector2(absf(truck.position.x) + 1.8, 9.9).length())
 			_seen["key6"] = [_menu.selected_players, _visible_trucks(), reach < Showroom.PLATE_RADIUS]
-			_seen["track_pad"] = [GameState.selected_track, _menu.race_scene(), _menu.subtitle.text.contains("CYBER CITY")]
+			_seen["track_pad"] = [GameState.selected_track, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[0]["tagline"])]
 			_key(KEY_3, true)
 		91: _key(KEY_3, false)
 		110: _pad(JOY_BUTTON_START, true)
