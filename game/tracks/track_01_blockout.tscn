@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
 [ext_resource type="Script" path="res://tracks/city_backdrop.gd" id="2"]
+[ext_resource type="Script" path="res://tracks/race_decor.gd" id="3"]
 
 [node name="Track01" type="Node3D"]
 script = ExtResource("1")
@@ -128,6 +129,32 @@ jump_offset = 12.0
 boost_pad_size = Vector2(12, 8)
 grid_row_spacing = 20.0
 grid_lateral = PackedFloat32Array(-10, 10, -30, 30)
+grid_back_lateral = PackedFloat32Array(-20, 20)
 
 [node name="CityBackdrop" type="Node3D" parent="."]
 script = ExtResource("2")
+
+[node name="RaceDecor" type="Node3D" parent="."]
+script = ExtResource("3")
+overpasses = Array[Dictionary]([{
+"angle": 90.0,
+"at": 250.0,
+"label": "NEON COLA",
+"segment": "Grand virage releve (en montee)"
+}, {
+"angle": 75.0,
+"at": 45.0,
+"label": "HYPER FUEL",
+"segment": "Diagonale de la chicane (longueur calculee)"
+}, {
+"angle": 90.0,
+"at": 220.0,
+"label": "CYBER TIRES",
+"segment": "Epingle relevee (drift)"
+}, {
+"angle": 80.0,
+"at": 330.0,
+"decks": 2,
+"label": "TURBO TRUCKS",
+"segment": "Ligne droite des stands (longueur calculee)"
+}])

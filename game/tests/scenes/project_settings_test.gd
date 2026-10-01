@@ -4,6 +4,12 @@ extends PhysicsTest
 ## EFFECTIVE. L'editeur Godot retire de project.godot les lignes egales au
 ## defaut (60 ticks/s, Forward+) : le texte du fichier ne prouve rien, la
 ## valeur chargee si.
+##
+## Affichage et rendu (demande du 2026-09-30) : base 1920 x 1080 sans
+## fenetre reduite imposee, plein ecran sans bordure, MSAA 2x ; les deux
+## environnements decrivent le rendu complet (reflets SSR, eclairage indirect
+## SSIL, occlusion SSAO) et GraphicsSettings en retire selon la qualite
+## choisie et le nombre de vues.
 
 
 func _test_setup() -> void:
@@ -21,3 +27,42 @@ func _test_finish() -> void:
 	# (chase_camera.gd lit la transformation interpolee du camion).
 	check("interpolation physique active",
 		ProjectSettings.get_setting("physics/common/physics_interpolation", false) == true)
+	_check_display()
+	_check_lighting()
+
+
+func _check_display() -> void:
+	var w: int = ProjectSettings.get_setting("display/window/size/viewport_width", 0)
+	var h: int = ProjectSettings.get_setting("display/window/size/viewport_height", 0)
+	check("base 1920 x 1080", w == 1920 and h == 1080, "%d x %d" % [w, h])
+	var ow: int = ProjectSettings.get_setting("display/window/size/window_width_override", 0)
+	var oh: int = ProjectSettings.get_setting("display/window/size/window_height_override", 0)
+	check("plus de fenetre reduite imposee (1280 x 720)", ow == 0 and oh == 0, "%d x %d" % [ow, oh])
+	var mode: int = ProjectSettings.get_setting("display/window/size/mode", 0)
+	check("plein ecran sans bordure", mode == DisplayServer.WINDOW_MODE_FULLSCREEN, "mode=%d" % mode)
+	var msaa: int = ProjectSettings.get_setting("rendering/anti_aliasing/quality/msaa_3d", 0)
+	check("anticrenelage MSAA 2x", msaa == Viewport.MSAA_2X, "msaa_3d=%d" % msaa)
+
+
+func _check_lighting() -> void:
+	for path: String in ["res://tracks/cyber_night.tres", "res://tracks/playa_sun.tres"]:
+		var env := load(path) as Environment
+		check("%s : SSR, SSIL et SSAO actifs" % path.get_file(), env.ssr_enabled and env.ssil_enabled and env.ssao_enabled,
+			"ssr=%s ssil=%s ssao=%s" % [env.ssr_enabled, env.ssil_enabled, env.ssao_enabled])
+	var env := (load("res://tracks/cyber_night.tres") as Environment).duplicate() as Environment
+	var seen := []
+	for c: Array in [[GraphicsSettings.Quality.HIGH, 1], [GraphicsSettings.Quality.HIGH, 4],
+			[GraphicsSettings.Quality.HIGH, 6], [GraphicsSettings.Quality.MEDIUM, 1], [GraphicsSettings.Quality.LOW, 1]]:
+		GraphicsSettings.apply_environment(env, c[0], c[1])
+		seen.append([env.ssr_enabled, env.ssil_enabled, env.ssao_enabled])
+	check("qualite haute : tout a 1 vue, sans SSIL a 4 vues, SSAO seul a 6 ; moyenne : SSAO ; basse : rien",
+		seen == [[true, true, true], [true, false, true], [false, false, true], [false, false, true],
+		[false, false, false]], str(seen))
+	var vp := SubViewport.new()
+	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.HIGH)
+	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED
+	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.LOW)
+	check("vues de l'ecran partage : MSAA 2x (haute), FXAA (basse)", high
+		and vp.msaa_3d == Viewport.MSAA_DISABLED and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_FXAA)
+	vp.free()
+	check("qualite haute par defaut", GameState.graphics_quality == GraphicsSettings.Quality.HIGH)

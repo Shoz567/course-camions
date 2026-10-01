@@ -8,8 +8,8 @@ extends Node
 ## pendant toute la course (cf. docs/INPUT_SPEC.md §5). Ne reattribue jamais
 ## un slot en cours de course.
 ##
-## Pour l'instant : le nombre de joueurs et la categorie de vitesse choisis
-## dans le menu principal, lus par la course locale. Le mapping device -> slot
+## Pour l'instant : le nombre de joueurs, la categorie de vitesse et le
+## circuit choisis dans le menu principal, lus par la course locale. Le mapping device -> slot
 ## est fixe (joueur i = manette i).
 
 ## Categorie de vitesse, facon cylindree de Mario Kart.
@@ -25,12 +25,29 @@ const SPEED_CLASSES: Array[Dictionary] = [
 	{"name": "Ultrasonique", "cc": "200cc", "top_kmh": 225.0, "accel": 1.55, "grip": 1.12, "steer": 1.25},
 ]
 
+## Circuits : nom, ambiance (sous-titre du menu) et scene de course.
+const TRACKS: Array[Dictionary] = [
+	{"name": "Cyber City", "tagline": "nuit pluvieuse, néons, mégalopole", "scene": "res://dev/race.tscn"},
+	{"name": "Playa Del Sol", "tagline": "plage tropicale, plein soleil, océan", "scene": "res://dev/race_playa.tscn"},
+]
+
+## Circuit choisi dans le menu (garde entre deux courses).
+var selected_track: int = 0
+
+## Qualite graphique choisie dans les parametres (GraphicsSettings.Quality).
+var graphics_quality: int = GraphicsSettings.Quality.HIGH
+
 ## Categorie choisie dans le menu (garde entre deux courses).
 var speed_class: int = SpeedClass.NORMAL
 
-## Nombre de joueurs demande par le menu (1 a 4). 0 = rien de demande : la
+## Nombre de joueurs demande par le menu (1 a 6). 0 = rien de demande : la
 ## scene de course garde sa propre valeur (tests, lancement direct).
 var requested_players: int = 0
+
+
+## Scene de course du circuit `index` (borne aux circuits connus).
+static func track_scene(index: int) -> String:
+	return TRACKS[clampi(index, 0, TRACKS.size() - 1)]["scene"]
 
 
 ## Reglage d'un camion pour une categorie de vitesse : copie du reglage de

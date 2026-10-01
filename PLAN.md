@@ -159,6 +159,37 @@ reset tout autour. Métriques : `baseline.json` du 2026-09-26 (0,877 g,
 **Tour de référence : 87,7 s** (`track_01_lap_test`, pilote à 80 % de
 l'adhérence mesurée, camions à l'échelle 1,2, semi-remorque articulée
 comprise, plaques et pièges sans effet, relief compris).
+**Décors de course** (2026-09-30, `RaceDecor`, purement visuels, aucune
+collision) : 3 ponts routiers et un échangeur à deux niveaux enjambent la piste
+(tablier à 20 m au-dessus du point le plus haut de la chaussée survolée, piles
+au-delà des murs, arc porteur, néons, circulation en points de lumière), chacun
+avec un **méga-écran holographique** dont la publicité alterne ; 4 **tribunes**
+de part et d'autre du départ (environ 3 000 spectateurs en un MultiMesh : ils sautent,
+font la ola, prennent des photos ; projecteurs sans ombres) ; 8 **faisceaux**
+qui balaient le ciel. Coût GPU mesuré sur la grille à 6 joueurs (Radeon 780M,
+1920 × 1200, qualité haute) : 16,3 ms.
+
+**Piste n°2, « Playa Del Sol »** (2026-09-30, `game/tracks/track_02_playa.tscn`,
+même générateur, thème `TrackTheme.PLAYA_DEL_SOL`) : une île en plein soleil,
+2 673 m, 75 m de large, 40 m de dénivelé, pente max 14 %. Promenade du front de
+mer (départ, océan à droite), montée de la corniche (R 160 m, 5°), corniche
+(+26 m, 11 %), virage du belvédère (R 140 m, 7°) à 36 m, **descente des
+falaises** face à la mer et aux îlots, S des palmiers (R 150 m, ±45°), plage,
+**grand pont de la baie** (R 200 m, 6°, tablier de béton sur piles au-dessus de
+l'eau), **jetée en bois** sur pieux avec 2 tremplins, grille à plat. 6 plaques
+de boost, 4 tremplins, 8 panneaux, et 4 **bancs de sable** (liseré rouge et
+blanc) à la place des flaques : même ralentissement (`PadEffects`). Le thème
+habille le générateur sans toucher au tracé ni à la physique : chaussée de
+jour et planches sur les ponts, glissières blanches à vibreurs, **masque terre /
+mer** calculé sur le tracé (terre à 130 m autour, intérieur de la boucle, baie
+de 105 m creusée sous les tabliers), talus de roche sous les portions hautes,
+segments `"bridge"` (tablier sur piles dès 3 m de haut). Décor
+(`PlayaBackdrop`, 6 MultiMesh, aucune collision) : palmiers, parasols, rochers
+au large, phare ; tribunes de jour au départ (`RaceDecor`, sans faisceaux
+ni projecteurs). Environnement `playa_sun.tres`, soleil avec ombres
+(`dev/race_playa.tscn`). **Tour de référence : 76,7 s** (`track_02_lap_test`,
+mêmes règles que la piste n°1). Le circuit se choisit au menu
+(`GameState.selected_track`, `GameState.TRACKS`).
 
 **Critères de sortie**
 - `[x]` Un joueur fait 3 tours chronométrés sur la piste n°1 (`make run` :
@@ -200,24 +231,42 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 | # | Tâche | Agent | État |
 |---|---|---|---|
 | 4.1 | `DeviceInputSource` : routage des `InputEvent` par `device` id (`docs/INPUT_SPEC.md`) | gameplay-engineer | `[x]` + profil MK8 Switch, jeux de touches par joueur |
-| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[~]` menu principal (`ui/main_menu.tscn`) : choix de 1 à 4 joueurs, couleur fixe par joueur, joueur N = manette N ; « appuyez sur A pour rejoindre » à faire |
-| 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[x]` `LocalRace` : plein écran, 2 vues haut / bas, grille 2 × 2 à 3-4 (à 3, 4e case = caméra TV sur le leader), HUD réduit |
+| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[~]` menu principal (`ui/main_menu.tscn`) : choix de 1 à 6 joueurs, couleur fixe par joueur, joueur N = manette N ; « appuyez sur A pour rejoindre » à faire |
+| 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[x]` `LocalRace` : plein écran, 2 vues haut / bas, grille 2 × 2 à 3-4, **3 × 2 à 5-6** (à 3 et à 5, la case libre = caméra TV sur le leader), HUD réduit (0,6 puis 0,5) |
 | 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer | `[~]` débranchement : roue libre (testé en solo) ; rebranchement en course non testé |
-| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[~]` isolation à 2 et 4 joueurs (`race_scene_test`, `race_4p_test`), grille à 3 (`race_3p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 |
+| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[~]` isolation à 2, 4 et 6 joueurs (`race_scene_test`, `race_4p_test`, `race_6p_test`), grilles à 3 et 5 (`race_3p_test`, `race_5p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 |
 
 Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course de
-1 à 4 joueurs** (`make run`, scène principale `ui/main_menu.tscn`). Le menu
-(titre animé, choix du nombre de joueurs à la manette, au clavier ou à la
-souris, son on / off, écran des paramètres avec le schéma légendé de la manette
+1 à 6 joueurs** (6 depuis le 2026-09-30 ; `make run`, scène principale `ui/main_menu.tscn`). Le menu
+(titre animé, choix du **circuit** (Cyber City ou Playa Del Sol ; Triangle ou
+T) et du nombre de joueurs à la manette, au clavier ou à la souris, son on / off, écran des paramètres avec le schéma légendé de la manette
 et le volume, piste et camions en orbite derrière)
-lance `dev/race.tscn`, dans la catégorie de vitesse choisie (Lent 50cc 110 km/h,
+lance la scène de course du circuit (`dev/race.tscn` ou `dev/race_playa.tscn`),
+dans la catégorie de vitesse choisie (Lent 50cc 110 km/h,
 Normal 100cc 150 km/h, Rapide 150cc 185 km/h, Ultrasonique 200cc 225 km/h ;
 `GameState.SPEED_CLASSES`). J1 camion bleu AZUR (manette 0 ou flèches), J2 rouge
-DURAND (manette 1 ou ZQSD), J3 jaune SOLEIL (manette 2), J4 vert (manette 3) ;
+DURAND (manette 1 ou ZQSD), J3 jaune SOLEIL (manette 2), J4 vert (manette 3),
+**J5 VIOLET NÉO-TOKYO** (manette 4) et **J6 ORANGE CARBO** (manette 5) : pas de
+modèle à eux, un modèle existant repeint à l'exécution par une livrée
+(`TruckVisual.livery`, par nom de matériau : améthyste vernie et néons magenta ;
+orange lave métallisé, carbone mat, jantes cuivrées). 2e rang de la grille en
+quinconce (±20 m) ;
 compte à rebours, position (POS n/N) dans chaque HUD, classement affiché à tous
 dès la première arrivée ; Start / Entrée rejoue, − / Échap revient au menu.
 Accès directs : `make solo` (`dev/track_drive.tscn`), `dev/race_2p.tscn`.
-Affichage : base 1920 × 1080, étirement `canvas_items` (fenêtre 1280 × 720).
+Affichage (2026-09-30) : base 1920 × 1080, étirement `canvas_items`, **plein
+écran sans bordure** à la résolution de l'écran (plus de fenêtre 1280 × 720
+imposée ; F11 : fenêtre), **MSAA 2x** sur la fenêtre et sur chaque vue de
+l'écran partagé. Éclairage : les deux environnements activent les reflets
+(**SSR**), l'éclairage indirect (**SSIL**) et l'occlusion ambiante (**SSAO**) ;
+`GraphicsSettings` en retire selon la qualité choisie dans les paramètres
+(haute, moyenne : SSAO seul, basse : aucun effet, FXAA) et, en qualité haute,
+selon le nombre de vues : SSIL jusqu'à 2 vues, SSR jusqu'à 4, SSAO toujours.
+Coût GPU mesuré le 2026-09-30 sur la machine de développement (Radeon 780M,
+1920 × 1200 ; **pas** la machine de référence, rien n'est écrit dans
+`baseline.json`) : 1 joueur 8 ms sans effet, 11 à 15 ms avec tout ; 4 joueurs
+10 ms → 14 ms (SSR + SSAO) → 16 ms (tout) ; 6 joueurs 12 ms → 15 ms (SSAO) →
+19 ms (tout), d'où ces seuils pour tenir 60 images par seconde.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).

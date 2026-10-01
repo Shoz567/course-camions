@@ -1,16 +1,19 @@
 extends Node3D
 
-## Course locale de 3 tours sur la piste n°1, de 1 a 4 joueurs.
+## Course locale de 3 tours, de 1 a 6 joueurs, sur le circuit de la scene.
 ##
 ##   1 joueur    : plein ecran, n'importe quelle manette + tout le clavier.
 ##   2 joueurs   : ecran partage haut / bas (VBoxContainer).
 ##   3-4 joueurs : grille 2 x 2 (GridContainer). A 3, la 4e case suit le
 ##                 camion en tete (camera TV).
+##   5-6 joueurs : grille 3 x 2. A 5, la 6e case suit le camion en tete.
 ##
-##   J1 camion bleu AZUR     manette 0 (+ fleches en ecran partage)
-##   J2 camion rouge DURAND  manette 1 (+ ZQSD)
-##   J3 camion jaune SOLEIL  manette 2
-##   J4 camion vert          manette 3
+##   J1 camion bleu AZUR          manette 0 (+ fleches en ecran partage)
+##   J2 camion rouge DURAND       manette 1 (+ ZQSD)
+##   J3 camion jaune SOLEIL       manette 2
+##   J4 camion vert               manette 3
+##   J5 violet NEO-TOKYO          manette 4 (livree : amethyste, neons magenta)
+##   J6 orange CARBO              manette 5 (livree : lave, carbone, cuivre)
 ##
 ## Chaque joueur a sa source d'input (sa manette, et AUCUNE autre : INPUT_SPEC
 ## §4), son camion, sa camera, son HUD. Compte a rebours commun, puis course :
@@ -34,20 +37,59 @@ const MODELS: PackedStringArray = [
 	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
 	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Jaune.glb",
 	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Vert.glb",
+	# J5 et J6 : pas de modele a eux (aucun .glb dans le depot) ; ils
+	# reprennent un modele existant, repeint par leur livree (LIVERIES)
+	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
 ]
-const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT"]
+const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT",
+	"J5 VIOLET NÉO-TOKYO", "J6 ORANGE CARBO"]
 ## Couleur des boites quand le modele est absent (clone neuf).
 const TINTS: Array[Color] = [Color(0.15, 0.35, 0.9), Color(0.85, 0.12, 0.1),
-	Color(0.95, 0.8, 0.1), Color(0.15, 0.7, 0.25)]
+	Color(0.95, 0.8, 0.1), Color(0.15, 0.7, 0.25),
+	Color(0.55, 0.16, 0.95), Color(1.0, 0.38, 0.04)]
+## Livree par joueur (TruckVisual.livery) : par prefixe de nom de materiau du
+## modele, les proprietes repeintes. Vide : le modele garde ses couleurs.
+const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
+	# J5 VIOLET NEO-TOKYO : amethyste electrique brillante, neons magenta
+	{
+		"Peinture_Cabine": {"albedo": Color(0.42, 0.1, 0.9), "metallic": 0.65, "roughness": 0.14,
+			"clearcoat": 1.0, "emission": Color(0.35, 0.05, 0.8), "emission_energy": 0.25},
+		"Peinture_Caisse": {"albedo": Color(0.16, 0.05, 0.34), "metallic": 0.55, "roughness": 0.2,
+			"clearcoat": 1.0},
+		"Bande_Deco": {"albedo": Color(1.0, 0.1, 0.75), "emission": Color(1.0, 0.08, 0.75),
+			"emission_energy": 3.5},
+		"Texte_Logo": {"albedo": Color(1.0, 0.1, 0.75), "emission": Color(1.0, 0.08, 0.75),
+			"emission_energy": 3.0},
+		"Flamme": {"albedo": Color(1.0, 0.1, 0.75), "emission": Color(1.0, 0.08, 0.75),
+			"emission_energy": 4.0},
+		"Jante": {"albedo": Color(0.75, 0.6, 1.0), "metallic": 1.0, "roughness": 0.18},
+	},
+	# J6 ORANGE CARBO : orange lave metallise, carbone noir mat, jantes cuivre
+	{
+		"Peinture_Cabine": {"albedo": Color(1.0, 0.3, 0.02), "metallic": 0.8, "roughness": 0.2,
+			"clearcoat": 0.8, "emission": Color(1.0, 0.22, 0.0), "emission_energy": 0.35},
+		"Peinture_Caisse": {"albedo": Color(0.035, 0.035, 0.04), "metallic": 0.1, "roughness": 0.85},
+		"Bande_Deco": {"albedo": Color(0.03, 0.03, 0.035), "metallic": 0.1, "roughness": 0.8},
+		"Carbone": {"albedo": Color(0.03, 0.03, 0.035), "metallic": 0.1, "roughness": 0.8},
+		"Texte_Logo": {"albedo": Color(1.0, 0.35, 0.02), "emission": Color(1.0, 0.3, 0.0),
+			"emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.42, 0.22), "metallic": 1.0, "roughness": 0.22},
+		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
+	},
+]
 const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L1 klaxon, R3 camera, Options reset.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, R reset.   Echap : menu"
 const HELP_SPLIT: PackedStringArray = [
 	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset)",
 	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset)",
 	"J3 : manette 3",
 	"J4 : manette 4",
+	"J5 : manette 5",
+	"J6 : manette 6",
 ]
+const MAX_PLAYERS := 6
 ## Echelle du HUD selon le nombre de joueurs (vues plus petites).
-const HUD_SCALE: Array[float] = [1.0, 0.85, 0.6, 0.6]
+const HUD_SCALE: Array[float] = [1.0, 0.85, 0.6, 0.6, 0.5, 0.5]
 
 enum State { COUNTDOWN, RACING, FINISHED }
 
@@ -59,11 +101,14 @@ class Player:
 	var viewport: SubViewport
 
 
-@export_range(1, 4) var player_count: int = 2
+@export_range(1, 6) var player_count: int = 2
 ## Vrai : le nombre de joueurs choisi dans le menu remplace `player_count`.
 @export var players_from_menu: bool = false
 
-@onready var track: TrackBlockout = $Track01
+## Le circuit de la scene (Track01 en ville, Track02 a la plage).
+@export var track_path: NodePath = ^"Track01"
+
+@onready var track: TrackBlockout = get_node(track_path) as TrackBlockout
 @onready var race: RaceLaps = $RaceLaps
 @onready var auto_reset: AutoReset = $AutoReset
 
@@ -71,7 +116,8 @@ var players: Array[Player] = []
 var state: State = State.COUNTDOWN
 ## Conteneur de l'ecran partage (VBoxContainer ou GridContainer), null en solo.
 var split: Container
-## Camera de la 4e case a 3 joueurs : suit le camion en tete.
+## Camera de la case libre (la 4e a 3 joueurs, la 6e a 5) : suit le camion en
+## tete.
 var leader_camera: ChaseCamera
 var _leader_label: Label
 var _state_tick: int = 0
@@ -84,9 +130,10 @@ var music: RaceMusic
 
 func _ready() -> void:
 	if players_from_menu and GameState.requested_players > 0:
-		player_count = clampi(GameState.requested_players, 1, 4)
+		player_count = clampi(GameState.requested_players, 1, MAX_PLAYERS)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
+	_apply_graphics()
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
 	music = RaceMusic.new()
@@ -96,12 +143,13 @@ func _ready() -> void:
 	split = _build_split_screen()
 	for i in player_count:
 		players.append(_add_player(i))
-	if player_count == 3:
+	if player_count == 3 or player_count == 5:
 		_add_leader_view()
 	_state_tick = Engine.get_physics_frames()
 
 
-## Ecran partage : haut / bas a 2, grille 2 x 2 a 3-4 (haut gauche = J1).
+## Ecran partage : haut / bas a 2, grille 2 x 2 a 3-4, 3 x 2 a 5-6 (haut
+## gauche = J1).
 func _build_split_screen() -> Container:
 	if player_count == 1:
 		return null
@@ -119,7 +167,7 @@ func _build_split_screen() -> Container:
 		box.add_theme_constant_override("separation", 4)
 	else:
 		var grid := GridContainer.new()
-		grid.columns = 2
+		grid.columns = 2 if player_count <= 4 else 3
 		grid.add_theme_constant_override("h_separation", 4)
 		grid.add_theme_constant_override("v_separation", 4)
 		box = grid
@@ -127,6 +175,16 @@ func _build_split_screen() -> Container:
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(box)
 	return box
+
+
+## Effets de l'environnement et anticrenelage selon la qualite choisie et le
+## nombre de vues (la case de la camera TV compte).
+func _apply_graphics() -> void:
+	var views := player_count + (1 if player_count == 3 or player_count == 5 else 0)
+	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world != null:
+		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, views)
+	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
 
 
 ## Une case de l'ecran partage : SubViewportContainer etire + SubViewport.
@@ -139,6 +197,7 @@ func _new_view(view_name: String, listener: bool) -> SubViewport:
 	var vp := SubViewport.new()
 	vp.name = view_name
 	vp.audio_listener_enable_3d = listener
+	GraphicsSettings.apply_viewport(vp, GameState.graphics_quality)
 	container.add_child(vp)
 	return vp
 
@@ -148,9 +207,7 @@ func _add_player(i: int) -> Player:
 	# camion : modele et couleur du joueur, case de depart i (centre de la grille)
 	var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 	t.name = "Truck%d" % (i + 1)
-	var visual := t.get_node("Visual") as TruckVisual
-	visual.external_model = MODELS[i]
-	visual.mock_tint = TINTS[i]
+	dress(t.get_node("Visual") as TruckVisual, i)
 	t.transform = track.get_start_transform(i)   # pose d'un camion immobile
 	# categorie de vitesse du menu (Normal par defaut : le reglage mesure)
 	t.tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
@@ -193,10 +250,17 @@ func _add_player(i: int) -> Player:
 	return p
 
 
-## 4e case a 3 joueurs : camera TV, plus haute et plus loin, sur le camion en
-## tete.
+## Modele, couleur de repli et livree du joueur `i` (course et showroom).
+static func dress(visual: TruckVisual, i: int) -> void:
+	visual.external_model = MODELS[i]
+	visual.mock_tint = TINTS[i]
+	visual.livery = LIVERIES[i]
+
+
+## Case libre (4e a 3 joueurs, 6e a 5) : camera TV, plus haute et plus loin,
+## sur le camion en tete.
 func _add_leader_view() -> void:
-	var vp := _new_view("View4", false)
+	var vp := _new_view("View%d" % (player_count + 1), false)
 	var cam := ChaseCamera.new()
 	cam.name = "LeaderCamera"
 	cam.distance = 45.0
@@ -233,6 +297,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key_down and key.physical_keycode == KEY_F1:
 		DebugDraw.enabled = not DebugDraw.enabled
+	if key_down and key.physical_keycode == KEY_F11:
+		GraphicsSettings.toggle_fullscreen()
 
 
 func _physics_process(_delta: float) -> void:

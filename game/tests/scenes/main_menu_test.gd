@@ -3,15 +3,21 @@ extends PhysicsTest
 ## Menu principal (ui/main_menu.tscn), par les vrais chemins d'entree
 ## (Input.parse_input_event : clavier, manette, clics souris) :
 ##   - titre dans la colonne de gauche (les camions sont exposes a droite),
-##     entierement a l'ecran ; 4 boutons de joueurs, 1 joueur par defaut ;
+##     entierement a l'ecran ; 6 boutons de joueurs, 1 joueur par defaut ;
 ##   - showroom : les camions sont sur le plateau tournant, qui tourne, et les
 ##     camions montres restent centres sur le plateau ;
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
-##     camions montres en decor aussi ;
+##     camions montres en decor aussi ; touche 6 : les 6 camions tiennent sur
+##     le plateau ;
+##   - circuit : Cyber City par defaut ; un clic sur PLAYA DEL SOL le choisit
+##     (GameState.selected_track, scene de course, sous-titre), Triangle
+##     revient a Cyber City ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
 ##     il montre la DualSense (les commandes Forza de la demande, legendes
 ##     sans chevauchement), regle le volume reel, et RETOUR ramene au menu ;
+##   - parametres : la qualite graphique choisie est gardee dans GameState et
+##     regle l'environnement du menu (basse : plus aucun effet) ;
 ##   - camera d'orbite : tourne autour de la grille, a distance constante ;
 ##   - Options et Croix (JOY_BUTTON_A, ui_accept de Godot) lancent la course :
 ##     signal avec le nombre choisi, ecrit dans GameState.
@@ -21,6 +27,7 @@ var _launches: Array[int] = []
 var _cam_start: Vector3
 var _cam_dist: Array[float] = []
 var _defaults_ok: bool = false
+var _defaults_track: bool = false
 var _seen: Dictionary = {}
 
 
@@ -30,6 +37,7 @@ func _test_setup() -> void:
 	# (1920 x 1080, display/window/size) pour que les boutons soient a l'ecran
 	get_window().size = Vector2i(1920, 1080)
 	GameState.requested_players = 0
+	GameState.selected_track = 0
 	_menu = (load("res://ui/main_menu.tscn") as PackedScene).instantiate() as MainMenu
 	_menu.auto_change_scene = false
 	_menu.launch_requested.connect(func(n: int) -> void: _launches.append(n))
@@ -82,6 +90,8 @@ func _test_tick(t: int) -> void:
 			_cam_start = cam
 			_defaults_ok = _menu.selected_players == 1 and _visible_trucks() == 1 \
 					and _menu.player_buttons[0].button_pressed and not _menu.player_buttons[1].button_pressed
+			_defaults_track = GameState.selected_track == 0 and _menu.track_buttons[0].button_pressed \
+					and _menu.race_scene() == "res://dev/race.tscn"
 			var title_center := _menu.title.get_global_rect().get_center().x
 			var vp := _menu.get_viewport().get_visible_rect()
 			var tr := _menu.title.get_global_rect()
@@ -143,9 +153,34 @@ func _test_tick(t: int) -> void:
 			_seen["volume_db"] = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
 			_menu.volume_slider.value = 100.0
 			_seen["sound_check"] = _menu.sound_check.button_pressed
+			var env := (_menu.get_node("WorldEnvironment") as WorldEnvironment).environment
+			var was := [GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
+			_menu.quality_option.select(GraphicsSettings.Quality.LOW)
+			_menu.quality_option.item_selected.emit(GraphicsSettings.Quality.LOW)
+			_seen["quality"] = [was, GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
+			_menu.set_quality(GraphicsSettings.Quality.HIGH)
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
 		82: _seen["back"] = not _menu.settings.visible
+		83: _click(_menu.track_buttons[1], true)
+		84: _click(_menu.track_buttons[1], false)
+		85:
+			_seen["track_click"] = [GameState.selected_track, _menu.track_buttons[1].button_pressed,
+				_menu.track_buttons[0].button_pressed, _menu.race_scene(), _menu.subtitle.text.contains("PLAYA DEL SOL")]
+			_pad(JOY_BUTTON_Y, true)
+		86:
+			_pad(JOY_BUTTON_Y, false)
+			_key(KEY_6, true)
+		87: _key(KEY_6, false)
+		90:
+			# coin le plus eloigne de chaque ensemble (3,6 m de large, ~20 m de long)
+			var reach := 0.0
+			for truck in _menu.trucks:
+				reach = maxf(reach, Vector2(absf(truck.position.x) + 1.8, 9.9).length())
+			_seen["key6"] = [_menu.selected_players, _visible_trucks(), reach < Showroom.PLATE_RADIUS]
+			_seen["track_pad"] = [GameState.selected_track, _menu.race_scene(), _menu.subtitle.text.contains("CYBER CITY")]
+			_key(KEY_3, true)
+		91: _key(KEY_3, false)
 		110: _pad(JOY_BUTTON_START, true)
 		111: _pad(JOY_BUTTON_START, false)
 		114:
@@ -163,7 +198,12 @@ func _test_tick(t: int) -> void:
 
 func _test_finish() -> void:
 	check("1 joueur par defaut, 1 camion montre, bouton 1 enfonce", _defaults_ok)
-	check("4 boutons de joueurs", _menu.player_buttons.size() == 4)
+	check("6 boutons de joueurs", _menu.player_buttons.size() == 6)
+	check("touche 6 : 6 joueurs, 6 camions, tous sur le plateau", _seen.get("key6", []) == [6, 6, true],
+		str(_seen.get("key6", [])))
+	var row := _menu.player_buttons[0].get_parent() as Control
+	check("les 6 boutons tiennent dans la moitie gauche de l'ecran",
+		row.get_global_rect().end.x < 1920.0 * 0.6, "%.0f px" % row.get_global_rect().end.x)
 	check("titre a gauche, entierement a l'ecran", _seen["title_left"])
 	check("showroom : camions sur le plateau, centres (3 camions)", _seen["centered"])
 	check("showroom : le plateau tourne", absf(_menu.showroom.turntable.rotation.y - _seen["plate_yaw"]) > 0.05)
@@ -173,6 +213,11 @@ func _test_finish() -> void:
 	check("manette R : 4 joueurs", _seen["r"] == 4, str(_seen["r"]))
 	check("manette L : 3 joueurs", _seen["l"] == 3, str(_seen["l"]))
 	check("clic sur 2 JOUEURS : choisi et seul enfonce", _seen["click2"] == [2, true, false], str(_seen["click2"]))
+	check("circuit : 2 boutons, Cyber City par defaut", _menu.track_buttons.size() == 2 and _defaults_track)
+	check("circuit : clic sur PLAYA DEL SOL (GameState, scene, sous-titre)",
+		_seen.get("track_click", []) == [1, true, false, "res://dev/race_playa.tscn", true], str(_seen.get("track_click", [])))
+	check("circuit : Triangle revient a Cyber City",
+		_seen.get("track_pad", []) == [0, "res://dev/race.tscn", true], str(_seen.get("track_pad", [])))
 	check("son : un clic coupe le bus Master", _seen["mute"] == [true, "SON : OFF"], str(_seen["mute"]))
 	check("son : un second clic le remet", _seen["unmute"] == false)
 	check("vitesse : 4 categories, clic sur RAPIDE : choisie et seule enfoncee",
@@ -207,6 +252,9 @@ func _test_finish() -> void:
 	check("schema : legendes sans chevauchement, dans le cadre", not overlap and not outside)
 	check_near("parametres : volume a 50 % (dB)", _seen.get("volume_db", 0.0), linear_to_db(0.5), 0.01)
 	check("parametres : case Son synchronisee avec le bouton", _seen.get("sound_check", false))
+	check("parametres : qualite haute par defaut (tout), basse choisie : gardee, plus aucun effet",
+		_seen.get("quality", []) == [[GraphicsSettings.Quality.HIGH, true, true, true], GraphicsSettings.Quality.LOW,
+		false, false, false], str(_seen.get("quality", [])))
 	check("RETOUR ramene au menu", _seen.get("back", false))
 	check_above("camera en orbite : deplacement en 97 ticks (m)", _seen["cam_moved"], 3.0)
 	check_below("orbite a distance constante (ecart m)", _cam_dist.max() - _cam_dist.min(), 0.01)

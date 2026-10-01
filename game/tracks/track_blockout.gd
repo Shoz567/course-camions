@@ -30,9 +30,17 @@ extends Node3D
 ##   "signs": [[m, lateral], ...]  panneaux ejectables (vitesse / 2).
 ##   "arch": m      arche lumineuse au-dessus de la piste a cette distance ;
 ##   "arch_label": texte de son enseigne.
+##   "bridge": 1 | 2  pont en beton (1) ou en bois (2) : la ou la chaussee est
+##                  a plus de bridge_min_height du sol, un tablier sur piles
+##                  remplace les murs pleins jusqu'au sol (on voit dessous).
+##
+## L'habillage (materiaux, couleurs, sol) vient du theme (`theme_id`,
+## TrackTheme) : Cyber City de nuit par defaut, ou Playa Del Sol (ile au
+## soleil : le sol recoit un masque terre / mer calcule sur le trace, des
+## talus rocheux portent les portions hautes).
 ##
 ## Genere : Geometry (chaussee, sol), Walls (2 glissieres continues, bord haut
-## en neon : cyan a gauche, magenta a droite), Arches (portiques neon), Pads
+## colore : cyan a gauche, magenta a droite en ville), Arches (portiques), Pads
 ## (plaques de boost et rampes de saut a chevrons lumineux, avec leur Area3D),
 ## ResetZones (Area3D au-dela des murs, tout autour), Checkpoints (Area3D
 ## ordonnees, la n°0 est la ligne d'arrivee), StartGrid, RacingLine.
@@ -76,6 +84,8 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 ## raccordees sur cette longueur (plus court = crete et compression plus
 ## franches).
 @export var climb_blend_length: float = 0.0
+## Habillage du circuit (TrackTheme.Id).
+@export_enum("Cyber City", "Playa Del Sol") var theme_id: int = 0
 
 @export_group("Glissieres")
 ## Epaisseur a hauteur de chaussee (METRICS.md §4 : 0,3 m minimum).
@@ -96,6 +106,14 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var jump_offset: float = 4.2
 ## Profondeur de la zone de declenchement, au sommet de la rampe.
 @export var jump_trigger_depth: float = 3.0
+
+@export_group("Ponts")
+## Epaisseur du tablier sous le bord de la chaussee.
+@export var bridge_deck_depth: float = 1.6
+## Hauteur du bord bas de la chaussee au-dessus du sol a partir de laquelle un
+## segment "bridge" devient un tablier sur piles.
+@export var bridge_min_height: float = 3.0
+@export var bridge_pillar_spacing: float = 44.0
 
 @export_group("Arches")
 ## Hauteur libre sous la poutre, au-dessus de la chaussee.
@@ -127,6 +145,9 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 @export var grid_distance: float = 12.0
 @export var grid_row_spacing: float = 9.0
 @export var grid_lateral: PackedFloat32Array = [-4.5, -1.5, 1.5, 4.5]
+## Couloirs des rangs suivants (vide : les memes). En quinconce, un camion du
+## 2e rang a la voie libre devant lui, entre deux camions du 1er.
+@export var grid_back_lateral: PackedFloat32Array = []
 
 @export_tool_button("Reconstruire") var _rebuild_button: Callable = rebuild
 
@@ -146,6 +167,14 @@ var _segment_starts: Dictionary = {}    # nom -> abscisse du debut (m)
 var _puddles: Array[Vector3] = []       # (s, decalage, rayon)
 var _signs: Array[Vector2] = []         # (s, decalage)
 var _auto_lengths: PackedFloat32Array = []
+## Habillage resolu a la construction.
+var theme: TrackTheme
+var _bridge: PackedByteArray = []       # par echantillon : 0, 1 (beton), 2 (bois)
+var _deck: PackedByteArray = []         # par echantillon : 1 = tablier sur piles
+## Masque terre / mer (theme cotier) : R = terre, V = interieur de la boucle.
+var _coast_image: Image
+var _coast_origin: Vector2
+var _coast_size: float = 1.0
 
 
 func _ready() -> void:
@@ -167,6 +196,7 @@ func rebuild() -> void:
 			c.queue_free()
 	if segments.is_empty():
 		return
+	theme = TrackTheme.of(theme_id)
 	if not _build_centerline():
 		return
 	_build_geometry()
@@ -262,7 +292,8 @@ func frame_at(i: int, lateral: float, lift: float) -> Transform3D:
 	return Transform3D(Basis(r, u, -f), sample_position(i) + r * lateral + u * lift)
 
 
-## Case de depart `slot` (0 = pole) : rangs de 4 derriere la ligne.
+## Case de depart `slot` (0 = pole) : rangs derriere la ligne, le 1er dans les
+## couloirs `grid_lateral`, les suivants dans `grid_back_lateral`.
 @warning_ignore("integer_division")
 func get_start_transform(slot: int) -> Transform3D:
 	_ensure_built()
@@ -270,7 +301,10 @@ func get_start_transform(slot: int) -> Transform3D:
 	var col := slot % grid_lateral.size()
 	var s := _length - grid_distance - row * grid_row_spacing
 	var i := roundi(s / (_length / _pos.size()))
-	return frame_at(i, grid_lateral[col], 0.0)
+	var lateral := grid_lateral[col]
+	if row > 0 and not grid_back_lateral.is_empty():
+		lateral = grid_back_lateral[col % grid_back_lateral.size()]
+	return frame_at(i, lateral, 0.0)
 
 
 func boost_pad_count() -> int:
@@ -335,6 +369,25 @@ func jump_pad_count() -> int:
 func jump_pad_transform(k: int) -> Transform3D:
 	_ensure_built()
 	return frame_at(index_at_s(_jumps[k].x), _jumps[k].y, 0.0)
+
+
+## Vrai si l'echantillon i est sur un tablier de pont (piles, vide dessous).
+func is_bridge_deck(i: int) -> bool:
+	_ensure_built()
+	return _deck[posmod(i, _pos.size())] == 1
+
+
+## Vrai si le sol est de l'eau a la verticale de `p` (theme cotier ; toujours
+## faux ailleurs). Purement visuel : le sol physique est le meme partout.
+func is_water(p: Vector3) -> bool:
+	_ensure_built()
+	if _coast_image == null:
+		return false
+	var u := (Vector2(p.x, p.z) - _coast_origin) / _coast_size
+	if u.x < 0.0 or u.y < 0.0 or u.x >= 1.0 or u.y >= 1.0:
+		return true
+	var size := _coast_image.get_size()
+	return _coast_image.get_pixel(int(u.x * size.x), int(u.y * size.y)).r < 0.5
 
 
 ## Reapparition au plus pres de `p` : sur la chaussee, dans le sens de course,
@@ -447,6 +500,8 @@ func _build_centerline() -> bool:
 	raw_line.resize(count)
 	var seg_of := PackedInt32Array()
 	seg_of.resize(count)
+	_bridge.resize(count)
+	_deck.resize(count)
 	var climb_base := PackedFloat32Array()
 	climb_base.resize(segments.size())
 	var yb := 0.0
@@ -475,6 +530,7 @@ func _build_centerline() -> bool:
 			_curv[i] = signf(float(seg["angle"])) / float(seg["radius"])
 		raw_bank[i] = float(seg.get("bank", 0.0))
 		raw_line[i] = float(seg.get("line", 0.0))
+		_bridge[i] = int(seg.get("bridge", 0))
 	if climb_blend_length > 0.0:
 		# pentes constantes par segment, raccordees sur toute la boucle
 		var ys := PackedFloat32Array()
@@ -504,6 +560,10 @@ func _build_centerline() -> bool:
 		_fwd[i] = t
 		_right[i] = r * cos(b) + up * sin(b)
 		_up[i] = up * cos(b) - r * sin(b)
+	# tablier sur piles : segment "bridge" et bord bas de la chaussee assez haut
+	for i in count:
+		var low := _pos[i].y - absf(_right[i].y) * width / 2.0
+		_deck[i] = 1 if _bridge[i] > 0 and low - GROUND_Y > bridge_min_height else 0
 	return true
 
 
@@ -575,8 +635,9 @@ func _build_geometry() -> void:
 		var r0 := _pos[i] + _right[i] * width / 2.0
 		var l1 := _pos[j] - _right[j] * width / 2.0
 		var r1 := _pos[j] + _right[j] * width / 2.0
+		st.set_color(Color(_bridge[i] * 0.5, 0.0, 0.0))
 		_quad(st, road_tris, l0, r0, r1, l1, Vector2(0, v0), Vector2(1, v0), Vector2(1, v1), Vector2(0, v1), _up[i])
-	var road_mat := preload("res://tracks/materials/road.tres").duplicate() as ShaderMaterial
+	var road_mat := theme.road.duplicate() as ShaderMaterial
 	road_mat.set_shader_parameter("road_width", width)
 	var road := _static_body(geometry, "Road", st, road_tris, road_mat, 1.0)
 	road.set_meta(&"surface", &"asphalt")
@@ -593,6 +654,7 @@ func _build_geometry() -> void:
 			var b := _wall_profile(j, side)
 			var v0 := _s[i]
 			var v1 := _s[i] + _length / n
+			wst.set_color(Color(_bridge[i] * 0.5, 0.0, 0.0))
 			for k in 3:
 				if side > 0.0:
 					_quad(wst, wtris, a[k], b[k], b[k + 1], a[k + 1],
@@ -601,12 +663,13 @@ func _build_geometry() -> void:
 					_quad(wst, wtris, a[k], a[k + 1], b[k + 1], b[k],
 						Vector2(k, v0), Vector2(k + 1, v0), Vector2(k + 1, v1), Vector2(k, v1), Vector3.ZERO)
 		var wall := _static_body(walls, "WallLeft" if side < 0.0 else "WallRight", wst, wtris,
-			preload("res://tracks/materials/wall.tres"), wall_friction)
+			theme.wall, wall_friction)
 		wall.set_meta(&"surface", &"asphalt")
 		_build_wall_neon(walls, side)
 
 	# sol sous toute la piste et la ville (hors piste : lent, pas de vide)
-	var span := _bounds_span() + 2400.0
+	# sur une ile, la mer va jusqu'a l'horizon
+	var span := _bounds_span() + (9000.0 if theme.coast else 2400.0)
 	var gst := SurfaceTool.new()
 	gst.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var gtris := PackedVector3Array()
@@ -615,8 +678,20 @@ func _build_geometry() -> void:
 	_quad(gst, gtris, c + Vector3(-h, GROUND_Y, -h), c + Vector3(-h, GROUND_Y, h),
 		c + Vector3(h, GROUND_Y, h), c + Vector3(h, GROUND_Y, -h),
 		Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector3.UP)
-	var ground := _static_body(geometry, "Ground", gst, gtris, preload("res://tracks/materials/grass.tres"), 1.0)
+	var ground_mat := theme.ground
+	if theme.coast:
+		_build_coast_mask()
+		var coast_mat := theme.ground.duplicate() as ShaderMaterial
+		coast_mat.set_shader_parameter("coast_mask", ImageTexture.create_from_image(_coast_image))
+		coast_mat.set_shader_parameter("coast_origin", _coast_origin)
+		coast_mat.set_shader_parameter("coast_size", _coast_size)
+		ground_mat = coast_mat
+	var ground := _static_body(geometry, "Ground", gst, gtris, ground_mat, 1.0)
 	ground.set_meta(&"surface", &"grass")
+
+	_build_bridges(_group("Bridges"))
+	if theme.embankment != null:
+		_build_embankments(_group("Embankments"))
 
 	var arches := _group("Arches")
 	for k in _arches.size():
@@ -663,7 +738,9 @@ func _wall_profile(i: int, side: float) -> PackedVector3Array:
 	var inner_top := Vector3(edge.x, top_y, edge.z) - out * wall_lean
 	var thick_top := wall_thickness + wall_lean * (1.0 + 0.3 / wall_height)
 	var outer_top := inner_top + out * thick_top
-	var outer_bottom := Vector3(outer_top.x, minf(GROUND_Y - 0.1, edge.y - 0.3), outer_top.z)
+	# sur un pont, le mur s'arrete sous le tablier : on voit dessous
+	var bottom_y := edge.y - bridge_deck_depth if _deck[i] == 1 else minf(GROUND_Y - 0.1, edge.y - 0.3)
+	var outer_bottom := Vector3(outer_top.x, bottom_y, outer_top.z)
 	return PackedVector3Array([inner_bottom, inner_top, outer_top, outer_bottom])
 
 
@@ -690,10 +767,216 @@ func _build_wall_neon(parent: Node3D, side: float) -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = "NeonLeft" if side < 0.0 else "NeonRight"
 	mi.mesh = st.commit()
-	mi.material_override = preload("res://tracks/materials/neon_cyan.tres") if side < 0.0 \
-			else preload("res://tracks/materials/neon_magenta.tres")
+	mi.material_override = theme.edge_left if side < 0.0 else theme.edge_right
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)
+
+
+## Ponts : dessous du tablier (la ou les murs s'arretent sous la chaussee) et
+## piles tous les bridge_pillar_spacing : deux futs de beton et leur chevetre,
+## ou quatre pieux de bois. Purement visuel (la chaussee porte les camions).
+func _build_bridges(parent: Node3D) -> void:
+	var n := _pos.size()
+	var z2 := Vector2.ZERO
+	var dummy := PackedVector3Array()
+	var under: Array[SurfaceTool] = [SurfaceTool.new(), SurfaceTool.new()]
+	var used := [false, false]
+	for st in under:
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var next_pier := 0.0
+	var piers := 0
+	for i in n:
+		if _deck[i] == 0:
+			continue
+		var j := (i + 1) % n
+		var kind := clampi(_bridge[i], 1, 2) - 1
+		var al := _wall_profile(i, -1.0)[3]
+		var ar := _wall_profile(i, 1.0)[3]
+		if _deck[j] == 1:
+			var bl := _wall_profile(j, -1.0)[3]
+			var br := _wall_profile(j, 1.0)[3]
+			_quad(under[kind], dummy, al, bl, br, ar, z2, z2, z2, z2, Vector3.ZERO)
+			used[kind] = true
+		if _s[i] < next_pier:
+			continue
+		next_pier = _s[i] + bridge_pillar_spacing
+		var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
+		var r := t.cross(Vector3.UP).normalized()
+		var pier := Node3D.new()
+		pier.name = "Pier%d" % piers
+		piers += 1
+		var low := minf(al.y, ar.y)
+		pier.transform = Transform3D(Basis(r, Vector3.UP, -t), Vector3(_pos[i].x, 0.0, _pos[i].z))
+		parent.add_child(pier)
+		var mat := theme.bridge_concrete if kind == 0 else theme.bridge_wood
+		var foot := GROUND_Y - 3.0
+		_box(pier, Vector3(width + 2.0, 1.2, 3.2 if kind == 0 else 1.0), Vector3(0.0, low - 0.6, 0.0), mat)
+		var laterals: Array[float] = [-width / 2.0 + 8.0, width / 2.0 - 8.0]
+		if kind == 1:
+			laterals = [-width / 2.0 + 2.0, -width / 6.0, width / 6.0, width / 2.0 - 2.0]
+		for x in laterals:
+			var cm := CylinderMesh.new()
+			cm.top_radius = 2.2 if kind == 0 else 0.75
+			cm.bottom_radius = cm.top_radius * (1.15 if kind == 0 else 1.0)
+			cm.height = low - 1.2 - foot
+			cm.radial_segments = 16 if kind == 0 else 8
+			var col := MeshInstance3D.new()
+			col.mesh = cm
+			col.material_override = mat
+			col.position = Vector3(x, foot + cm.height / 2.0, 0.0)
+			pier.add_child(col)
+	for kind in 2:
+		if not used[kind]:
+			continue
+		var mi := MeshInstance3D.new()
+		mi.name = "DeckUnderConcrete" if kind == 0 else "DeckUnderWood"
+		under[kind].generate_normals()
+		mi.mesh = under[kind].commit()
+		mi.material_override = theme.bridge_concrete if kind == 0 else theme.bridge_wood
+		parent.add_child(mi)
+
+
+## Talus : sous les portions hautes (hors ponts), une pente de roche descend
+## du haut exterieur du mur jusqu'au sol, plus large quand la route est plus
+## haute : la route court sur une crete, pas sur un mur. Purement visuel.
+func _build_embankments(parent: Node3D) -> void:
+	var n := _pos.size()
+	for side: float in [-1.0, 1.0]:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var dummy := PackedVector3Array()
+		var rows: Array[PackedVector3Array] = []
+		var reach := PackedFloat32Array()
+		for i in n:
+			var prof := _wall_profile(i, side)
+			var out := Vector3(_right[i].x, 0.0, _right[i].z).normalized() * side
+			var top := prof[2] - Vector3(0.0, 0.2, 0.0)
+			var h := top.y - GROUND_Y
+			var d := 0.0
+			if _deck[i] == 0 and h > wall_height + 1.0:
+				# pente irreguliere (deterministe), plus longue quand c'est haut
+				d = (h * 1.25 + 3.0) * (1.0 + 0.18 * sin(_s[i] * 0.05 + side) + 0.12 * sin(_s[i] * 0.017))
+			var foot := Vector3(top.x, GROUND_Y + 0.02, top.z) + out * d
+			var mid := top.lerp(foot, 0.42)
+			mid.y = top.y - h * 0.3
+			rows.append(PackedVector3Array([top, mid, foot]))
+			reach.append(d)
+		for i in n:
+			var j := (i + 1) % n
+			if reach[i] == 0.0 and reach[j] == 0.0:
+				continue
+			var a := rows[i]
+			var b := rows[j]
+			var v0 := _s[i]
+			var v1 := _s[i] + _length / n
+			for k in 2:
+				if side > 0.0:
+					_quad(st, dummy, a[k], b[k], b[k + 1], a[k + 1],
+						Vector2(v0, k * 0.5), Vector2(v1, k * 0.5), Vector2(v1, k * 0.5 + 0.5), Vector2(v0, k * 0.5 + 0.5), Vector3.ZERO)
+				else:
+					_quad(st, dummy, a[k], a[k + 1], b[k + 1], b[k],
+						Vector2(v0, k * 0.5), Vector2(v0, k * 0.5 + 0.5), Vector2(v1, k * 0.5 + 0.5), Vector2(v1, k * 0.5), Vector3.ZERO)
+		var mi := MeshInstance3D.new()
+		mi.name = "EmbankmentLeft" if side < 0.0 else "EmbankmentRight"
+		st.generate_normals()
+		mi.mesh = st.commit()
+		mi.material_override = theme.embankment
+		parent.add_child(mi)
+
+
+## Masque terre / mer d'un circuit cotier, en image (256 x 256, le trace au
+## centre) : de la terre dans un rayon coast_land_radius autour du trace (sauf
+## sous les tabliers de pont), tout l'interieur de la boucle (remplissage
+## depuis les bords : ce que l'eau n'atteint pas, la boucle entiere faisant
+## barrage, est a l'interieur), puis une baie creusee sous chaque tablier ;
+## bords adoucis (le shader y pose le rivage). Deterministe.
+func _build_coast_mask() -> void:
+	var res := 256
+	var span := _bounds_span() + 900.0
+	var c := _bounds_center()
+	_coast_size = span
+	_coast_origin = Vector2(c.x, c.z) - Vector2(span, span) / 2.0
+	var texel := span / res
+	var land := PackedByteArray()
+	land.resize(res * res)
+	var barrier := PackedByteArray()
+	barrier.resize(res * res)
+	var n := _pos.size()
+	var every := maxi(1, roundi(10.0 / (_length / n)))
+	# 1. terre autour du trace ; la boucle entiere (ponts compris) fait barrage
+	for i in range(0, n, every):
+		_stamp(barrier, res, texel, _pos[i], theme.coast_land_radius, 1)
+		if _deck[i] == 0:
+			_stamp(land, res, texel, _pos[i], theme.coast_land_radius, 1)
+	# 2. interieur de la boucle : ce que l'eau venue des bords n'atteint pas
+	var outside := PackedByteArray()
+	outside.resize(res * res)
+	var stack := PackedInt32Array([0])
+	outside[0] = 1
+	while not stack.is_empty():
+		var k := stack[stack.size() - 1]
+		stack.remove_at(stack.size() - 1)
+		var x := k % res
+		@warning_ignore("integer_division")
+		var y := k / res
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var nx := x + d.x
+			var ny := y + d.y
+			if nx < 0 or ny < 0 or nx >= res or ny >= res:
+				continue
+			var nk := ny * res + nx
+			if outside[nk] == 0 and barrier[nk] == 0:
+				outside[nk] = 1
+				stack.append(nk)
+	var inner := PackedByteArray()
+	inner.resize(res * res)
+	for k in res * res:
+		if barrier[k] == 0 and outside[k] == 0:
+			land[k] = 1
+			inner[k] = 1
+	# 3. baies sous les tabliers
+	for i in range(0, n, every):
+		if _deck[i] == 1:
+			_stamp(land, res, texel, _pos[i], theme.coast_bay_radius, 0)
+			_stamp(inner, res, texel, _pos[i], theme.coast_bay_radius + 40.0, 0)
+	# 4. bords adoucis, puis image
+	var soft := _blur(_blur(_blur(land, res), res), res)
+	var soft_inner := _blur(_blur(_blur(inner, res), res), res)
+	var data := PackedByteArray()
+	data.resize(res * res * 3)
+	for k in res * res:
+		data[k * 3] = soft[k]
+		data[k * 3 + 1] = soft_inner[k]
+		data[k * 3 + 2] = 0
+	_coast_image = Image.create_from_data(res, res, false, Image.FORMAT_RGB8, data)
+
+
+## Disque de rayon `radius` (m) autour de `p`, pose a `value` dans la grille.
+func _stamp(grid: PackedByteArray, res: int, texel: float, p: Vector3, radius: float, value: int) -> void:
+	var cx := (p.x - _coast_origin.x) / texel
+	var cy := (p.z - _coast_origin.y) / texel
+	var r := radius / texel
+	for y in range(maxi(0, floori(cy - r)), mini(res, ceili(cy + r) + 1)):
+		for x in range(maxi(0, floori(cx - r)), mini(res, ceili(cx + r) + 1)):
+			if (x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy) <= r * r:
+				grid[y * res + x] = value
+
+
+## Flou 3 x 3 d'une grille 0 / 1 (ou deja floue) : valeurs 0 .. 255 en sortie.
+static func _blur(grid: PackedByteArray, res: int) -> PackedByteArray:
+	var scale := 255 if grid.count(1) + grid.count(0) == grid.size() else 1
+	var out := PackedByteArray()
+	out.resize(res * res)
+	for y in res:
+		for x in res:
+			var acc := 0
+			for dy in range(-1, 2):
+				var yy := clampi(y + dy, 0, res - 1)
+				for dx in range(-1, 2):
+					acc += grid[yy * res + clampi(x + dx, 0, res - 1)]
+			@warning_ignore("integer_division")
+			out[y * res + x] = acc * scale / 9
+	return out
 
 
 ## Arche lumineuse : deux piliers au-dela des murs, une poutre au-dessus de la
@@ -707,9 +990,8 @@ func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
 	var arch_basis := Basis(r, Vector3.UP, -t)
 	var base := _pos[i]
 	var half := width / 2.0 + 3.0
-	var neon: Material = preload("res://tracks/materials/neon_magenta.tres") if index % 2 == 0 \
-			else preload("res://tracks/materials/neon_cyan.tres")
-	var neon_color := Color(1.0, 0.12, 0.78) if index % 2 == 0 else Color(0.08, 0.95, 1.0)
+	var neon: Material = theme.arch_tubes[index % theme.arch_tubes.size()]
+	var neon_color := theme.arch_colors[index % theme.arch_colors.size()]
 	var root := Node3D.new()
 	root.name = "Arch%d" % index
 	root.transform = Transform3D(arch_basis, base)
@@ -718,10 +1000,10 @@ func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
 	var ground := GROUND_Y - base.y
 	for side: float in [-1.0, 1.0]:
 		var h := beam_y + 1.2 - ground
-		_box(root, Vector3(2.2, h, 2.2), Vector3(side * half, ground + h / 2.0, 0.0), _arch_metal())
+		_box(root, Vector3(2.2, h, 2.2), Vector3(side * half, ground + h / 2.0, 0.0), theme.arch_frame)
 		# tube neon sur la face du pilier tournee vers la piste
 		_box(root, Vector3(0.25, h - 1.5, 0.25), Vector3(side * (half - 1.15), ground + h / 2.0, 0.0), neon)
-	_box(root, Vector3(half * 2.0 + 2.2, 2.4, 2.6), Vector3(0.0, beam_y, 0.0), _arch_metal())
+	_box(root, Vector3(half * 2.0 + 2.2, 2.4, 2.6), Vector3(0.0, beam_y, 0.0), theme.arch_frame)
 	for z: float in [-1.35, 1.35]:
 		_box(root, Vector3(half * 2.0, 0.22, 0.22), Vector3(0.0, beam_y - 1.25, z), neon)
 		_box(root, Vector3(half * 2.0, 0.22, 0.22), Vector3(0.0, beam_y + 1.25, z), neon)
@@ -731,30 +1013,20 @@ func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
 		l.text = label
 		l.font_size = 220
 		l.pixel_size = 0.02
-		l.outline_size = 0
+		l.outline_size = theme.arch_label_outline
+		l.outline_modulate = Color(0.02, 0.06, 0.14)
 		l.modulate = Color(neon_color.r * 2.2, neon_color.g * 2.2, neon_color.b * 2.2)
 		l.double_sided = false
 		# face avant vers les camions qui arrivent (-t = +Z local)
 		l.position = Vector3(0.0, beam_y, 1.32)
 		root.add_child(l)
-	var light := OmniLight3D.new()
-	light.light_color = neon_color
-	light.light_energy = 3.0
-	light.omni_range = 34.0
-	light.position = Vector3(0.0, beam_y - 2.0, 0.0)
-	root.add_child(light)
-
-
-static var _metal: StandardMaterial3D
-
-
-static func _arch_metal() -> StandardMaterial3D:
-	if _metal == null:
-		_metal = StandardMaterial3D.new()
-		_metal.albedo_color = Color(0.05, 0.055, 0.07)
-		_metal.metallic = 0.7
-		_metal.roughness = 0.35
-	return _metal
+	if theme.arch_light_energy > 0.0:
+		var light := OmniLight3D.new()
+		light.light_color = neon_color
+		light.light_energy = theme.arch_light_energy
+		light.omni_range = 34.0
+		light.position = Vector3(0.0, beam_y - 2.0, 0.0)
+		root.add_child(light)
 
 
 static func _box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
@@ -846,9 +1118,10 @@ func _on_sign_hit(truck: Truck, index: int) -> void:
 	sign_hit.emit(truck, index)
 
 
-## Flaque d'eau : disque irregulier (bord bruite, deterministe) a ras de la
-## chaussee, miroir sombre aux rides animees ; zone de declenchement
-## cylindrique. Aucune collision.
+## Piege ralentisseur : disque irregulier (bord bruite, deterministe) pose
+## sur la chaussee - flaque d'eau a ras du sol (miroir sombre aux rides
+## animees) ou banc de sable legerement bombe, selon le theme ; zone de
+## declenchement cylindrique. Aucune collision.
 func _build_puddle(parent: Node3D, p: Vector3, index: int) -> void:
 	var area := Area3D.new()
 	area.name = "Puddle%d" % index
@@ -873,7 +1146,7 @@ func _build_puddle(parent: Node3D, p: Vector3, index: int) -> void:
 		# ellipse allongee le long de la piste
 		var v0 := Vector3(cos(a0) * r0 * 0.75, 0.05, sin(a0) * r0 * 1.2)
 		var v1 := Vector3(cos(a1) * r1 * 0.75, 0.05, sin(a1) * r1 * 1.2)
-		for v: Array in [[Vector3(0.0, 0.05, 0.0), Vector2(float(k) / n, 0.0)], [v1, Vector2(float(k + 1) / n, 1.0)],
+		for v: Array in [[Vector3(0.0, 0.05 + theme.hazard_height, 0.0), Vector2(float(k) / n, 0.0)], [v1, Vector2(float(k + 1) / n, 1.0)],
 				[v0, Vector2(float(k) / n, 1.0)]]:
 			st.set_normal(Vector3.UP)
 			st.set_uv(v[1])
@@ -881,7 +1154,7 @@ func _build_puddle(parent: Node3D, p: Vector3, index: int) -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = "Water"
 	mi.mesh = st.commit()
-	mi.material_override = preload("res://tracks/materials/puddle.tres")
+	mi.material_override = theme.hazard
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	area.add_child(mi)
 	area.transform = frame_at(index_at_s(p.x), p.y, 0.0)

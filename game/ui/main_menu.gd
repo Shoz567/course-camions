@@ -1,25 +1,27 @@
 class_name MainMenu
 extends Node3D
 
-## Ecran d'accueil (tache 4.2, partiel) : titre anime, choix du nombre de
-## joueurs (1 a 4), START / COMMENCER, son on / off, parametres. Decor dedie
+## Ecran d'accueil (tache 4.2, partiel) : titre anime, choix du circuit (Cyber
+## City ou Playa Del Sol), du nombre de joueurs (1 a 6), de la categorie de
+## vitesse, START / COMMENCER, son on / off, parametres. Decor dedie
 ## (Showroom) : les camions des joueurs choisis exposes sur un plateau tournant,
 ## sur le toit d'une tour de Cyber City, sous les projecteurs ; camera en orbite
 ## lente, decalee pour montrer les camions a droite, le menu a gauche.
 ##
 ## Manette (PlayStation, positions SDL) : croix directionnelle ou stick pour
 ## naviguer, Croix pour valider, Rond ou Create pour fermer les parametres,
-## L1 / R1 pour changer le nombre de joueurs, Options pour commencer.
-## Clavier et souris : fleches + Entree, touches 1 a 4, clic ; Echap ferme les
-## parametres, sinon quitte le jeu.
+## L1 / R1 pour changer le nombre de joueurs, Triangle pour changer de circuit,
+## Options pour commencer.
+## Clavier et souris : fleches + Entree, touches 1 a 6, T (circuit), clic ;
+## F11 : plein ecran / fenetre ; Echap ferme les parametres, sinon quitte le
+## jeu.
 ##
-## COMMENCER ecrit le choix dans GameState.requested_players puis charge
-## dev/race.tscn (LocalRace le lit). Le menu ne touche pas a la physique : les
+## COMMENCER ecrit le choix dans GameState (requested_players, selected_track)
+## puis charge la scene de course du circuit (LocalRace le lit). Le menu ne touche pas a la physique : les
 ## camions de decor sont geles.
 
 signal launch_requested(players: int)
 
-const RACE_SCENE := "res://dev/race.tscn"
 const LocalRace := preload("res://dev/local_race.gd")
 
 ## Faux pour les tests : COMMENCER emet `launch_requested` sans changer de scene.
@@ -29,6 +31,9 @@ const LocalRace := preload("res://dev/local_race.gd")
 @export var orbit_height: float = 9.0
 ## Decalage lateral de l'image (m) : les camions a droite, le menu a gauche.
 @export var frame_offset: float = -20.0
+## Champ de la camera : normal, et elargi quand 5 ou 6 camions sont exposes.
+@export var fov_deg: float = 55.0
+@export var fov_wide_deg: float = 72.0
 
 @onready var showroom: Showroom = $Showroom
 @onready var camera: Camera3D = $OrbitCamera
@@ -37,6 +42,8 @@ var selected_players: int = 1
 var trucks: Array[Truck] = []
 var player_buttons: Array[Button] = []
 var speed_buttons: Array[Button] = []
+var track_buttons: Array[Button] = []
+var subtitle: Label
 var title: Label
 var start_button: Button
 var sound_button: Button
@@ -45,11 +52,13 @@ var settings: Control
 ## Ecran des parametres : case du son (miroir du bouton du menu), volume.
 var sound_check: CheckButton
 var volume_slider: HSlider
+var quality_option: OptionButton
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
 var _orbit_angle: float = 0.0
 var _time: float = 0.0
+var _fov_target: float = 55.0
 
 
 func _ready() -> void:
@@ -59,6 +68,7 @@ func _ready() -> void:
 	camera.current = true
 	_spawn_trucks()
 	_build_ui()
+	set_quality(GameState.graphics_quality)
 	set_sound(not AudioServer.is_bus_mute(_master_bus()))
 	# musique de course rendue en fond pendant le menu (sans effet en headless)
 	RaceMusic.prepare()
@@ -70,15 +80,13 @@ func _ready() -> void:
 
 
 
-## Les 4 camions sur le plateau tournant, geles : du decor, pas de physique.
+## Les 6 camions sur le plateau tournant, geles : du decor, pas de physique.
 func _spawn_trucks() -> void:
-	for i in 4:
+	for i in LocalRace.MAX_PLAYERS:
 		var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 		t.name = "Truck%d" % (i + 1)
-		var visual := t.get_node("Visual") as TruckVisual
-		visual.external_model = LocalRace.MODELS[i]
-		visual.mock_tint = LocalRace.TINTS[i]
-		t.transform = Showroom.slot(i, 4)
+		LocalRace.dress(t.get_node("Visual") as TruckVisual, i)
+		t.transform = Showroom.slot(i, LocalRace.MAX_PLAYERS)
 		t.freeze = true
 		showroom.turntable.add_child(t)
 		trucks.append(t)
@@ -92,6 +100,7 @@ func _process(delta: float) -> void:
 	_time += delta
 	_orbit_angle = fmod(_orbit_angle + orbit_speed * delta, TAU)
 	_place_camera()
+	camera.fov = lerpf(camera.fov, _fov_target, 1.0 - exp(-5.0 * delta))
 	# titre arcade : pulsation, balancement, couleur chaude qui varie
 	title.pivot_offset = title.size / 2.0
 	var s := 1.0 + 0.045 * sin(_time * 3.2)
@@ -126,8 +135,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	var pad := event as InputEventJoypadButton
 	if key != null and key.pressed and not key.echo:
 		match key.physical_keycode:
-			KEY_1, KEY_2, KEY_3, KEY_4:
+			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6:
 				select_players(key.physical_keycode - KEY_0)
+			KEY_T:
+				if not settings.visible:
+					select_track((GameState.selected_track + 1) % GameStateNode.TRACKS.size())
+			KEY_F11:
+				GraphicsSettings.toggle_fullscreen()
 			KEY_ESCAPE:
 				if settings.visible:
 					toggle_settings()
@@ -147,6 +161,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				select_players(selected_players - 1)
 			JOY_BUTTON_RIGHT_SHOULDER:
 				select_players(selected_players + 1)
+			JOY_BUTTON_Y:
+				if not settings.visible:
+					select_track((GameState.selected_track + 1) % GameStateNode.TRACKS.size())
 			JOY_BUTTON_START:
 				if not settings.visible:
 					start_race()
@@ -158,6 +175,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## Circuit (GameState.TRACKS), garde dans GameState pour la course et les
+## suivantes ; le sous-titre annonce son ambiance.
+func select_track(k: int) -> void:
+	var prev := GameState.selected_track
+	GameState.selected_track = clampi(k, 0, GameStateNode.TRACKS.size() - 1)
+	if is_node_ready() and GameState.selected_track != prev:
+		MenuSound.play_select()
+	for i in track_buttons.size():
+		track_buttons[i].set_pressed_no_signal(i == GameState.selected_track)
+	if subtitle != null:
+		var t: Dictionary = GameStateNode.TRACKS[GameState.selected_track]
+		subtitle.text = "%s   ·   %s   ·   3 TOURS   ·   1 À 6 JOUEURS" \
+				% [String(t["name"]).to_upper(), String(t["tagline"]).to_upper()]
+
+
+## Scene de course du circuit choisi.
+func race_scene() -> String:
+	return GameStateNode.track_scene(GameState.selected_track)
+
+
 ## Categorie de vitesse (0 = Lent .. 3 = Ultrasonique), gardee dans GameState
 ## pour la course et les suivantes.
 func select_speed(k: int) -> void:
@@ -166,14 +203,15 @@ func select_speed(k: int) -> void:
 		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
 
-## Nombre de joueurs (borne a 1..4) : bouton enfonce, camions montres.
+## Nombre de joueurs (borne a 1..6) : bouton enfonce, camions montres.
 func select_players(n: int) -> void:
 	var prev := selected_players
-	selected_players = clampi(n, 1, 4)
+	selected_players = clampi(n, 1, LocalRace.MAX_PLAYERS)
 	if is_node_ready() and selected_players != prev:
 		MenuSound.play_select()
 	for i in player_buttons.size():
 		player_buttons[i].set_pressed_no_signal(i == selected_players - 1)
+	_fov_target = fov_deg if selected_players <= 4 else fov_wide_deg
 	for i in trucks.size():
 		trucks[i].visible = i < selected_players
 		# les camions exposes restent centres sur le plateau
@@ -187,7 +225,7 @@ func start_race() -> void:
 	GameState.requested_players = selected_players
 	launch_requested.emit(selected_players)
 	if auto_change_scene:
-		get_tree().change_scene_to_file(RACE_SCENE)
+		get_tree().change_scene_to_file(race_scene())
 
 
 func set_sound(on: bool) -> void:
@@ -198,6 +236,18 @@ func set_sound(on: bool) -> void:
 		sound_check.set_pressed_no_signal(on)
 	if is_node_ready():
 		MenuSound.play_toggle()
+
+
+## Qualite graphique (GraphicsSettings.Quality), gardee dans GameState pour les
+## courses ; appliquee tout de suite au decor du menu (une seule vue).
+func set_quality(q: int) -> void:
+	GameState.graphics_quality = clampi(q, 0, GraphicsSettings.NAMES.size() - 1)
+	if quality_option != null:
+		quality_option.select(GameState.graphics_quality)
+	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world != null:
+		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, 1)
+	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
 
 
 ## Volume general (0 a 100 %), sur le bus Master.
@@ -270,7 +320,7 @@ func _build_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_box.add_child(title)
-	var subtitle := _label("CYBER CITY   ·   PISTE DE 75 M   ·   3 TOURS   ·   1 À 4 JOUEURS", 26, 6)
+	subtitle = _label("", 20, 6)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.modulate = Color(1.0, 0.95, 0.8)
 	# carte translucide : lisible devant les camions du decor
@@ -283,20 +333,41 @@ func _build_ui() -> void:
 	card.add_child(card_box)
 	card_box.add_child(subtitle)
 
+	# circuit
+	var track_row := HBoxContainer.new()
+	track_row.name = "Tracks"
+	track_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	track_row.add_theme_constant_override("separation", 12)
+	card_box.add_child(track_row)
+	var track_group := ButtonGroup.new()
+	for k in GameStateNode.TRACKS.size():
+		var tb := Button.new()
+		tb.name = "Track%d" % k
+		tb.text = String(GameStateNode.TRACKS[k]["name"]).to_upper()
+		tb.toggle_mode = true
+		tb.button_group = track_group
+		tb.custom_minimum_size = Vector2(300, 60)
+		_style_button(tb, Color(0.07, 0.09, 0.15, 0.88),
+			Color(0.62, 0.2, 0.9) if k == 0 else Color(0.0, 0.62, 0.62), 24)
+		tb.pressed.connect(select_track.bind(k))
+		track_row.add_child(tb)
+		track_buttons.append(tb)
+	select_track(GameState.selected_track)
+
 	var row := HBoxContainer.new()
 	row.name = "Players"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 10)
 	card_box.add_child(row)
 	var group := ButtonGroup.new()
-	for i in 4:
+	for i in LocalRace.MAX_PLAYERS:
 		var b := Button.new()
 		b.name = "Players%d" % (i + 1)
 		b.text = "%d JOUEUR%s" % [i + 1, "S" if i > 0 else ""]
 		b.toggle_mode = true
 		b.button_group = group
-		b.custom_minimum_size = Vector2(200, 72)
-		_style_button(b, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 26)
+		b.custom_minimum_size = Vector2(150, 72)
+		_style_button(b, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 20)
 		b.pressed.connect(select_players.bind(i + 1))
 		row.add_child(b)
 		player_buttons.append(b)
@@ -366,8 +437,8 @@ func _build_ui() -> void:
 	_gear.offset_bottom = -10
 	settings_button.add_child(_gear)
 
-	var help := _label("Manette : croix directionnelle pour choisir, Croix valider, Rond retour, L1 / R1 joueurs, Options commencer"
-			+ "      Clavier : fleches, Entree, 1 a 4, Echap pour quitter", 18, 4)
+	var help := _label("Manette : croix directionnelle pour choisir, Croix valider, Rond retour, L1 / R1 joueurs, Triangle circuit, Options commencer"
+			+ "      Clavier : fleches, Entree, 1 a 6, T circuit, Echap pour quitter", 18, 4)
 	help.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	help.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	help.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -426,7 +497,7 @@ func _build_settings() -> Control:
 	for line: String in [
 		"J1 — flèches · Ctrl droit drift · Maj droite boost · ; cargo · ! klaxon · : vue · Retour arrière reset",
 		"J2 — Z Q S D · Espace drift · Maj gauche boost · E cargo · H klaxon · C vue · R reset",
-		"Seul : les deux jeux de touches · Échap : menu · Entrée : rejouer",
+		"Seul : les deux jeux de touches · Échap : menu · Entrée : rejouer · F11 : plein écran / fenêtre",
 	]:
 		var l := _label(line, 17, 0)
 		l.modulate = Color(0.9, 0.9, 0.94)
@@ -461,11 +532,15 @@ func _build_settings() -> Control:
 	rumble.button_pressed = true
 	rumble.add_theme_font_size_override("font_size", 19)
 	opts.add_child(rumble)
-	var quality := OptionButton.new()
-	for q: String in ["Qualité graphique : haute", "Qualité graphique : moyenne", "Qualité graphique : basse"]:
-		quality.add_item(q)
-	quality.add_theme_font_size_override("font_size", 19)
-	opts.add_child(quality)
+	quality_option = OptionButton.new()
+	quality_option.name = "Quality"
+	for q: String in GraphicsSettings.NAMES:
+		quality_option.add_item("Qualité graphique : %s" % q)
+	quality_option.tooltip_text = "Haute : reflets, éclairage indirect, occlusion. Moyenne : occlusion. Basse : aucun effet."
+	quality_option.add_theme_font_size_override("font_size", 19)
+	quality_option.select(GameState.graphics_quality)
+	quality_option.item_selected.connect(set_quality)
+	opts.add_child(quality_option)
 
 	var back := Button.new()
 	back.name = "Back"

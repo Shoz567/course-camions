@@ -10,9 +10,16 @@ extends PhysicsTest
 ##     qui sort retombe dans une zone avant d'atteindre une tour), aucune qui
 ##     en chevauche une autre, aucun corps physique, trois MultiMesh sans
 ##     ombre portee (trois appels de rendu) ;
+##   - decors de course (RaceDecor) : 3 ponts routiers et un echangeur a deux
+##     niveaux au-dessus de la piste (au moins 18 m de hauteur libre au-dessus
+##     de toute la chaussee survolee, piles au-dela des murs), 4 mega-ecrans
+##     holographiques dont la publicite alterne, 4 tribunes au depart avec au
+##     moins 2 000 spectateurs (un MultiMesh), 8 faisceaux qui balaient le
+##     ciel ; aucun corps physique ;
 ##   - showroom du menu : ville en contrebas, dessus du plateau sur la couche 1 ;
 ##   - phares des camions sans ombres (cout du rendu a 4 vues).
-## La ville n'est generee en headless que parce que ce test le force.
+## La ville et les decors ne sont generes en headless que parce que ce test
+## le force.
 
 var _track: TrackBlockout
 var _showroom: Showroom
@@ -22,6 +29,7 @@ var _build_ms: float = 0.0
 func _test_setup() -> void:
 	duration_ticks = 1
 	CityBackdrop.generate_in_headless = true
+	RaceDecor.generate_in_headless = true
 	var t0 := Time.get_ticks_usec()
 	_track = (load("res://tracks/track_01_blockout.tscn") as PackedScene).instantiate() as TrackBlockout
 	add_child(_track)
@@ -32,9 +40,11 @@ func _test_setup() -> void:
 
 func _test_finish() -> void:
 	CityBackdrop.generate_in_headless = false
+	RaceDecor.generate_in_headless = false
 	_check_environment()
 	_check_track()
 	_check_city()
+	_check_race_decor()
 	_check_showroom()
 	var truck := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 	var lights := truck.get_node_or_null("Headlights") as SpotLight3D
@@ -124,6 +134,73 @@ func _check_city() -> void:
 	check_above("ville : au moins 250 tours", n, 249)
 	check_above("ville : toutes les tours au-dela des zones de reset (marge, m)", worst, 0.0)
 	check("ville : aucune tour n'en chevauche une autre", overlaps == 0, "%d" % overlaps)
+
+
+func _check_race_decor() -> void:
+	var decor := _track.get_node("RaceDecor") as RaceDecor
+	var root := decor.get_child(0) as Node3D if decor.get_child_count() > 0 else null
+	check("decors de course generes", root != null)
+	if root == null:
+		return
+	check("decors de course : aucun corps physique", root.find_children("*", "CollisionObject3D", true, false).is_empty())
+	var decks: Array = root.get_meta(&"decks", [])
+	var piers: Array = root.get_meta(&"piers", [])
+	check("5 tabliers : 3 ponts routiers et un echangeur a 2 niveaux", decks.size() == 5, "%d" % decks.size())
+	# hauteur libre : toute la chaussee (axe et bords) sous l'emprise d'un tablier
+	var clearance := INF
+	var half := _track.width / 2.0
+	for d: Dictionary in decks:
+		var o: Vector3 = d["origin"]
+		var dir: Vector3 = d["dir"]
+		var across: Vector3 = d["across"]
+		for i in _track.sample_count():
+			for lateral: float in [-half, 0.0, half]:
+				var e := _track.sample_position(i) + _track.sample_right(i) * lateral
+				var rel := e - o
+				if absf(rel.dot(dir)) < float(d["half_len"]) and absf(rel.dot(across)) < float(d["width"]) / 2.0:
+					clearance = minf(clearance, o.y - e.y)
+	check_above("ponts : hauteur libre au-dessus de la chaussee survolee (m)", clearance, 18.0)
+	# piles (5 m x 16 m : demi-diagonale 8,4 m) hors de la chaussee et des murs
+	var worst := INF
+	for p: Vector3 in piers:
+		var c := _track.sample_position(_track.closest_sample(p))
+		worst = minf(worst, Vector2(p.x - c.x, p.z - c.z).length() - 8.4
+			- (half + _track.wall_thickness + _track.wall_lean))
+	print("  INFO   ponts : %d piles, hauteur libre %.1f m, marge des piles %.1f m" % [piers.size(), clearance, worst])
+	check_above("ponts : piles au-dela des murs (marge, m)", worst, 0.0)
+	var screens := root.find_children("HoloScreen", "MeshInstance3D", true, false)
+	var holo := true
+	for sc: Node in screens:
+		var mat := (sc as MeshInstance3D).material_override as ShaderMaterial
+		holo = holo and mat != null and mat.shader == preload("res://tracks/materials/holo_screen.gdshader")
+	check("4 mega-ecrans holographiques (un par pont)", screens.size() == 4 and holo and decor.screen_labels.size() == 4,
+		"%d ecrans" % screens.size())
+	var ad0 := decor.screen_labels[0].text if not decor.screen_labels.is_empty() else ""
+	var beam0 := decor.beams[0].rotation if not decor.beams.is_empty() else Vector3.ZERO
+	decor._process(RaceDecor.AD_SECONDS + 0.2)
+	check("ecrans : la publicite alterne", not decor.screen_labels.is_empty() and decor.screen_labels[0].text != ad0
+		and decor.screen_labels[0].text != decor.screen_labels[1].text, ad0)
+	check("8 faisceaux, qui balaient le ciel", decor.beams.size() == 8 and decor.beams[0].rotation != beam0,
+		"%d" % decor.beams.size())
+	var stands := root.get_node_or_null("Grandstands") as Node3D
+	check("tribunes generees", stands != null)
+	if stands == null:
+		return
+	var blocks := stands.find_children("Stand*", "Node3D", false, false)
+	var outside := true
+	for st: Node in blocks:
+		var pos := (st as Node3D).global_position
+		var c := _track.sample_position(_track.closest_sample(pos))
+		outside = outside and Vector2(pos.x - c.x, pos.z - c.z).length() > half + _track.wall_thickness + _track.wall_lean
+	check("4 tribunes au depart, au-dela des murs", blocks.size() == 4 and outside, "%d" % blocks.size())
+	var crowd := stands.get_node_or_null("Crowd") as MultiMeshInstance3D
+	check_above("tribunes : spectateurs", int(stands.get_meta(&"spectators", 0)), 1999)
+	check("tribunes : la foule est un seul MultiMesh, sans ombre portee", crowd != null
+		and crowd.multimesh.instance_count == int(stands.get_meta(&"spectators", 0))
+		and crowd.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	check("tribunes illuminees : projecteurs sans ombres",
+		stands.find_children("*", "OmniLight3D", true, false).size() == 8
+		and stands.find_children("*", "OmniLight3D", true, false).all(func(l: Node) -> bool: return not (l as OmniLight3D).shadow_enabled))
 
 
 func _check_showroom() -> void:

@@ -1,0 +1,128 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
+[ext_resource type="Script" path="res://tracks/playa_backdrop.gd" id="2"]
+[ext_resource type="Script" path="res://tracks/race_decor.gd" id="3"]
+
+[node name="Track02" type="Node3D"]
+script = ExtResource("1")
+segments = Array[Dictionary]([{
+"arch": 0.0,
+"arch_label": "PLAYA DEL SOL",
+"boost": [[120.0, 14.0]],
+"length": 200.0,
+"name": "Promenade du front de mer (depart)",
+"puddle": [[150.0, -24.0, 7.0]],
+"type": "straight"
+}, {
+"angle": 60.0,
+"bank": 5.0,
+"climb": 8.0,
+"name": "Montee de la corniche",
+"radius": 160.0,
+"signs": [[60.0, 32.0], [130.0, 32.0]],
+"type": "arc"
+}, {
+"auto": true,
+"boost": [[20.0, -14.0]],
+"climb": 26.0,
+"name": "Corniche (longueur calculee)",
+"type": "straight"
+}, {
+"angle": 120.0,
+"bank": 7.0,
+"climb": 2.0,
+"name": "Virage du belvedere",
+"puddle": [[150.0, 24.0, 8.0]],
+"radius": 140.0,
+"signs": [[80.0, 32.0], [220.0, 32.0]],
+"type": "arc"
+}, {
+"arch": 20.0,
+"arch_label": "MIRADOR",
+"auto": true,
+"boost": [[60.0, 14.0]],
+"climb": -20.0,
+"jump": 150.0,
+"jump_offset": -14.0,
+"name": "Descente des falaises (longueur calculee)",
+"type": "straight"
+}, {
+"angle": 45.0,
+"climb": -5.0,
+"name": "S des palmiers (gauche)",
+"radius": 150.0,
+"signs": [[50.0, 32.0]],
+"type": "arc"
+}, {
+"angle": -45.0,
+"climb": -5.0,
+"name": "S des palmiers (droite)",
+"puddle": [[60.0, -22.0, 7.0]],
+"radius": 150.0,
+"signs": [[50.0, -32.0]],
+"type": "arc"
+}, {
+"climb": 3.0,
+"jump": 50.0,
+"jump_offset": 12.0,
+"length": 160.0,
+"line": 12.0,
+"name": "Plage",
+"puddle": [[120.0, 20.0, 8.0]],
+"type": "straight"
+}, {
+"angle": 180.0,
+"bank": 6.0,
+"boost": [[150.0, -10.0], [450.0, 12.0]],
+"bridge": 1,
+"name": "Grand pont de la baie",
+"radius": 200.0,
+"signs": [[200.0, 32.0], [420.0, 32.0]],
+"type": "arc"
+}, {
+"arch": 30.0,
+"arch_label": "SURF JUMP",
+"bridge": 2,
+"climb": -3.0,
+"jump": 80.0,
+"jump_offset": -14.0,
+"length": 150.0,
+"name": "Jetee (pont de bois)",
+"type": "straight"
+}, {
+"boost": [[120.0, 0.0]],
+"bridge": 2,
+"climb": -6.0,
+"jump": 60.0,
+"jump_offset": 14.0,
+"length": 150.0,
+"name": "Jetee (retour sur la plage)",
+"type": "straight"
+}, {
+"length": 100.0,
+"name": "Grille de depart (a plat)",
+"type": "straight"
+}])
+width = 75.0
+bank_blend_length = 120.0
+climb_blend_length = 30.0
+theme_id = 1
+wall_height = 2.8
+wall_friction = 0.5
+jump_length = 14.0
+jump_angle_deg = 7.0
+jump_width = 14.0
+jump_offset = 12.0
+boost_pad_size = Vector2(12, 8)
+grid_row_spacing = 20.0
+grid_lateral = PackedFloat32Array(-10, 10, -30, 30)
+grid_back_lateral = PackedFloat32Array(-20, 20)
+
+[node name="PlayaBackdrop" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="RaceDecor" type="Node3D" parent="."]
+script = ExtResource("3")
+sky_beams = false
+night = false

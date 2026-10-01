@@ -8,10 +8,11 @@ extends Node3D
 ## jusqu'a l'horizon. Purement visuel, sauf le dessus du plateau (couche 1
 ## `world`) : les rayons de suspension des camions s'y posent.
 
-const PLATE_RADIUS := 20.0
+const PLATE_RADIUS := 24.0
 const PLATE_TOP := 0.5
-## Ecart lateral entre deux camions exposes.
+## Ecart lateral entre deux camions exposes (resserre a 5 et 6 camions).
 const SLOT_SPACING := 8.0
+const SLOT_SPACING_TIGHT := 6.6
 ## Centre de l'ensemble semi-remorque (le tracteur est a l'avant, en -Z).
 const RIG_CENTER_Z := 6.3
 
@@ -50,7 +51,7 @@ func _process(delta: float) -> void:
 ## Pose du camion `i` quand `n` camions sont exposes : alignes cote a cote,
 ## centres sur le plateau (repere du plateau tournant).
 static func slot(i: int, n: int) -> Transform3D:
-	var x := (i - (n - 1) / 2.0) * SLOT_SPACING
+	var x := (i - (n - 1) / 2.0) * (SLOT_SPACING if n <= 4 else SLOT_SPACING_TIGHT)
 	return Transform3D(Basis.IDENTITY, Vector3(x, PLATE_TOP, -RIG_CENTER_Z))
 
 

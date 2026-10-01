@@ -50,9 +50,14 @@ var _cam_y: PackedFloat32Array = []
 var _truck_y: PackedFloat32Array = []
 
 
+## Scene du circuit teste (le test du circuit n°2 herite de celui-ci).
+func _track_scene() -> String:
+	return "res://tracks/track_01_blockout.tscn"
+
+
 func _test_setup() -> void:
 	duration_ticks = MAX_TICKS
-	_track = (load("res://tracks/track_01_blockout.tscn") as PackedScene).instantiate() as TrackBlockout
+	_track = (load(_track_scene()) as PackedScene).instantiate() as TrackBlockout
 	add_child(_track)
 	_truck = (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 	_truck.transform = _track.get_start_transform(0)
