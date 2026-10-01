@@ -1,9 +1,11 @@
 extends PhysicsTest
 
 ## Derapage au frein a main (tache 1.6). Trois camions lances a 80 km/h, plein
-## gaz, puis plein braquage a droite pendant DRIFT ticks :
-##   A. reference, sans frein a main ;
-##   B. frein a main pendant le braquage, puis stick et frein relaches ;
+## gaz, puis virage a droite pendant DRIFT ticks :
+##   A. reference, plein braquage sans frein a main ;
+##   B. frein a main, conduit par le pilote de drift (TruckTestUtil, derive
+##      visee PILOT_DEG : l'angle est libre depuis le 2026-10-01, c'est le
+##      joueur qui le tient), puis stick et frein relaches ;
 ##   C. comme B, puis contre-braquage franc pendant COUNTER ticks.
 ## Criteres :
 ##   - le drift s'amorce : derive max de B >= 3 x derive max de A ;
@@ -19,6 +21,7 @@ const DRIFT := 60
 const COUNTER := 20
 const EXIT := 180
 const RECOVERED_DEG := 5.0
+const PILOT_DEG := 45.0
 
 var _trucks: Array[Truck] = []
 var _labels: PackedStringArray = ["A sans frein a main", "B drift puis relache", "C drift puis contre-braquage"]
@@ -64,7 +67,7 @@ func _test_tick(t: int) -> void:
 		f.steer = 0.0
 		f.handbrake = false
 		if t > LAUNCH and t <= release:
-			f.steer = 1.0
+			f.steer = TruckTestUtil.drift_pilot_steer(tr, PILOT_DEG) if i > 0 else 1.0
 			f.handbrake = i > 0
 		elif i == 2 and t > release and t <= release + COUNTER:
 			f.steer = -1.0

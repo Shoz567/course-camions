@@ -191,10 +191,11 @@ extends Resource
 ## d'adherence, 2 a 6 deg a haute vitesse) : le nez s'inscrit vers la corde.
 ## Mesure : 16 deg garde 74 % de la vitesse sur 4 s de drift, 32 deg 54 %.
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_steer_deg: float = 0.0
-## Derive tenue au frein a main, au plein braquage (proportionnelle au stick).
+## Derive visee au LANCEMENT du drift, au plein braquage (proportionnelle au
+## stick) : l'aide pousse le nez jusque-la, puis l'angle est libre (le joueur
+## le tient au stick). Pleine force de courbe (drift_carve_g) a partir de cet
+## angle.
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
-## Derive cible maximale au frein a main (borne de drift_target_slip_deg).
-@export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
 ## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
 ## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
 @export_range(0.0, 1.0, 0.01) var drift_speed_keep: float = 0.0
@@ -280,9 +281,6 @@ func validate() -> PackedStringArray:
 		errors.append("engine_taper_kmh (%s) >= top_speed_kmh (%s)" % [engine_taper_kmh, top_speed_kmh])
 	if drift_steer_deg > max_steer_deg:
 		errors.append("drift_steer_deg (%s) > max_steer_deg (%s)" % [drift_steer_deg, max_steer_deg])
-	if drift_target_slip_deg >= drift_max_slip_deg:
-		errors.append("drift_target_slip_deg (%s) >= drift_max_slip_deg (%s)"
-			% [drift_target_slip_deg, drift_max_slip_deg])
 	if wall_unstick_speed_factor >= 1.0 or cargo_hit_speed_factor >= 1.0:
 		errors.append("wall_unstick_speed_factor / cargo_hit_speed_factor : doivent etre < 1")
 	if trailer_damping_ratio >= 2.0:
