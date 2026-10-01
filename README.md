@@ -11,17 +11,25 @@ puis online.
 > complet : deux circuits, course à 3 tours, écran partagé de 1 à 6 joueurs,
 > menu, sons.
 >
-> La fusion s'est faite en *squash* : un seul commit sur `main`. **Ne continuez
-> pas sur `phase-4/menu-et-ecran-partage`** (ni sur les anciennes branches
-> `phase-0.5`, `phase-1`, `phase-2`) : une PR depuis ces branches ramènerait
-> toute l'ancienne histoire en double. Elles restent sur GitHub pour consulter
-> l'historique détaillé, en lecture seule.
+> La fusion s'est faite en *squash* : un seul commit sur `main`. Les anciennes
+> branches (`phase-0.5/spikes`, `phase-1/vehicule-base`,
+> `phase-2/piste-blockout`, `phase-4/menu-et-ecran-partage`, `3D-Models`) ont
+> été **supprimées** de GitHub : tout leur contenu était déjà sur `main`. Si
+> vous les avez encore sur votre PC, **ne travaillez plus dessus** : une PR
+> depuis l'une d'elles ramènerait toute l'ancienne histoire en double.
+>
+> Leur historique détaillé (45 commits) est conservé par le tag
+> **`archive/phase-4`** :
+>
+> ```bash
+> git switch -c phase-4-historique archive/phase-4
+> ```
 >
 > Pour reprendre :
 >
 > ```bash
 > git switch main
-> git pull
+> git pull --prune                      # oublie aussi les branches supprimées
 > git switch -c <zone>/<sujet>        # par exemple piste/troisieme-circuit
 > ```
 >
@@ -105,7 +113,9 @@ Détail : `docs/ENVIRONMENT.md` §6.
 ## Historique
 
 Ce dépôt a d'abord porté un jeu de combat en ragdoll, abandonné le 2026-09-25.
-Tout ce travail est conservé par le tag **`archive/ragdoll-brawler`** :
+Tout ce travail est conservé par le tag **`archive/ragdoll-brawler`** (et
+l'historique détaillé des phases 0.5 à 4 du jeu de camions par
+**`archive/phase-4`**) :
 
 ```bash
 git switch -c ragdoll archive/ragdoll-brawler
