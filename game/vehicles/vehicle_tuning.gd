@@ -195,6 +195,9 @@ extends Resource
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
 ## Derive jamais depassee, frein a main ou non : pas de tete-a-queue.
 @export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
+## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
+## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
+@export_range(0.0, 1.0, 0.01) var drift_speed_keep: float = 0.0
 ## Raideur du retour vers la derive cible (1/s).
 @export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
 ## Acceleration angulaire max de l'aide (une aide, pas un rail).

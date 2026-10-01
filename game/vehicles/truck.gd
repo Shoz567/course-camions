@@ -615,7 +615,10 @@ func _physics_process(_delta: float) -> void:
 		if debug_drive:
 			var decel := braking * t.brake_decel_ms2 + t.rolling_resistance_ms2
 			if rear:
-				decel += _handbrake_blend * t.handbrake_decel_ms2
+				# frein a main + gaz = drift, pas freinage : la deceleration du frein
+				# a main s'efface avec l'accelerateur (2026-10-01, « le derapage
+				# freine trop »)
+				decel += _handbrake_blend * t.handbrake_decel_ms2 * (1.0 - _input.throttle)
 			var sat := clampf(v_long / t.grip_saturation_speed_ms, -1.0, 1.0)
 			f_long -= decel * m_wheel * sat
 
@@ -629,6 +632,7 @@ func _physics_process(_delta: float) -> void:
 	# derapage maitrise : cible de derive au frein a main, jamais de tete-a-queue
 	if debug_handbrake:
 		_apply_drift_assist(t, up, fwd, steer_in, v_fwd)
+		_apply_drift_momentum(t, up, fwd)
 
 	# 1.6 au sol : anti-retournement (prioritaire : les camions se percutent
 	# souvent). En l'air : assiette automatique et lacet au stick.
@@ -739,6 +743,37 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 	var desired_w := path_rate + t.drift_assist_gain * (target - slip)
 	var alpha := clampf((desired_w - w) * 8.0, -limit, limit) * gain
 	apply_torque(up * alpha * t.inertia_yaw_kgm2)
+
+
+## Elan en drift : en derapage, les pneus « raclent » la vitesse (leur force
+## laterale s'oppose en grande partie au mouvement des qu'ils glissent de
+## 40 deg). On restitue drift_speed_keep de cette perte, le long de la
+## trajectoire. Le camion glisse en gardant son elan : c'est l'usage des jeux
+## de course arcade. Avant le 2026-10-01, un drift de 4 s a 90 km/h perdait
+## 26 % de la vitesse.
+##
+## Engagement : le plus grand du frein a main et de la GLISSE elle-meme (de 0 a
+## 10 deg de derive a 1 a 25 deg). La glisse compte aussi parce que la sortie
+## du drift, frein a main relache, glisse encore a 50 deg : sans elle, le
+## camion y perdait 39 % de sa vitesse. Un virage normal (< 10 deg) n'est pas
+## concerne.
+func _apply_drift_momentum(t: VehicleTuning, up: Vector3, fwd: Vector3) -> void:
+	if _grounded < 2:
+		return
+	var flat := linear_velocity - up * linear_velocity.dot(up)
+	var speed := flat.length()
+	if speed < t.drift_min_speed_ms:
+		return
+	var slip := absf(atan2(flat.dot(fwd.cross(up)), flat.dot(fwd)))
+	var engage := maxf(_handbrake_blend, smoothstep(deg_to_rad(10.0), deg_to_rad(25.0), slip))
+	if engage <= 0.0:
+		return
+	var dir := flat / speed
+	var scrub := 0.0
+	for i in 4:
+		scrub += _tire_force[i].dot(dir)
+	if scrub < 0.0:
+		apply_central_force(-dir * scrub * t.drift_speed_keep * engage)
 
 
 func _update_boost(t: VehicleTuning) -> void:

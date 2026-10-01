@@ -28,6 +28,10 @@ var _recovered_at: PackedInt32Array = [-1, -1, -1]
 var _overshoot: PackedFloat32Array = [0.0, 0.0, 0.0]
 var _speed_entry: PackedFloat32Array = [0.0, 0.0, 0.0]
 var _speed_min: PackedFloat32Array = [INF, INF, INF]
+# vitesse REELLE (norme horizontale), km/h : get_speed_kmh() ne donne que la
+# composante le long du nez, soit cos(derive) x la vitesse en plein drift
+var _real_entry: PackedFloat32Array = [0.0, 0.0, 0.0]
+var _real_min: PackedFloat32Array = [INF, INF, INF]
 var _max_roll: PackedFloat32Array = [0.0, 0.0, 0.0]
 var _upside: Array[bool] = [false, false, false]
 
@@ -65,13 +69,16 @@ func _test_tick(t: int) -> void:
 		elif i == 2 and t > release and t <= release + COUNTER:
 			f.steer = -1.0
 		tr.set_input(f)
+		var real := Vector2(tr.linear_velocity.x, tr.linear_velocity.z).length() * 3.6
 		if t == LAUNCH:
 			_speed_entry[i] = v
+			_real_entry[i] = real
 		if t <= LAUNCH:
 			continue
 		var slip := signed_slip_deg(tr)
 		_max_slip[i] = maxf(_max_slip[i], absf(slip))
 		_speed_min[i] = minf(_speed_min[i], v)
+		_real_min[i] = minf(_real_min[i], real)
 		_max_roll[i] = maxf(_max_roll[i], absf(TruckTestUtil.pitch_roll_deg(tr).y))
 		_upside[i] = _upside[i] or tr.is_upside_down()
 		if t > release:
@@ -92,6 +99,17 @@ func _test_finish() -> void:
 		print("  INFO   %s : derive max %.1f deg, retour < %.0f deg en %d ticks, depassement %.1f deg, vitesse %.0f -> min %.0f km/h, roulis max %.1f deg"
 			% [l, _max_slip[i], RECOVERED_DEG, _recovered_at[i], _overshoot[i], _speed_entry[i], _speed_min[i], _max_roll[i]])
 	check_ratio_above("le drift s'amorce : derive B / derive A", _max_slip[1], _max_slip[0], 3.0)
+	# Ajoute le 2026-10-01 (« le derapage freine trop ») : drift court PUIS
+	# sortie, vitesse REELLE minimale >= 95 % de la vitesse d'entree. Mesure :
+	# 98,6 % avant le reglage du 2026-10-01, 100 % apres. Ce scenario court
+	# protege la sortie de drift ; le gain de vitesse se mesure, lui, sur le
+	# drift tenu 4 s de truck_drift_control_test (74 % -> 92 %).
+	# Piege rencontre : la « vitesse min » affichee plus haut est
+	# get_speed_kmh(), composante le long du nez. En drift elle vaut
+	# cos(derive) x la vitesse : 62 km/h a 38,5 deg (ancien reglage), 49 km/h a
+	# 53 deg (nouveau), sans aucune perte de vitesse reelle derriere.
+	check_ratio_above("B : vitesse reelle gardee jusqu'a la sortie du drift", _real_min[1], _real_entry[1], 0.95)
+	print("  INFO   B : vitesse reelle %.0f -> min %.0f km/h" % [_real_entry[1], _real_min[1]])
 	check("B se rattrape seul", _recovered_at[1] >= 0, "ticks=%d" % _recovered_at[1])
 	check_below("B : retour sous 5 deg de derive (ticks)", _recovered_at[1], 90)
 	check("C se rattrape", _recovered_at[2] >= 0, "ticks=%d" % _recovered_at[2])
