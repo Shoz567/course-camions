@@ -69,6 +69,8 @@ const STOP_SPEED_MS := 0.5
 @export var debug_drag: bool = true
 @export var debug_anti_roll: bool = true
 @export var debug_handbrake: bool = true
+## Drift : force laterale commandee au stick, la trajectoire suit le virage.
+@export var debug_drift_carve: bool = true
 @export var debug_air_control: bool = true
 ## Saut de plaque : chute freinee progressivement a l'approche du sol.
 @export var debug_landing_cushion: bool = true
@@ -633,6 +635,8 @@ func _physics_process(_delta: float) -> void:
 	if debug_handbrake:
 		_apply_drift_assist(t, up, fwd, steer_in, v_fwd)
 		_apply_drift_momentum(t, up, fwd)
+		if debug_drift_carve:
+			_apply_drift_carve(t, up, fwd, steer_in)
 
 	# 1.6 au sol : anti-retournement (prioritaire : les camions se percutent
 	# souvent). En l'air : assiette automatique et lacet au stick.
@@ -774,6 +778,30 @@ func _apply_drift_momentum(t: VehicleTuning, up: Vector3, fwd: Vector3) -> void:
 		scrub += _tire_force[i].dot(dir)
 	if scrub < 0.0:
 		apply_central_force(-dir * scrub * t.drift_speed_keep * engage)
+
+
+## Courbe du drift (2026-10-01, « je me deporte contre la rambarde
+## exterieure ») : l'aide au drift pivote le nez, mais la TRAJECTOIRE ne
+## courbe que de la force laterale des pneus qui glissent, ~0,75 g. Rayon
+## r = v^2 / a : 237 m a 150 km/h, plus large que tous les virages du jeu.
+## On ajoute drift_carve_g au plein stick, perpendiculaire a la vitesse : la
+## vitesse n'en change pas, seule la courbe se resserre. Stick au neutre : rien.
+## Seulement vers le cote ou pointe le nez : la trajectoire rejoint le nez, la
+## derive se referme. Dans l'autre sens (contre-braquage en sortie), la force
+## ouvrirait la derive et retarderait le retour en ligne (mesure : 65 -> 72
+## ticks). Engagee par le frein a main, estompee sous drift_min_speed_ms.
+func _apply_drift_carve(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float) -> void:
+	if _grounded < 2 or _handbrake_blend <= 0.0 or steer_in == 0.0:
+		return
+	var flat := linear_velocity - up * linear_velocity.dot(up)
+	var speed := flat.length()
+	var fade := smoothstep(t.drift_min_speed_ms * 0.5, t.drift_min_speed_ms, speed)
+	if fade <= 0.0:
+		return
+	var right := (flat / speed).cross(up)
+	if steer_in * right.dot(fwd) <= 0.0:
+		return
+	apply_central_force(right * (steer_in * t.drift_carve_g * _gravity * _handbrake_blend * fade * mass))
 
 
 func _update_boost(t: VehicleTuning) -> void:

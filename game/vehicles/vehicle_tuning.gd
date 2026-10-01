@@ -198,6 +198,11 @@ extends Resource
 ## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
 ## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
 @export_range(0.0, 1.0, 0.01) var drift_speed_keep: float = 0.0
+## Acceleration laterale AJOUTEE en drift au plein stick, perpendiculaire a la
+## vitesse (vers l'interieur du virage ; contre-braquage : vers l'exterieur).
+## Les pneus qui glissent ne tiennent que ~0,75 g : sans elle, le drift a
+## 150 km/h decrivait 237 m de rayon et sortait des virages de 140 m.
+@export_range(0.0, 3.0, 0.01, "suffix:g") var drift_carve_g: float = 0.0
 ## Raideur du retour vers la derive cible (1/s).
 @export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
 ## Acceleration angulaire max de l'aide (une aide, pas un rail).

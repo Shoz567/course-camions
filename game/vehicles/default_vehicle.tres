@@ -67,6 +67,7 @@ drift_steer_deg = 16.0
 drift_target_slip_deg = 50.0
 drift_max_slip_deg = 62.0
 drift_speed_keep = 0.8
+drift_carve_g = 0.8
 drift_assist_gain = 3.0
 drift_assist_accel = 8.0
 drift_min_speed_ms = 8.0
