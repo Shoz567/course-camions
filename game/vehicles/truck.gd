@@ -631,7 +631,7 @@ func _physics_process(_delta: float) -> void:
 	if debug_drag:
 		apply_central_force(-linear_velocity * linear_velocity.length() * t.aero_drag_per_m * mass)
 
-	# derapage maitrise : cible de derive au frein a main, jamais de tete-a-queue
+	# derapage maitrise : cible de derive au frein a main
 	if debug_handbrake:
 		_apply_drift_assist(t, up, fwd, steer_in, v_fwd)
 		_apply_drift_momentum(t, up, fwd)
@@ -706,14 +706,15 @@ func _apply_cargo_hit(t: VehicleTuning, up: Vector3) -> void:
 	cargo_hit_taken.emit()
 
 
-## Derapage maitrise (demande du playtest : plus de tetes-a-queue). La derive
-## (angle entre le cap et la vitesse, > 0 : vitesse a droite du cap) varie
-## comme lacet - rotation de la trajectoire ; on pilote donc le lacet :
-##   - au frein a main, vers une derive cible proportionnelle au braquage
-##     (drift_target_slip_deg au plein stick) : le drift tient, previsible ;
-##   - a tout moment, jamais au-dela de drift_max_slip_deg : retour vers la
-##     limite, meme sans frein a main (apres un choc, par exemple).
+## Derapage maitrise. La derive (angle entre le cap et la vitesse, > 0 :
+## vitesse a droite du cap) varie comme lacet - rotation de la trajectoire ; on
+## pilote donc le lacet, au frein a main seulement, vers une derive cible
+## proportionnelle au braquage (drift_target_slip_deg au plein stick, bornee
+## a drift_max_slip_deg) : le drift tient, previsible.
 ## Acceleration angulaire bornee (drift_assist_accel) : une aide, pas un rail.
+## Plus de garde anti tete-a-queue (retiree le 2026-10-01 a la demande de
+## l'utilisateur) : sans frein a main, apres un choc ou un coup de volant, le
+## camion peut partir en tete-a-queue.
 func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float, v_fwd: float) -> void:
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	var flat := linear_velocity - up * linear_velocity.dot(up)
@@ -728,24 +729,12 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 		return
 	var slip := atan2(flat.dot(fwd.cross(up)), flat.dot(fwd))
 	var max_slip := deg_to_rad(t.drift_max_slip_deg)
-	var w := angular_velocity.dot(up)
-	var target := 0.0
-	var gain := 0.0
-	var limit := t.drift_assist_accel
-	if _handbrake_blend > 0.2:
-		target = clampf(-steer_in * deg_to_rad(t.drift_target_slip_deg), -max_slip, max_slip)
-		gain = _handbrake_blend
-	# garde anti tete-a-queue : derive PREVUE a 0,3 s (un choc lance la rotation
-	# trop vite pour attendre la limite), autorite plus forte
-	var predicted := slip + (w - path_rate) * 0.3
-	if absf(predicted) > max_slip:
-		target = signf(predicted) * max_slip
-		gain = 1.0
-		limit = t.spin_guard_accel
-	if gain <= 0.0:
+	if _handbrake_blend <= 0.2:
 		return
+	var w := angular_velocity.dot(up)
+	var target := clampf(-steer_in * deg_to_rad(t.drift_target_slip_deg), -max_slip, max_slip)
 	var desired_w := path_rate + t.drift_assist_gain * (target - slip)
-	var alpha := clampf((desired_w - w) * 8.0, -limit, limit) * gain
+	var alpha := clampf((desired_w - w) * 8.0, -t.drift_assist_accel, t.drift_assist_accel) * _handbrake_blend
 	apply_torque(up * alpha * t.inertia_yaw_kgm2)
 
 

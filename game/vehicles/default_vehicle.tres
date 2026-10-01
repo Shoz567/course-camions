@@ -71,7 +71,6 @@ drift_carve_g = 1.2
 drift_assist_gain = 3.0
 drift_assist_accel = 8.0
 drift_min_speed_ms = 8.0
-spin_guard_accel = 14.0
 anti_roll_threshold_deg = 10.0
 anti_roll_strength = 60.0
 air_follow_ratio = 0.8

@@ -193,7 +193,7 @@ extends Resource
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_steer_deg: float = 0.0
 ## Derive tenue au frein a main, au plein braquage (proportionnelle au stick).
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
-## Derive jamais depassee, frein a main ou non : pas de tete-a-queue.
+## Derive cible maximale au frein a main (borne de drift_target_slip_deg).
 @export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
 ## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
 ## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
@@ -209,8 +209,6 @@ extends Resource
 @export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
 ## Acceleration angulaire max de l'aide (une aide, pas un rail).
 @export_range(0.0, 30.0, 0.01, "suffix:rad/s²") var drift_assist_accel: float = 0.0
-## Garde anti tete-a-queue (derive prevue au-dela de la limite) : autorite.
-@export_range(0.0, 60.0, 0.01, "suffix:rad/s²") var spin_guard_accel: float = 0.0
 ## En dessous, pas d'aide (manoeuvres a basse vitesse).
 @export_range(0.0, 30.0, 0.01, "suffix:m/s") var drift_min_speed_ms: float = 0.0
 

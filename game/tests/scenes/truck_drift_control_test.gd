@@ -12,8 +12,10 @@ extends PhysicsTest
 ##      5 deg en < 1,5 s ; la remorque suit sans balancier (moins de 10 deg de
 ##      l'autre cote) ;
 ##   B. coup de volant sans frein a main : 90 % du lacet etabli en < 0,5 s ;
-##   C. choc en lacet (4 rad/s donnes d'un coup, sans frein a main) : pas de
-##      tete-a-queue (derive < drift_max_slip_deg + 15 deg), rattrapage ;
+##   C. choc en lacet (4 rad/s donnes d'un coup, sans frein a main) : le
+##      camion finit par se rattraper (derive < 5 deg a la fin). Le tete-a-queue
+##      est permis depuis le retrait de la garde anti tete-a-queue (2026-10-01,
+##      demande de l'utilisateur) : derive max 126 deg, affichee seulement ;
 ##   D. Ultrasonique (200cc) lance a 210 km/h, plein braquage sans frein a
 ##      main : la direction n'est pas figee, le camion tient au moins 0,75 g
 ##      (plancher steer_floor_deg ; 0,41 g sans lui).
@@ -166,7 +168,6 @@ func _test_finish() -> void:
 	check_below("A remorque : pas de balancier de l'autre cote (deg)", _a_trailer_other, 10.0)
 	check("B braquage franc : 90 % du lacet etabli", turn_in >= 0)
 	check_below("B braquage franc : 90 % du lacet en (ticks)", turn_in, 30)
-	check_below("C choc en lacet : pas de tete-a-queue (deg)", _c_max_slip, max_slip + 15.0)
 	check_below("C choc en lacet : rattrapage (deg)", _c_final_slip, 5.0)
 	check_above("D 200cc a 210 km/h : direction jamais figee (g)", d_lat_g, 0.75)
 	check_below("jamais couche (deg)", _max_tilt, 45.0)
