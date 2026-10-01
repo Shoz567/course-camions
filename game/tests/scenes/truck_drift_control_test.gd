@@ -7,7 +7,8 @@ extends PhysicsTest
 ##      sont debridees (drift_steer_deg, au lieu des ~5 deg d'adherence) ; la
 ##      derive tient (jamais au-dela de drift_max_slip_deg + 3 deg, pas de
 ##      tete-a-queue), reste stable (ecart-type < 4 deg sur les 2 dernieres
-##      secondes), garde de la vitesse (> 60 %) ; relachee, elle revient sous
+##      secondes), garde de la vitesse (> 90 %) et un angle franc (derive
+##      moyenne > 45 deg) ; relachee, elle revient sous
 ##      5 deg en < 1,5 s ; la remorque suit sans balancier (moins de 10 deg de
 ##      l'autre cote) ;
 ##   B. coup de volant sans frein a main : 90 % du lacet etabli en < 0,5 s ;
@@ -154,9 +155,12 @@ func _test_finish() -> void:
 	check_below("A drift : 30 deg de derive en (ticks)", _a_pivot, 42)
 	check_near("A drift : roues avant debridees (deg)", _a_max_steer, _a.tuning.drift_steer_deg, 0.5)
 	check_below("A drift : derive max (deg)", _a_max_slip, max_slip + 3.0)
-	check_above("A drift : la derive tient (deg, moyenne)", absf(mean), 15.0)
+	# Seuils releves le 2026-10-01 a la demande de l'utilisateur (« le derapage
+	# freine trop et l'angle n'est pas assez eleve ») : etaient 15 deg et 60 %,
+	# pour 38,7 deg et 74 % mesures.
+	check_above("A drift : la derive tient (deg, moyenne)", absf(mean), 45.0)
 	check_below("A drift stable : ecart-type sur 2 s (deg)", std, 4.0)
-	check_above("A drift : vitesse gardee (fin / debut)", _a_speed_out / _a_speed_in, 0.6)
+	check_above("A drift : vitesse gardee (fin / debut)", _a_speed_out / _a_speed_in, 0.9)
 	check("A relache : retour sous 5 deg", _a_recovered >= 0, "ticks=%d" % _a_recovered)
 	check_below("A relache : retour sous 5 deg (ticks)", _a_recovered, 90)
 	check_below("A remorque : pas de balancier de l'autre cote (deg)", _a_trailer_other, 10.0)

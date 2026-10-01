@@ -113,10 +113,17 @@ extends Resource
 @export_range(0.0, 3.0, 0.01) var solo_steer_factor: float = 0.0
 
 @export_group("Sauts (plaques)")
-## Pendant un saut de plaque : raideur de l'assiette automatique multipliee.
+## Pendant un saut de plaque : raideur de l'alignement sur le sol (phase 2 du
+## vol) multipliee. N'agit plus pendant le vol lui-meme.
 @export_range(0.0, 10.0, 0.01) var jump_air_level_factor: float = 0.0
-## A la reception d'un saut de plaque, vitesse de chute ramenee a cette valeur.
+## Saut de plaque : vitesse de chute visee au contact. Elle est atteinte
+## PROGRESSIVEMENT pendant l'approche du sol (phase 2), par une deceleration
+## constante calculee sur la distance restante. Avant le 2026-09-30, elle etait
+## imposee en UN tick au contact : 36,6 g de pic, la reception « rattrapee ».
 @export_range(0.0, 20.0, 0.01, "suffix:m/s") var jump_landing_max_down_ms: float = 0.0
+## Plafond de cette deceleration d'approche. Si le sol est vu trop tard, la
+## suspension absorbe le reste, comme pour une reception naturelle.
+@export_range(0.0, 100.0, 0.1, "suffix:m/s²") var jump_landing_max_decel_ms2: float = 0.0
 ## Apres cette reception, amortissement de suspension multiplie, pendant
 ## jump_landing_damping_ticks : pas de rebond.
 @export_range(0.0, 5.0, 0.01) var jump_landing_damping_factor: float = 0.0
@@ -188,6 +195,16 @@ extends Resource
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
 ## Derive jamais depassee, frein a main ou non : pas de tete-a-queue.
 @export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
+## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
+## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
+@export_range(0.0, 1.0, 0.01) var drift_speed_keep: float = 0.0
+## Acceleration laterale AJOUTEE en drift au plein stick, perpendiculaire a la
+## vitesse (vers l'interieur du virage ; contre-braquage : vers l'exterieur).
+## Les pneus qui glissent ne tiennent que ~0,75 g : sans elle, le drift a
+## 150 km/h decrivait 237 m de rayon et sortait des virages de 140 m.
+## Mesure a 150 km/h : 0,8 g -> 110 m, 1,2 g -> 87 m ; 1,5 g -> 76 m mais la
+## remorque d'un drift contre un mur y entre (truck_trailer_test, cas D).
+@export_range(0.0, 3.0, 0.01, "suffix:g") var drift_carve_g: float = 0.0
 ## Raideur du retour vers la derive cible (1/s).
 @export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
 ## Acceleration angulaire max de l'aide (une aide, pas un rail).
@@ -205,8 +222,31 @@ extends Resource
 ## Acceleration angulaire de redressement par radian au-dela du seuil. Amortie
 ## critiquement (2 * racine de la raideur) : pas de rebond de l'autre cote.
 @export_range(0.0, 200.0, 0.01, "suffix:1/s²") var anti_roll_strength: float = 0.0
-## En l'air (aucune roue au sol) : raideur du ressort angulaire qui ramene le
-## camion a plat, amorti critiquement. Remplace l'anti-retournement.
+## En l'air, le camion n'est PLUS ramene a plat pendant tout le vol : c'etait la
+## cause du « trop rigide en l'air » (2026-09-30 ; tangage fige a 0 deg pendant
+## que la trajectoire plongeait a -11 deg). Deux phases :
+##
+## 1. En vol : le nez SUIT la trajectoire. Tangage vise = pente de la
+##    trajectoire x air_follow_ratio, roulis vise = 0. Ressort doux et
+##    sous-amorti : le camion vit, penche sous un choc, puis revient.
+## 2. Approche du sol (impact estime a moins de air_landing_prep_ticks) :
+##    alignement sur la NORMALE du sol vise, ressort plus raide et amorti
+##    critiquement (air_level_strength), pour retomber sur les roues.
+##
+## Part de la pente de la trajectoire reprise par le nez (0 = reste a plat,
+## 1 = suit exactement l'arc).
+@export_range(0.0, 1.0, 0.01) var air_follow_ratio: float = 0.0
+## Tangage vise maximal en vol, dans les deux sens. Le suivi s'efface aussi
+## sous ~10 m/s horizontaux (chute quasi verticale : pas de trajectoire a suivre).
+@export_range(0.0, 90.0, 0.1, "suffix:°") var air_follow_max_deg: float = 0.0
+## Raideur du ressort angulaire en vol (phase 1).
+@export_range(0.0, 200.0, 0.01, "suffix:1/s²") var air_follow_strength: float = 0.0
+## Taux d'amortissement en vol : < 1, le camion peut osciller legerement.
+@export_range(0.0, 2.0, 0.01) var air_follow_damping_ratio: float = 0.0
+## Delai avant l'impact estime a partir duquel le camion s'aligne sur le sol.
+@export_range(0.0, 120.0, 1.0, "suffix:ticks") var air_landing_prep_ticks: float = 0.0
+## Approche du sol (phase 2) : raideur du ressort qui aligne le camion sur la
+## normale du sol vise, amorti critiquement.
 @export_range(0.0, 200.0, 0.01, "suffix:1/s²") var air_level_strength: float = 0.0
 ## En l'air : vitesse de lacet obtenue au plein stick.
 @export_range(0.0, 720.0, 0.1, "suffix:°/s") var air_yaw_rate_deg_s: float = 0.0

@@ -10,13 +10,14 @@ extends RigidBody3D
 ##   1.5 direction reduite avec la vitesse, adherence laterale ponderee par la
 ##       charge de la roue et la surface
 ##   1.6 frein a main (derapage, contre-braquage permissif), anti-retournement
-##       au sol, controle en l'air (assiette automatique, lacet au stick)
+##       au sol ; en l'air : le nez suit la trajectoire, alignement sur le sol
+##       a l'approche de l'impact, lacet au stick
 ##   1.9 traces DebugDraw : rayons, contacts, forces, centre de masse
 ##   boost : poussee et vitesse max relevees pendant boost_duration_ticks, puis
 ##       jauge rechargee en boost_recharge_ticks (declenche a l'appui)
 ##   plaques : boost de plaque (coup de pouce immediat + vitesse max relevee),
-##       saut de plaque (impulsion verticale, assiette renforcee en l'air,
-##       reception amortie)
+##       saut de plaque (impulsion verticale, chute freinee progressivement a
+##       l'approche du sol, suspension plus amortie a la reception)
 ##   remorque articulee : la caisse de la remorque pivote autour de la sellette
 ##       (VEHICLE_SPEC §5 bis), avec sa propre inertie de lacet. Elle chasse
 ##       vers l'exterieur en virage et en derapage, s'arrete contre les murs,
@@ -68,7 +69,11 @@ const STOP_SPEED_MS := 0.5
 @export var debug_drag: bool = true
 @export var debug_anti_roll: bool = true
 @export var debug_handbrake: bool = true
+## Drift : force laterale commandee au stick, la trajectoire suit le virage.
+@export var debug_drift_carve: bool = true
 @export var debug_air_control: bool = true
+## Saut de plaque : chute freinee progressivement a l'approche du sol.
+@export var debug_landing_cushion: bool = true
 @export var debug_boost: bool = true
 @export var debug_wall_unstick: bool = true
 ## Traces DebugDraw du camion (actifs seulement si DebugDraw.enabled).
@@ -110,6 +115,15 @@ var _pad_kick_pending: bool = false
 var _launch_up_ms: float = 0.0
 var _jump_assist_ticks: int = 0
 var _air_ticks: int = 0
+## En l'air : rayon vertical tire depuis le centre de masse, pour estimer
+## l'impact (ticks restants, hauteur des roues au-dessus du sol vise, normale du
+## sol vise). INF = aucun sol en vue, ou camion qui monte.
+var _ground_ray: RayCast3D
+var _ticks_to_impact: float = INF
+var _ground_d: float = INF
+var _ground_normal: Vector3 = Vector3.UP
+const GROUND_RAY_LENGTH := 60.0
+var _gravity: float = 9.8
 var _landing_damp_ticks: int = 0
 ## Reception d'un saut de plaque : vitesse de chute juste avant l'amorti (m/s).
 var last_landing_fall_ms: float = 0.0
@@ -166,6 +180,17 @@ func _ready() -> void:
 		_trailer_query = PhysicsShapeQueryParameters3D.new()
 		_trailer_query.shape = _trailer_shape.shape
 		_trailer_query.exclude = [get_rid()]
+	# Rayon d'estimation de l'impact : interroge a la demande (force_raycast_update),
+	# jamais automatiquement ; RayCast3D plutot qu'intersect_ray, qui allouerait
+	# un dictionnaire a chaque tick (CLAUDE.md §5).
+	_ground_ray = RayCast3D.new()
+	_ground_ray.name = "GroundRay"
+	_ground_ray.position = TruckSpec.CENTER_OF_MASS
+	_ground_ray.enabled = false
+	_ground_ray.collision_mask = 1 << (TruckSpec.LAYER_WORLD - 1)
+	_ground_ray.add_exception(self)
+	add_child(_ground_ray)
+	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity")) * gravity_scale
 	if tuning == null:
 		push_error("Truck '%s' : aucun VehicleTuning" % name)
 		return
@@ -521,7 +546,8 @@ func _physics_process(_delta: float) -> void:
 			_slow_decel = 0.0
 
 	# saut de plaque : impulsion verticale ; a la reception (apres un vrai vol),
-	# chute ramenee a jump_landing_max_down_ms et suspension plus amortie.
+	# suspension plus amortie. La chute, elle, a ete freinee avant le contact
+	# (_apply_landing_cushion).
 	if _launch_up_ms > 0.0:
 		if linear_velocity.y < _launch_up_ms:
 			apply_central_impulse(Vector3.UP * (_launch_up_ms - linear_velocity.y) * mass)
@@ -538,10 +564,9 @@ func _physics_process(_delta: float) -> void:
 		elif _air_ticks >= 8:   # un vrai vol, pas un rebond sur le bord de la rampe
 			_jump_assist_ticks = 0
 			_landing_damp_ticks = roundi(t.jump_landing_damping_ticks)
-			var fall := -linear_velocity.y
-			last_landing_fall_ms = fall
-			if fall > t.jump_landing_max_down_ms:
-				apply_central_impulse(Vector3.UP * (fall - t.jump_landing_max_down_ms) * mass)
+			# La chute a deja ete freinee pendant l'approche (_apply_landing_cushion).
+			# Plus de plafonnement instantane ici : il donnait 36,6 g en un tick.
+			last_landing_fall_ms = -linear_velocity.y
 
 	var m_wheel := mass / 4.0
 	for i in 4:
@@ -592,7 +617,10 @@ func _physics_process(_delta: float) -> void:
 		if debug_drive:
 			var decel := braking * t.brake_decel_ms2 + t.rolling_resistance_ms2
 			if rear:
-				decel += _handbrake_blend * t.handbrake_decel_ms2
+				# frein a main + gaz = drift, pas freinage : la deceleration du frein
+				# a main s'efface avec l'accelerateur (2026-10-01, « le derapage
+				# freine trop »)
+				decel += _handbrake_blend * t.handbrake_decel_ms2 * (1.0 - _input.throttle)
 			var sat := clampf(v_long / t.grip_saturation_speed_ms, -1.0, 1.0)
 			f_long -= decel * m_wheel * sat
 
@@ -606,14 +634,21 @@ func _physics_process(_delta: float) -> void:
 	# derapage maitrise : cible de derive au frein a main, jamais de tete-a-queue
 	if debug_handbrake:
 		_apply_drift_assist(t, up, fwd, steer_in, v_fwd)
+		_apply_drift_momentum(t, up, fwd)
+		if debug_drift_carve:
+			_apply_drift_carve(t, up, fwd, steer_in)
 
 	# 1.6 au sol : anti-retournement (prioritaire : les camions se percutent
 	# souvent). En l'air : assiette automatique et lacet au stick.
 	if _grounded > 0:
 		if debug_anti_roll:
 			_apply_anti_roll(up, fwd)
-	elif debug_air_control:
-		_apply_air_control(up, steer_in)
+	else:
+		_update_landing_estimate()
+		if debug_air_control:
+			_apply_air_control(up, steer_in)
+		if debug_landing_cushion:
+			_apply_landing_cushion(t)
 
 	# remorque articulee : angle de la caisse, murs, adversaires balayes
 	if _trailer_shape != null and not _trailer_detached:
@@ -712,6 +747,61 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 	var desired_w := path_rate + t.drift_assist_gain * (target - slip)
 	var alpha := clampf((desired_w - w) * 8.0, -limit, limit) * gain
 	apply_torque(up * alpha * t.inertia_yaw_kgm2)
+
+
+## Elan en drift : en derapage, les pneus « raclent » la vitesse (leur force
+## laterale s'oppose en grande partie au mouvement des qu'ils glissent de
+## 40 deg). On restitue drift_speed_keep de cette perte, le long de la
+## trajectoire. Le camion glisse en gardant son elan : c'est l'usage des jeux
+## de course arcade. Avant le 2026-10-01, un drift de 4 s a 90 km/h perdait
+## 26 % de la vitesse.
+##
+## Engagement : le plus grand du frein a main et de la GLISSE elle-meme (de 0 a
+## 10 deg de derive a 1 a 25 deg). La glisse compte aussi parce que la sortie
+## du drift, frein a main relache, glisse encore a 50 deg : sans elle, le
+## camion y perdait 39 % de sa vitesse. Un virage normal (< 10 deg) n'est pas
+## concerne.
+func _apply_drift_momentum(t: VehicleTuning, up: Vector3, fwd: Vector3) -> void:
+	if _grounded < 2:
+		return
+	var flat := linear_velocity - up * linear_velocity.dot(up)
+	var speed := flat.length()
+	if speed < t.drift_min_speed_ms:
+		return
+	var slip := absf(atan2(flat.dot(fwd.cross(up)), flat.dot(fwd)))
+	var engage := maxf(_handbrake_blend, smoothstep(deg_to_rad(10.0), deg_to_rad(25.0), slip))
+	if engage <= 0.0:
+		return
+	var dir := flat / speed
+	var scrub := 0.0
+	for i in 4:
+		scrub += _tire_force[i].dot(dir)
+	if scrub < 0.0:
+		apply_central_force(-dir * scrub * t.drift_speed_keep * engage)
+
+
+## Courbe du drift (2026-10-01, « je me deporte contre la rambarde
+## exterieure ») : l'aide au drift pivote le nez, mais la TRAJECTOIRE ne
+## courbe que de la force laterale des pneus qui glissent, ~0,75 g. Rayon
+## r = v^2 / a : 237 m a 150 km/h, plus large que tous les virages du jeu.
+## On ajoute drift_carve_g au plein stick, perpendiculaire a la vitesse : la
+## vitesse n'en change pas, seule la courbe se resserre. Stick au neutre : rien.
+## Seulement vers le cote ou pointe le nez : la trajectoire rejoint le nez, la
+## derive se referme. Dans l'autre sens (contre-braquage en sortie), la force
+## ouvrirait la derive et retarderait le retour en ligne (mesure : 65 -> 72
+## ticks). Engagee par le frein a main, estompee sous drift_min_speed_ms.
+func _apply_drift_carve(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float) -> void:
+	if _grounded < 2 or _handbrake_blend <= 0.0 or steer_in == 0.0:
+		return
+	var flat := linear_velocity - up * linear_velocity.dot(up)
+	var speed := flat.length()
+	var fade := smoothstep(t.drift_min_speed_ms * 0.5, t.drift_min_speed_ms, speed)
+	if fade <= 0.0:
+		return
+	var right := (flat / speed).cross(up)
+	if steer_in * right.dot(fwd) <= 0.0:
+		return
+	apply_central_force(right * (steer_in * t.drift_carve_g * _gravity * _handbrake_blend * fade * mass))
 
 
 func _update_boost(t: VehicleTuning) -> void:
@@ -842,24 +932,118 @@ func _set_trailer_angle(angle: float) -> void:
 ## seuil, plus doux que l'anti-retournement), et lacet pilote au stick vers une
 ## vitesse de consigne, a acceleration bornee. Le camion retombe a plat, dans
 ## la direction choisie.
+## En l'air, deux phases (VehicleTuning, groupe « Aides arcade ») :
+##   1. en vol, le nez SUIT la trajectoire (ressort doux, sous-amorti) ;
+##   2. a l'approche du sol, alignement sur la normale du sol vise (ressort
+##      raide, amorti critiquement), en fondu selon le temps avant l'impact.
+## Avant le 2026-09-30, le camion etait ramene a plat pendant TOUT le vol par
+## un ressort amorti critiquement : tangage fige a 0 pendant que la trajectoire
+## plongeait, reception parfaitement a plat. D'ou « trop rigide en l'air ».
 func _apply_air_control(up: Vector3, steer_in: float) -> void:
 	var t := tuning
 	var alpha := Vector3.ZERO
 	var body_up := up.normalized()
-	var axis := body_up.cross(Vector3.UP)
-	var tilt := body_up.angle_to(Vector3.UP)
+
+	# phase 1 : assiette visee = pente de la trajectoire x air_follow_ratio,
+	# roulis nul. Un camion qui recule suit sa trajectoire a l'envers.
+	var target_up := Vector3.UP
+	var fwd_h := -global_basis.z
+	fwd_h.y = 0.0
+	if fwd_h.length_squared() > 1e-6:
+		fwd_h = fwd_h.normalized()
+		var v := linear_velocity
+		var v_h := Vector3(v.x, 0.0, v.z)
+		var h_speed := v_h.length()
+		var path := atan2(v.y, maxf(h_speed, 0.1))
+		if v_h.dot(fwd_h) < 0.0:
+			path = -path
+		# Sans vitesse horizontale, la « trajectoire » pointe droit vers le sol :
+		# la suivre ferait piquer le camion a la verticale (mesure : 37 deg au
+		# contact sur une chute droite). Le suivi s'efface donc entre 10 et
+		# 3 m/s horizontaux, et le tangage vise est plafonne.
+		var follow := smoothstep(3.0, 10.0, h_speed) * t.air_follow_ratio
+		var max_pitch := deg_to_rad(t.air_follow_max_deg)
+		var pitch := clampf(path * follow, -max_pitch, max_pitch)
+		var f_des := fwd_h * cos(pitch) + Vector3.UP * sin(pitch)
+		var right_h := f_des.cross(Vector3.UP).normalized()
+		target_up = right_h.cross(f_des).normalized()
+	var k := t.air_follow_strength
+	var zeta := t.air_follow_damping_ratio
+
+	# phase 2 : fondu vers la normale du sol vise, ressort plus raide et amorti
+	# critiquement, a mesure que l'impact approche.
+	var s := _landing_blend()
+	if s > 0.0:
+		var k_land := t.air_level_strength
+		if _jump_assist_ticks > 0:
+			k_land *= t.jump_air_level_factor
+		target_up = target_up.slerp(_ground_normal, s).normalized()
+		k = lerpf(k, k_land, s)
+		zeta = lerpf(zeta, 1.0, s)
+
+	var axis := body_up.cross(target_up)
 	if axis.length_squared() > 1e-8:
 		axis = axis.normalized()
-		var k := t.air_level_strength
-		if _jump_assist_ticks > 0:
-			k *= t.jump_air_level_factor
-		alpha += axis * (k * tilt - 2.0 * sqrt(k) * angular_velocity.dot(axis))
+		var err := body_up.angle_to(target_up)
+		alpha += axis * (k * err - 2.0 * zeta * sqrt(k) * angular_velocity.dot(axis))
 	# lacet : stick a droite = rotation horaire vue de dessus = -Y
 	var target_yaw := -steer_in * deg_to_rad(t.air_yaw_rate_deg_s)
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	alpha.y += clampf((target_yaw - angular_velocity.y) / dt, -t.air_control_accel, t.air_control_accel)
 	var inertia := get_inverse_inertia_tensor().inverse()
 	apply_torque(inertia * alpha)
+
+
+## En l'air : estime l'impact par un rayon vertical tire du centre de masse.
+## Renseigne _ground_d (hauteur des roues au-dessus du sol vise, en supposant
+## le camion a plat), _ground_normal et _ticks_to_impact (INF si le camion
+## monte ou si aucun sol n'est en vue). Aucune allocation.
+func _update_landing_estimate() -> void:
+	_ticks_to_impact = INF
+	_ground_d = INF
+	_ground_ray.target_position = _ground_ray.global_basis.inverse() * (Vector3.DOWN * GROUND_RAY_LENGTH)
+	_ground_ray.force_raycast_update()
+	if not _ground_ray.is_colliding():
+		return
+	var hit_y := _ground_ray.get_collision_point().y
+	_ground_d = maxf(_ground_ray.global_position.y - hit_y - TruckSpec.CENTER_OF_MASS.y, 0.0)
+	_ground_normal = _ground_ray.get_collision_normal()
+	# Temps de chute sous gravite, d = v t + g t^2 / 2 : valable aussi a vitesse
+	# verticale nulle ou en montee. Une estimation a vitesse constante (d / v)
+	# surestimait le temps restant : l'alignement sur le sol demarrait trop tard,
+	# et un camion secoue en vol touchait le sol a 26 deg, chassis compris.
+	var v_down := -linear_velocity.y
+	var g := _gravity
+	# racine positive de g t^2 / 2 + v_down t - d = 0
+	_ticks_to_impact = (-v_down + sqrt(v_down * v_down + 2.0 * g * _ground_d)) / g \
+		* Engine.physics_ticks_per_second
+
+
+## Poids de la phase « approche du sol » : 0 a air_landing_prep_ticks de
+## l'impact, 1 des 40 % de ce delai, et 1 jusqu'au contact. Les derniers ticks
+## servent donc entierement a se poser a plat. Un fondu lineaire jusqu'a
+## l'impact laissait le camion a moitie aligne au contact (28 deg apres un choc
+## en vol, chassis au sol).
+func _landing_blend() -> float:
+	if _ticks_to_impact == INF:
+		return 0.0
+	var prep := tuning.air_landing_prep_ticks
+	return smoothstep(prep, prep * 0.4, _ticks_to_impact)
+
+
+## Saut de plaque : a l'approche du sol, deceleration verticale CONSTANTE qui
+## amene la chute a jump_landing_max_down_ms exactement au contact
+## (a = (v^2 - v_max^2) / 2d), plafonnee a jump_landing_max_decel_ms2. La
+## suspension absorbe le reste. Remplace le plafonnement en un tick au contact.
+func _apply_landing_cushion(t: VehicleTuning) -> void:
+	if _jump_assist_ticks <= 0 or _ticks_to_impact > t.air_landing_prep_ticks:
+		return
+	var fall := -linear_velocity.y
+	var v_max := t.jump_landing_max_down_ms
+	if fall <= v_max or _ground_d < 0.05:
+		return
+	var a := minf((fall * fall - v_max * v_max) / (2.0 * _ground_d), t.jump_landing_max_decel_ms2)
+	apply_central_force(Vector3.UP * a * mass)
 
 
 ## Rayons de suspension (vert au sol, gris en l'air), contacts, charge de

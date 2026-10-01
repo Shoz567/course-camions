@@ -74,6 +74,43 @@ var _steers: Array[bool] = []
 ## rayon i).
 var _probe_of: PackedInt32Array = []
 
+@export_group("Penche visuel de la carrosserie")
+## La CARROSSERIE (noeud Body) penche selon l'acceleration du camion : roulis
+## vers l'exterieur en virage, plongee au freinage, cabrage a l'acceleration.
+## PUREMENT VISUEL : ni la physique, ni les roues, ni la remorque ne bougent.
+## Ajoute a la demande de l'utilisateur (2026-09-30 : camion « trop rigide »),
+## c'est l'astuce classique des jeux arcade pour donner de la vie a un vehicule
+## dont la physique reste stable.
+@export var lean_enabled: bool = true
+## Roulis par g d'acceleration laterale.
+@export_range(0.0, 20.0, 0.1, "suffix:°/g") var lean_roll_deg_per_g: float = 4.0
+## Tangage par g d'acceleration longitudinale (freinage : le nez plonge).
+@export_range(0.0, 20.0, 0.1, "suffix:°/g") var lean_pitch_deg_per_g: float = 2.5
+## Plafond, dans chaque axe : un choc violent ne couche pas la carrosserie.
+@export_range(0.0, 30.0, 0.1, "suffix:°") var lean_max_deg: float = 6.0
+## Ressort visuel qui suit la cible : frequence et amortissement. Sous 1, la
+## carrosserie se balance legerement avant de se poser : c'est voulu.
+@export_range(0.1, 5.0, 0.01, "suffix:Hz") var lean_frequency_hz: float = 1.3
+@export_range(0.0, 2.0, 0.01) var lean_damping_ratio: float = 0.45
+## Part du ROULIS reprise par la semi-remorque (autour de la sellette). C'est
+## elle qu'on voit depuis la camera de poursuite : sans elle, le penche serait
+## presque invisible avec le modele externe (constate sur capture). Pas de
+## tangage : l'arriere de la remorque se souleverait au freinage.
+@export_range(0.0, 1.5, 0.01) var lean_trailer_roll_ratio: float = 1.0
+
+var _body: Node3D
+var _body_rest: Transform3D
+## Penche courant (x = tangage, y = roulis, en degres) et sa vitesse.
+var _lean: Vector2 = Vector2.ZERO
+var _lean_rate: Vector2 = Vector2.ZERO
+var _prev_velocity: Vector3 = Vector3.ZERO
+var _lean_started: bool = false
+
+
+## Penche courant de la carrosserie (x = tangage, y = roulis, en degres).
+func get_lean_deg() -> Vector2:
+	return _lean
+
 
 func _ready() -> void:
 	_truck = get_parent() as Truck
@@ -93,15 +130,21 @@ func _ready() -> void:
 			_pivots.append(w)
 			_rest.append(w.transform if w != null else Transform3D.IDENTITY)
 		_steers.assign([true, true, false, false])
+	var body_path := NodePath("%s/Body" % MODEL_ROOT) if model_loaded else ^"Body"
+	_body = get_node_or_null(body_path) as Node3D
+	if _body != null:
+		_body_rest = _body.transform
 
 
 ## Apres le camion (enfant : meme tick, apres ses forces). Les transformations
 ## posees ici sont interpolees au rendu (physics interpolation).
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if _truck == null:
 		return
+	_update_lean(delta)
 	if _trailer_pivot != null:
-		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle())
+		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle()) \
+			* Basis(Vector3.BACK, deg_to_rad(_lean.y * lean_trailer_roll_ratio))
 		# remorque larguee : elle est sur la route, plus derriere le tracteur
 		_trailer_pivot.visible = not _truck.is_trailer_detached()
 	if _pivots.is_empty():
@@ -118,6 +161,40 @@ func _physics_process(_delta: float) -> void:
 		if _steers[i]:
 			xf.basis = steer * xf.basis
 		p.transform = xf
+
+
+## Penche de la carrosserie : cible deduite de l'acceleration du camion (au sol
+## seulement : en l'air, la cible revient a zero), suivie par un ressort visuel.
+## Rotation autour du centre de masse. Aucune allocation.
+func _update_lean(delta: float) -> void:
+	if _body == null or delta <= 0.0:
+		return
+	var v := _truck.linear_velocity
+	if not _lean_started:
+		_prev_velocity = v
+		_lean_started = true
+	var accel := (v - _prev_velocity) / delta
+	_prev_velocity = v
+
+	var target := Vector2.ZERO
+	if lean_enabled and _truck.wheels_on_ground() >= 2:
+		var b := _truck.global_basis
+		# virage a droite : acceleration centripete vers +X -> roulis > 0, la
+		# carrosserie penche a GAUCHE, vers l'exterieur
+		var a_lat := accel.dot(b.x) / 9.81
+		# freinage : acceleration vers l'arriere -> tangage < 0, le nez plonge
+		var a_long := accel.dot(-b.z) / 9.81
+		target.x = clampf(a_long * lean_pitch_deg_per_g, -lean_max_deg, lean_max_deg)
+		target.y = clampf(a_lat * lean_roll_deg_per_g, -lean_max_deg, lean_max_deg)
+
+	var w := TAU * lean_frequency_hz
+	var acc := (target - _lean) * (w * w) - _lean_rate * (2.0 * lean_damping_ratio * w)
+	_lean_rate += acc * delta
+	_lean += _lean_rate * delta
+
+	var lean_basis := Basis(Vector3.RIGHT, deg_to_rad(_lean.x)) * Basis(Vector3.BACK, deg_to_rad(_lean.y))
+	var pivot := TruckSpec.CENTER_OF_MASS
+	_body.transform = Transform3D(lean_basis, pivot - lean_basis * pivot) * _body_rest
 
 
 ## Copie de la remorque (modele ou boite), dans le repere de la sellette : le
