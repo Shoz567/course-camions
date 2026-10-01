@@ -55,6 +55,11 @@ signal slowed_down
 signal trailer_detached
 signal trailer_reattached
 
+## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
+## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
+const TRAILER_BLOCK_MASK := (1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)) \
+		| (1 << (5 - 1))
+
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
 const STOP_SPEED_MS := 0.5
@@ -147,6 +152,9 @@ var _heading_ready: bool = false
 var _shove_ticks: Dictionary = {}
 ## Remorque larguee (pouvoir cargo) : tracteur seul.
 var _trailer_detached: bool = false
+## Remorque raccrochee alors que sa place etait prise : caisse de collision
+## coupee (« fantome ») jusqu'a ce que la place se libere.
+var _trailer_ghost: bool = false
 ## Ralentissement impose par la piste : facteur immediat en attente, puis
 ## deceleration supplementaire pendant quelques ticks.
 var _slow_factor_pending: float = 1.0
@@ -321,18 +329,28 @@ func detach_trailer() -> Transform3D:
 
 
 ## Raccroche la remorque (dans l'axe). Refuse (faux) si sa caisse toucherait
-## un mur ou un camion : on reessaie au tick suivant.
+## un mur, un camion ou un obstacle (remorque larguee d'un adversaire) : on
+## reessaie au tick suivant. Force : raccrochee quand meme, mais sa caisse de
+## collision reste coupee tant que la place est prise (_trailer_ghost). Avant
+## le 2026-10-01, elle apparaissait dans l'obstacle et le solveur projetait
+## les deux corps (truck_reattach_test).
 func reattach_trailer(force: bool = false) -> bool:
 	if not _trailer_detached:
 		return true
-	if not force and _trailer_shape != null and _trailer_hits(0.0,
-			(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1))):
+	var blocked := _trailer_shape != null and _trailer_hits(0.0, TRAILER_BLOCK_MASK)
+	if blocked and not force:
 		return false
 	_trailer_detached = false
-	if _trailer_shape != null:
+	_trailer_ghost = blocked
+	if _trailer_shape != null and not blocked:
 		_trailer_shape.disabled = false
 	trailer_reattached.emit()
 	return true
+
+
+## Vrai si la remorque est raccrochee mais encore sans collision (place prise).
+func is_trailer_ghost() -> bool:
+	return _trailer_ghost
 
 
 func is_trailer_detached() -> bool:
@@ -652,6 +670,9 @@ func _physics_process(_delta: float) -> void:
 
 	# remorque articulee : angle de la caisse, murs, adversaires balayes
 	if _trailer_shape != null and not _trailer_detached:
+		if _trailer_ghost and not _trailer_hits(_trailer_angle, TRAILER_BLOCK_MASK):
+			_trailer_ghost = false
+			_trailer_shape.disabled = false
 		_update_trailer(up, com, v_fwd, xf.basis.x)
 
 	# 1.9 traces de debug
@@ -861,7 +882,7 @@ func _update_trailer(up: Vector3, com: Vector3, v_fwd: float, right: Vector3) ->
 		else:
 			angle = _trailer_angle
 		rel = 0.0
-	if absf(rel) > 0.3:
+	if absf(rel) > 0.3 and not _trailer_ghost:
 		rel = _shove(angle, rel, up, com)
 	_trailer_yaw_rate = w + rel
 	_trailer_rel_rate = rel
