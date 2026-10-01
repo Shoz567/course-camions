@@ -649,12 +649,12 @@ func _physics_process(_delta: float) -> void:
 	if debug_drag:
 		apply_central_force(-linear_velocity * linear_velocity.length() * t.aero_drag_per_m * mass)
 
-	# derapage maitrise : cible de derive au frein a main, jamais de tete-a-queue
+	# derapage maitrise : cible de derive au frein a main
 	if debug_handbrake:
 		_apply_drift_assist(t, up, fwd, steer_in, v_fwd)
 		_apply_drift_momentum(t, up, fwd)
 		if debug_drift_carve:
-			_apply_drift_carve(t, up, fwd, steer_in)
+			_apply_drift_carve(t, up, fwd)
 
 	# 1.6 au sol : anti-retournement (prioritaire : les camions se percutent
 	# souvent). En l'air : assiette automatique et lacet au stick.
@@ -727,14 +727,15 @@ func _apply_cargo_hit(t: VehicleTuning, up: Vector3) -> void:
 	cargo_hit_taken.emit()
 
 
-## Derapage maitrise (demande du playtest : plus de tetes-a-queue). La derive
-## (angle entre le cap et la vitesse, > 0 : vitesse a droite du cap) varie
-## comme lacet - rotation de la trajectoire ; on pilote donc le lacet :
-##   - au frein a main, vers une derive cible proportionnelle au braquage
-##     (drift_target_slip_deg au plein stick) : le drift tient, previsible ;
-##   - a tout moment, jamais au-dela de drift_max_slip_deg : retour vers la
-##     limite, meme sans frein a main (apres un choc, par exemple).
-## Acceleration angulaire bornee (drift_assist_accel) : une aide, pas un rail.
+## Lancement du drift. La derive (angle entre le cap et la vitesse, > 0 :
+## vitesse a droite du cap) varie comme lacet - rotation de la trajectoire ; au
+## frein a main, on pousse donc le lacet vers une derive cible proportionnelle
+## au braquage (drift_target_slip_deg au plein stick) : le nez pivote tout de
+## suite. Acceleration angulaire bornee (drift_assist_accel).
+## L'aide ne BLOQUE jamais l'angle (2026-10-01, demande de l'utilisateur :
+## plus d'anti tete-a-queue, « ne la bloque pas du tout ») : elle ne freine
+## jamais la rotation et se coupe au-dela de la cible. Le joueur tient
+## l'angle au stick et au contre-braquage ; il peut partir en tete-a-queue.
 func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float, v_fwd: float) -> void:
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	var flat := linear_velocity - up * linear_velocity.dot(up)
@@ -748,25 +749,18 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 	if _grounded < 2 or speed < t.drift_min_speed_ms or v_fwd <= 0.0:
 		return
 	var slip := atan2(flat.dot(fwd.cross(up)), flat.dot(fwd))
-	var max_slip := deg_to_rad(t.drift_max_slip_deg)
+	if _handbrake_blend <= 0.2:
+		return
 	var w := angular_velocity.dot(up)
-	var target := 0.0
-	var gain := 0.0
-	var limit := t.drift_assist_accel
-	if _handbrake_blend > 0.2:
-		target = clampf(-steer_in * deg_to_rad(t.drift_target_slip_deg), -max_slip, max_slip)
-		gain = _handbrake_blend
-	# garde anti tete-a-queue : derive PREVUE a 0,3 s (un choc lance la rotation
-	# trop vite pour attendre la limite), autorite plus forte
-	var predicted := slip + (w - path_rate) * 0.3
-	if absf(predicted) > max_slip:
-		target = signf(predicted) * max_slip
-		gain = 1.0
-		limit = t.spin_guard_accel
-	if gain <= 0.0:
+	var target := -steer_in * deg_to_rad(t.drift_target_slip_deg)
+	# deja au-dela de la cible, du meme cote (ou stick au neutre) : angle libre
+	if slip * target >= 0.0 and absf(slip) >= absf(target):
 		return
 	var desired_w := path_rate + t.drift_assist_gain * (target - slip)
-	var alpha := clampf((desired_w - w) * 8.0, -limit, limit) * gain
+	var alpha := clampf((desired_w - w) * 8.0, -t.drift_assist_accel, t.drift_assist_accel) * _handbrake_blend
+	# la derive suit lacet - trajectoire : pousser vers la cible, jamais freiner
+	if alpha * (target - slip) <= 0.0:
+		return
 	apply_torque(up * alpha * t.inertia_yaw_kgm2)
 
 
@@ -802,17 +796,17 @@ func _apply_drift_momentum(t: VehicleTuning, up: Vector3, fwd: Vector3) -> void:
 
 
 ## Courbe du drift (2026-10-01, « je me deporte contre la rambarde
-## exterieure ») : l'aide au drift pivote le nez, mais la TRAJECTOIRE ne
-## courbe que de la force laterale des pneus qui glissent, ~0,75 g. Rayon
-## r = v^2 / a : 237 m a 150 km/h, plus large que tous les virages du jeu.
-## On ajoute drift_carve_g au plein stick, perpendiculaire a la vitesse : la
-## vitesse n'en change pas, seule la courbe se resserre. Stick au neutre : rien.
-## Seulement vers le cote ou pointe le nez : la trajectoire rejoint le nez, la
-## derive se referme. Dans l'autre sens (contre-braquage en sortie), la force
-## ouvrirait la derive et retarderait le retour en ligne (mesure : 65 -> 72
-## ticks). Engagee par le frein a main, estompee sous drift_min_speed_ms.
-func _apply_drift_carve(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float) -> void:
-	if _grounded < 2 or _handbrake_blend <= 0.0 or steer_in == 0.0:
+## exterieure ») : la TRAJECTOIRE d'un drift ne courbe que de la force laterale
+## des pneus qui glissent, ~0,75 g. Rayon r = v^2 / a : 237 m a 150 km/h, plus
+## large que tous les virages du jeu. On ajoute jusqu'a drift_carve_g,
+## perpendiculaire a la vitesse, vers le cote ou pointe le nez : la vitesse
+## n'en change pas, seule la courbe se resserre.
+## Dosee par l'ANGLE de glisse (pleine des drift_target_slip_deg), pas par le
+## stick : depuis que l'angle est libre (2026-10-01), le joueur tient le drift
+## en contre-braquant, et une force pilotee au stick se coupait justement la.
+## Engagee par le frein a main, estompee sous drift_min_speed_ms.
+func _apply_drift_carve(t: VehicleTuning, up: Vector3, fwd: Vector3) -> void:
+	if _grounded < 2 or _handbrake_blend <= 0.0:
 		return
 	var flat := linear_velocity - up * linear_velocity.dot(up)
 	var speed := flat.length()
@@ -820,9 +814,9 @@ func _apply_drift_carve(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: f
 	if fade <= 0.0:
 		return
 	var right := (flat / speed).cross(up)
-	if steer_in * right.dot(fwd) <= 0.0:
-		return
-	apply_central_force(right * (steer_in * t.drift_carve_g * _gravity * _handbrake_blend * fade * mass))
+	var nose := right.dot(fwd)   # sin(derive), du cote ou pointe le nez
+	var amount := minf(absf(nose) / sin(deg_to_rad(t.drift_target_slip_deg)), 1.0)
+	apply_central_force(right * (signf(nose) * amount * t.drift_carve_g * _gravity * _handbrake_blend * fade * mass))
 
 
 func _update_boost(t: VehicleTuning) -> void:

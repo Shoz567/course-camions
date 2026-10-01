@@ -4,13 +4,20 @@ extends PhysicsTest
 ## sellette, avec sa propre inertie de lacet. Cinq scenes sur des voies
 ## espacees de 100 m, vitesses initiales posees au tick 0 (CLAUDE.md §10 b) :
 ##   A. ligne droite : la remorque reste dans l'axe (< 0,5 deg) ;
-##   B. derapage a gauche (plein braquage + frein a main) : elle chasse vers
+##   B. derapage a gauche (frein a main, pilote de drift de TruckTestUtil qui
+##      tient PILOT_DEG : l'angle est libre depuis le 2026-10-01) : elle chasse vers
 ##      l'EXTERIEUR (a droite, angle > 0) de plus de 15 deg, jamais au-dela de
 ##      la butee de 35 deg ; la boite de collision et le pivot visuel suivent
 ##      le meme angle ; relachee, elle se realigne (< 2 deg) ;
 ##   C. coup de volant sec a droite : elle chasse vers la gauche (exterieur) ;
 ##   D. mur de 0,3 m a droite pendant un derapage a gauche : la remorque
-##      s'arrete contre le mur, ses coins n'y entrent jamais (< 35 cm), le
+##      s'arrete contre le mur des le tick du contact : ses coins n'y entrent
+##      pas plus loin que ce qu'ils balaient en un tick, + 5 cm de contact. Le
+##      seuil fixe de 35 cm d'avant le 2026-10-01 etait de l'ordre de ce balayage
+##      (arriere de remorque a 16 m du centre, ~1,3 rad/s a l'entree du drift :
+##      ~34 cm par tick) : la mesure passait de 6 a 35 cm selon la phase du
+##      contact dans le tick. Pas de CCD en rotation (Jolt ne balaie que la
+##      translation) : un mur plus fin que ce balayage peut etre traverse. Le
 ##      camion n'est ni envole ni couche ;
 ##   E. balayage : en derapage, la remorque percute un camion qui roule a sa
 ##      droite. Il est pousse vers la droite (> 2 m/s), personne ne se couche.
@@ -18,6 +25,7 @@ extends PhysicsTest
 ## (handling_test) sont inchangees.
 
 const V0 := 22.0      # m/s, ~80 km/h
+const PILOT_DEG := 45.0
 const DRIFT_FROM := 20
 const DRIFT_TO := 110
 const WALL_X := 103.2
@@ -37,6 +45,9 @@ var _c_min: float = 0.0
 var _c_max: float = 0.0
 var _d_max: float = 0.0
 var _d_pen: float = -INF
+## Plus grand deplacement d'un coin vers le mur en un tick (m), avant contact.
+var _d_sweep: float = 0.0
+var _d_corner_prev := PackedFloat32Array([NAN, NAN, NAN])
 var _max_tilt: float = 0.0
 var _max_y: float = 0.0
 var _shape_ok: bool = true
@@ -93,9 +104,9 @@ func _drive(t: Truck, tick: int, steer: float, handbrake: bool) -> void:
 func _test_tick(t: int) -> void:
 	var drifting := t >= DRIFT_FROM and t < DRIFT_TO
 	_drive(_a, t, 0.0, false)
-	_drive(_b, t, -1.0 if drifting else 0.0, drifting)
+	_drive(_b, t, TruckTestUtil.drift_pilot_steer(_b, PILOT_DEG, -1.0) if drifting else 0.0, drifting)
 	_drive(_c, t, 1.0 if (t >= DRIFT_FROM and t < DRIFT_FROM + 15) else 0.0, false)
-	_drive(_d, t, -1.0 if drifting else 0.0, drifting)
+	_drive(_d, t, TruckTestUtil.drift_pilot_steer(_d, PILOT_DEG, -1.0) if drifting else 0.0, drifting)
 	_drive(_e, t, -1.0 if drifting else 0.0, drifting)
 	_drive(_e_victim, t, 0.0, false)
 	if t == DRIFT_FROM:
@@ -115,8 +126,13 @@ func _test_tick(t: int) -> void:
 	# D. coins de la caisse de remorque contre la face interieure du mur
 	var txf := _d.global_transform * Truck.trailer_local_transform(_d.get_trailer_angle())
 	var h := TruckSpec.TRAILER_SIZE / 2.0
-	for corner: Vector3 in [Vector3(h.x, -h.y, h.z), Vector3(h.x, -h.y, -h.z), Vector3(h.x, h.y, h.z)]:
-		_d_pen = maxf(_d_pen, (txf * corner).x - (WALL_X - 0.15))
+	var corners: Array[Vector3] = [Vector3(h.x, -h.y, h.z), Vector3(h.x, -h.y, -h.z), Vector3(h.x, h.y, h.z)]
+	for k in corners.size():
+		var x := (txf * corners[k]).x
+		if not is_nan(_d_corner_prev[k]):
+			_d_sweep = maxf(_d_sweep, x - _d_corner_prev[k])
+		_d_corner_prev[k] = x
+		_d_pen = maxf(_d_pen, x - (WALL_X - 0.15))
 	if t == duration_ticks:
 		_b_end = absf(_b.get_trailer_angle_deg())
 	_victim_push = maxf(_victim_push, _e_victim.linear_velocity.x - _victim_v0)
@@ -146,7 +162,8 @@ func _test_finish() -> void:
 	check_below("B relachee : realignee (deg)", _b_end, 2.0)
 	check_below("C coup de volant a droite : chasse a gauche, amortie (deg)", _c_min, -2.0)
 	check_below("D mur : la remorque s'arrete contre le mur (deg, B = reference)", _d_max, _b_max)
-	check_below("D mur : les coins de la remorque n'y entrent pas (m, tolerance de contact)", _d_pen, 0.35)
+	print("  INFO   D mur : enfoncement max %.3f m, balayage max d'un coin %.3f m par tick" % [_d_pen, _d_sweep])
+	check_below("D mur : arretee des le tick du contact (m, balayage d'un tick + 5 cm)", _d_pen, _d_sweep + 0.05)
 	check("E balayage : au moins un choc de remorque", _shoves >= 1, "%d" % _shoves)
 	check_above("E balayage : victime poussee vers la droite (m/s)", _victim_push, 2.0)
 	check_below("personne ne se couche (deg)", _max_tilt, 45.0)
