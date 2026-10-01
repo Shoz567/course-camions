@@ -29,6 +29,15 @@ extends SceneTree
 ##         Egalement FAIL : toute sortie contenant "SCRIPT ERROR", meme si la
 ##         scene a conclu PASS avec les verifications posees avant l'erreur.
 ##
+## Vitesse : chaque scene tourne avec `--fixed-fps 60`, donc sans attendre le
+## temps reel (en headless, Godot regulerait sinon a 16,67 ms par tick : 600
+## ticks = 10 s). Le pas physique reste 1/60 s : la simulation est la meme.
+## Sans exception, y compris les scenes `perf_*` : sous --fixed-fps, les
+## iterations s'enchainent sans attente, donc le temps mural divise par le
+## nombre de ticks EST le cout d'un tick. C'est la seule mesure fiable :
+## Performance.TIME_PHYSICS_PROCESS n'est rafraichi qu'environ une fois par
+## seconde reelle (docs/SPIKE.md, acquis A2).
+##
 ## Code de sortie : 0 si aucun FAIL, 1 sinon.
 
 const DEFAULT_DIR := "res://tests/scenes"
@@ -115,8 +124,9 @@ func _run_scene(scene_path: String) -> void:
 			"--headless",
 			"--path", project_dir,
 			"--quit-after", str(_max_iterations),
-			scene_path,
 		]
+		args.append_array(["--fixed-fps", "60"])
+		args.append(scene_path)
 		var output: Array = []
 		var started_ms := Time.get_ticks_msec()
 		var code := OS.execute(exe, args, output, true)

@@ -1,0 +1,82 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://dev/drive_sandbox.gd" id="1"]
+[ext_resource type="PackedScene" path="res://vehicles/truck.tscn" id="2"]
+[ext_resource type="Script" path="res://gameplay/input/local_input_source.gd" id="3"]
+[ext_resource type="Script" path="res://gameplay/chase_camera.gd" id="4"]
+
+[sub_resource type="BoxShape3D" id="shape_floor"]
+size = Vector3(400, 1, 400)
+
+[sub_resource type="Shader" id="shader_checker"]
+code = "shader_type spatial;
+
+// Damier de 4 m en coordonnees monde : donne la sensation de vitesse.
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	float c = mod(floor(world_pos.x / 4.0) + floor(world_pos.z / 4.0), 2.0);
+	ALBEDO = mix(vec3(0.28, 0.31, 0.28), vec3(0.36, 0.40, 0.35), c);
+	ROUGHNESS = 0.9;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="mat_floor"]
+shader = SubResource("shader_checker")
+
+[sub_resource type="PlaneMesh" id="mesh_floor"]
+material = SubResource("mat_floor")
+size = Vector2(400, 400)
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+
+[node name="DriveSandbox" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 20, 0)
+shadow_enabled = true
+
+[node name="Floor" type="StaticBody3D" parent="."]
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+shape = SubResource("shape_floor")
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("mesh_floor")
+
+[node name="Truck" parent="." instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 40)
+
+[node name="LocalInput" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="ChaseCamera" type="Node3D" parent="." node_paths=PackedStringArray("target")]
+script = ExtResource("4")
+target = NodePath("../Truck")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="Hud"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 900.0
+offset_bottom = 240.0
+theme_override_font_sizes/font_size = 18

@@ -1,0 +1,25 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[sub_resource type="Shader" id="shader"]
+code = "shader_type spatial;
+render_mode cull_disabled;
+
+// Rampe (dos et flancs) : bandes de danger jaunes et noires, a peine
+// lumineuses, visibles de nuit. La face de roulement a ses chevrons cyan.
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	float c = step(0.5, fract((world_pos.x + world_pos.z + world_pos.y) / 1.5));
+	vec3 yellow = vec3(1.0, 0.78, 0.05);
+	ALBEDO = mix(vec3(0.03), yellow, c);
+	EMISSION = yellow * c * 0.6;
+	ROUGHNESS = 0.6;
+}
+"
+
+[resource]
+shader = SubResource("shader")

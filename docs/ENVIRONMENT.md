@@ -184,6 +184,7 @@ cible se comporte bizarrement et qu'on veut isoler la commande sous-jacente :
 | `make import` | `godot --headless --path game --import` |
 | `make test` | `godot --headless --path game -s res://tests/cli_runner.gd` |
 | `make test-full` | `godot --headless --path game -s res://tests/cli_runner.gd -- --runs=5` |
+| `make baseline` | `godot --headless --fixed-fps 60 --path game res://tests/scenes/handling_test.tscn -- --write-baseline` |
 | `make run` | `godot --path game` |
 
 Note pour les chemins Windows : les scripts Blender doivent utiliser `pathlib`

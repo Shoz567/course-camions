@@ -80,12 +80,12 @@ appliquées de l'extérieur, sauf pour tester une réaction à un choc.
 
 | Phase | Test | Critère |
 |---|---|---|
-| 0.5 | spikes V2, V3 | épaisseur de mur minimale, budget de rendu à 4 vues |
+| 0.5 | spikes V2 ✅, V3 | épaisseur de mur (aucun minimum physique, cf. `SPIKE.md`), budget de rendu à 4 vues |
 | 1 | stabilité à l'arrêt | 600 ticks : roulis et tangage < 1°, dérive < 5 cm |
 | 1 | hauteur de caisse | conforme à `VEHICLE_SPEC.md` ± 3 cm |
-| 1 | **handling_test** | mesure et écrit les métriques de `docs/METRICS.md` ; vitesse max et 0-100 à ± 5 % de la cible |
+| 1 | **handling_test** | mesure les métriques de `docs/METRICS.md` (écrites par `make baseline`, verrouillées à ± 10 % par `make test`) ; vitesse max et 0-100 à ± 5 % de la cible |
 | 1 | virage | plein braquage à 80 km/h, 300 ticks : jamais retourné |
-| 1 | saut | chute de 2 m : roues au sol en < 30 ticks, aucun NaN |
+| 1 | saut | chute de 2 m : 4 roues au sol < 30 ticks après le 1er contact, stabilisé < 60 ticks après, châssis jamais au sol, aucun NaN |
 | 1 | haute vitesse | mur à vitesse max : jamais traversé |
 | 1 | perf physique | < 4 ms/tick à 4 camions |
 | 2 | tours | tour compté seulement si les checkpoints sont passés dans l'ordre |
@@ -100,22 +100,28 @@ appliquées de l'extérieur, sauf pour tester une réaction à un choc.
 
 ## `handling_test` : ton livrable le plus structurant
 
-Ce n'est pas un test de non-régression, c'est une **source de vérité** : il
-mesure vitesse max, 0-100, freinage, rayon de braquage et adhérence latérale,
-et les écrit dans `baseline.json`. Le `track-designer` dessine ses pistes
+C'est une **source de vérité** autant qu'un test de non-régression : il
+mesure vitesse max, 0-100, freinage, rayon de braquage et adhérence latérale.
+`make baseline` les écrit dans `baseline.json` (seul moyen de changer la
+référence) ; `make test` les verrouille ensuite à ± 10 %. Le `track-designer` dessine ses pistes
 dessus. Protocoles de mesure : `docs/METRICS.md` (vitesse le long de l'axe
 avant, rayon de braquage en régime établi).
 
 ## Pièges mesurés (`docs/SPIKE.md`, partie 1)
 
-- **Perf** : le temps mural en headless vaut 16,67 ms quelle que soit la
-  charge. Mesure avec `Performance.TIME_PHYSICS_PROCESS`.
+- **Perf** : mesure le **temps mural entre deux ticks sous `--fixed-fps 60`**
+  (le runner lance tous les tests ainsi) : les ticks s'enchaînent sans attente,
+  c'est donc le coût réel d'un tick. **N'utilise jamais
+  `Performance.TIME_PHYSICS_PROCESS`** : il n'est rafraîchi qu'environ une fois
+  par seconde réelle (acquis A15) ; il annonçait 8,2 ms à 4 camions pour
+  0,66 ms réels.
 - **Rendu** : le headless ne rend rien. La perf de l'écran partagé se mesure
   avec un vrai rendu, fenêtre ouverte, sur la machine de référence.
 - **Démarrage** : Godot enchaîne plusieurs ticks sans rendu au lancement ; un
   test qui observe le rendu n'agit pas avant ~30 ticks.
-- **`--quit-after`** compte des itérations (~2,4 par tick), pas des ticks : un
-  test long relève `--max-iterations`.
+- **`--quit-after`** compte des itérations, pas des ticks : 1 par tick sous
+  `--fixed-fps`, ~2,4 par tick pour les scènes `perf_*`. Un test long relève
+  `--max-iterations`.
 - **Jolt** enfonce un corps au repos de 0,02 m (`penetration_slop`).
 - Sur une même machine, une simulation se rejoue à l'identique : un écart entre
   runs signale un changement d'ordre ou d'état, pas du hasard.

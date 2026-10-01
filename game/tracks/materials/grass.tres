@@ -1,0 +1,26 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[sub_resource type="Shader" id="shader"]
+code = "shader_type spatial;
+
+// Sol de la ville, hors piste : dalle sombre quadrillee de fines lignes cyan
+// tous les 20 m (lecture de la vitesse), en coordonnees monde.
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	vec2 g = world_pos.xz / 20.0;
+	vec2 d = abs(fract(g - 0.5) - 0.5) / max(fwidth(g), vec2(1e-4));
+	float line = 1.0 - min(min(d.x, d.y), 1.0);
+	float tile = mod(floor(g.x) + floor(g.y), 2.0);
+	ALBEDO = vec3(0.02, 0.022, 0.034) + vec3(0.006) * tile + vec3(0.0, 0.04, 0.06) * line;
+	EMISSION = vec3(0.0, 0.3, 0.5) * line * 0.5;
+	ROUGHNESS = 0.75;
+}
+"
+
+[resource]
+shader = SubResource("shader")

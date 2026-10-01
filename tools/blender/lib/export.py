@@ -28,13 +28,18 @@ GLTF_SETTINGS = {
 
 
 def apply_transforms(objects):
-    """Applique location/rotation/scale. A faire TOUJOURS avant l'export."""
+    """Applique rotation et echelle. A faire TOUJOURS avant l'export.
+
+    La location n'est PAS appliquee : c'est elle qui porte le pivot. L'appliquer
+    ramene l'origine de chaque objet au centre du monde ; mesure au spike V4, le
+    pivot des roues arrivait a 2,24 m du moyeu dans Godot (0,0000 m sans).
+    """
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
     if objects:
         bpy.context.view_layer.objects.active = objects[0]
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 
 
 def to_glb(out_path, objects):

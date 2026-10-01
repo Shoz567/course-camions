@@ -8,10 +8,12 @@ Le code de conduite ne lit **jamais** `Input.*`. Il consomme une `InputFrame`
 fournie par une `InputSource`.
 
 ```
-LocalKeyboardSource ─┐
-DeviceInputSource ───┼──► InputFrame ──► TruckController ──► Truck (RigidBody3D)
+KeyboardInputSource ─┐
+DeviceInputSource ───┼──► InputFrame ──► Truck.set_input() ──► Truck (RigidBody3D)
 RemoteInputSource ───┤
 ScriptedInputSource ─┘
+
+LocalInputSource = première manette + clavier fusionnés (joueur solo, dev)
 ```
 
 C'est ce qui permet, sans toucher au camion :
@@ -32,8 +34,10 @@ var steer: float = 0.0        # -1 (gauche) .. +1 (droite), zone morte appliqué
 var throttle: float = 0.0     # 0 .. 1
 var brake: float = 0.0        # 0 .. 1 ; à l'arrêt, freiner = marche arrière
 var handbrake: bool = false   # état maintenu : dérapage
-var boost: bool = false       # état maintenu (si le design retient le boost)
+var boost: bool = false       # état maintenu
 var reset: bool = false       # front montant : vrai un seul tick
+var honk: bool = false        # front montant : coup de klaxon
+var cargo: bool = false       # front montant : largage de cargo
 
 func to_bytes() -> PackedByteArray
 static func from_bytes(b: PackedByteArray) -> InputFrame
@@ -50,7 +54,7 @@ elle ne modifie pas la simulation, elle reste locale au joueur.
 | `steer` | `int8` (−127..127) | 1 |
 | `throttle` | `uint8` (0..255) | 1 |
 | `brake` | `uint8` (0..255) | 1 |
-| `handbrake`, `boost`, `reset`, réserve | bitfield | 1 |
+| `handbrake`, `boost`, `reset`, `honk` (klaxon), `cargo`, réserve | bitfield | 1 |
 | **Total** | | **6** |
 
 À 60 Hz : 360 octets/s de charge utile par joueur. Négligeable.
@@ -69,15 +73,45 @@ frames. À prévoir dès la phase 1 dans `to_bytes()`, à implémenter en phase 
 
 ## 3. Mapping
 
-| Action | Manette (XInput / DualShock) | Clavier (joueur 1, dev) |
-|---|---|---|
-| `steer` | stick gauche, axe X | Q / D (ou ← / →) |
-| `throttle` | RT (gâchette droite) | Z (ou ↑) |
-| `brake` | LT (gâchette gauche) | S (ou ↓) |
-| `handbrake` | A / Croix | Espace |
-| `boost` | X / Carré | Maj |
-| `reset` | Y / Triangle | R |
-| pause | Start | Échap |
+Profil **Forza Horizon, manette PlayStation 5 DualSense** (décidé le
+2026-09-30 après le playtest ; avant : Mario Kart 8 sur Switch). Godot (SDL)
+nomme les boutons **par position** : `JOY_BUTTON_A` = bas (Croix),
+`JOY_BUTTON_B` = droite (Rond), `JOY_BUTTON_X` = gauche (Carré),
+`JOY_BUTTON_Y` = haut (Triangle), `JOY_BUTTON_BACK` = Create,
+`JOY_BUTTON_START` = Options. Une manette Xbox ou Switch fonctionne à la même
+position. Chaque action est une **liste** de boutons exportée par
+`DeviceInputSource` : réaffectable sans code.
+
+| Action | Manette (DualSense) | Clavier J1 (flèches) | Clavier J2 / solo (ZQSD) |
+|---|---|---|---|
+| `steer` | stick gauche, axe X | ← / → | Q / D |
+| `throttle` | **R2**, analogique | ↑ | Z |
+| `brake` (puis recul à l'arrêt) | **L2**, analogique | ↓ | S |
+| `handbrake` (frein à main, drift) | **Croix** ou **R1** | Ctrl droit | Espace |
+| `boost` (nitro) | **Carré** (1,5 s, recharge 6 s) | Maj droite | Maj gauche |
+| `cargo` (largage de la remorque, recharge 30 s) | **Triangle** | deux touches à gauche de Maj droite (;) | E |
+| `honk` (klaxon) | **L1** | touche à gauche de Maj droite (!) | H |
+| caméra 1re / 3e personne | **R3**, ou un coup franc du stick droit (local, hors `InputFrame`) | touche suivante (:) | C |
+| `reset` | **Options**, **Create** ou **pavé tactile** | Retour arrière | R |
+| rejouer après l'arrivée | Options | Entrée | Entrée |
+| revenir au menu après l'arrivée | Create | Échap | Échap |
+
+Rond n'a pas d'effet en course. Le schéma de la manette (DualSense dessinée,
+légendes reliées à chaque commande) est affiché dans l'écran des paramètres du
+menu (`ControllerDiagram`).
+
+En solo, le clavier accepte ZQSD **et** les flèches. En écran partagé, chaque
+joueur a sa manette (joueur N = device N − 1, de 0 à 3) ; J1 et J2 ont en plus
+leur jeu de touches (flèches, ZQSD) : deux joueurs peuvent partager un clavier.
+J3 et J4 n'ont que leur manette (`KeyboardInputSource.Layout.NONE`).
+
+**Menu principal** (`ui/main_menu.tscn`) : navigation par les actions `ui_*` de
+Godot (croix directionnelle, stick, flèches, souris). Godot 4.7 ne met aucun
+bouton de manette dans `ui_accept` ni `ui_cancel` : le menu y ajoute Croix
+(valider) et Rond (revenir) au démarrage. L1 / R1 changent le nombre de joueurs,
+Options commence, Rond ou Create ferment les paramètres. En course : Échap
+revient au menu à tout moment ; après l'arrivée, Options / Entrée rejoue et
+Create revient au menu.
 
 - **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
   utile), puis courbe de réponse légèrement exponentielle pour la précision en
@@ -116,7 +150,7 @@ Le clavier a `device == -1` par convention (les manettes commencent à 0).
 2. Première pression d'un device inconnu → création d'un slot joueur lié à ce
    `device_id`, attribution d'une couleur de camion.
 3. B pour quitter son slot. Start (joueur 1) pour lancer.
-4. Entre 1 et 4 joueurs.
+4. Entre 1 et 6 joueurs (décision du 2026-09-30 ; J5 et J6 : manettes 4 et 5, pas de clavier).
 
 Le mapping `device_id → player_slot` est détenu par `GameState` et **persiste
 pendant toute la course**.

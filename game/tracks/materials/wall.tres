@@ -1,0 +1,22 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[sub_resource type="Shader" id="shader"]
+code = "shader_type spatial;
+render_mode cull_disabled;
+
+// Glissiere futuriste : panneaux de metal sombre de 6 m (joints marques) ; le
+// neon court le long de son bord haut (maillage a part). UV.y en m.
+void fragment() {
+	float seam = smoothstep(0.93, 0.97, fract(UV.y / 6.0));
+	float face = fract(UV.x);
+	vec3 metal = vec3(0.055, 0.06, 0.08) * (1.0 - 0.45 * seam);
+	// liseres horizontaux discrets sur la face
+	metal += vec3(0.02, 0.025, 0.04) * step(0.46, face) * step(face, 0.5);
+	ALBEDO = metal;
+	METALLIC = 0.65;
+	ROUGHNESS = 0.38;
+}
+"
+
+[resource]
+shader = SubResource("shader")

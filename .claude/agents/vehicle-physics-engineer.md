@@ -24,10 +24,9 @@ besoin d'un changement tu le **demandes** avec ta justification chiffrée
 `docs/SPIKE.md` pose la question qui décide de toute ton architecture :
 **`VehicleBody3D` ou `RigidBody3D` + suspension par rayons écrite à la main ?**
 
-La spec est écrite pour la seconde, l'approche habituelle en arcade : chaque
-force est explicite, donc réglable, désactivable et testable une à une. Mais
-c'est une hypothèse. **Tant que V1 n'a pas répondu, tu n'écris pas de physique
-de production.**
+**✅ Tranché le 2026-09-26 : `RigidBody3D` + rayons.** Chiffres dans
+`docs/SPIKE.md`. `VehicleBody3D` est écarté : raideur hors unités physiques
+(~2/3 de `s·M`), avant en +Z, `suspension_max_force` par défaut trop basse.
 
 ## Architecture visée
 
@@ -58,8 +57,10 @@ par un test avant de passer à la suivante.
    du projet :
    `k = m_roue · ω²`, `c = 2ζ · m_roue · ω`, avec `m_roue` = masse / 4.
    La longueur libre du ressort se **déduit** de la hauteur de repos imposée
-   par la spec et de l'affaissement statique (`m_roue · g / k`) : changer la
-   raideur ne doit jamais changer la hauteur de caisse.
+   par la spec et de l'affaissement statique **de chaque essieu**
+   (`charge de la roue / k`, charge par essieu dans `VEHICLE_SPEC.md` §4 : 57,9 %
+   à l'avant). Avec `m_roue · g / k` partout, le camion pique du nez de ~0,46°.
+   Changer la raideur ne doit jamais changer la hauteur de caisse.
 2. **Traction et freinage** : force longitudinale au contact, le long de l'axe
    avant de la roue, proportionnelle à la masse (une accélération en m/s²).
    À l'arrêt, freiner enclenche la marche arrière.
@@ -68,14 +69,25 @@ par un test avant de passer à la suivante.
    multiplicateur de surface (`VEHICLE_SPEC.md` §8). Sans pondération par la
    charge, le camion adhère en l'air.
 4. **Direction** : l'angle de braquage **diminue avec la vitesse**, sinon le
-   camion devient ingérable à 150 km/h.
+   camion devient ingérable à 150 km/h. Il est borné par l'angle qui fait
+   tourner à la limite d'adhérence (`atan(empattement · μg / v²)`, facteur
+   `steer_grip_ratio`) : ainsi tout le stick reste utile à toutes les vitesses.
+   Une simple interpolation « 32° à l'arrêt → 8° à 150 km/h » laissait 19° à
+   80 km/h quand 4° suffisent : au-delà de 20 % de stick, plus rien ne changeait.
 5. **Dérapage** : le frein à main réduit l'adhérence latérale du train arrière.
    Un dérapage doit se **rattraper** en contre-braquant — c'est le cœur du plaisir.
+   Réalisé : adhérence arrière en rampe (engagement rapide, relâcher plus lent),
+   limite de braquage élargie de l'angle de dérive du côté du contre-braquage,
+   et **contre-braquage automatique** stick au neutre (les roues suivent une
+   fraction de la dérive). Mesuré : relance stick relâché en 79 ticks au lieu
+   de 131, vitesse conservée, dépassement de 3°.
 6. **Aides arcade** : anti-retournement (couple de redressement proportionnel au
    roulis, seulement au-delà d'un seuil), contrôle en l'air (léger couple pour
    orienter le camion avant de retomber), stabilisation en ligne droite.
 7. **Reset** : `state.transform` dans `_integrate_forces()`, vitesses à zéro dans
    le même tick. Jamais `global_position` sur un corps en mouvement.
+8. **Traînée** : explicite, dans `VehicleTuning`. Le corps a `linear_damp = 0`
+   (mode REPLACE) : le défaut du projet est une traînée cachée (SPIKE A10).
 
 ## Réglages : `VehicleTuning`
 
@@ -121,6 +133,9 @@ et vérifie aussi qu'il **attrape** les erreurs.
 | Sa hauteur change quand on règle la raideur | longueur libre du ressort codée en dur au lieu d'être déduite |
 | Il traverse les murs à pleine vitesse | détection continue désactivée ou mur trop fin (spike V2) |
 | Direction ingérable à haute vitesse | angle de braquage non réduit avec la vitesse |
+| Demi-stick et plein stick tournent pareil | angle max non borné par la limite d'adhérence, ou adhérence qui sature en m/s au lieu d'un angle de glissement |
+| Accélère moins que prévu, pousse au freinage | force de suspension appliquée le long de l'axe de la caisse : dès qu'elle cabre, composante horizontale (mesuré : 0,10 m/s² pour 0,6°). L'appliquer le long de la normale de contact |
+| Se couche contre un mur pris en biais | pneus qui retiennent le bas pendant que le mur pousse la caisse : anti-retournement (mesuré : 34° → 16° à 150 km/h, 30°) |
 
 ## Livrable attendu à chaque tâche
 

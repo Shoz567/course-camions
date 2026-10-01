@@ -2,7 +2,7 @@
 
 *Titre provisoire.* Jeu de course de camions arcade en 3D, développé avec
 Godot 4.7 et Claude Code : conduite permissive et spectaculaire, écran partagé
-jusqu'à 4 joueurs, puis online.
+jusqu'à 6 joueurs, puis online.
 
 ## Démarrer
 

@@ -62,11 +62,15 @@ Exigences pour tout script de build :
 
 Centralisés dans `tools/blender/lib/export.py`, **seul endroit** où l'on appelle
 `bpy.ops.export_scene.gltf` : GLB, `export_yup=True`, modificateurs appliqués,
-transforms appliquées, pas de caméra ni de lumière.
+**rotation et échelle appliquées, location conservée**, pas de caméra ni de
+lumière.
 
 ✅ **Validé** (acquis A6 de `docs/SPIKE.md`) : un cube de 1 m arrive à
-1,0000 m dans Godot, les noms sont conservés. Le spike **V4** doit encore
-vérifier le cas d'un véhicule : objets séparés dont le pivot est au moyeu.
+1,0000 m dans Godot, les noms sont conservés.
+
+✅ **Validé par le spike V4** (acquis A13) : chassis + 4 roues séparées, pivots
+à 0,0000 m du moyeu dans Godot. La location n'est **jamais** appliquée : c'est
+elle qui porte le pivot. L'appliquer mettait les roues à 2,24 m du moyeu.
 
 ## 4. Le camion
 
@@ -95,6 +99,49 @@ il ne le définit pas. La physique utilise deux boîtes de collision et quatre
 rayons définis côté Godot ; on ne dérive jamais une masse, un centre de masse ou
 une forme de collision du maillage. Si le camion paraît trop haut, c'est la
 carrosserie qu'on ajuste, pas la suspension.
+
+### 4 bis. Modèle externe des camarades (`Assets_Visuels/`)
+
+Les modèles `Assets_Visuels/Camion/Camions_Course_Export/*.glb` sont faits à la
+main, hors pipeline Blender scripté, et **hors dépôt** (`.gitignore`, et le hook
+refuse tout `.glb`). `TruckVisual` (`game/vehicles/truck_visual.gd`) les charge
+**à l'exécution** s'ils existent ; sinon le camion garde ses boîtes de blockout.
+Un clone neuf et les tests ne dépendent donc d'aucun binaire. Un export du jeu
+ne les embarquera pas : à régler en phase 7 (import dans le projet, licence et
+origine confirmées).
+
+Mesuré sur `Camion_Bleu.glb` (2026-09-28), **le modèle ne suit pas la spec** :
+
+| Point du contrat | Spec | Modèle |
+|---|---|---|
+| Avant | −Z | +Z |
+| Échelle | appliquée (1,0) | ×1,25 non appliqué sur la racine |
+| Remorque | semi-remorque (depuis le 2026-09-28) | semi-remorque 3 essieux avec aileron : conservée |
+| Longueur du tracteur | 5,8 m | 6,1 m |
+| Largeur / hauteur | 2,5 / 3,2 m | 2,9 m (cabine), 3,7 m hors tout / 3,7 m (4,7 m échappements) |
+| Empattement / voie | 3,8 / 2,1 m | 3,1 / 2,4 m |
+| Rayon de roue | 0,55 m | 0,72 m (AV), 0,84 m (AR jumelées) |
+| Noms des roues | `Wheel_FL`… pivot au moyeu | `Roue_AV_G`… groupes sans pivot au moyeu ; « G » est à droite une fois l'avant en −Z |
+
+`TruckVisual` l'**ajuste** donc sans toucher à la physique : demi-tour,
+échelle uniforme ×0,947 calculée sur le **tracteur** (5,8 m) et appliquée à tout
+l'ensemble (semi-remorque exclue du calage mais affichée : 16,4 m hors tout),
+centrage sur la caisse du tracteur, bas des pneus au sol, pivot recalé au moyeu
+de chaque groupe de roues du tracteur, roues associées aux rayons **par
+position** (pas par nom) ; les roues de remorque restent fixes. Le nœud
+`Remorque` (toute la semi-remorque, aileron et roues compris) est accroché à un
+pivot posé sur la sellette de la spec (0 ; 1,8 ; 1,2) et tourne avec l'angle de
+remorque du camion (VEHICLE_SPEC §5 bis). Restent
+visibles : cabine plus large (3,5 m) et plus haute (4,4 m) que sa collision, et
+roues visuelles à l'empattement du modèle (≈ 3,0 m) au lieu de 3,8 m.
+`truck_visual_test` vérifie l'ajustement ; il se saute sans le modèle.
+
+**À corriger à la source** (blender-modeler / camarades) : avant en −Z, échelle
+appliquée, empattement 3,8 m, voie 2,1 m, roues de 0,55 m, objets `Body` +
+`Wheel_FL/FR/RL/RR` pivotés au moyeu (§4), caisse de remorque de 13,0 × 3,0 m
+dont le bas est à 1,8 m (VEHICLE_SPEC §5). **À
+vérifier** : les nœuds `Logo_001`, `Embleme_004/005` et `Plaque_AV_UE` ne
+doivent reproduire aucune marque existante (`CLAUDE.md` §1).
 
 ### Style
 
