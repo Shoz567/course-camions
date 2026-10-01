@@ -202,6 +202,8 @@ extends Resource
 ## vitesse (vers l'interieur du virage ; contre-braquage : vers l'exterieur).
 ## Les pneus qui glissent ne tiennent que ~0,75 g : sans elle, le drift a
 ## 150 km/h decrivait 237 m de rayon et sortait des virages de 140 m.
+## Mesure a 150 km/h : 0,8 g -> 110 m, 1,2 g -> 87 m ; 1,5 g -> 76 m mais la
+## remorque d'un drift contre un mur y entre (truck_trailer_test, cas D).
 @export_range(0.0, 3.0, 0.01, "suffix:g") var drift_carve_g: float = 0.0
 ## Raideur du retour vers la derive cible (1/s).
 @export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
