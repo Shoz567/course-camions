@@ -17,12 +17,15 @@ enum SpeedClass { SLOW, NORMAL, FAST, ULTRA }
 
 ## Par categorie : nom, cylindree, vitesse max (km/h), multiplicateurs
 ## d'acceleration, d'adherence laterale (plus d'appui aux grandes vitesses) et
-## de nervosite de la direction. NORMAL = le reglage mesure (baseline.json).
+## de nervosite de la direction, et de courbe du drift (drift_carve_g) : le
+## rayon croit comme le carre de la vitesse, sans elle le drift 200cc decrivait
+## 175 m et sortait des virages de 140 m (truck_drift_line_test).
+## NORMAL = le reglage mesure (baseline.json).
 const SPEED_CLASSES: Array[Dictionary] = [
-	{"name": "Lent", "cc": "50cc", "top_kmh": 110.0, "accel": 0.75, "grip": 1.0, "steer": 0.9},
-	{"name": "Normal", "cc": "100cc", "top_kmh": 150.0, "accel": 1.0, "grip": 1.0, "steer": 1.0},
-	{"name": "Rapide", "cc": "150cc", "top_kmh": 185.0, "accel": 1.25, "grip": 1.06, "steer": 1.12},
-	{"name": "Ultrasonique", "cc": "200cc", "top_kmh": 225.0, "accel": 1.55, "grip": 1.12, "steer": 1.25},
+	{"name": "Lent", "cc": "50cc", "top_kmh": 110.0, "accel": 0.75, "grip": 1.0, "steer": 0.9, "drift": 1.0},
+	{"name": "Normal", "cc": "100cc", "top_kmh": 150.0, "accel": 1.0, "grip": 1.0, "steer": 1.0, "drift": 1.0},
+	{"name": "Rapide", "cc": "150cc", "top_kmh": 185.0, "accel": 1.25, "grip": 1.06, "steer": 1.12, "drift": 1.4},
+	{"name": "Ultrasonique", "cc": "200cc", "top_kmh": 225.0, "accel": 1.55, "grip": 1.12, "steer": 1.25, "drift": 2.0},
 ]
 
 ## Circuits : nom, ambiance (sous-titre du menu) et scene de course.
@@ -51,7 +54,7 @@ static func track_scene(index: int) -> String:
 
 
 ## Reglage d'un camion pour une categorie de vitesse : copie du reglage de
-## base (jamais modifie), vitesse max, poussee, adherence, direction.
+## base (jamais modifie), vitesse max, poussee, adherence, direction, drift.
 static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> VehicleTuning:
 	var c: Dictionary = SPEED_CLASSES[clampi(speed_class_index, 0, SPEED_CLASSES.size() - 1)]
 	var t := base.duplicate() as VehicleTuning
@@ -60,5 +63,6 @@ static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> Vehicle
 	t.boost_accel_ms2 = base.boost_accel_ms2 * float(c["accel"])
 	t.lateral_grip_g = base.lateral_grip_g * float(c["grip"])
 	t.steer_rate_deg_per_tick = base.steer_rate_deg_per_tick * float(c["steer"])
+	t.drift_carve_g = base.drift_carve_g * float(c["drift"])
 	t.reverse_top_speed_kmh = minf(base.reverse_top_speed_kmh, t.top_speed_kmh * 0.5)
 	return t
