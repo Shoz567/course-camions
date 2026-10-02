@@ -9,7 +9,7 @@ extends PhysicsTest
 ##   A. flaque (savonnette) : perte d'adherence laterale (glissade) sans perte de vitesse brute ;
 ##   B. panneau : percute et ejecte (monte de plus de 2 m) sans ralentir le camion, puis respawn ;
 ##   E. baril explosif : detonation au contact, ejection du baril (envol > 2 m), yeet physique
-##      leger sur le camion sans retournement, puis respawn.
+##      leger sur le camion sans retournement, -15 PV pour le camion (TruckHealth), puis respawn.
 
 const PUDDLE := 0          # grand virage, a l'exterieur
 const SIGN := 0            # grand virage, a l'exterieur
@@ -27,6 +27,7 @@ var _fb: InputFrame = InputFrame.new()
 var _fd: InputFrame = InputFrame.new()
 var _fe: InputFrame = InputFrame.new()
 var _c_pilot: TrackAutopilot
+var _e_damage: PackedStringArray = []
 
 var _a_slipped: int = 0
 var _a_hit_at: int = -1
@@ -96,6 +97,8 @@ func _test_setup() -> void:
 		_track.barrel_hit.connect(func(truck: Truck, _index: int) -> void:
 			if truck == _e and _e_hit_at < 0:
 				_e_hit_at = tick)
+		TruckHealth.of(_e).damaged.connect(func(amount: float, source: StringName) -> void:
+			_e_damage.append("%s %.0f (tick %d)" % [source, amount, tick]))
 
 
 ## Camion pose `back` metres avant le point, a son decalage, dans l'axe.
@@ -209,6 +212,9 @@ func _test_finish() -> void:
 	check("panneau revenu a sa place, gele, 5 s apres", _sign_back)
 
 	check("E baril explosif percute", _e_hit_at >= 0, "tick=%d" % _e_hit_at)
+	print("  INFO   E : degats %s" % [_e_damage])
+	check("E baril : -15 PV pour le camion qui le fait sauter, au contact",
+		not _e_damage.is_empty() and _e_damage[0] == "baril 15 (tick %d)" % _e_hit_at, str(_e_damage))
 	check_above("baril ejecte : envol (m)", _barrel_rise, 2.0)
 	check("baril revenu a sa place apres respawn", _barrel_back)
 

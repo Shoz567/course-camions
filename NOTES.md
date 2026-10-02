@@ -16,13 +16,13 @@
   - Multiplicateur de vitesse max à **x1.2** (`solo_top_speed_factor = 1.2`) et accélération accrue quand la remorque est larguée pour un boost d'agilité immédiat.
 
 ### Module 2 : Système de Points de Vie (HP) & Mort / Respawn
-- [ ] **Barre de PV (100 HP)** :
+- [x] **Barre de PV (100 HP)** (Lot 2, `TruckHealth`) :
   - Suivi des 100 HP (affichage discret / petit ou interne avant dégradations visuelles).
   - Calcul des dégâts : uniquement le tracteur (cabine / avant) encaisse les dégâts sur les PV du joueur.
   - Chocs contre les murs : **-1 à -5 HP** selon la violence / vitesse de l'impact.
   - Percussion d'un baril explosif : **-15 HP**.
   - La remorque agit comme un **bouclier défensif** (protège l'arrière du joueur, les chocs dessus n'entament pas les 100 HP du tracteur).
-- [ ] **Mort & Respawn** :
+- [x] **Mort & Respawn** (épave gelée 3 s, explosion, réapparition sur la ligne de course) :
   - À 0 HP : explosion / fumée, immobilisation pendant **3 secondes**, puis réapparition (respawn) sur la piste avec 100 HP restaurés.
 
 ### Module 3 : Course & Règles (4 Tours)
@@ -44,18 +44,18 @@
   - Fumée légère -> fumée dense selon le niveau de PV restants.
 
 ### Module 6 : Remorques Larguées Persistantes & Destructibles
-- [ ] **Persistance sur la piste** :
+- [x] **Persistance sur la piste** (Lot 2) :
   - Les remorques larguées ne disparaissent plus au bout d'un timer : elles restent comme obstacles physiques sur la piste !
-- [ ] **Règles d'équilibrage du largage** :
+- [x] **Règles d'équilibrage du largage** (verrou 5 s au GO, nouvelle remorque après la recharge de 30 s) :
   - Les **5 premières secondes** de course : largage interdit (évite le bouchon au départ).
   - Après largage : une nouvelle remorque réapparaît sur le camion du joueur pour lui permettre d'en larguer d'autres.
-- [ ] **Points de vie de la remorque (50 HP)** :
+- [~] **Points de vie de la remorque (50 HP)** (Lot 2 : PV, dégâts selon l'énergie du choc, explosion ; dégradation visuelle progressive à faire avec le module 5) :
   - Chaque remorque abandonnée sur la piste a **50 HP**.
   - Elle perd des PV lors des chocs avec les autres camions ou attaques.
   - Dégradation visuelle progressive puis destruction / disparition quand ses 50 HP tombent à 0.
 
 ### Module 7 : Flux Menu & Écran Scindé de Sélection des Pouvoirs
-- [ ] **Bouton READY au menu principal** :
+- [~] **Sas READY** (Lot 2 : dans la course, chaque joueur valide avec Carré avant le compte à rebours ; le bouton du menu et le choix des pouvoirs restent à faire) — **Bouton READY au menu principal** :
   - Remplacer le bouton "COMMENCER" direct par un bouton **"READY"**.
 - [ ] **Écran de sélection des pouvoirs en écran scindé** :
   - Bascule en écran scindé (selon le nombre de joueurs) sur un sas de préparation.

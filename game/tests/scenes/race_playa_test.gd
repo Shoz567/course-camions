@@ -19,6 +19,7 @@ func _test_setup() -> void:
 	GameState.selected_track = 1
 	GameState.requested_players = 2
 	_scene = (load(GameStateNode.track_scene(GameState.selected_track)) as PackedScene).instantiate() as Node3D
+	_scene.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	add_child(_scene)
 	GameState.selected_track = 0
 	_players = _scene.get("players")

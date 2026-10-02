@@ -13,6 +13,7 @@ func _test_setup() -> void:
 	duration_ticks = 300
 	GameState.requested_players = 3
 	_scene = (load("res://dev/race.tscn") as PackedScene).instantiate() as Node3D
+	_scene.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	add_child(_scene)
 	_players = _scene.get("players")
 

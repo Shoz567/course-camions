@@ -53,6 +53,11 @@ func _on_exited(body: Node3D) -> void:
 
 func _physics_process(_delta: float) -> void:
 	for t in _trucks:
+		if t.is_wrecked():
+			# epave (0 PV) : sa reapparition est l'affaire de TruckHealth
+			_in_zone[t] = 0
+			_flipped[t] = 0
+			continue
 		_in_zone[t] = _in_zone[t] + 1 if _zones[t] > 0 else 0
 		var tilt := rad_to_deg(t.global_transform.basis.y.normalized().angle_to(Vector3.UP))
 		var slow := t.linear_velocity.length() * 3.6 < flipped_speed_kmh

@@ -31,6 +31,7 @@ func _test_setup() -> void:
 	RaceMusic.prepare()
 	GameState.requested_players = 1
 	_race = (load("res://dev/race.tscn") as PackedScene).instantiate() as Node3D
+	_race.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	_race.position = Vector3(0.0, -500.0, 0.0)
 	add_child(_race)
 

@@ -10,7 +10,9 @@ extends Node
 ##   - flaque d'eau : perte d'adherence laterale (savonnette) pendant
 ##     puddle_slip_ticks, sans freinage longitudinal ;
 ##   - panneau percute : le panneau s'envole (RoadsideSign), sans penalite
-##     de vitesse sur le camion.
+##     de vitesse sur le camion ;
+##   - baril explosif : le baril saute (ExplosiveBarrel) et le camion qui l'a
+##     fait detoner perd barrel_damage PV (TruckHealth).
 ## Une meme plaque ne redeclenche pas pour le meme camion avant cooldown_ticks.
 
 @export var track: TrackBlockout
@@ -25,6 +27,7 @@ extends Node
 @export var sign_speed_factor: float = 1.0
 @export var sign_ticks: int = 0
 @export var sign_decel_ms2: float = 0.0
+@export var barrel_damage: float = TruckHealth.BARREL_DAMAGE
 
 ## Dernier declenchement : "b3:<id du camion>" -> tick physique.
 var _last: Dictionary = {}
@@ -38,6 +41,7 @@ func _ready() -> void:
 	track.jump_pad_entered.connect(_on_jump_pad)
 	track.puddle_entered.connect(_on_puddle)
 	track.sign_hit.connect(_on_sign)
+	track.barrel_hit.connect(_on_barrel)
 
 
 func _on_boost_pad(body: Node3D, index: int) -> void:
@@ -65,6 +69,12 @@ func _on_sign(body: Node3D, index: int) -> void:
 	if truck != null and _fresh(truck, "s%d" % index):
 		if sign_speed_factor < 1.0 or sign_decel_ms2 > 0.0:
 			truck.apply_slowdown(sign_speed_factor, sign_ticks, sign_decel_ms2)
+
+
+func _on_barrel(truck: Truck, _index: int) -> void:
+	var health := TruckHealth.of(truck)
+	if health != null:
+		health.damage(barrel_damage, &"baril")
 
 
 func _fresh(truck: Truck, pad: String) -> bool:
