@@ -1,0 +1,3 @@
+# Le .gitignore du depot ignore Assets_Visuels/ sauf les .glb :
+# on reautorise ici les .blend de ce dossier.
+!*.blend

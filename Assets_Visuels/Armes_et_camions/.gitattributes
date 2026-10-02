@@ -1,0 +1,4 @@
+# Regles propres a ce dossier : modeles du catalogue (.glb et .blend)
+# stockes par Git LFS, comme les camions de l equipe.
+*.glb filter=lfs diff=lfs merge=lfs -text
+*.blend filter=lfs diff=lfs merge=lfs -text
