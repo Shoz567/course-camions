@@ -65,6 +65,7 @@ monde sans en parler.** Tout le réglage de la conduite en dépend.
 │   └── build_all.py
 ├── game/                      ← projet Godot (project.godot ici)
 │   ├── assets/generated/      ← .glb produits par tools/blender (git-ignorés)
+│   ├── catalogue/             ← une scène par modèle du catalogue (véhicules, armes…) + Catalogue.gd
 │   ├── vehicles/              ← camion : physique, réglages, scène
 │   ├── tracks/                ← pistes, checkpoints, zones de reset
 │   ├── gameplay/              ← autoloads, règles de course

@@ -162,7 +162,21 @@ gameplay des armes sera spécifié plus tard.
 | Script | Sortie (`game/assets/generated/`) |
 |---|---|
 | `build_vehicle.py --variant=…` | `vehicules/{citerne, betaillere, remorque, porte_voitures, grue, chasse_neige, pompier, chariot_elevateur}.glb` |
-| `build_item.py --item=…` | `armes/{lance_missiles, missile, scie_geante_d/g, mitrailleuse, grenade, camion_projectile, doudou_geant, voiture_*, bouclier_emetteur, bouclier_coque, laser_emetteur, laser_faisceau, boomerang_aimante}.glb` |
+| `build_item.py --item=…` | `armes/{lance_missiles, scie_geante_g, scie_geante_d, mitrailleuse, laser_emetteur, bouclier_emetteur, boomerang_aimante}.glb` (montées sur un socket) |
+| | `projectiles/{missile, grenade, camion_projectile, doudou_geant, voiture_rouge/bleue/jaune/verte/blanche}.glb` (ce qui part du camion) |
+| | `effets/{bouclier_coque, laser_faisceau}.glb` (enveloppes et faisceaux à étirer) |
+
+**Dans Godot : un modèle = une scène.** `game/catalogue/<catégorie>/<nom>.tscn`
+est une scène héritée du `.glb` : on la glisse dans l'éditeur ou on
+l'instancie en code, et on peut y ajouter nœuds et scripts sans toucher au
+`.glb` régénéré. `Catalogue` (`game/catalogue/catalogue.gd`) liste les
+chemins (`VEHICULES`, `ARMES`, `PROJECTILES`, `EFFETS`) et monte une arme
+sur un camion : `Catalogue.monter(camion, &"mitrailleuse")` (socket par
+défaut) ou `Catalogue.monter(camion, &"scie_geante_g", &"Socket_Lateral_G")`.
+`game/catalogue/demo_catalogue.tscn` montre tout le catalogue et un
+porte-conteneur équipé (mitrailleuse, scies, missiles, boomerang,
+bouclier). Les `.glb` étant git-ignorés, ces scènes ne se chargent
+qu'après `make assets` (et `make import`).
 
 Code partagé : `lib/kit.py` (matériaux, primitives, roue), `lib/vehicles.py`,
 `lib/items.py`. `make assets` régénère les 26 fichiers en ~15 s.

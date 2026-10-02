@@ -27,21 +27,29 @@ OUT_DIR = REPO_ROOT / "game" / "assets" / "generated"
 
 HERE = Path(__file__).resolve().parent
 
+# Un .glb par modele, range par categorie (docs/ART_PIPELINE.md §4 ter) :
+#   vehicules/   camions et engins, avec leurs points d'accroche Socket_*
+#   armes/       equipements montes sur un Socket_* du camion
+#   projectiles/ ce qui part du camion (missile, grenade, voitures...)
+#   effets/      enveloppes et faisceaux a etirer (bouclier, laser)
 VEHICLES = ["citerne", "betaillere", "remorque", "porte_voitures", "grue",
             "chasse_neige", "pompier", "chariot_elevateur"]
-ITEMS = ["lance_missiles", "missile", "scie_geante_d", "scie_geante_g",
-         "mitrailleuse", "grenade", "camion_projectile", "doudou_geant",
-         "voiture_rouge", "voiture_bleue", "voiture_jaune", "voiture_verte",
-         "voiture_blanche", "bouclier_emetteur", "bouclier_coque",
-         "laser_emetteur", "laser_faisceau", "boomerang_aimante"]
+ITEMS = {
+    "armes": ["lance_missiles", "scie_geante_g", "scie_geante_d", "mitrailleuse",
+              "laser_emetteur", "bouclier_emetteur", "boomerang_aimante"],
+    "projectiles": ["missile", "grenade", "camion_projectile", "doudou_geant",
+                    "voiture_rouge", "voiture_bleue", "voiture_jaune", "voiture_verte",
+                    "voiture_blanche"],
+    "effets": ["bouclier_coque", "laser_faisceau"],
+}
 
 # (script, arguments) — rempli au fil des phases.
 # Phase 5 : build_truck.py, build_track_01.py
 BUILDS = (
     [("build_vehicle.py", ["--variant=" + v, "--out=" + str(OUT_DIR / "vehicules" / (v + ".glb"))])
      for v in VEHICLES]
-    + [("build_item.py", ["--item=" + i, "--out=" + str(OUT_DIR / "armes" / (i + ".glb"))])
-       for i in ITEMS]
+    + [("build_item.py", ["--item=" + i, "--out=" + str(OUT_DIR / cat / (i + ".glb"))])
+       for cat, names in ITEMS.items() for i in names]
 )
 
 

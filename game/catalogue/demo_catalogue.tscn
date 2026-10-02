@@ -1,0 +1,142 @@
+[gd_scene load_steps=31 format=3]
+
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/citerne.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/betaillere.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/remorque.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/porte_voitures.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/grue.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/chasse_neige.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/pompier.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/chariot_elevateur.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://catalogue/vehicules/remorque.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/mitrailleuse.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/scie_geante_g.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/scie_geante_d.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/lance_missiles.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/boomerang_aimante.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://catalogue/effets/bouclier_coque.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/missile.tscn" id="16"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/grenade.tscn" id="17"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/camion_projectile.tscn" id="18"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/doudou_geant.tscn" id="19"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/voiture_rouge.tscn" id="20"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/voiture_bleue.tscn" id="21"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/voiture_jaune.tscn" id="22"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/voiture_verte.tscn" id="23"]
+[ext_resource type="PackedScene" path="res://catalogue/projectiles/voiture_blanche.tscn" id="24"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/laser_emetteur.tscn" id="25"]
+[ext_resource type="PackedScene" path="res://catalogue/armes/bouclier_emetteur.tscn" id="26"]
+
+[sub_resource type="StandardMaterial3D" id="sol_mat"]
+albedo_color = Color(0.32, 0.33, 0.35, 1)
+roughness = 0.9
+
+[sub_resource type="PlaneMesh" id="sol"]
+material = SubResource("sol_mat")
+size = Vector2(160, 90)
+
+[sub_resource type="ProceduralSkyMaterial" id="ciel"]
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("ciel")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 2
+
+[node name="DemoCatalogue" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Soleil" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 20, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(-0.707107, -0.246632, 0.662701, 0.000000, 0.937201, 0.348790, -0.707107, 0.246632, -0.662701, 24.000000, 20.000000, -34.000000)
+current = true
+fov = 60.0
+
+[node name="Sol" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, 0)
+mesh = SubResource("sol")
+
+[node name="Vehicules" type="Node3D" parent="."]
+
+[node name="Objets" type="Node3D" parent="."]
+
+[node name="Citerne" parent="Vehicules" instance=ExtResource("1")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.0, 0, 0)
+
+[node name="Betaillere" parent="Vehicules" instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.5, 0, 0)
+
+[node name="Remorque" parent="Vehicules" instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24.0, 0, 0)
+
+[node name="PorteVoitures" parent="Vehicules" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -31.5, 0, 0)
+
+[node name="Grue" parent="Vehicules" instance=ExtResource("5")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -39.0, 0, 0)
+
+[node name="ChasseNeige" parent="Vehicules" instance=ExtResource("6")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -46.5, 0, 0)
+
+[node name="Pompier" parent="Vehicules" instance=ExtResource("7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -54.0, 0, 0)
+
+[node name="ChariotElevateur" parent="Vehicules" instance=ExtResource("8")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -61.5, 0, 0)
+
+[node name="CamionEquipe" parent="." instance=ExtResource("9")]
+
+[node name="Mitrailleuse" parent="CamionEquipe/Body/Socket_Toit" instance=ExtResource("10")]
+
+[node name="ScieGeanteG" parent="CamionEquipe/Body/Socket_Lateral_G" instance=ExtResource("11")]
+
+[node name="ScieGeanteD" parent="CamionEquipe/Body/Socket_Lateral_D" instance=ExtResource("12")]
+
+[node name="LanceMissiles" parent="CamionEquipe/Remorque/Socket_Arriere" instance=ExtResource("13")]
+
+[node name="BoomerangAimante" parent="CamionEquipe/Body/Socket_Avant" instance=ExtResource("14")]
+
+[node name="BouclierCoque" parent="CamionEquipe" instance=ExtResource("15")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.9, 6.3)
+
+[node name="Missile" parent="Objets" instance=ExtResource("16")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0.45, -12)
+
+[node name="Grenade" parent="Objets" instance=ExtResource("17")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16.8, 0.45, -12)
+
+[node name="CamionProjectile" parent="Objets" instance=ExtResource("18")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.6, 1.6, -12)
+
+[node name="DoudouGeant" parent="Objets" instance=ExtResource("19")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.4, 1.6, -12)
+
+[node name="VoitureRouge" parent="Objets" instance=ExtResource("20")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.2, 0.0, -12)
+
+[node name="VoitureBleue" parent="Objets" instance=ExtResource("21")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.0, -12)
+
+[node name="VoitureJaune" parent="Objets" instance=ExtResource("22")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.2, 0.0, -12)
+
+[node name="VoitureVerte" parent="Objets" instance=ExtResource("23")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.4, 0.0, -12)
+
+[node name="VoitureBlanche" parent="Objets" instance=ExtResource("24")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19.6, 0.0, -12)
+
+[node name="LaserEmetteur" parent="Objets" instance=ExtResource("25")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24.8, 0.0, -12)
+
+[node name="BouclierEmetteur" parent="Objets" instance=ExtResource("26")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0.0, -12)
