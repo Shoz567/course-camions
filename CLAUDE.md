@@ -189,7 +189,9 @@ supporter :
 - Committer des binaires : `*.glb`, `*.blend1`, `.godot/`, `builds/` sont
   git-ignorés (le hook `pre-commit` les refuse). Exceptions : `baseline.json`,
   et les modèles `.glb` de l'équipe dans `Assets_Visuels/`, versionnés **par
-  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7).
+  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7), ainsi que le
+  catalogue publié dans `Assets_Visuels/Armes_et_camions/` (`.glb` + `.blend`,
+  Git LFS, `make publish-assets`, même date).
 - Télécharger des assets tiers (modèles, textures, sons).
   Les sons et la musique **synthétisés par le code** (`MenuSound`,
   `CountdownSound`, `RaceMusic`) ne sont pas des assets tiers ; la musique de

@@ -175,6 +175,11 @@ consultation**, git-ignorées : la source de vérité reste le script, et
 `.blend` est perdue). Ils sont hors de `game/` car Godot importerait un
 `.blend` tout seul (`CLAUDE.md` §2).
 
+**Sur GitHub : `Assets_Visuels/Armes_et_camions/`.** `make publish-assets`
+y copie le `.glb` et le `.blend` de chaque modèle, rangés par catégorie, à
+côté des modèles de l'équipe (Git LFS, `docs/ENVIRONMENT.md` §6.7). Un
+coéquipier sans Blender y trouve donc tout le catalogue après un `git pull`.
+
 **Dans Godot : un modèle = une scène.** `game/catalogue/<catégorie>/<nom>.tscn`
 est une scène héritée du `.glb` : on la glisse dans l'éditeur ou on
 l'instancie en code, et on peut y ajouter nœuds et scripts sans toucher au

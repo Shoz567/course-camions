@@ -6,11 +6,13 @@ game/.godot/
 # Assets generes par Blender : ils se regenerent avec `make assets`
 game/assets/generated/
 
-# Modeles de l'equipe : seuls les .glb sont versionnes, via Git LFS
-# (.gitattributes) ; les sources (.fbx, .blend...) restent hors depot.
+# Modeles de l'equipe : les .glb sont versionnes via Git LFS (.gitattributes) ;
+# les sources (.fbx...) restent hors depot. Exception : les .blend du
+# catalogue (Armes_et_camions/, make publish-assets), aussi via Git LFS.
 Assets_Visuels/**
 !Assets_Visuels/**/
 !Assets_Visuels/**/*.glb
+!Assets_Visuels/Armes_et_camions/**/*.blend
 
 # Blender
 # Un .blend par modele du catalogue (make assets) : copies de consultation,

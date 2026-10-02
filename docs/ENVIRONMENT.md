@@ -370,6 +370,16 @@ garde qu'un pointeur de quelques lignes, le fichier est stocké à part sur
 GitHub. Règle dans `.gitattributes` ; les sources (`.fbx`, `.blend`) restent
 hors dépôt (`.gitignore`).
 
+**Catalogue `Assets_Visuels/Armes_et_camions/`** (demande de l'utilisateur,
+2026-10-02) : les 26 modèles générés par Blender (véhicules, armes,
+projectiles, effets), chacun en `.glb` **et** en `.blend`, versionnés aussi
+par Git LFS (~35 Mo). Ce sont des **copies publiées** : la source reste
+`tools/blender/`. Pour les mettre à jour : `make assets` puis
+`make publish-assets` (ne recopie que les modèles dont le `.glb` a changé ;
+un `.blend` n'est jamais identique octet pour octet d'une sauvegarde à
+l'autre). Une retouche faite à la main dans un de ces `.blend` est écrasée
+par la publication suivante : la reporter dans le script.
+
 - **Installer** : Git LFS est fourni avec Git for Windows. Une fois par machine,
   `git lfs install --skip-repo` (filtres seulement : `--skip-repo` empêche LFS
   de poser ses propres hooks, ceux du projet vivent dans `.githooks/`).
@@ -382,4 +392,6 @@ hors dépôt (`.gitignore`).
 - **Sans les modèles** (LFS absent, clone partiel), le jeu tourne : le camion
   garde ses boîtes de blockout (`TruckVisual`).
 - **Quota** : GitHub offre 1 Go de stockage LFS et 1 Go de téléchargement par
-  mois sur un compte gratuit ; un clone complet en consomme ~9 Mo.
+  mois sur un compte gratuit ; un clone complet en consomme ~44 Mo (modèles
+  de l'équipe + catalogue). Chaque publication d'un modèle modifié ajoute
+  sa nouvelle version au stockage : publier par lots, pas à chaque essai.

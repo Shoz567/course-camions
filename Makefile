@@ -12,11 +12,12 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike
+.PHONY: help assets publish-assets import test test-full test-selftest baseline run solo sandbox clean-spike
 
 help:
 	@echo "Cibles disponibles :"
 	@echo "  make assets     - regenere tous les assets 3D (Blender headless)"
+	@echo "  make publish-assets - copie le catalogue (.glb + .blend) dans Assets_Visuels/ (Git LFS)"
 	@echo "  make import     - importe les assets dans Godot"
 	@echo "  make test       - suite rapide : 1 run par test (< 60 s)"
 	@echo "  make test-full  - suite complete : 5 runs par test physique"
@@ -29,6 +30,11 @@ help:
 
 assets:
 	$(BLENDER) -b -P tools/blender/build_all.py
+
+# Apres make assets : publie le catalogue dans Assets_Visuels/Armes_et_camions
+# (versionne par Git LFS, docs/ENVIRONMENT.md §6.7).
+publish-assets:
+	$(BLENDER) -b --factory-startup -P tools/blender/publish_assets.py
 
 import:
 	$(GODOT) --headless --path $(PROJECT) --import
