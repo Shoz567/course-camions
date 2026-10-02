@@ -288,10 +288,10 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 |---|---|---|---|
 | 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[x]` |
 | 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[x]` |
-| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) ; **remasterisation visuelle** (taille x2, balise stroboscopique/lumineuse haute visibilité) | track-designer | `[~]` |
+| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) ; **remasterisation visuelle** (taille x2, balise stroboscopique/lumineuse haute visibilité) | track-designer | `[x]` lot 3 ; `damage_visuals_test`, `track_hazards_test` |
 | 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP cabine uniquement), barils explosifs (-15 HP), remorque bouclier, mort et respawn après 3 s (PV discrets/internes avant dégradations) | gameplay-engineer | `[x]` `TruckHealth` (nœud « Health » du camion), signal `Truck.wall_impact` par forme touchée ; `truck_health_test` |
 | 4.5.5 | Remorques larguées persistantes (50 HP) : restent sur piste sans disparition, nouvelle remorque réapparue sur le tracteur, interdiction de largage les 5 premières secondes | gameplay-engineer | `[x]` dégâts selon l'énergie du choc, explosion à 0 PV ; `trailer_hp_test`, `truck_cargo_test` (dégradation visuelle de la remorque : 4.5.6) |
-| 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive (tracteur & remorque) | visual-artist | `[ ]` |
+| 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive (tracteur & remorque) | visual-artist | `[x]` lot 3 : `DamageFx`, `TruckDamageFx`, `DetachedTrailer` ; `damage_visuals_test` |
 | 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[x]` dans la course (`LocalRace`, état LOBBY) ; `race_ready_test` |
 | 4.5.8 | Système de pouvoirs : nouvelle formule (anciens pouvoirs provisoires retirés, nouvelle conception en attente) | gameplay-engineer | `[ ]` |
 
@@ -328,10 +328,36 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 - `[x]` `make test` à 100 % (50/50 : `truck_health_test`, `trailer_hp_test`,
   `race_ready_test` ajoutés ; tests de course sans sas : `ready_gate = false`).
 
-**Critères de sortie du Lot 3 (En cours)**
-- `[ ]` **Remasterisation des barils explosifs** : taille accrue (~x1.8 à x2, rayon ~1.2m, hauteur ~2.5m), visibilité arcade renforcée (balise lumineuse/stroboscopique clignotante au sommet visible de loin, chevrons d'alerte émissifs contrastés), rayon de déclenchement adapté, non-régression des tests d'explosion et de dégâts (-15 PV).
-- `[ ]` **Dégradations visuelles localisées (Module 5 & 6)** : éraflures, noircissement et déformations d'impacts sur la carrosserie du tracteur et de la remorque selon l'angle des chocs ; fumée de moteur progressive selon les PV restants (légère sous 70 PV, dense et étincelles sous 30 PV) ; dégradation visuelle de la remorque abandonnée selon ses 50 PV.
-- `[ ]` `make test` passe toujours à 100 %.
+**Critères de sortie du Lot 3 (Terminé le 2026-10-02)**
+- `[x]` **Remasterisation des barils explosifs** : taille accrue (~x1.8 à x2, rayon ~1.2m, hauteur ~2.5m), visibilité arcade renforcée (balise lumineuse/stroboscopique clignotante au sommet visible de loin, chevrons d'alerte émissifs contrastés), rayon de déclenchement adapté, non-régression des tests d'explosion et de dégâts (-15 PV).
+- `[x]` **Dégradations visuelles localisées (Module 5 & 6)** : éraflures, noircissement et déformations d'impacts sur la carrosserie du tracteur et de la remorque selon l'angle des chocs ; fumée de moteur progressive selon les PV restants (légère sous 70 PV, dense et étincelles sous 30 PV) ; dégradation visuelle de la remorque abandonnée selon ses 50 PV.
+- `[x]` `make test` passe toujours à 100 % (51/51, `damage_visuals_test` ajouté).
+
+Réalisation du lot 3 :
+- **Baril** (`ExplosiveBarrel`) : rayon 1,2 m, hauteur 2,5 m (×1,85), forme
+  physique et zone de déclenchement agrandies (rayon +1 m, hauteur +1,5 m) ;
+  deux bandes de chevrons jaunes et noirs lumineux qui pulsent
+  (`barrel_chevrons.gdshader`) ; **gyrophare** au sommet : dôme émissif,
+  `OmniLight3D` orange et halo additif qui garde au moins 40 pixels à l'écran
+  (`beacon_halo.gdshader` : repéré à plus de 250 m), en double éclair toutes
+  les 0,9 s, déphasé d'un baril à l'autre. Explosion, son, envol, -15 PV et
+  yeet inchangés.
+- **Traces de choc localisées** (`DamageFx`, `TruckDamageFx`) : à chaque
+  impact (mur, camion, remorque larguée), un décalque procédural au point
+  touché - éraflures claires pour un frottement, brûlure noire au-delà -
+  plus grand quand c'est plus violent. Le camion signale désormais le point
+  et la normale de chaque impact (`Truck.wall_impact_at`, `body_impact`, sans
+  effet sur les PV). Avant sur un choc frontal, flanc sur un frottement,
+  remorque sur un choc arrière (accrochée à son pivot : elle suit
+  l'articulation et part avec la remorque larguée). Les carrosseries sont sur
+  le calque de rendu 11, seul marqué : jamais la route. Camion réapparu ou
+  nouvelle remorque : neufs.
+- **Fumée moteur** (particules CPU, monde) sortant de la calandre : rien
+  au-dessus de 70 PV, grise de 70 à 30, anthracite épaisse avec étincelles
+  sous 30, fumée d'épave pendant les 3 s avant la réapparition.
+- **Remorque larguée** : trace à chaque choc qui l'abîme ; sous 60 % de ses
+  PV, flancs noircis et fumée grise ; sous 30 %, toit noirci, fumée
+  anthracite et étincelles ; à 0, explosion.
 
 ---
 

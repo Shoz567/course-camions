@@ -63,6 +63,13 @@ signal trailer_reattached
 ## (m/s, vers le mur) et partie touchee (remorque, ou tracteur). Les degats
 ## sont l'affaire du gameplay (TruckHealth).
 signal wall_impact(normal_speed_ms: float, on_trailer: bool)
+## Le meme impact, avec le point de contact et la normale du mur (monde,
+## tournee vers le camion) : pour les traces de choc (TruckDamageFx).
+signal wall_impact_at(normal_speed_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Debut d'un contact avec un autre corps mobile (camion, remorque larguee) :
+## vitesse d'approche, partie touchee, point et normale (monde, tournee vers
+## le camion). Purement informatif : aucun degat de PV.
+signal body_impact(approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 
 ## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
 ## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
@@ -193,6 +200,9 @@ const WALL_IMPACT_GAP_TICKS := 12
 var _front_wall_gap: int = WALL_IMPACT_GAP_TICKS + 1
 var _trailer_wall_gap: int = WALL_IMPACT_GAP_TICKS + 1
 var _vel_hist: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
+## Contacts avec des corps mobiles : id du corps -> dernier pas de contact.
+var _body_contacts: Dictionary = {}
+var _contact_step: int = 0
 ## Epave (0 PV, TruckHealth) : gelee, aucune force, aucune commande.
 var _wrecked: bool = false
 
@@ -463,21 +473,52 @@ static func trailer_local_transform(angle: float) -> Transform3D:
 
 # --- simulation ------------------------------------------------------------------
 
+## Contact avec un corps mobile : au debut d'un contact (apres
+## WALL_IMPACT_GAP_TICKS sans), signale body_impact.
+func _note_body_contact(state: PhysicsDirectBodyState3D, i: int, obj: Object, at: Vector3) -> void:
+	var id := state.get_contact_collider_id(i)
+	var last: int = _body_contacts.get(id, -1000)
+	_body_contacts[id] = _contact_step
+	if _contact_step - last <= WALL_IMPACT_GAP_TICKS or obj == self:
+		return
+	var n := state.get_contact_local_normal(i)
+	if n.dot(state.transform.origin - at) < 0.0:
+		n = -n
+	n = n.normalized()
+	var other := state.get_contact_collider_velocity_at_position(i)
+	var approach := 0.0
+	for v in _vel_hist:
+		approach = maxf(approach, (other - v).dot(n))
+	var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
+	body_impact.emit(approach, shape_node == _trailer_shape, at, n)
+
+
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# contacts avec un mur : corps statique, normale presque horizontale (le
 	# sol et les rampes ont une normale verticale)
 	var n_sum := Vector3.ZERO
-	# impacts : vitesse vers le mur, pour le tracteur et pour la remorque
+	# impacts : vitesse vers le mur, pour le tracteur et pour la remorque (et
+	# le point du contact le plus violent de chacun)
 	var front := -1.0
 	var rear := -1.0
+	var front_at := Vector3.ZERO
+	var rear_at := Vector3.ZERO
+	var front_n := Vector3.ZERO
+	var rear_n := Vector3.ZERO
+	_contact_step += 1
 	for i in state.get_contact_count():
-		if not (state.get_contact_collider_object(i) is StaticBody3D):
+		var obj := state.get_contact_collider_object(i)
+		var at := state.get_contact_local_position(i)
+		if obj is RigidBody3D:
+			_note_body_contact(state, i, obj, at)
+			continue
+		if not (obj is StaticBody3D):
 			continue
 		var n := state.get_contact_local_normal(i)
 		if absf(n.y) > 0.6:
 			continue
 		n.y = 0.0
-		if n.dot(state.transform.origin - state.get_contact_local_position(i)) < 0.0:
+		if n.dot(state.transform.origin - at) < 0.0:
 			n = -n
 		n = n.normalized()
 		n_sum += n
@@ -486,14 +527,21 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			into = maxf(into, -v.dot(n))
 		var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
 		if shape_node == _trailer_shape:
-			rear = maxf(rear, into)
-		else:
-			front = maxf(front, into)
+			if into > rear:
+				rear = into
+				rear_at = at
+				rear_n = n
+		elif into > front:
+			front = into
+			front_at = at
+			front_n = n
 	_wall_normal = n_sum.normalized() if n_sum.length_squared() > 1e-6 else Vector3.ZERO
 	if front >= 0.0 and _front_wall_gap > WALL_IMPACT_GAP_TICKS:
 		wall_impact.emit(front, false)
+		wall_impact_at.emit(front, false, front_at, front_n)
 	if rear >= 0.0 and _trailer_wall_gap > WALL_IMPACT_GAP_TICKS:
 		wall_impact.emit(rear, true)
+		wall_impact_at.emit(rear, true, rear_at, rear_n)
 	_front_wall_gap = 0 if front >= 0.0 else _front_wall_gap + 1
 	_trailer_wall_gap = 0 if rear >= 0.0 else _trailer_wall_gap + 1
 	if not _reset_pending:

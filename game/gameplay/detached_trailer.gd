@@ -18,6 +18,11 @@ extends RigidBody3D
 ## travers ma propre remorque ») ; jamais tant qu'il est dedans : le solveur
 ## les separerait d'un coup. Durees en ticks physiques (CLAUDE.md §7).
 ##
+## Degats visibles (2026-10-02, purement visuels) : chaque choc qui l'abime
+## laisse une trace au point touche ; sous 60 % de ses PV, elle fume (gris) et
+## ses flancs noircissent ; sous 30 %, fumee noire epaisse, etincelles, toit
+## noirci ; a 0, elle explose.
+##
 ## Repere : origine a la sellette (comme le pivot visuel de la remorque),
 ## avant du camion en -Z, remorque vers +Z.
 
@@ -59,6 +64,14 @@ var _pending: Dictionary = {}
 ## tete (comme Truck.get_recent_velocities) : avant le choc, elle etait
 ## immobile ; apres, elle file deja avec le camion qui l'a poussee.
 var _vel_hist: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
+## Point et normale (monde) du contact le plus violent de chaque choc en attente.
+var _pending_at: Dictionary = {}
+var _smoke: CPUParticles3D
+var _sparks: CPUParticles3D
+## Etat visible : 0 neuve, 1 abimee (< 60 %), 2 en ruine (< 30 %).
+var damage_stage: int = 0
+var _marks: Array[Decal] = []
+const MAX_MARKS := 10
 
 
 func _init() -> void:
@@ -101,6 +114,13 @@ func set_visual(v: Node3D) -> void:
 func _ready() -> void:
 	mass = trailer_mass
 	hp = max_hp
+	var center := _shape.position
+	_smoke = DamageFx.make_smoke()
+	_smoke.position = center + Vector3(0.0, 2.0, 0.0)
+	add_child(_smoke)
+	_sparks = DamageFx.make_sparks()
+	_sparks.position = center + Vector3(0.0, -0.5, 0.0)
+	add_child(_sparks)
 	if dropped_by != null:
 		add_collision_exception_with(dropped_by)
 		_owner_query = PhysicsShapeQueryParameters3D.new()
@@ -131,8 +151,9 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		for k in 3:
 			approach = maxf(approach, absf((truck_hist[k] - _vel_hist[k]).dot(n)))
 		var last: int = _last_contact.get(truck, -100000)
-		if now - last > hit_gap_ticks:
-			_pending[truck] = maxf(float(_pending.get(truck, 0.0)), approach)
+		if now - last > hit_gap_ticks and approach >= float(_pending.get(truck, -1.0)):
+			_pending[truck] = approach
+			_pending_at[truck] = [state.get_contact_local_position(i), n]
 		_last_contact[truck] = now
 
 
@@ -145,16 +166,18 @@ func _physics_process(_delta: float) -> void:
 		_update_owner_collision()
 	for key: Variant in _pending:
 		if is_instance_valid(key):
-			_on_truck_hit(key as Truck, float(_pending[key]))
+			_on_truck_hit(key as Truck, float(_pending[key]), _pending_at.get(key, []))
 	_pending.clear()
+	_pending_at.clear()
 	if hp <= 0.0:
 		ExplosionFx.spawn(get_parent(), _shape.global_position, 9.0)
 		destroyed.emit()
 		queue_free()
 
 
-## Choc d'un camion : PV retires selon l'energie ; un adversaire est penalise.
-func _on_truck_hit(truck: Truck, approach_ms: float) -> void:
+## Choc d'un camion : PV retires selon l'energie ; un adversaire est penalise ;
+## trace au point touche, fumee et suie selon les PV restants.
+func _on_truck_hit(truck: Truck, approach_ms: float, contact: Array) -> void:
 	truck_hit.emit(truck)
 	if truck != dropped_by:
 		truck.cargo_hit(global_position)
@@ -163,6 +186,57 @@ func _on_truck_hit(truck: Truck, approach_ms: float) -> void:
 		return
 	hp = maxf(0.0, hp - amount)
 	damaged.emit(amount, hp)
+	if contact.size() == 2:
+		var at: Vector3 = contact[0]
+		var n: Vector3 = contact[1]
+		# normale sortante de la remorque : vers le camion qui l'a frappee
+		if n.dot(truck.global_position - at) < 0.0:
+			n = -n
+		_add_mark(at, n, clampf(amount / 25.0, 0.2, 1.0))
+	_update_damage_stage()
+
+
+## Trace de choc au point monde `at`, la carrosserie regardant vers `outward`.
+func _add_mark(at: Vector3, outward: Vector3, severity: float) -> void:
+	var parent: Node3D = _visual if _visual != null else self
+	var d := DamageFx.make_mark(severity)
+	var inv := parent.global_transform.affine_inverse()
+	DamageFx.place_mark(d, inv * at, inv.basis * outward)
+	parent.add_child(d)
+	_marks.append(d)
+	if _marks.size() > MAX_MARKS:
+		var old: Decal = _marks.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+
+
+## Fumee et suie selon les PV : abimee sous 60 %, en ruine sous 30 %.
+func _update_damage_stage() -> void:
+	var ratio := hp / maxf(max_hp, 1.0)
+	var stage := 2 if ratio < 0.3 else (1 if ratio < 0.6 else 0)
+	if stage <= damage_stage:
+		return
+	var c := _shape.global_position
+	var b := _shape.global_basis
+	var half := TruckSpec.TRAILER_SIZE / 2.0
+	if stage >= 1 and damage_stage < 1:
+		# flancs noircis
+		for side: float in [-1.0, 1.0]:
+			_add_mark(c + b.x * side * half.x, b.x * side, 0.9)
+	if stage >= 2:
+		_add_mark(c + b.y * half.y, b.y, 1.0)
+		_add_mark(c - b.z * half.z * 0.5 + b.x * half.x, b.x, 1.0)
+	damage_stage = stage
+	DamageFx.set_smoke(_smoke, DamageFx.Smoke.LIGHT if stage == 1 else DamageFx.Smoke.HEAVY)
+	_sparks.emitting = stage == 2
+
+
+func is_smoking() -> bool:
+	return _smoke != null and _smoke.emitting
+
+
+func mark_count() -> int:
+	return _marks.size()
 
 
 ## Le camion qui l'a larguee la percute desormais, une fois sorti de son

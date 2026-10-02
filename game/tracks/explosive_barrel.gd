@@ -2,19 +2,27 @@ class_name ExplosiveBarrel
 extends RigidBody3D
 
 ## Baril explosif pose sur la piste (style Mario Kart / arcade).
-## Gele sur la route tant que personne n'y touche.
+## Gele sur la route tant que personne n'y touche. Remasterise le 2026-10-02 :
+## taille arcade (1,2 m de rayon, 2,5 m de haut : visible a 150 km/h sur 75 m
+## de large), deux bandes de chevrons jaunes et noirs lumineux, et un
+## gyrophare stroboscopique au sommet (dome, lumiere, halo qui garde une
+## taille minimale a l'ecran : repere a plus de 250 m).
 ## Au contact d'un camion :
 ##   - Detonation avec flash lumineux / onde de choc et son d'explosion procedural ;
 ##   - Yeet physique leger sur le camion (impulsion de rebond vers le haut et l'exterieur) ;
 ##   - Le baril lui-meme est projete en l'air en tournoyant ;
 ##   - Respawn a sa position d'origine apres respawn_ticks.
-## (Les degats de PV seront ajoutes lors du lot PV / combat).
+## Degats : -15 PV au camion qui le fait sauter (PadEffects, TruckHealth).
 
 signal exploded(truck: Truck)
 
 const HAZARD_LAYER := 5
-const BARREL_RADIUS := 0.65
-const BARREL_HEIGHT := 1.35
+const BARREL_RADIUS := 1.2
+const BARREL_HEIGHT := 2.5
+## Gyrophare : periode du motif (double eclair) et intensites au maximum.
+const STROBE_PERIOD_S := 0.9
+const BEACON_ENERGY := 6.0
+const BEACON_GLOW := 9.0
 const AUDIO_RATE := 22050
 const AUDIO_DURATION_S := 0.55
 
@@ -30,12 +38,17 @@ var _blast_fx: MeshInstance3D
 var _blast_mat: StandardMaterial3D
 var _blast_light: OmniLight3D
 var _audio_player: AudioStreamPlayer3D
+var _beacon_light: OmniLight3D
+var _beacon_mat: StandardMaterial3D
+var _halo_mat: ShaderMaterial
+## Phase propre a chaque baril (ils ne clignotent pas tous ensemble).
+var _strobe_phase: float = 0.0
 static var _shared_stream: AudioStreamWAV
 
 
 func _init() -> void:
 	name = "ExplosiveBarrel"
-	mass = 45.0
+	mass = 120.0
 	freeze = true
 	freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 	collision_layer = 1 << (HAZARD_LAYER - 1)
@@ -55,55 +68,108 @@ func _init() -> void:
 	_barrel_model.name = "Model"
 	add_child(_barrel_model)
 
-	# Fût principal en metal rouge industriel
+	# Fut principal en metal rouge industriel
 	var body_mesh := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
 	cm.top_radius = BARREL_RADIUS
 	cm.bottom_radius = BARREL_RADIUS
 	cm.height = BARREL_HEIGHT
-	cm.radial_segments = 20
+	cm.radial_segments = 28
 	body_mesh.mesh = cm
 	var red_metal := StandardMaterial3D.new()
-	red_metal.albedo_color = Color(0.88, 0.14, 0.08)
+	red_metal.albedo_color = Color(0.88, 0.12, 0.06)
 	red_metal.roughness = 0.35
-	red_metal.metallic = 0.65
+	red_metal.metallic = 0.6
+	red_metal.emission_enabled = true
+	red_metal.emission = Color(0.9, 0.08, 0.02)
+	red_metal.emission_energy_multiplier = 0.35
 	body_mesh.material_override = red_metal
 	body_mesh.position = Vector3(0.0, BARREL_HEIGHT / 2.0, 0.0)
 	_barrel_model.add_child(body_mesh)
 
-	# Cerclages noirs (haut et bas)
+	# Cerclages noirs (haut, milieu, bas)
 	var ring_mat := StandardMaterial3D.new()
-	ring_mat.albedo_color = Color(0.08, 0.08, 0.1)
+	ring_mat.albedo_color = Color(0.06, 0.06, 0.08)
 	ring_mat.roughness = 0.5
 	ring_mat.metallic = 0.8
-	for y_off: float in [0.22, BARREL_HEIGHT - 0.22]:
+	for y_off: float in [0.3, BARREL_HEIGHT * 0.5, BARREL_HEIGHT - 0.3]:
 		var ring := MeshInstance3D.new()
 		var rm := CylinderMesh.new()
-		rm.top_radius = BARREL_RADIUS + 0.02
-		rm.bottom_radius = BARREL_RADIUS + 0.02
-		rm.height = 0.12
-		rm.radial_segments = 20
+		rm.top_radius = BARREL_RADIUS + 0.04
+		rm.bottom_radius = BARREL_RADIUS + 0.04
+		rm.height = 0.16
+		rm.radial_segments = 28
 		ring.mesh = rm
 		ring.material_override = ring_mat
 		ring.position = Vector3(0.0, y_off, 0.0)
 		_barrel_model.add_child(ring)
 
-	# Bande centrale jaune d'avertissement emissive
-	var warn_ring := MeshInstance3D.new()
-	var wm := CylinderMesh.new()
-	wm.top_radius = BARREL_RADIUS + 0.015
-	wm.bottom_radius = BARREL_RADIUS + 0.015
-	wm.height = 0.28
-	wm.radial_segments = 20
-	warn_ring.mesh = wm
-	var warn_mat := StandardMaterial3D.new()
-	warn_mat.albedo_color = Color(1.0, 0.82, 0.1)
-	warn_mat.emission_enabled = true
-	warn_mat.emission = Color(1.0, 0.72, 0.05)
-	warn_mat.emission_energy_multiplier = 1.6
-	warn_ring.material_override = warn_mat
-	warn_ring.position = Vector3(0.0, BARREL_HEIGHT / 2.0, 0.0)
-	_barrel_model.add_child(warn_ring)
+	# Deux bandes de chevrons jaunes et noirs lumineux
+	var chevron_mat := ShaderMaterial.new()
+	chevron_mat.shader = preload("res://tracks/materials/barrel_chevrons.gdshader")
+	for y_band: float in [BARREL_HEIGHT * 0.3, BARREL_HEIGHT * 0.7]:
+		var band := MeshInstance3D.new()
+		band.name = "Chevrons"
+		var bm := CylinderMesh.new()
+		bm.top_radius = BARREL_RADIUS + 0.03
+		bm.bottom_radius = BARREL_RADIUS + 0.03
+		bm.height = 0.55
+		bm.radial_segments = 28
+		bm.cap_top = false
+		bm.cap_bottom = false
+		band.mesh = bm
+		band.material_override = chevron_mat
+		band.position = Vector3(0.0, y_band, 0.0)
+		_barrel_model.add_child(band)
+
+	# Gyrophare stroboscopique au sommet : socle, dome lumineux, lumiere et
+	# halo (visible de tres loin, voir beacon_halo.gdshader)
+	var base := MeshInstance3D.new()
+	var basem := CylinderMesh.new()
+	basem.top_radius = 0.42
+	basem.bottom_radius = 0.5
+	basem.height = 0.22
+	base.mesh = basem
+	base.material_override = ring_mat
+	base.position = Vector3(0.0, BARREL_HEIGHT + 0.11, 0.0)
+	_barrel_model.add_child(base)
+	_beacon_mat = StandardMaterial3D.new()
+	_beacon_mat.albedo_color = Color(1.0, 0.55, 0.05)
+	_beacon_mat.emission_enabled = true
+	_beacon_mat.emission = Color(1.0, 0.5, 0.02)
+	_beacon_mat.emission_energy_multiplier = BEACON_GLOW
+	var dome := MeshInstance3D.new()
+	dome.name = "BeaconDome"
+	var dm := SphereMesh.new()
+	dm.radius = 0.4
+	dm.height = 0.8
+	dm.is_hemisphere = true
+	dome.mesh = dm
+	dome.material_override = _beacon_mat
+	dome.position = Vector3(0.0, BARREL_HEIGHT + 0.22, 0.0)
+	_barrel_model.add_child(dome)
+	_beacon_light = OmniLight3D.new()
+	_beacon_light.name = "Beacon"
+	_beacon_light.light_color = Color(1.0, 0.55, 0.08)
+	_beacon_light.light_energy = BEACON_ENERGY
+	_beacon_light.omni_range = 24.0
+	_beacon_light.shadow_enabled = false
+	_beacon_light.position = Vector3(0.0, BARREL_HEIGHT + 0.6, 0.0)
+	_barrel_model.add_child(_beacon_light)
+	_halo_mat = ShaderMaterial.new()
+	_halo_mat.shader = preload("res://tracks/materials/beacon_halo.gdshader")
+	_halo_mat.set_shader_parameter("min_pixels", 40.0)
+	var halo := MeshInstance3D.new()
+	halo.name = "BeaconHalo"
+	var hm := QuadMesh.new()
+	hm.size = Vector2(3.0, 3.0)
+	halo.mesh = hm
+	halo.material_override = _halo_mat
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# le halo grandit au loin (shader) : boite englobante large, jamais coupee
+	halo.custom_aabb = AABB(Vector3(-40.0, -40.0, -40.0), Vector3(80.0, 80.0, 80.0))
+	halo.position = Vector3(0.0, BARREL_HEIGHT + 0.5, 0.0)
+	_barrel_model.add_child(halo)
 
 	# Effet visuel d'explosion (onde de choc spherique)
 	_blast_fx = MeshInstance3D.new()
@@ -149,8 +215,8 @@ func _init() -> void:
 	area.monitorable = false
 	var acs := CollisionShape3D.new()
 	var acyl := CylinderShape3D.new()
-	acyl.radius = BARREL_RADIUS + 0.85
-	acyl.height = BARREL_HEIGHT + 1.2
+	acyl.radius = BARREL_RADIUS + 1.0
+	acyl.height = BARREL_HEIGHT + 1.5
 	acs.shape = acyl
 	acs.position = Vector3(0.0, BARREL_HEIGHT / 2.0, 0.0)
 	area.add_child(acs)
@@ -160,6 +226,25 @@ func _init() -> void:
 
 func _ready() -> void:
 	_home = transform
+	_strobe_phase = fposmod(_home.origin.x * 0.37 + _home.origin.z * 0.11, STROBE_PERIOD_S)
+
+
+## Intensite du gyrophare (0 .. 1) a l'instant t (s) : double eclair bref,
+## puis une lueur residuelle.
+static func strobe(t: float) -> float:
+	var u := fposmod(t, STROBE_PERIOD_S)
+	if u < 0.07 or (u > 0.16 and u < 0.23):
+		return 1.0
+	return 0.3
+
+
+func _process(_delta: float) -> void:
+	var k := strobe(Time.get_ticks_msec() / 1000.0 + _strobe_phase)
+	if exploded_state:
+		k = 0.0
+	_beacon_light.light_energy = BEACON_ENERGY * k
+	_beacon_mat.emission_energy_multiplier = BEACON_GLOW * maxf(k, 0.25)
+	_halo_mat.set_shader_parameter("flash", k)
 
 
 func _physics_process(_delta: float) -> void:
@@ -170,7 +255,7 @@ func _physics_process(_delta: float) -> void:
 	# Animation d'expansion et d'attenuation de l'onde de choc
 	if _exploded_ticks <= 20:
 		var u := float(_exploded_ticks) / 20.0
-		_blast_fx.scale = Vector3.ONE * lerpf(0.6, 4.6, u)
+		_blast_fx.scale = Vector3.ONE * lerpf(1.0, 7.5, u)
 		_blast_light.light_energy = lerpf(5.0, 0.0, u)
 		if _blast_mat != null:
 			_blast_mat.albedo_color.a = (1.0 - u) * 0.85
@@ -219,7 +304,7 @@ func explode(truck: Truck) -> void:
 
 	# Flash visuel
 	_blast_fx.visible = true
-	_blast_fx.scale = Vector3.ONE * 0.6
+	_blast_fx.scale = Vector3.ONE * 1.0
 	_blast_light.visible = true
 	_blast_light.light_energy = 5.0
 	if _blast_mat != null:

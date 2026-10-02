@@ -34,13 +34,13 @@
   - Éjection spectaculaire (*yeet* > 11 m) conservée, suppression de la division de vitesse par 2 (flow de course arcade préservé).
 - [x] **Flaques d'huile / eau glissantes** :
   - Ne freinent plus le camion (vitesse longitudinale 100 % préservée) : perte brutale d'adhérence latérale (effet savonnette) obligeant à contre-braquer.
-- [~] **Barils explosifs** (Lot 1 fonctionnel, Lot 3 : remasterisation visuelle et taille) :
+- [x] **Barils explosifs** (Lot 1 fonctionnel ; Lot 3 : 1,2 m x 2,5 m, chevrons lumineux, gyrophare stroboscopique à halo) :
   - Fût métallique rouge et jaune émissif sur la piste.
   - Détonation au contact : onde de choc, lumière dynamique, son d'explosion procédural et léger *yeet* physique du camion sans basculement. Éjection du baril et respawn après 6 s. Dégâts -15 HP (TruckHealth).
   - Remasterisation (demande utilisateur) : barils actuellement trop petits et peu visibles à grande vitesse sur la piste de 75 m ; à agrandir sensiblement (~x1.8 à x2), contraste renforcé et ajout d'une balise stroboscopique/lumineuse arcade clignotante visible de loin.
 
 ### Module 5 : Dégradations Visuelles Localisées
-- [ ] **Système de dégradations visuelles par zone** :
+- [x] **Système de dégradations visuelles par zone** (Lot 3 : décalques de choc localisés, fumée moteur selon les PV, `TruckDamageFx`) :
   - Déformations et éraflures/noirceur là où le camion a tapé ou s'est fait taper (avant, flancs, remorque).
   - Fumée légère -> fumée dense selon le niveau de PV restants.
 
@@ -50,7 +50,7 @@
 - [x] **Règles d'équilibrage du largage** (verrou 5 s au GO, nouvelle remorque après la recharge de 30 s) :
   - Les **5 premières secondes** de course : largage interdit (évite le bouchon au départ).
   - Après largage : une nouvelle remorque réapparaît sur le camion du joueur pour lui permettre d'en larguer d'autres.
-- [~] **Points de vie de la remorque (50 HP)** (Lot 2 : PV, dégâts selon l'énergie du choc, explosion ; dégradation visuelle progressive à faire avec le module 5) :
+- [x] **Points de vie de la remorque (50 HP)** (Lot 2 : PV, dégâts selon l'énergie du choc, explosion ; Lot 3 : traces, suie et fumée selon ses PV) :
   - Chaque remorque abandonnée sur la piste a **50 HP**.
   - Elle perd des PV lors des chocs avec les autres camions ou attaques.
   - Dégradation visuelle progressive puis destruction / disparition quand ses 50 HP tombent à 0.
