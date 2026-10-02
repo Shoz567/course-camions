@@ -185,7 +185,9 @@ supporter :
 - Changer de version de Godot, de moteur physique ou de langage.
 - Ajouter une dépendance externe (addon, GDExtension, plugin Blender).
 - Committer des binaires : `*.glb`, `*.blend1`, `.godot/`, `builds/` sont
-  git-ignorés (le hook `pre-commit` les refuse). Exception : `baseline.json`.
+  git-ignorés (le hook `pre-commit` les refuse). Exceptions : `baseline.json`,
+  et les modèles `.glb` de l'équipe dans `Assets_Visuels/`, versionnés **par
+  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7).
 - Télécharger des assets tiers (modèles, textures, sons).
   Les sons et la musique **synthétisés par le code** (`MenuSound`,
   `CountdownSound`, `RaceMusic`) ne sont pas des assets tiers ; la musique de

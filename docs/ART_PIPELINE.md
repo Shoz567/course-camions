@@ -103,10 +103,11 @@ carrosserie qu'on ajuste, pas la suspension.
 ### 4 bis. Modèle externe des camarades (`Assets_Visuels/`)
 
 Les modèles `Assets_Visuels/Camion/Camions_Course_Export/*.glb` sont faits à la
-main, hors pipeline Blender scripté, et **hors dépôt** (`.gitignore`, et le hook
-refuse tout `.glb`). `TruckVisual` (`game/vehicles/truck_visual.gd`) les charge
-**à l'exécution** s'ils existent ; sinon le camion garde ses boîtes de blockout.
-Un clone neuf et les tests ne dépendent donc d'aucun binaire. Un export du jeu
+main, hors pipeline Blender scripté, et versionnés **par Git LFS** depuis le
+2026-10-02 (`docs/ENVIRONMENT.md` §6.7 ; les `.fbx` sources restent hors
+dépôt). `TruckVisual` (`game/vehicles/truck_visual.gd`) les charge **à
+l'exécution** s'ils existent ; sinon le camion garde ses boîtes de blockout. Un
+clone sans Git LFS et les tests (headless) ne dépendent donc d'aucun binaire. Un export du jeu
 ne les embarquera pas : à régler en phase 7 (import dans le projet, licence et
 origine confirmées).
 

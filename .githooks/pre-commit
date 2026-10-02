@@ -29,11 +29,30 @@ fi
 staged=$(git diff --cached --name-only --diff-filter=ACM)
 [ -z "$staged" ] && exit 0
 
+# Fichiers suivis par Git LFS (.gitattributes : les .glb d'Assets_Visuels/) :
+# ils ne partent pas dans l'historique, seulement un pointeur de quelques
+# lignes. Ils echappent donc aux controles 1 et 2. Un .glb hors de ces
+# chemins reste refuse.
+lfs=""
+for f in $staged; do
+	if [ "$(git check-attr filter -- "$f" | sed 's/.*: filter: //')" = "lfs" ]; then
+		lfs="$lfs
+$f"
+	fi
+done
+not_lfs() {
+	if [ -z "$lfs" ]; then
+		cat
+	else
+		grep -vxF "$lfs"
+	fi
+}
+
 # --- 1. artefacts regenerables ---------------------------------------------
 # Les assets se regenerent (`make assets`), ils ne se versionnent pas.
 # CLAUDE.md §8. baseline.json est l'exception explicite, et il est en .json
 # donc il ne matche aucun de ces motifs.
-forbidden=$(echo "$staged" | grep -Ei '\.(glb|gltf|blend|blend1|pck|exe)$' || true)
+forbidden=$(echo "$staged" | not_lfs | grep -Ei '\.(glb|gltf|blend|blend1|pck|exe)$' || true)
 if [ -n "$forbidden" ]; then
 	echo "${RED}pre-commit : artefact regenerable dans le commit${RESET}"
 	echo "$forbidden" | sed 's/^/    /'
@@ -45,7 +64,7 @@ fi
 
 # --- 2. fichiers volumineux -------------------------------------------------
 big=""
-for f in $staged; do
+for f in $(echo "$staged" | not_lfs); do
 	[ -f "$f" ] || continue
 	size=$(wc -c < "$f" 2>/dev/null || echo 0)
 	if [ "$size" -gt 1048576 ]; then

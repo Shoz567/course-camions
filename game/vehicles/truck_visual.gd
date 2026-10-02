@@ -5,7 +5,7 @@ extends Node3D
 ## (rayons, braquage) et n'agit jamais sur la physique.
 ##
 ## - Roues : suivent le debattement de leur rayon et le braquage.
-## - Modele externe optionnel (.glb des camarades, Assets_Visuels/, hors git) :
+## - Modele externe optionnel (.glb des camarades, Assets_Visuels/, Git LFS) :
 ##   charge a l'execution s'il existe, sinon le camion garde ses boites de
 ##   blockout. Un clone neuf et les tests ne dependent donc d'aucun binaire.
 ##
@@ -49,7 +49,8 @@ extends Node3D
 @export var livery: Dictionary = {}
 
 ## En headless (tests), le modele n'est pas charge : rien a voir, et les tests
-## ne doivent pas dependre d'un fichier hors depot. Un test peut forcer.
+## ne doivent pas dependre d'un fichier LFS (absent d'un clone sans Git LFS).
+## Un test peut forcer.
 static var load_external_in_headless: bool = false
 
 const SPEC_LENGTH := TruckSpec.CHASSIS_SIZE.z
