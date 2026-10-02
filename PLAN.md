@@ -347,8 +347,9 @@ ajout discret au milieu d'une autre.
   ±35°, la caisse de collision pivote et balaie les adversaires (VEHICLE_SPEC
   §2 et §5 bis). Pas de mise en portefeuille ni de corps séparé.
 - **Boost / objets.** Arcade retenu : boost à jauge (L), plaques de boost et de
-  saut, largage de la remorque entière (Triangle, barrage de 10 s, tracteur
-  seul plus rapide pendant ce temps, recharge 30 s). Pas encore d'objets à
+  saut, largage de la remorque entière (Triangle, barrage de 60 s, tracteur
+  seul plus rapide pendant ce temps, recharge 30 s : on relargue dès le
+  raccrochage). Pas encore d'objets à
   ramasser.
 
 ## Ce qu'on ne fait volontairement pas (pour l'instant)

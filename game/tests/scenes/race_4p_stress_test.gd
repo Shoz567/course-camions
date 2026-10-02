@@ -6,9 +6,10 @@ extends PhysicsTest
 ## de la grille, chacun sur sa voie, et roulent 25 s ; chacun largue sa remorque.
 ## Verifie la robustesse, pas un temps : aucun NaN, personne hors du monde ni
 ## sur le toit plus de 2 s, tout le monde avance, toutes les remorques
-## larguees disparaissent.
+## larguees disparaissent (barrage ramene a DETACH_TICKS pour tenir en 25 s).
 
 const DURATION := 1500
+const DETACH_TICKS := 600
 const LANES: Array[float] = [-2.5, 2.5, -7.5, 7.5]
 
 var _track: TrackBlockout
@@ -54,6 +55,9 @@ func _test_setup() -> void:
 		var p := TrackAutopilot.new(_track, t, float(g))
 		p.lane = LANES[i]
 		_pilots.append(p)
+		# barrage de 10 s (60 s par defaut depuis le 2026-10-02) : la course
+		# de 25 s voit les remorques disparaitre et se raccrocher
+		(t.get_node("Cargo") as TruckCargo).detach_ticks = DETACH_TICKS
 		(t.get_node("Cargo") as TruckCargo).dropped.connect(func(c: DetachedTrailer) -> void:
 			_drops += 1
 			_crates.append(c))

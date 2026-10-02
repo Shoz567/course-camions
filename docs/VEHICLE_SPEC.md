@@ -211,7 +211,8 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
 - **Remorque larguée** (pouvoir cargo, 2026-09-30) : la remorque entière se
   détache (caisse de collision du camion coupée, visuel masqué) ; une
   `DetachedTrailer` (9 000 kg, freinée, boîte pleine hauteur, couche 5
-  `hazard`) la remplace sur la route pendant 10 s, puis la remorque se
+  `hazard`) la remplace sur la route pendant 60 s (10 s jusqu'au
+  2026-10-02, allongé à la demande de l'utilisateur), puis la remorque se
   raccroche dès que sa place est libre. Tracteur seul pendant ce temps :
   vitesse max × 1,12, poussée × 1,3, braquage × 1,15 (mesuré : +18 km/h
   après 5 s). Recharge globale de 30 s depuis le largage.

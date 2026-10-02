@@ -2,7 +2,7 @@ class_name DetachedTrailer
 extends RigidBody3D
 
 ## Remorque larguee (pouvoir cargo, Triangle) : la remorque entiere reste sur
-## la route pendant lifetime_ticks (10 s) et fait barrage. Corps lourd et
+## la route pendant lifetime_ticks (60 s) et fait barrage. Corps lourd et
 ## freine (il glisse un peu, puis tient la place), boite pleine hauteur posee
 ## au sol, sur la couche 5 `hazard` (VEHICLE_SPEC §7) : les camions la
 ## percutent, les rayons de suspension et les zones de la piste l'ignorent.
