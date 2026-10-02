@@ -12,30 +12,31 @@
 ## GIGA TODO : PLAN D'IMPLÉMENTATION PAR MODULES
 
 ### Module 1 : Véhicule & Conduite Légère
-- [ ] **Vitesse tracteur solo (sans remorque)** :
+- [x] **Vitesse tracteur solo (sans remorque)** :
   - Multiplicateur de vitesse max à **x1.2** (`solo_top_speed_factor = 1.2`) et accélération accrue quand la remorque est larguée pour un boost d'agilité immédiat.
 
 ### Module 2 : Système de Points de Vie (HP) & Mort / Respawn
 - [ ] **Barre de PV (100 HP)** :
-  - Affichage d'une jauge de vie dédiée sur le HUD de chaque joueur.
+  - Suivi des 100 HP (affichage discret / petit ou interne avant dégradations visuelles).
   - Calcul des dégâts : uniquement le tracteur (cabine / avant) encaisse les dégâts sur les PV du joueur.
   - Chocs contre les murs : **-1 à -5 HP** selon la violence / vitesse de l'impact.
+  - Percussion d'un baril explosif : **-15 HP**.
   - La remorque agit comme un **bouclier défensif** (protège l'arrière du joueur, les chocs dessus n'entament pas les 100 HP du tracteur).
 - [ ] **Mort & Respawn** :
   - À 0 HP : explosion / fumée, immobilisation pendant **3 secondes**, puis réapparition (respawn) sur la piste avec 100 HP restaurés.
 
 ### Module 3 : Course & Règles (4 Tours)
-- [ ] **4 Laps** :
-  - Passer le nombre de tours de 3 à **4 tours** (`total_laps = 4`).
+- [x] **4 Laps** :
+  - Passage du nombre de tours de 3 à **4 tours** (`total_laps = 4`) et synchronisation HUD/menu.
 
 ### Module 4 : Obstacles du Circuit : Panneaux, Flaques & Barils Explosifs
-- [ ] **Panneaux de virage sans pénalité** :
-  - Conserver l'éjection spectaculaire (*yeet*), mais supprimer la division de vitesse par 2 pour garder un flow de course arcade rapide.
-- [ ] **Flaques d'huile / eau glissantes** :
-  - Ne freinent plus le camion : à la place, perte brutale d'adhérence latérale (effet savonnette) qui déstabilise le contrôle du joueur.
-- [ ] **Barils explosifs** :
-  - Barils d'explosifs posés sur le tracé.
-  - Au contact : explosion, léger *yeet* physique et **-15 HP** de dégâts.
+- [x] **Panneaux de virage sans pénalité** :
+  - Éjection spectaculaire (*yeet* > 11 m) conservée, suppression de la division de vitesse par 2 (flow de course arcade préservé).
+- [x] **Flaques d'huile / eau glissantes** :
+  - Ne freinent plus le camion (vitesse longitudinale 100 % préservée) : perte brutale d'adhérence latérale (effet savonnette) obligeant à contre-braquer.
+- [x] **Barils explosifs** :
+  - Fût métallique rouge et jaune émissif sur la piste.
+  - Détonation au contact : onde de choc, lumière dynamique, son d'explosion procédural et léger *yeet* physique du camion sans basculement. Éjection du baril et respawn après 6 s. (Dégâts -15 HP branchés avec le module PV).
 
 ### Module 5 : Dégradations Visuelles Localisées
 - [ ] **Système de dégradations visuelles par zone** :

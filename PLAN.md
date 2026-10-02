@@ -286,21 +286,26 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 
 | # | Tâche | Agent | État |
 |---|---|---|---|
-| 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[~]` |
-| 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[~]` |
-| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) sans dégâts pour l'instant | track-designer | `[~]` |
-| 4.5.4 | Système de PV (100 HP) sur le HUD : dégâts aux chocs murs (-1 à -5 HP sur la cabine uniquement), remorque bouclier, mort et respawn après 3 s | gameplay-engineer | `[ ]` |
-| 4.5.5 | Remorques larguées persistantes (50 HP) : barrage permanent sur la piste, détruites à 0 HP, interdiction de largage les 5 premières secondes | gameplay-engineer | `[ ]` |
+| 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[x]` |
+| 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[x]` |
+| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) | track-designer | `[x]` |
+| 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP cabine uniquement), barils explosifs (-15 HP), remorque bouclier, mort et respawn après 3 s (PV discrets/internes avant dégradations) | gameplay-engineer | `[~]` |
+| 4.5.5 | Remorques larguées persistantes (50 HP) : restent sur piste sans disparition, nouvelle remorque réapparue sur le tracteur, interdiction de largage les 5 premières secondes | gameplay-engineer | `[~]` |
 | 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive | visual-artist | `[ ]` |
-| 4.5.7 | Sas "READY" et écran scindé de sélection des 4 pouvoirs mappés sur le D-PAD PS5 DualSense (Haut, Bas, Gauche, Droite) | gameplay-engineer | `[ ]` |
-| 4.5.8 | Arsenal des pouvoirs : Lance-missiles (2 missiles, 5 s cooldown, -15 HP) et Citerne d'essence sur remorque (traînée glissante 2 s, 30 s cooldown) | gameplay-engineer | `[ ]` |
+| 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[~]` |
+| 4.5.8 | Arsenal des pouvoirs D-PAD : Lance-missiles (2 missiles, 5 s cooldown, -15 HP) et Citerne d'essence sur remorque (traînée glissante 2 s, 30 s cooldown) | gameplay-engineer | `[ ]` |
 
-**Critères de sortie**
-- Les camions sans remorque accélèrent et pointent à x1.2 de leur vitesse de pointe normale.
+**Critères de sortie du Lot 1 (Terminé)**
+- Les camions sans remorque accélèrent et pointent à x1.2 de leur vitesse de pointe normale (`solo_top_speed_factor = 1.2`).
 - La course se dispute sur 4 tours complets avec affichage HUD synchronisé.
 - Les panneaux sont éjectés sans pénaliser la vitesse du camion ; les flaques provoquent une glissade latérale sans freinage.
 - Des barils explosifs jalonnent la piste et explosent avec éjection physique au contact.
-- `make test` passe à 100 %.
+- `make test` passe à 100 % (47/47 tests).
+
+**Critères de sortie du Lot 2 (En cours)**
+- Gestion des PV (100 HP) avec calcul des dégâts aux murs et dégâts barils (-15 HP), sans dégradation visuelle pour l'instant.
+- Remorques larguées persistantes (50 HP) avec spawn d'une nouvelle remorque sur le camion (verrou 5 premières secondes).
+- Sas "READY ?" avant le départ où chaque joueur valide avec la touche Carré.
 
 ---
 
