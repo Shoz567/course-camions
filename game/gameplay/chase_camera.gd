@@ -10,8 +10,15 @@ extends Node3D
 ##   hauteur plus que le reste : le pompage de la suspension ne secoue pas
 ##   l'image. La camera ne roule ni ne tangue avec le camion.
 ## - Vise dans la direction de la vitesse en derapage, et legerement devant.
-## - Un SpringArm3D la raccourcit quand un mur s'interpose : elle ne passe jamais
-##   a travers la geometrie de la piste (couche 1 `world`).
+## - Le bras la raccourcit quand le decor s'interpose (sphere lancee du pivot
+##   vers la camera, couche 1 `world`) : elle ne passe jamais a travers la
+##   piste. Lance A CHAQUE IMAGE (2026-10-02) : un SpringArm3D ne verifie qu'au
+##   tick physique, et sur un ecran plus rapide que 60 Hz la camera entrait
+##   dans le decor entre deux ticks (1,1 m a 240 Hz, camera_ground_test).
+## - Le pivot, amorti en hauteur, ne descend jamais a moins de
+##   focus_min_height au-dessus du camion : en montee rapide (11 m/s en 200cc
+##   sur Cyber City), il trainait a 0,4 m du camion, au ras de la route, et le
+##   bras ne voyait plus le sol.
 ## - Champ de vision un peu plus large a haute vitesse.
 ## - Deux vues (toggle_view) : poursuite (3e personne) et cabine (1re personne,
 ##   oeil derriere le pare-brise, orientation legerement amortie).
@@ -23,6 +30,11 @@ enum View { CHASE, COCKPIT }
 ## Recul depuis le tracteur : au-dela de la semi-remorque (arriere a 16,1 m).
 @export var distance: float = 28.0
 @export var focus_height: float = 4.8
+## Hauteur minimale du pivot au-dessus du camion, malgre l'amortissement.
+@export var focus_min_height: float = 2.5
+## Rayon de la sphere du bras et marge gardee devant le decor (m).
+@export var arm_radius: float = 0.3
+@export var arm_margin: float = 0.3
 ## Plongee de la camera (deg) : assez pour voir par-dessus l'aileron (5,6 m).
 @export var pitch_deg: float = 13.0
 ## Amortissements (1/s) : plus grand = plus raide.
@@ -50,7 +62,8 @@ enum View { CHASE, COCKPIT }
 var view: View = View.CHASE
 var _cockpit_basis: Basis = Basis.IDENTITY
 
-var _arm: SpringArm3D
+var _arm: Node3D
+var _arm_query: PhysicsShapeQueryParameters3D
 var _camera: Camera3D
 var _focus: Vector3
 var _yaw: float = 0.0
@@ -65,18 +78,18 @@ func _ready() -> void:
 	# la camera se deplace dans _process : pas d'interpolation physique sur elle
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	top_level = true
-	_arm = SpringArm3D.new()
-	_arm.spring_length = distance
-	_arm.collision_mask = 1          # murs et chaussee ; jamais les camions
-	_arm.margin = 0.3
-	var sphere := SphereShape3D.new()
-	sphere.radius = 0.3
-	_arm.shape = sphere
+	_arm = Node3D.new()
 	_arm.rotation.x = -deg_to_rad(pitch_deg)
 	add_child(_arm)
+	var sphere := SphereShape3D.new()
+	sphere.radius = arm_radius
+	_arm_query = PhysicsShapeQueryParameters3D.new()
+	_arm_query.shape = sphere
+	_arm_query.collision_mask = 1    # murs et chaussee ; jamais les camions
 	_camera = Camera3D.new()
 	_camera.fov = fov_min
 	_camera.current = true
+	_camera.position = Vector3(0.0, 0.0, distance)
 	_arm.add_child(_camera)
 
 
@@ -97,7 +110,7 @@ func toggle_view() -> void:
 func set_view(v: View) -> void:
 	view = v
 	var chase := v == View.CHASE
-	_arm.spring_length = distance if chase else 0.0
+	_camera.position = Vector3(0.0, 0.0, distance if chase else 0.0)
 	_arm.rotation.x = -deg_to_rad(pitch_deg) if chase else 0.0
 	snap()
 
@@ -136,11 +149,25 @@ func _process(delta: float) -> void:
 		_focus.z = lerpf(_focus.z, focus.z, k)
 		_focus.y = lerpf(_focus.y, focus.y, kh)
 		_yaw = lerp_angle(_yaw, heading, 1.0 - exp(-yaw_damping * delta))
+	_focus.y = maxf(_focus.y, xf.origin.y + focus_min_height)
 
 	global_transform = Transform3D(Basis(Vector3.UP, _yaw), _focus)
+	_camera.position = Vector3(0.0, 0.0, _arm_length())
 	var speed_ratio := clampf(absf(forward_speed) * 3.6 / fov_speed_kmh, 0.0, 1.0)
 	var fov := lerpf(fov_min, fov_max, speed_ratio)
 	_camera.fov = lerpf(_camera.fov, fov, 1.0 - exp(-fov_damping * delta))
+
+
+## Longueur du bras a cette image : la sphere part du pivot vers la camera et
+## s'arrete au premier decor, moins arm_margin.
+func _arm_length() -> float:
+	var from := _arm.global_position
+	_arm_query.transform = Transform3D(Basis.IDENTITY, from)
+	_arm_query.motion = _arm.global_basis.z * distance
+	var hit := get_world_3d().direct_space_state.cast_motion(_arm_query)
+	if hit.is_empty():
+		return distance
+	return maxf(distance * hit[0] - arm_margin, 0.0)
 
 
 func _process_cockpit(xf: Transform3D, delta: float) -> void:
