@@ -70,6 +70,7 @@ _BASE = {
     "Oeil": ((0.01, 0.01, 0.01), 0.0, 0.05, None, 1.0),
     "Ruban_Rouge": ((0.70, 0.02, 0.05), 0.0, 0.50, None, 1.0),
     "Couture": ((0.12, 0.05, 0.02), 0.0, 1.00, None, 1.0),
+    "Creme_Tuyau": ((0.85, 0.80, 0.65), 0.0, 0.70, None, 1.0),
     "Neon_Cyan": ((0.00, 0.80, 1.00), 0.0, 0.10, ((0.0, 0.85, 1.0), 5.0), 1.0),
     "Neon_Rouge": ((1.00, 0.02, 0.02), 0.0, 0.10, ((1.0, 0.05, 0.02), 5.0), 1.0),
     "Neon_Violet": ((0.60, 0.05, 1.00), 0.0, 0.10, ((0.6, 0.1, 1.0), 5.0), 1.0),
@@ -154,6 +155,23 @@ def livery(color):
 
 
 # ---------------------------------------------------------------------------
+# Qualite
+# ---------------------------------------------------------------------------
+
+# Niveau de detail global (demande du 2026-10-02 : meme densite que les
+# modeles de l'equipe, ~64 000 triangles par camion). Les segments donnes
+# dans le code sont des valeurs de base, multipliees ici.
+SEG_MULT = 3.0        # cylindres, revolutions, arcs
+SPHERE_MULT = 2.0     # spheres (segments et anneaux)
+BEVEL_SEG = 4         # segments minimaux d'un biseau
+SEG_MAX = 72
+
+
+def _seg(n, mult=None):
+    return max(3, min(SEG_MAX, int(round(n * (SEG_MULT if mult is None else mult)))))
+
+
+# ---------------------------------------------------------------------------
 # Transformations
 # ---------------------------------------------------------------------------
 
@@ -228,7 +246,7 @@ class Part:
         bmesh.ops.scale(t, vec=Vector(s), verts=t.verts)
         if bevel > 0.0:
             b = min(bevel, min(s) * 0.45)
-            bmesh.ops.bevel(t, geom=list(t.edges), offset=b, segments=seg,
+            bmesh.ops.bevel(t, geom=list(t.edges), offset=b, segments=max(seg, BEVEL_SEG),
                             profile=0.5, affect="EDGES", clamp_overlap=True)
             bmesh.ops.recalc_face_normals(t, faces=t.faces)
         t.normal_update()
@@ -237,7 +255,7 @@ class Part:
     def cyl(self, c, r, depth, m, axis="Z", seg=16, r2=None, rot=None, smooth=True):
         """Cylindre (ou tronc de cone si `r2`) d'axe `axis`. `r2` = rayon cote +axe."""
         t = bmesh.new()
-        bmesh.ops.create_cone(t, cap_ends=True, cap_tris=False, segments=seg,
+        bmesh.ops.create_cone(t, cap_ends=True, cap_tris=False, segments=_seg(seg),
                               radius1=r, radius2=r if r2 is None else r2,
                               depth=depth)
         t.normal_update()
@@ -245,7 +263,8 @@ class Part:
 
     def sphere(self, c, r, m, seg=12, rings=8, scale=(1, 1, 1), rot=None):
         t = bmesh.new()
-        bmesh.ops.create_uvsphere(t, u_segments=seg, v_segments=rings, radius=r)
+        bmesh.ops.create_uvsphere(t, u_segments=_seg(seg, SPHERE_MULT),
+                                  v_segments=_seg(rings, SPHERE_MULT), radius=r)
         bmesh.ops.scale(t, vec=Vector(scale), verts=t.verts)
         t.normal_update()
         return self._merge(t, m, _place(c, rot), True)
@@ -256,6 +275,7 @@ class Part:
         Un point de rayon nul ferme en pointe. `closed` relie le dernier point
         au premier (tore, pneu).
         """
+        seg = _seg(seg)
         t = bmesh.new()
         rings = []
         for r, h in prof:
@@ -312,6 +332,7 @@ class Part:
     def arc(self, c, r_in, r_out, width, a0, a1, m, axis="X", seg=10, rot=None):
         """Secteur d'anneau (garde-boue) : angles en degres dans le plan
         perpendiculaire a `axis`, 0 = vers l'avant (+Y) pour axis X."""
+        seg = _seg(seg)
         pts = []
         for i in range(seg + 1):
             a = math.radians(a0 + (a1 - a0) * i / seg)
@@ -364,7 +385,7 @@ class Part:
         cu.extrude = depth
         cu.align_x = "CENTER"
         cu.align_y = "CENTER"
-        cu.resolution_u = 2
+        cu.resolution_u = 6
         ob = bpy.data.objects.new("txt_" + body, cu)
         bpy.context.scene.collection.objects.link(ob)
         dg = bpy.context.evaluated_depsgraph_get()
@@ -449,28 +470,61 @@ def tris(objects):
 # ---------------------------------------------------------------------------
 
 def wheel(p, hub, side, r=0.66, w=0.48, seg=16):
-    """Roue complete (pneu, jante, moyeu, ecrous) ajoutee a la piece `p`.
+    """Roue complete ajoutee a la piece `p` : pneu a epaulements arrondis et
+    sculptures, jante a voile ajoure, tambour, moyeu bombe, 10 ecrous, valve.
 
     `hub` = centre du moyeu (monde), `side` = +1 si le flanc exterieur est en
-    +X (roue droite), -1 sinon. ~350 triangles a 16 segments.
+    +X (roue droite), -1 sinon.
     """
-    rim = r * 0.62
+    rim = r * 0.60
     s = side
     hx, hy, hz = hub
-    p.lathe(hub, [(rim, -w / 2), (r - 0.07, -w / 2), (r, -w / 2 + 0.08),
-                  (r, w / 2 - 0.08), (r - 0.07, w / 2), (rim, w / 2)],
-            "Pneu", axis="X", seg=seg, closed=True)
-    # Jante : disque bombe cote exterieur, fond plat cote interieur.
-    o = s * (w / 2 - 0.03)
-    i = -s * (w / 2 - 0.05)
-    p.lathe(hub, [(0.0, i), (rim + 0.005, i), (rim + 0.005, o),
-                  (rim * 0.45, o + s * 0.02), (0.0, o + s * 0.02)],
-            "Jante", axis="X", seg=seg, smooth=False)
-    p.cyl((hx + s * (w / 2), hy, hz), r * 0.17, 0.08, "Chrome", axis="X", seg=8)
-    for k in range(5):
-        a = 2 * math.pi * k / 5
-        p.box((hx + s * (w / 2 - 0.0), hy + math.cos(a) * r * 0.26,
-               hz + math.sin(a) * r * 0.26), (0.05, 0.05, 0.05), "Chrome")
+    h = w / 2
+    # Pneu : profil arrondi (epaulements), ferme sur le talon.
+    # Carcasse un peu sous le rayon : les sculptures affleurent exactement a
+    # `r` (le bas du pneu reste au sol, moyeu a la cote de la spec).
+    rc = r - 0.03
+    prof = [(rim, -h + 0.02)]
+    for k in range(7):
+        a = math.radians(90 * k / 6)
+        prof.append((rc - 0.09 + 0.09 * math.sin(a), -h + 0.09 - 0.09 * math.cos(a)))
+    for k in range(7):
+        a = math.radians(90 * k / 6)
+        prof.append((rc - 0.09 * (1 - math.cos(a)), h - 0.09 + 0.09 * math.sin(a)))
+    prof.append((rim, h - 0.02))
+    p.lathe(hub, prof, "Pneu", axis="X", seg=seg, closed=True)
+    # Sculptures : deux rangees de pavés decales.
+    n = int(_seg(seg) * 0.85)
+    for k in range(n):
+        for row, xo in enumerate((-w * 0.22, w * 0.22)):
+            a = 360.0 * (k + 0.5 * row) / n
+            ar = math.radians(a)
+            p.box((hx + xo, hy + math.cos(ar) * (r - 0.0175), hz + math.sin(ar) * (r - 0.0175)),
+                  (w * 0.36, 2 * math.pi * r / n * 0.55, 0.035), "Pneu", rot=(a - 90, 0, 0))
+    # Flanc : anneau en relief.
+    o = s * (h - 0.01)
+    p.lathe((hx + o, hy, hz), [(r * 0.83, 0.012 * s), (r * 0.83, -0.012 * s), (r * 0.79, -0.012 * s),
+                               (r * 0.79, 0.012 * s)], "Caoutchouc", axis="X", seg=seg, closed=True)
+    # Jante : voile en cuvette cote exterieur.
+    i = -s * (h - 0.06)
+    o = s * (h - 0.04)
+    p.lathe(hub, [(0.0, i), (rim + 0.01, i), (rim + 0.01, o), (rim * 0.92, o + s * 0.015),
+                  (rim * 0.86, o - s * 0.03), (rim * 0.55, o - s * 0.05), (rim * 0.40, o - s * 0.02),
+                  (0.0, o - s * 0.02)], "Jante", axis="X", seg=seg, smooth=True)
+    # Ajours du voile (6 lumieres sombres).
+    for k in range(6):
+        a = 2 * math.pi * (k + 0.5) / 6
+        p.cyl((hx + o - s * 0.045, hy + math.cos(a) * rim * 0.70, hz + math.sin(a) * rim * 0.70),
+              rim * 0.13, 0.012, "Chassis", axis="X", seg=6)
+    # Tambour de frein (visible cote interieur) et moyeu bombe.
+    p.cyl((hx - s * (h - 0.02), hy, hz), rim * 0.85, 0.06, "Acier_Sellette", axis="X", seg=seg)
+    p.lathe((hx + o - s * 0.02, hy, hz), [(0.0, s * 0.10), (r * 0.10, s * 0.08), (r * 0.17, s * 0.03),
+                                          (r * 0.19, 0.0), (0.0, 0.0)], "Chrome", axis="X", seg=8)
+    for k in range(10):
+        a = 2 * math.pi * k / 10
+        p.cyl((hx + o - s * 0.0, hy + math.cos(a) * r * 0.27, hz + math.sin(a) * r * 0.27),
+              0.026, 0.05, "Chrome", axis="X", seg=2)
+    p.cyl((hx + o - s * 0.02, hy + rim * 0.80, hz), 0.012, 0.06, "Chrome", axis="X", seg=2)
     return p
 
 

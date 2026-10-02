@@ -250,9 +250,19 @@ Rappels :
 | Piste (visuel) | < 60 000 | ≤ 4 |
 | Piste (collision) | < 8 000 | — |
 | Prop | < 800 | 1 |
-| Véhicule complet du catalogue (§4 ter : tracteur, roues, remorque, chargement) | < 16 000 (mesuré : 2 500 à 9 500) | partagés |
-| Objet d'arme ou projectile | < 2 500 (mesuré : 64 à 2 470) | partagés |
-| Effet enveloppant (coque du bouclier) | < 4 000 (mesuré : 800) | 2 |
+| Catalogue §4 ter : `Body` d'un véhicule | < 60 000 | partagés |
+| Catalogue : roue (jumelée comprise) | < 10 000 | 4–5 |
+| Catalogue : véhicule complet (tracteur, roues, remorque, chargement) | < 160 000 (mesuré : 25 000 chariot, 65 000 à 71 000 porteurs, 89 000 à 95 000 semi-remorques) | partagés |
+| Catalogue : objet d'arme ou projectile | < 30 000 (mesuré : 200 à 10 600) | partagés |
+| Catalogue : effet enveloppant (coque du bouclier) | < 30 000 (mesuré : 800) | 2 |
+
+Le catalogue (§4 ter) est en **haute définition** à la demande de
+l'utilisateur (2026-10-02) : densité des modèles de l'équipe (~64 000
+triangles par camion) ou plus. Le niveau de détail se règle en un seul
+endroit, en tête de `lib/kit.py` (`SEG_MULT`, `SPHERE_MULT`, `BEVEL_SEG`) :
+les ramener à 1 / 1 / 1 divise grossièrement le compte par 4 à 6. ⚠️ En
+écran partagé à 4 avec 4 semi-remorques, c'est ~1,5 M de triangles par vue :
+à confronter au spike V3 avant de les mettre en course.
 
 Constantes en tête de `tools/blender/lib/mesh.py`. `build_all.py` échoue si un
 budget est dépassé. Les budgets de piste sont **provisoires** : le spike V3

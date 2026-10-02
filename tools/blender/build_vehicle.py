@@ -80,12 +80,12 @@ def check(objects, variant):
             raise SystemExit("%s : pivot de %s hors du moyeu (z=%.3f, rayon=%.3f)"
                              % (variant, n, w.location.z, w.dimensions.z / 2))
     body = mesh.tri_count(bpy.data.objects["Body"])
-    if body > mesh.TRI_BUDGET_TRUCK:
-        raise SystemExit("%s : Body %d triangles > budget %d" % (variant, body, mesh.TRI_BUDGET_TRUCK))
+    if body > mesh.TRI_BUDGET_CATALOGUE_BODY:
+        raise SystemExit("%s : Body %d triangles > budget %d" % (variant, body, mesh.TRI_BUDGET_CATALOGUE_BODY))
     for n in V.TRUCK_WHEELS:
         t = mesh.tri_count(bpy.data.objects[n])
-        if t > mesh.TRI_BUDGET_WHEEL:
-            raise SystemExit("%s : %s %d triangles > budget %d" % (variant, n, t, mesh.TRI_BUDGET_WHEEL))
+        if t > mesh.TRI_BUDGET_CATALOGUE_WHEEL:
+            raise SystemExit("%s : %s %d triangles > budget %d" % (variant, n, t, mesh.TRI_BUDGET_CATALOGUE_WHEEL))
     total = kit.tris(objects)
     if total > mesh.TRI_BUDGET_VEHICLE_TOTAL:
         raise SystemExit("%s : %d triangles > budget %d" % (variant, total, mesh.TRI_BUDGET_VEHICLE_TOTAL))

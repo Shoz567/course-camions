@@ -16,11 +16,14 @@ TRI_BUDGET_WHEEL = 400         # par roue (objet separe, cf. ART_PIPELINE.md)
 TRI_BUDGET_TRACK = 60000       # visuel d'une piste complete
 TRI_BUDGET_TRACK_COL = 8000    # collision de la piste
 TRI_BUDGET_PROP = 800
-# Vehicule complet : tracteur + roues + semi-remorque et son chargement
-# (2026-10-02, catalogue de vehicules, docs/ART_PIPELINE.md §6).
-TRI_BUDGET_VEHICLE_TOTAL = 16000
-TRI_BUDGET_ITEM = 2500         # arme ou projectile (toutes pieces comprises)
-TRI_BUDGET_FX = 4000           # effet enveloppant (coque du bouclier)
+# Catalogue de vehicules et d'armes (docs/ART_PIPELINE.md §4 ter). Releve le
+# 2026-10-02 a la demande de l'utilisateur : meme densite que les modeles de
+# l'equipe (Camion_Bleu.glb : ~64 000 triangles).
+TRI_BUDGET_CATALOGUE_BODY = 60000    # Body d'un vehicule du catalogue
+TRI_BUDGET_CATALOGUE_WHEEL = 10000   # par roue du catalogue (jumelee comprise)
+TRI_BUDGET_VEHICLE_TOTAL = 160000    # vehicule complet (remorque, chargement)
+TRI_BUDGET_ITEM = 30000              # arme ou projectile (toutes pieces)
+TRI_BUDGET_FX = 30000                # effet enveloppant (coque du bouclier)
 
 
 def tri_count(obj):
