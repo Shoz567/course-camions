@@ -63,6 +63,8 @@ signal jump_pad_entered(truck: Node3D, index: int)
 signal puddle_entered(truck: Node3D, index: int)
 ## Un camion percute le panneau `index` (qui s'envole).
 signal sign_hit(truck: Node3D, index: int)
+## Un camion percute le baril explosif `index`.
+signal barrel_hit(truck: Truck, index: int)
 
 const ROAD_LAYER := 1          # couche 1 `world` (VEHICLE_SPEC §7)
 const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
@@ -166,6 +168,7 @@ var _arches: Array[Dictionary] = []     # {s, label}
 var _segment_starts: Dictionary = {}    # nom -> abscisse du debut (m)
 var _puddles: Array[Vector3] = []       # (s, decalage, rayon)
 var _signs: Array[Vector2] = []         # (s, decalage)
+var _barrels: Array[Vector2] = []       # (s, decalage)
 var _auto_lengths: PackedFloat32Array = []
 ## Habillage resolu a la construction.
 var theme: TrackTheme
@@ -360,6 +363,20 @@ func sign_node(k: int) -> RoadsideSign:
 	return get_node_or_null("Signs/Sign%d" % k) as RoadsideSign
 
 
+func barrel_count() -> int:
+	_ensure_built()
+	return _barrels.size()
+
+
+func barrel_node(k: int) -> ExplosiveBarrel:
+	return get_node_or_null("Barrels/Barrel%d" % k) as ExplosiveBarrel
+
+
+func barrel_transform(k: int) -> Transform3D:
+	_ensure_built()
+	return frame_at(index_at_s(_barrels[k].x), _barrels[k].y, 0.0)
+
+
 func jump_pad_count() -> int:
 	_ensure_built()
 	return _jumps.size()
@@ -442,6 +459,7 @@ func _build_centerline() -> bool:
 	_segment_starts.clear()
 	_puddles.clear()
 	_signs.clear()
+	_barrels.clear()
 	var seg_start := 0.0
 	for k in segments.size():
 		var seg: Dictionary = segments[k]
@@ -454,6 +472,8 @@ func _build_centerline() -> bool:
 			_puddles.append(Vector3(seg_start + float(pd[0]), float(pd[1]), float(pd[2])))
 		for sg: Array in seg.get("signs", []):
 			_signs.append(Vector2(seg_start + float(sg[0]), float(sg[1])))
+		for br: Array in seg.get("barrels", []):
+			_barrels.append(Vector2(seg_start + float(br[0]), float(br[1])))
 		if seg.has("arch"):
 			_arches.append({"s": seg_start + float(seg["arch"]), "label": String(seg.get("arch_label", ""))})
 		seg_start += lengths[k]
@@ -700,6 +720,10 @@ func _build_geometry() -> void:
 	var signs := _group("Signs")
 	for k in _signs.size():
 		_build_sign(signs, _signs[k].x, _signs[k].y, k)
+
+	var barrels := _group("Barrels")
+	for k in _barrels.size():
+		_build_barrel(barrels, _barrels[k].x, _barrels[k].y, k)
 
 	var pads := _group("Pads")
 	for k in _jumps.size():
@@ -1177,6 +1201,16 @@ func _build_sign(parent: Node3D, s: float, lateral: float, index: int) -> void:
 	board.transform = Transform3D(Basis(r, Vector3.UP, -t), pos)
 	board.hit.connect(_on_sign_hit.bind(index))
 	parent.add_child(board)
+
+
+func _build_barrel(parent: Node3D, s: float, lateral: float, index: int) -> void:
+	var i := index_at_s(s)
+	var barrel := ExplosiveBarrel.new()
+	barrel.name = "Barrel%d" % index
+	barrel.transform = frame_at(i, lateral, 0.0)
+	barrel.exploded.connect(func(truck: Truck) -> void:
+		barrel_hit.emit(truck, index))
+	parent.add_child(barrel)
 
 
 func _on_boost_pad_body_entered(body: Node3D, index: int) -> void:

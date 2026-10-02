@@ -1,6 +1,6 @@
 extends Node3D
 
-## Course locale de 3 tours, de 1 a 6 joueurs, sur le circuit de la scene.
+## Course locale de 4 tours, de 1 a 6 joueurs, sur le circuit de la scene.
 ##
 ##   1 joueur    : plein ecran, n'importe quelle manette + tout le clavier.
 ##   2 joueurs   : ecran partage haut / bas (VBoxContainer).

@@ -51,6 +51,8 @@ signal wall_unstuck(normal: Vector3)
 signal cargo_hit_taken
 ## Vient d'etre ralenti par la piste (flaque, panneau percute...).
 signal slowed_down
+## Glissade declenchee par une flaque d'eau (effet savonnette).
+signal puddle_slipped(ticks: int)
 ## La remorque vient d'etre detachee / raccrochee.
 signal trailer_detached
 signal trailer_reattached
@@ -162,6 +164,8 @@ var _trailer_ghost: bool = false
 var _slow_factor_pending: float = 1.0
 var _slow_ticks: int = 0
 var _slow_decel: float = 0.0
+## Perte d'adherence laterale temporaire (flaque savonnette)
+var _slip_ticks: int = 0
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 
@@ -256,6 +260,7 @@ func get_input() -> InputFrame:
 func reset_to(xf: Transform3D) -> void:
 	_reset_xf = xf
 	_reset_pending = true
+	_slip_ticks = 0
 
 
 ## Vitesse le long de l'axe avant (-Z), pas la norme du vecteur (METRICS.md).
@@ -368,6 +373,25 @@ func apply_slowdown(speed_factor: float, ticks: int, extra_decel_ms2: float) -> 
 	_slow_factor_pending = minf(_slow_factor_pending, clampf(speed_factor, 0.0, 1.0))
 	_slow_ticks = maxi(_slow_ticks, ticks)
 	_slow_decel = maxf(_slow_decel, extra_decel_ms2)
+
+
+## Perte d'adherence laterale (flaque savonnette) : le camion glisse sans
+## perte de vitesse longitudinale, deteriorant le controle du joueur.
+func apply_puddle_slip(ticks: int = 60) -> void:
+	var first := _slip_ticks == 0
+	_slip_ticks = maxi(_slip_ticks, ticks)
+	puddle_slipped.emit(_slip_ticks)
+	if first:
+		var xf := global_transform
+		var up := xf.basis.y
+		var v_fwd := linear_velocity.dot(-xf.basis.z)
+		if absf(v_fwd) > 2.0:
+			var kick_dir := 1.0 if (int(Engine.get_physics_frames()) % 2 == 0) else -1.0
+			apply_torque_impulse(up * kick_dir * mass * 0.8)
+
+
+func is_slipping() -> bool:
+	return _slip_ticks > 0
 
 
 func cargo_hit(crate_position: Vector3) -> void:
@@ -564,6 +588,8 @@ func _physics_process(_delta: float) -> void:
 			apply_central_force(-fwd * _slow_decel * mass)
 		if _slow_ticks == 0:
 			_slow_decel = 0.0
+	if _slip_ticks > 0:
+		_slip_ticks -= 1
 
 	# saut de plaque : impulsion verticale ; a la reception (apres un vrai vol),
 	# suspension plus amortie. La chute, elle, a ete freinee avant le contact
@@ -630,6 +656,8 @@ func _physics_process(_delta: float) -> void:
 		if debug_grip:
 			var v_ref := maxf(absf(v_long), _min_ref_speed) * _tan_slip
 			var mu := t.lateral_grip_g * p.surface_grip * (rear_grip if rear else 1.0)
+			if _slip_ticks > 0:
+				mu *= 0.12 if rear else 0.22
 			f_lat = -mu * fs * clampf(v_lat / v_ref, -1.0, 1.0)
 
 		# 1.4 longitudinal : 4 roues motrices, forces proportionnelles a la masse.

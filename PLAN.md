@@ -18,6 +18,7 @@ Colonne **Agent** = sous-agent de `.claude/agents/` à qui déléguer.
 | 2 | Piste et tour solo | 3 tours chronométrés | 1–2 sem |
 | 3 | Course complète + premier juice | une course avec départ, classement, arrivée | 1–1,5 sem |
 | 4 | Écran partagé 2 à 4 joueurs | 4 joueurs sur un canapé | 1 sem |
+| 4.5 | Combat arcade : PV, pouvoirs, obstacles & dégradations | course armée avec PV, pouvoirs D-PAD et obstacles dynamiques | 1 sem |
 | 5 | Art généré par Blender | camions et pistes texturés | 1–2 sem |
 | 6 | Online host-autoritaire | 2 PC connectés | 2–4 sem |
 | 7 | Polish, menus, export | build jouable | 1–2 sem |
@@ -276,6 +277,30 @@ Coût GPU mesuré le 2026-09-30 sur la machine de développement (Radeon 780M,
 > 🎉 **Ici le jeu est jouable.** Faites-y jouer de vraies personnes avant
 > d'aller plus loin. Si ce n'est pas drôle sur un canapé, l'art et le réseau n'y
 > changeront rien.
+
+---
+
+## Phase 4.5 — Combat arcade : PV, pouvoirs, obstacles & dégradations
+
+Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement physique, gestion des dégâts, arsenal de pouvoirs sur la croix directionnelle (D-PAD) et obstacles interactifs.
+
+| # | Tâche | Agent | État |
+|---|---|---|---|
+| 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[~]` |
+| 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[~]` |
+| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) sans dégâts pour l'instant | track-designer | `[~]` |
+| 4.5.4 | Système de PV (100 HP) sur le HUD : dégâts aux chocs murs (-1 à -5 HP sur la cabine uniquement), remorque bouclier, mort et respawn après 3 s | gameplay-engineer | `[ ]` |
+| 4.5.5 | Remorques larguées persistantes (50 HP) : barrage permanent sur la piste, détruites à 0 HP, interdiction de largage les 5 premières secondes | gameplay-engineer | `[ ]` |
+| 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive | visual-artist | `[ ]` |
+| 4.5.7 | Sas "READY" et écran scindé de sélection des 4 pouvoirs mappés sur le D-PAD PS5 DualSense (Haut, Bas, Gauche, Droite) | gameplay-engineer | `[ ]` |
+| 4.5.8 | Arsenal des pouvoirs : Lance-missiles (2 missiles, 5 s cooldown, -15 HP) et Citerne d'essence sur remorque (traînée glissante 2 s, 30 s cooldown) | gameplay-engineer | `[ ]` |
+
+**Critères de sortie**
+- Les camions sans remorque accélèrent et pointent à x1.2 de leur vitesse de pointe normale.
+- La course se dispute sur 4 tours complets avec affichage HUD synchronisé.
+- Les panneaux sont éjectés sans pénaliser la vitesse du camion ; les flaques provoquent une glissade latérale sans freinage.
+- Des barils explosifs jalonnent la piste et explosent avec éjection physique au contact.
+- `make test` passe à 100 %.
 
 ---
 
