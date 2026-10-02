@@ -292,6 +292,7 @@ rayons). Le maillage est **purement visuel** et suit `docs/VEHICLE_SPEC.md`.
 | 5.4 | Décor et props dans le budget du spike V3 | blender-modeler |
 | 5.5 | Intégration : le camion texturé remplace les boîtes, roues animées d'après les rayons | vehicle-physics-engineer |
 | 5.6 | Non-régression : **tous** les tests de la phase 1 passent inchangés | godot-qa |
+| 5.7 | Catalogue de véhicules (citerne, bétaillère, porte-conteneur, porte-voitures, grue, chasse-neige, pompier, chariot élévateur) et objets d'arme (missiles, scies, mitrailleuse, grenade, camion projectile, doudou géant, voitures, bouclier, laser, boomerang) : **visuels seulement**, sockets d'accroche (`ART_PIPELINE.md` §4 ter) ; demande du 2026-10-02 | blender-modeler — `[x]` visuels ; branchement en jeu à spécifier |
 
 **Critères de sortie**
 - `make assets` régénère tout l'art depuis zéro en < 2 min.

@@ -151,6 +151,79 @@ occupe une petite portion d'une petite vue. Silhouettes de cabine distinctes
 d'une variante à l'autre, couleur dominante par joueur. Aucun camion, logo ou
 marque existants.
 
+### 4 ter. Catalogue de véhicules et objets d'arme (2026-10-02)
+
+Demandé par l'utilisateur : des véhicules et des armes **dans le style des
+camions de l'équipe** (cabine avancée à arêtes arrondies, peinture
+métallisée, chromes, cheminées à flamme, rampe de phares, numéro de course
+dans un rond blanc, grosses roues à jante alu). **Visuels seulement** : le
+gameplay des armes sera spécifié plus tard.
+
+| Script | Sortie (`game/assets/generated/`) |
+|---|---|
+| `build_vehicle.py --variant=…` | `vehicules/{citerne, betaillere, remorque, porte_voitures, grue, chasse_neige, pompier, chariot_elevateur}.glb` |
+| `build_item.py --item=…` | `armes/{lance_missiles, missile, scie_geante_d/g, mitrailleuse, grenade, camion_projectile, doudou_geant, voiture_*, bouclier_emetteur, bouclier_coque, laser_emetteur, laser_faisceau, boomerang_aimante}.glb` |
+
+Code partagé : `lib/kit.py` (matériaux, primitives, roue), `lib/vehicles.py`,
+`lib/items.py`. `make assets` régénère les 26 fichiers en ~15 s.
+
+**Véhicules.** Ils suivent le contrat du §4 et `VEHICLE_SPEC.md` (vérifié
+après import dans Godot : roues à (±1,26 ; 0,66 ; ±2,28), sellette à
+(0 ; 2,16 ; 1,44), avant en −Z). `Body` + `Wheel_FL/FR/RL/RR` pivotées au
+moyeu ; `build_vehicle.py` refuse un objet manquant ou un pivot hors du
+moyeu. Trois silhouettes de cabine : plate (citerne, grue, chasse-neige,
+pompier), plate à couchette (remorque, porte-voitures), à capot
+(bétaillère).
+- **Semi-remorques** (citerne, bétaillère, porte-conteneur `remorque`,
+  porte-voitures) : tout est enfant du vide `Remorque` posé sur la sellette,
+  comme le nœud du même nom des modèles de l'équipe. Roues de remorque fixes
+  (`Remorque_Roues`).
+- **Porteurs** (grue, chasse-neige, pompier) : pas de sellette ; la caisse
+  ou l'équipement est enfant de `Body`.
+- **Chariot élévateur** : engin hors gabarit camion (roues de 0,40 / 0,32 m),
+  mêmes noms d'objets ; ses cotes ne relèvent pas de `VEHICLE_SPEC.md`.
+- **Pièces mobiles**, pivotées sur leur axe : `Grue_Tourelle` / `Grue_Fleche`
+  / `Grue_Crochet`, `Echelle_Tourelle` / `Echelle`, `Lame_Neige`, `Mat` /
+  `Fourche`, `Conteneur_Porte_G/D` (charnière extérieure),
+  `Voiture_Chargee_1..5` (détachables).
+
+**Points d'accroche des armes** : des vides `Socket_*` (des `Node3D` dans
+Godot). Une arme se pose en enfant du socket, transformation nulle.
+
+| Socket | Où | Armes prévues |
+|---|---|---|
+| `Socket_Toit` | toit de la cabine | mitrailleuse, laser, émetteur de bouclier, boomerang |
+| `Socket_Avant` | pare-chocs avant | boomerang |
+| `Socket_Lateral_G` / `_D` | flancs du tracteur, entre les essieux | scies géantes (`scie_geante_g` / `_d`) |
+| `Socket_Arriere` | arrière **de la remorque** (ou de la caisse d'un porteur) | lance-missiles |
+| `Socket_Conteneur` | plancher arrière de la remorque | largage des voitures |
+
+Les sockets de remorque sont enfants de `Remorque` : ils suivent son
+articulation.
+
+**Objets d'arme.** Origine de la racine = point d'accroche (centre pour un
+projectile), avant en +Y Blender (−Z Godot), pièces mobiles séparées :
+`Lance_Missiles` (lacet) → `Lance_Missiles_Caisson` (tangage) →
+`Missile_1..6` (cachés un à un au tir) ; `Scie_Bras_*` → `Scie_Lame_*`
+(rotation sur X) ; `Mitrailleuse_Socle` → `_Tourelle` (lacet) → `_Canon`
+(tangage) → `_Barillet` (rotation sur Y) ; `Laser_Socle` → `Laser_Canon` →
+vide `Laser_Bouche` ; `laser_faisceau` mesure 1 m en +Y depuis son origine
+(à étirer) ; `bouclier_coque` est une coque alvéolée de 5,6 × 23 × 9 m centrée
+sur son origine (à poser au centre de l'ensemble, échelle libre) ;
+`Boomerang_Support` → `Boomerang` (pivot au centre de rotation en vol). Le
+doudou géant est un ours générique, sans personnage existant.
+
+**Matériaux.** Ce catalogue n'applique **pas** le §7 (couleurs vertex) : il
+reprend les matériaux nommés des modèles de l'équipe (`Peinture_Cabine_<Couleur>`,
+`Chrome`, `Jante`, `Pneu`, `Phare`, `Vitre`…) pour avoir le même rendu
+(métal, brillance, feux émissifs) et pour que la livrée de `TruckVisual`
+(par préfixe de nom de matériau) s'y applique. Entre 1 et ~20 matériaux par
+modèle, partagés entre modèles.
+
+**Non branché dans le jeu.** Aucun `.tscn` ni `.gd` ne charge encore ces
+fichiers : `TruckVisual` charge toujours `Camion_Bleu.glb`. Brancher un
+véhicule du catalogue ou une arme est une tâche de gameplay à part.
+
 ## 5. Les pistes
 
 Deux objets exportés par piste :
@@ -177,6 +250,9 @@ Rappels :
 | Piste (visuel) | < 60 000 | ≤ 4 |
 | Piste (collision) | < 8 000 | — |
 | Prop | < 800 | 1 |
+| Véhicule complet du catalogue (§4 ter : tracteur, roues, remorque, chargement) | < 16 000 (mesuré : 2 500 à 9 500) | partagés |
+| Objet d'arme ou projectile | < 2 500 (mesuré : 64 à 2 470) | partagés |
+| Effet enveloppant (coque du bouclier) | < 4 000 (mesuré : 800) | 2 |
 
 Constantes en tête de `tools/blender/lib/mesh.py`. `build_all.py` échoue si un
 budget est dépassé. Les budgets de piste sont **provisoires** : le spike V3
