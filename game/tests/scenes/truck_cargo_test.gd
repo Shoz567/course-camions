@@ -1,6 +1,8 @@
 extends PhysicsTest
 
-## Pouvoir cargo : la remorque entiere se detache et fait barrage 10 s.
+## Pouvoir cargo : la remorque entiere se detache et fait barrage 60 s
+## (detach_ticks par defaut, verifie a part). Pour garder la suite rapide, A
+## largue avec un barrage de DETACH_A ticks (10 s) : le deroule est le meme.
 ##   A. A roule a 80 km/h et largue (front de l'InputFrame) : une
 ##      DetachedTrailer apparait a la place exacte de la remorque, la caisse
 ##      de collision du camion est coupee et son visuel de remorque masque ;
@@ -19,6 +21,8 @@ extends PhysicsTest
 
 const V0 := 22.0
 const DROP_AT := 20
+const DETACH_A := 600
+const DETACH_DEFAULT_S := 60
 
 var _a: Truck
 var _b: Truck
@@ -43,6 +47,7 @@ var _blinking: bool = false
 var _alive_before: bool = false
 var _gone_after: bool = false
 var _reattached: bool = false
+var _default_detach: int = 0
 var _max_tilt: float = 0.0
 
 
@@ -58,6 +63,9 @@ func _test_setup() -> void:
 	var e_cargo := _e.get_node("Cargo") as TruckCargo
 	e_cargo.cooldown_ticks = 400
 	e_cargo.detach_ticks = 200
+	var a_cargo := _a.get_node("Cargo") as TruckCargo
+	_default_detach = a_cargo.detach_ticks
+	a_cargo.detach_ticks = DETACH_A
 	for t: Truck in [_a, _b, _c, _d, _e]:
 		_drops[t] = 0
 		(t.get_node("Cargo") as TruckCargo).dropped.connect(func(tr: DetachedTrailer) -> void:
@@ -133,6 +141,8 @@ func _test_finish() -> void:
 		check_below("C ralenti (vitesse apres / avant)", _c_after / maxf(_c_before, 0.1), 0.75)
 	check("A jamais penalise par sa propre remorque", not _a_hit)
 	check("la remorque larguee clignote avant de disparaitre", _blinking)
+	check("barrage par defaut : %d s" % DETACH_DEFAULT_S,
+		_default_detach == DETACH_DEFAULT_S * Engine.physics_ticks_per_second, "ticks=%d" % _default_detach)
 	check("la remorque larguee tient 10 s", _alive_before)
 	check("apres 10 s : elle disparait", _gone_after)
 	check("apres 10 s : la remorque se raccroche (caisse et visuel)", _reattached)

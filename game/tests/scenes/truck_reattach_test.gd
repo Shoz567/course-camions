@@ -3,7 +3,7 @@ extends PhysicsTest
 ## Raccrochage de la remorque sans projection (2026-10-01, « quand la remorque
 ## se remet apres l'avoir detachee, le camion peut etre propulse »).
 ##
-## TruckCargo raccroche la remorque au bout de 10 s ; si sa place est prise,
+## TruckCargo raccroche la remorque au bout de 60 s ; si sa place est prise,
 ## il attend reattach_timeout_ticks puis FORCE le raccrochage. La caisse de
 ## collision reapparaissait alors dans l'obstacle, et le solveur separait les
 ## deux corps d'un coup : le camion etait ejecte.

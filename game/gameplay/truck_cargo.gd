@@ -4,7 +4,7 @@ extends Node
 ## Pouvoir cargo (Triangle, ou E / ; au clavier) : enfant du camion. A chaque
 ## signal `cargo_requested`, si la recharge est finie, la remorque ENTIERE se
 ## detache : une DetachedTrailer la remplace sur la route, a sa place exacte
-## (articulation comprise), et fait barrage pendant detach_ticks (10 s). Le
+## (articulation comprise), et fait barrage pendant detach_ticks (60 s). Le
 ## tracteur roule seul, plus rapide et plus vif (bonus dans Truck). Au bout du
 ## temps, la remorque larguee disparait et la remorque se raccroche au
 ## tracteur (des que sa place est libre). Recharge globale : cooldown_ticks
@@ -14,7 +14,10 @@ signal dropped(trailer: DetachedTrailer)
 signal reattached
 
 @export var cooldown_ticks: int = 1800
-@export var detach_ticks: int = 600
+## Duree du barrage : 60 s depuis le 2026-10-02 (10 s avant, demande de
+## l'utilisateur). Plus longue que la recharge : on relargue des le
+## raccrochage.
+@export var detach_ticks: int = 3600
 ## Au-dela, la remorque se raccroche meme si sa place n'est pas libre.
 @export var reattach_timeout_ticks: int = 120
 
