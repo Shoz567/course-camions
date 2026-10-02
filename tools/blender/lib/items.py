@@ -21,9 +21,28 @@ from lib.kit import Part, empty
 # Voiture (largable depuis le conteneur, chargee sur le porte-voitures)
 # ---------------------------------------------------------------------------
 
+def _car_profile():
+    """Profil lateral (y, z) de la caisse : capot, coffre, passages de roue."""
+    def arch(cy, a0, a1, n=12, r=0.43):
+        return [(cy + r * math.cos(math.radians(a0 + (a1 - a0) * k / n)),
+                 0.34 + r * math.sin(math.radians(a0 + (a1 - a0) * k / n))) for k in range(n + 1)]
+    pts = [(2.18, 0.30), (2.24, 0.45), (2.24, 0.62), (2.17, 0.80), (2.02, 0.89),
+           (1.40, 0.94), (0.95, 0.97), (-1.70, 0.98), (-2.02, 0.94), (-2.18, 0.84),
+           (-2.24, 0.66), (-2.24, 0.42), (-2.16, 0.30), (-1.80, 0.30)]
+    pts += arch(-1.35, 180, 0)[1:-1]
+    pts += [(-0.90, 0.30), (0.90, 0.30)]
+    pts += arch(1.35, 180, 0)[1:-1]
+    pts += [(1.80, 0.30)]
+    return pts
+
+
 def car(name, color, at=(0.0, 0.0, 0.0), lod=False):
-    """Citadine arcade (4,4 m), origine au sol au centre. `lod` : version
-    allegee pour le porte-voitures."""
+    """Citadine arcade (4,5 m), origine au sol au centre, avant en +Y.
+
+    Caisse profilee a passages de roue, habitacle vitre sombre avec montants
+    peints, portes, poignees, retroviseurs, calandre, optiques a lentilles,
+    feux, plaques, echappement, roues completes (pneu sculpte, jante).
+    `lod` ne garde que des roues un peu plus simples (porte-voitures)."""
     x0, y0, z0 = at
     paint = "Peinture_Cabine_" + color
     p = Part(name, at)
@@ -31,36 +50,70 @@ def car(name, color, at=(0.0, 0.0, 0.0), lod=False):
     def P(x, y, z):
         return (x0 + x, y0 + y, z0 + z)
 
-    p.box(P(0, 0, 0.62), (1.86, 4.40, 0.62), paint, bevel=0.16, seg=1 if lod else 2)
-    # Habitacle (enveloppe convexe : pare-brise et lunette inclines).
-    p.hull([P(sx * w, y, z) for sx in (-1, 1)
-            for (w, y, z) in ((0.86, 0.95, 0.92), (0.72, 0.35, 1.45), (0.72, -1.05, 1.45),
-                              (0.86, -1.70, 0.92))],
-           paint, smooth=True)
-    p.hull([P(sx * w, y, z) for sx in (-1, 1)
-            for (w, y, z) in ((0.80, 0.90, 0.96), (0.69, 0.36, 1.40), (0.69, -1.02, 1.40),
-                              (0.80, -1.62, 0.96))],
-           "Vitre")
+    # Caisse : profil extrude, puis flancs legerement bombes (deux passes).
+    prof = _car_profile()
+    p.prism(P(0, 0, 0), prof, 1.80, paint, axis="X")
+    p.prism(P(0, 0, 0), [(y * 0.985, 0.30 + (z - 0.30) * 0.92) for y, z in prof], 1.86,
+            paint, axis="X")
+    # Habillage interieur des passages de roue.
+    for y in (1.35, -1.35):
+        p.arc(P(0, y, 0.34), 0.40, 0.44, 1.70, 0, 180, "Plastique_Noir", axis="X", seg=10)
+    # Bas de caisse et baguettes.
     for sx in (-1, 1):
-        p.box(P(sx * 0.93, -0.30, 1.18), (0.02, 1.70, 0.40), "Vitre")
-        if not lod:
-            p.box(P(sx * 0.66, 2.20, 0.72), (0.34, 0.03, 0.16), "Phare", bevel=0.03)
-            p.box(P(sx * 0.66, -2.20, 0.74), (0.34, 0.03, 0.14), "Feu_Arriere", bevel=0.03)
-            p.box(P(sx * 0.96, 0.95, 1.00), (0.10, 0.06, 0.10), "Plastique_Noir")
-        else:
-            p.box(P(sx * 0.66, 2.20, 0.72), (0.34, 0.03, 0.16), "Phare")
-            p.box(P(sx * 0.66, -2.20, 0.74), (0.34, 0.03, 0.14), "Feu_Arriere")
-    p.box(P(0, 2.22, 0.42), (1.80, 0.12, 0.20), "Plastique_Noir")
-    p.box(P(0, -2.22, 0.42), (1.80, 0.12, 0.20), "Plastique_Noir")
-    if not lod:
-        p.box(P(0, 2.24, 0.60), (0.80, 0.03, 0.14), "Plastique_Noir")
-        p.box(P(0, -2.24, 0.48), (0.50, 0.02, 0.11), "Plaque_Fond")
-    seg = 10 if lod else 14
+        p.box(P(sx * 0.92, 0, 0.36), (0.05, 1.70, 0.12), "Plastique_Noir", bevel=0.02)
+        p.box(P(sx * 0.935, 0.0, 0.70), (0.02, 3.50, 0.035), "Chrome")
+    # Habitacle : fond sombre + vitrage brillant, toit et montants peints.
+    green = ((0.86, 0.95, 0.96), (0.72, 0.33, 1.47), (0.72, -1.08, 1.47), (0.86, -1.72, 0.97))
+    p.hull([P(sx * w, y, z) for sx in (-1, 1) for (w, y, z) in green], "Plastique_Interieur", smooth=True)
+    p.hull([P(sx * (w + 0.008), y + (0.008 if y > 0 else -0.008), z + 0.006)
+            for sx in (-1, 1) for (w, y, z) in green], "Vitre", smooth=True)
+    p.hull([P(sx * w, y, z) for sx in (-1, 1)
+            for (w, y, z) in ((0.70, 0.28, 1.46), (0.70, -1.02, 1.46), (0.68, 0.24, 1.50),
+                              (0.68, -0.98, 1.50))], paint, smooth=True)
+    for sx in (-1, 1):
+        # Montants A, B, C.
+        for (y_lo, z_lo, y_hi, z_hi) in ((0.95, 0.97, 0.33, 1.47), (-1.72, 0.97, -1.08, 1.47)):
+            p.hull([P(sx * (w + dx), y + dy, z) for (w, y, z) in
+                    ((0.87, y_lo, z_lo), (0.73, y_hi, z_hi)) for dx in (0.0, 0.02)
+                    for dy in (-0.05, 0.05)], paint)
+        p.hull([P(sx * (w + dx), y + dy, z) for (w, y, z) in
+                ((0.875, -0.40, 0.97), (0.735, -0.36, 1.47)) for dx in (0.0, 0.02)
+                for dy in (-0.06, 0.06)], paint)
+        # Portes : joints, poignees, retroviseurs.
+        for y in (0.95, -0.40, -1.62):
+            p.box(P(sx * 0.932, y, 0.66), (0.012, 0.015, 0.58), "Joint_Porte")
+        p.box(P(sx * 0.932, (0.95 - 1.62) / 2, 0.37), (0.012, 2.57, 0.012), "Joint_Porte")
+        for y in (0.15, -1.15):
+            p.box(P(sx * 0.94, y, 0.86), (0.025, 0.18, 0.035), "Chrome", bevel=0.01)
+        p.box(P(sx * 0.98, 0.82, 1.03), (0.12, 0.05, 0.05), "Plastique_Noir")
+        p.box(P(sx * 1.05, 0.80, 1.06), (0.08, 0.16, 0.12), paint, bevel=0.03)
+        p.box(P(sx * 1.05, 0.715, 1.06), (0.06, 0.01, 0.09), "Chrome")
+        # Optiques avant : boitier noir, deux lentilles, clignotant.
+        p.box(P(sx * 0.62, 2.215, 0.70), (0.42, 0.04, 0.17), "Plastique_Noir", bevel=0.03)
+        for k in (-1, 1):
+            p.cyl(P(sx * 0.62 + k * 0.10, 2.24, 0.70), 0.055, 0.02, "Phare", axis="Y", seg=12)
+        p.box(P(sx * 0.80, 2.23, 0.70), (0.06, 0.03, 0.10), "Clignotant")
+        p.cyl(P(sx * 0.68, 2.25, 0.40), 0.05, 0.02, "Phare", axis="Y", seg=10)   # antibrouillard
+        # Feux arriere : rouge + recul blanc.
+        p.box(P(sx * 0.66, -2.235, 0.74), (0.38, 0.04, 0.15), "Feu_Arriere", bevel=0.03)
+        p.box(P(sx * 0.44, -2.24, 0.74), (0.08, 0.035, 0.12), "Phare")
+        # Essuie-glaces.
+        p.box(P(sx * 0.32, 0.96, 0.995), (0.55, 0.02, 0.015), "Plastique_Noir", rot=(0, 0, sx * 6))
+    # Calandre, pare-chocs, plaques, echappement, antenne.
+    p.box(P(0, 2.23, 0.62), (0.70, 0.04, 0.16), "Plastique_Noir", bevel=0.02)
+    for z in (0.58, 0.62, 0.66):
+        p.box(P(0, 2.25, z), (0.62, 0.02, 0.015), "Chrome")
+    p.box(P(0, 2.22, 0.40), (1.20, 0.06, 0.10), "Plastique_Noir", bevel=0.02)
+    p.box(P(0, 2.255, 0.50), (0.48, 0.015, 0.10), "Plaque_Fond")
+    p.box(P(0, -2.255, 0.55), (0.48, 0.015, 0.10), "Plaque_Fond")
+    p.box(P(0, -2.22, 0.38), (1.50, 0.06, 0.12), "Plastique_Noir", bevel=0.02)
+    p.box(P(0, -2.225, 0.86), (1.40, 0.01, 0.012), "Joint_Porte")            # coffre
+    p.cyl(P(0.55, -2.22, 0.32), 0.04, 0.12, "Chrome", axis="Y", seg=10)
+    p.cyl(P(-0.45, -0.95, 1.62), 0.008, 0.28, "Plastique_Noir", seg=4, rot=(-25, 0, 0))
+    # Roues completes.
     for sx in (-1, 1):
         for y in (1.35, -1.35):
-            c = P(sx * 0.80, y, 0.34)
-            p.cyl(c, 0.34, 0.26, "Pneu", axis="X", seg=seg)
-            p.cyl((c[0] + sx * 0.12, c[1], c[2]), 0.21, 0.04, "Jante", axis="X", seg=seg, smooth=False)
+            kit.wheel(p, P(sx * 0.78, y, 0.34), sx, r=0.34, w=0.24, seg=10 if lod else 12)
     return p.finish()
 
 

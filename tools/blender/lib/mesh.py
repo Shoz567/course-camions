@@ -21,7 +21,7 @@ TRI_BUDGET_PROP = 800
 # l'equipe (Camion_Bleu.glb : ~64 000 triangles).
 TRI_BUDGET_CATALOGUE_BODY = 60000    # Body d'un vehicule du catalogue
 TRI_BUDGET_CATALOGUE_WHEEL = 10000   # par roue du catalogue (jumelee comprise)
-TRI_BUDGET_VEHICLE_TOTAL = 160000    # vehicule complet (remorque, chargement)
+TRI_BUDGET_VEHICLE_TOTAL = 200000    # vehicule complet (remorque, chargement)
 TRI_BUDGET_ITEM = 30000              # arme ou projectile (toutes pieces)
 TRI_BUDGET_FX = 30000                # effet enveloppant (coque du bouclier)
 
