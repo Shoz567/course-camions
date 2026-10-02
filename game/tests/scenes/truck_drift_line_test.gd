@@ -15,6 +15,9 @@ extends PhysicsTest
 ## tenir sa derive visee.
 ##   A. 100cc a 150 km/h, derive visee 40 deg ;
 ##   B. 100cc a 150 km/h, derive visee 55 deg ;
+##   C. 100cc a 150 km/h, PLEIN BRAQUAGE tenu sans contre-braquer : la garde
+##      anti tete-a-queue (remise le 2026-10-02) l'empeche de partir en
+##      tete-a-queue (derive < drift_max_slip_deg + 15 deg) ;
 ##   puis un camion par categorie (50cc a 200cc), a SA vitesse max, derive
 ##   visee 55 deg (le rayon croit comme le carre de la vitesse : la courbe
 ##   suit la categorie, GameState.SPEED_CLASSES « drift »).
@@ -32,6 +35,7 @@ const TIGHTEST_TURN_M := 140.0
 const CASES := [
 	[1, 40.0, "A 100cc vise 40 deg"],
 	[1, 55.0, "B 100cc vise 55 deg"],
+	[1, -1.0, "C 100cc plein braquage tenu"],
 	[0, 55.0, "50cc"],
 	[1, 55.0, "100cc"],
 	[2, 55.0, "150cc"],
@@ -73,7 +77,8 @@ func _test_tick(t: int) -> void:
 		f.tick = t
 		f.throttle = 1.0
 		f.handbrake = t > 5
-		f.steer = TruckTestUtil.drift_pilot_steer(tr, CASES[i][1])
+		# derive visee < 0 : plein braquage tenu, sans contre-braquer
+		f.steer = 1.0 if CASES[i][1] < 0.0 else TruckTestUtil.drift_pilot_steer(tr, CASES[i][1])
 		tr.set_input(f)
 		_max_slip[i] = maxf(_max_slip[i], TruckTestUtil.sideslip_deg(tr))
 		_upside[i] = _upside[i] or tr.is_upside_down()
@@ -98,6 +103,8 @@ func _test_finish() -> void:
 			label, _trucks[i].tuning.top_speed_kmh, 1.0 / k[i] if k[i] != 0.0 else INF, _max_slip[i]])
 	check("plus d'angle, courbe plus serree : courbure B > A", k[1] > k[0],
 		"A=%.5f B=%.5f 1/m" % [k[0], k[1]])
-	for i in range(2, CASES.size()):
+	check_below("C plein braquage tenu : pas de tete-a-queue (deg)", _max_slip[2],
+		_trucks[2].tuning.drift_max_slip_deg + 15.0)
+	for i in range(3, CASES.size()):
 		check_below("%s : le drift prend le virage le plus serre a %.0f km/h (rayon, m)"
 			% [CASES[i][2], _trucks[i].tuning.top_speed_kmh], 1.0 / maxf(k[i], 1e-6), TIGHTEST_TURN_M)

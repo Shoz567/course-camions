@@ -196,6 +196,9 @@ extends Resource
 ## le tient au stick). Pleine force de courbe (drift_carve_g) a partir de cet
 ## angle.
 @export_range(0.0, 60.0, 0.1, "suffix:°") var drift_target_slip_deg: float = 0.0
+## Derive jamais depassee, frein a main ou non : au-dela, la garde anti
+## tete-a-queue ramene le lacet. En dessous, l'angle est libre.
+@export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
 ## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
 ## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
 @export_range(0.0, 1.0, 0.01) var drift_speed_keep: float = 0.0
@@ -210,6 +213,8 @@ extends Resource
 @export_range(0.0, 20.0, 0.01, "suffix:1/s") var drift_assist_gain: float = 0.0
 ## Acceleration angulaire max de l'aide (une aide, pas un rail).
 @export_range(0.0, 30.0, 0.01, "suffix:rad/s²") var drift_assist_accel: float = 0.0
+## Garde anti tete-a-queue (derive prevue au-dela de la limite) : autorite.
+@export_range(0.0, 60.0, 0.01, "suffix:rad/s²") var spin_guard_accel: float = 0.0
 ## En dessous, pas d'aide (manoeuvres a basse vitesse).
 @export_range(0.0, 30.0, 0.01, "suffix:m/s") var drift_min_speed_ms: float = 0.0
 
@@ -267,6 +272,9 @@ func validate() -> PackedStringArray:
 				% [p.name, v])
 	if suspension_damping_ratio >= 2.0:
 		errors.append("suspension_damping_ratio = %s : >= 2, suspension figee" % suspension_damping_ratio)
+	if drift_target_slip_deg >= drift_max_slip_deg:
+		errors.append("drift_target_slip_deg (%s) >= drift_max_slip_deg (%s)"
+			% [drift_target_slip_deg, drift_max_slip_deg])
 	if handbrake_rear_grip_factor >= 1.0:
 		errors.append("handbrake_rear_grip_factor = %s : doit etre < 1" % handbrake_rear_grip_factor)
 	if steer_grip_ratio > 3.0:
