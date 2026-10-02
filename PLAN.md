@@ -288,12 +288,12 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 |---|---|---|---|
 | 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[x]` |
 | 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[x]` |
-| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) | track-designer | `[x]` |
+| 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) ; **remasterisation visuelle** (taille x2, balise stroboscopique/lumineuse haute visibilité) | track-designer | `[~]` |
 | 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP cabine uniquement), barils explosifs (-15 HP), remorque bouclier, mort et respawn après 3 s (PV discrets/internes avant dégradations) | gameplay-engineer | `[x]` `TruckHealth` (nœud « Health » du camion), signal `Truck.wall_impact` par forme touchée ; `truck_health_test` |
 | 4.5.5 | Remorques larguées persistantes (50 HP) : restent sur piste sans disparition, nouvelle remorque réapparue sur le tracteur, interdiction de largage les 5 premières secondes | gameplay-engineer | `[x]` dégâts selon l'énergie du choc, explosion à 0 PV ; `trailer_hp_test`, `truck_cargo_test` (dégradation visuelle de la remorque : 4.5.6) |
-| 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive | visual-artist | `[ ]` |
-| 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[x]` dans la course (`LocalRace`, état LOBBY) ; `race_ready_test`. Choix des pouvoirs au sas : avec 4.5.8 |
-| 4.5.8 | Arsenal des pouvoirs D-PAD : Lance-missiles (2 missiles, 5 s cooldown, -15 HP) et Citerne d'essence sur remorque (traînée glissante 2 s, 30 s cooldown) | gameplay-engineer | `[ ]` |
+| 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive (tracteur & remorque) | visual-artist | `[ ]` |
+| 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[x]` dans la course (`LocalRace`, état LOBBY) ; `race_ready_test` |
+| 4.5.8 | Système de pouvoirs : nouvelle formule (anciens pouvoirs provisoires retirés, nouvelle conception en attente) | gameplay-engineer | `[ ]` |
 
 **Critères de sortie du Lot 1 (Terminé)**
 - Les camions sans remorque accélèrent et pointent à x1.2 de leur vitesse de pointe normale (`solo_top_speed_factor = 1.2`).
@@ -327,6 +327,11 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
   Carré dans le sas ne consomme pas le boost.
 - `[x]` `make test` à 100 % (50/50 : `truck_health_test`, `trailer_hp_test`,
   `race_ready_test` ajoutés ; tests de course sans sas : `ready_gate = false`).
+
+**Critères de sortie du Lot 3 (En cours)**
+- `[ ]` **Remasterisation des barils explosifs** : taille accrue (~x1.8 à x2, rayon ~1.2m, hauteur ~2.5m), visibilité arcade renforcée (balise lumineuse/stroboscopique clignotante au sommet visible de loin, chevrons d'alerte émissifs contrastés), rayon de déclenchement adapté, non-régression des tests d'explosion et de dégâts (-15 PV).
+- `[ ]` **Dégradations visuelles localisées (Module 5 & 6)** : éraflures, noircissement et déformations d'impacts sur la carrosserie du tracteur et de la remorque selon l'angle des chocs ; fumée de moteur progressive selon les PV restants (légère sous 70 PV, dense et étincelles sous 30 PV) ; dégradation visuelle de la remorque abandonnée selon ses 50 PV.
+- `[ ]` `make test` passe toujours à 100 %.
 
 ---
 

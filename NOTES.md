@@ -34,9 +34,10 @@
   - Éjection spectaculaire (*yeet* > 11 m) conservée, suppression de la division de vitesse par 2 (flow de course arcade préservé).
 - [x] **Flaques d'huile / eau glissantes** :
   - Ne freinent plus le camion (vitesse longitudinale 100 % préservée) : perte brutale d'adhérence latérale (effet savonnette) obligeant à contre-braquer.
-- [x] **Barils explosifs** :
+- [~] **Barils explosifs** (Lot 1 fonctionnel, Lot 3 : remasterisation visuelle et taille) :
   - Fût métallique rouge et jaune émissif sur la piste.
-  - Détonation au contact : onde de choc, lumière dynamique, son d'explosion procédural et léger *yeet* physique du camion sans basculement. Éjection du baril et respawn après 6 s. (Dégâts -15 HP branchés avec le module PV).
+  - Détonation au contact : onde de choc, lumière dynamique, son d'explosion procédural et léger *yeet* physique du camion sans basculement. Éjection du baril et respawn après 6 s. Dégâts -15 HP (TruckHealth).
+  - Remasterisation (demande utilisateur) : barils actuellement trop petits et peu visibles à grande vitesse sur la piste de 75 m ; à agrandir sensiblement (~x1.8 à x2), contraste renforcé et ajout d'une balise stroboscopique/lumineuse arcade clignotante visible de loin.
 
 ### Module 5 : Dégradations Visuelles Localisées
 - [ ] **Système de dégradations visuelles par zone** :
@@ -54,22 +55,12 @@
   - Elle perd des PV lors des chocs avec les autres camions ou attaques.
   - Dégradation visuelle progressive puis destruction / disparition quand ses 50 HP tombent à 0.
 
-### Module 7 : Flux Menu & Écran Scindé de Sélection des Pouvoirs
-- [~] **Sas READY** (Lot 2 : dans la course, chaque joueur valide avec Carré avant le compte à rebours ; le bouton du menu et le choix des pouvoirs restent à faire) — **Bouton READY au menu principal** :
+### Module 7 : Flux Menu & Sas READY
+- [x] **Sas READY** (Lot 2 : dans la course, chaque joueur valide avec Carré avant le compte à rebours).
+- [ ] **Bouton READY au menu principal** :
   - Remplacer le bouton "COMMENCER" direct par un bouton **"READY"**.
-- [ ] **Écran de sélection des pouvoirs en écran scindé** :
-  - Bascule en écran scindé (selon le nombre de joueurs) sur un sas de préparation.
-  - Chaque joueur choisit ses **4 pouvoirs** avec sa manette avant le lancement de la course.
-  - Mappage des 4 pouvoirs sur les 4 directions de la **croix directionnelle (D-PAD)** de la manette PS5 DualSense (Haut, Bas, Gauche, Droite).
 
-### Module 8 : Arsenal des Pouvoirs (1ers Pouvoirs)
-- [ ] **Pouvoir 1 : Lance-Missiles** :
-  - Tire 2 missiles vers l'avant.
-  - Dégâts : **-15 HP** à la cible touchée.
-  - Cooldown : **5 secondes**.
-- [ ] **Pouvoir 2 : Citerne d'Essence / Huile** :
-  - Citerne visuelle fixée sur le dos de la remorque (part avec la remorque si larguée, revient avec elle).
-  - Déverse de l'essence pendant **2 secondes** créant une traînée ultra-glissante derrière soi.
-  - Cooldown : **30 secondes**.
-- [ ] **Pouvoir 3 & 4** :
-  - Emplacements prévus sur les touches restantes du D-PAD (spécifications à venir selon les retours de l'utilisateur).
+### Module 8 : Système de Pouvoirs (En attente de la nouvelle approche)
+- [ ] **Nouvelle formule de pouvoirs** :
+  - Les anciens pouvoirs provisoires (ancien 16 lance-missiles et ancien 17 citerne d'essence) sont supprimés.
+  - La nouvelle mécanique de pouvoirs sera spécifiée selon les retours et choix de gameplay du joueur.
