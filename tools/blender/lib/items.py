@@ -354,9 +354,10 @@ def teddy():
         p.hull([(sx * 0.07, 0.62, 0.28), (sx * 0.38, 0.60, 0.45), (sx * 0.38, 0.60, 0.11),
                 (sx * 0.07, 0.68, 0.28), (sx * 0.38, 0.66, 0.45), (sx * 0.38, 0.66, 0.11)],
                "Ruban_Rouge")
-    p.box((0.40, 0.68, -0.20), (0.35, 0.05, 0.30), "Peluche_Rose", rot=(0, 0, 25))
+    # Piece rapiecee posee sur le ventre (normale ~ +Y inclinee vers +X).
+    p.box((0.40, 0.735, -0.20), (0.35, 0.04, 0.30), "Peluche_Rose", bevel=0.01, rot=(0, 0, -25))
     for k in range(4):
-        p.box((0.30 + 0.07 * k, 0.71, -0.20), (0.02, 0.02, 0.38), "Couture", rot=(0, 0, 25))
+        p.box((0.29 + 0.07 * k, 0.765 - 0.03 * k, -0.20), (0.02, 0.02, 0.38), "Couture", rot=(0, 0, -25))
     return [p.finish()]
 
 

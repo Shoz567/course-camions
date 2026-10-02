@@ -60,6 +60,7 @@ monde sans en parler.** Tout le réglage de la conduite en dépend.
 │   ├── INPUT_SPEC.md          ← manettes, device id, InputFrame de conduite
 │   ├── METRICS.md             ← métriques de conduite : mesurées, jamais décrétées
 │   └── NETCODE.md             ← architecture réseau, budget bande passante
+├── blend/                     ← un .blend par modèle du catalogue (make assets, git-ignoré)
 ├── tools/blender/             ← scripts Python de génération d'assets
 │   ├── lib/                   ← helpers partagés (export glTF, budgets)
 │   └── build_all.py

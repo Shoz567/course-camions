@@ -66,6 +66,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--variant", required=True, choices=sorted(CATALOG))
     p.add_argument("--out", required=True)
+    p.add_argument("--blend", default="", help="sauvegarde aussi un .blend de ce seul modele")
     return p.parse_args(argv)
 
 
@@ -98,6 +99,8 @@ def main():
     check(objects, args.variant)
     export.apply_transforms(objects)
     out = export.to_glb(args.out, objects)
+    if args.blend:
+        export.to_blend(args.blend, objects, args.variant)
     print("OK %s tris=%d" % (out, kit.tris(objects)))
 
 

@@ -13,6 +13,9 @@ Assets_Visuels/**
 !Assets_Visuels/**/*.glb
 
 # Blender
+# Un .blend par modele du catalogue (make assets) : copies de consultation,
+# la source de verite reste tools/blender/.
+blend/
 *.blend1
 *.blend2
 

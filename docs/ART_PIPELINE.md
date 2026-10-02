@@ -166,6 +166,15 @@ gameplay des armes sera spécifié plus tard.
 | | `projectiles/{missile, grenade, camion_projectile, doudou_geant, voiture_rouge/bleue/jaune/verte/blanche}.glb` (ce qui part du camion) |
 | | `effets/{bouclier_coque, laser_faisceau}.glb` (enveloppes et faisceaux à étirer) |
 
+**Dans Blender : un modèle = un `.blend`.** `make assets` écrit aussi
+`blend/<catégorie>/<nom>.blend` à la racine du dépôt (mêmes catégories que
+les `.glb`) : le modèle seul dans une collection à son nom, avec un sol, une
+lumière et une caméra cadrée (collection `Studio`). Ce sont des **copies de
+consultation**, git-ignorées : la source de vérité reste le script, et
+`make assets` réécrit ces fichiers (une retouche faite à la main dans un
+`.blend` est perdue). Ils sont hors de `game/` car Godot importerait un
+`.blend` tout seul (`CLAUDE.md` §2).
+
 **Dans Godot : un modèle = une scène.** `game/catalogue/<catégorie>/<nom>.tscn`
 est une scène héritée du `.glb` : on la glisse dans l'éditeur ou on
 l'instancie en code, et on peut y ajouter nœuds et scripts sans toucher au

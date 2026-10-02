@@ -24,6 +24,9 @@ sys.path.append(str(Path(__file__).parent))
 # Racine du depot (tools/blender/build_all.py -> remonte de 2 niveaux).
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO_ROOT / "game" / "assets" / "generated"
+# Un .blend par modele, a ouvrir dans Blender. Hors de game/ : Godot
+# importerait les .blend tout seul (CLAUDE.md §2 : jamais de .blend dans Godot).
+BLEND_DIR = REPO_ROOT / "blend"
 
 HERE = Path(__file__).resolve().parent
 
@@ -46,15 +49,18 @@ ITEMS = {
 # (script, arguments) — rempli au fil des phases.
 # Phase 5 : build_truck.py, build_track_01.py
 BUILDS = (
-    [("build_vehicle.py", ["--variant=" + v, "--out=" + str(OUT_DIR / "vehicules" / (v + ".glb"))])
+    [("build_vehicle.py", ["--variant=" + v, "--out=" + str(OUT_DIR / "vehicules" / (v + ".glb")),
+                           "--blend=" + str(BLEND_DIR / "vehicules" / (v + ".blend"))])
      for v in VEHICLES]
-    + [("build_item.py", ["--item=" + i, "--out=" + str(OUT_DIR / cat / (i + ".glb"))])
+    + [("build_item.py", ["--item=" + i, "--out=" + str(OUT_DIR / cat / (i + ".glb")),
+                          "--blend=" + str(BLEND_DIR / cat / (i + ".blend"))])
        for cat, names in ITEMS.items() for i in names]
 )
 
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    BLEND_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=== build_all : %d asset(s) a generer ===" % len(BUILDS))
 
@@ -81,7 +87,7 @@ def main():
 
     if failed:
         raise SystemExit("build_all : %d echec(s) : %s" % (len(failed), failed))
-    print("OK sortie=%s" % OUT_DIR)
+    print("OK sortie=%s blend=%s" % (OUT_DIR, BLEND_DIR))
     return 0
 
 
