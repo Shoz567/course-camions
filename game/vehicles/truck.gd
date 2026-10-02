@@ -74,6 +74,8 @@ const STOP_SPEED_MS := 0.5
 @export var debug_drag: bool = true
 @export var debug_anti_roll: bool = true
 @export var debug_handbrake: bool = true
+## Anti tete-a-queue : derive prevue au-dela de drift_max_slip_deg ramenee.
+@export var debug_spin_guard: bool = true
 ## Drift : force laterale commandee au stick, la trajectoire suit le virage.
 @export var debug_drift_carve: bool = true
 @export var debug_air_control: bool = true
@@ -732,10 +734,10 @@ func _apply_cargo_hit(t: VehicleTuning, up: Vector3) -> void:
 ## frein a main, on pousse donc le lacet vers une derive cible proportionnelle
 ## au braquage (drift_target_slip_deg au plein stick) : le nez pivote tout de
 ## suite. Acceleration angulaire bornee (drift_assist_accel).
-## L'aide ne BLOQUE jamais l'angle (2026-10-01, demande de l'utilisateur :
-## plus d'anti tete-a-queue, « ne la bloque pas du tout ») : elle ne freine
-## jamais la rotation et se coupe au-dela de la cible. Le joueur tient
-## l'angle au stick et au contre-braquage ; il peut partir en tete-a-queue.
+## L'aide ne tient jamais l'angle (2026-10-01, « ne la bloque pas du tout ») :
+## elle ne freine jamais la rotation et se coupe au-dela de la cible. Le joueur
+## tient l'angle au stick et au contre-braquage, jusqu'a drift_max_slip_deg ;
+## au-dela, la garde anti tete-a-queue reprend la main (_apply_spin_guard).
 func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: float, v_fwd: float) -> void:
 	var dt := 1.0 / Engine.physics_ticks_per_second
 	var flat := linear_velocity - up * linear_velocity.dot(up)
@@ -749,9 +751,11 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 	if _grounded < 2 or speed < t.drift_min_speed_ms or v_fwd <= 0.0:
 		return
 	var slip := atan2(flat.dot(fwd.cross(up)), flat.dot(fwd))
+	var w := angular_velocity.dot(up)
+	if debug_spin_guard and _apply_spin_guard(t, up, slip, w, path_rate):
+		return
 	if _handbrake_blend <= 0.2:
 		return
-	var w := angular_velocity.dot(up)
 	var target := -steer_in * deg_to_rad(t.drift_target_slip_deg)
 	# deja au-dela de la cible, du meme cote (ou stick au neutre) : angle libre
 	if slip * target >= 0.0 and absf(slip) >= absf(target):
@@ -762,6 +766,23 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 	if alpha * (target - slip) <= 0.0:
 		return
 	apply_torque(up * alpha * t.inertia_yaw_kgm2)
+
+
+## Anti tete-a-queue (remis le 2026-10-02 a la demande de l'utilisateur, apres
+## son retrait la veille) : si la derive PREVUE a 0,3 s depasse
+## drift_max_slip_deg (un choc lance la rotation trop vite pour attendre la
+## limite), le lacet est ramene vers la limite, frein a main ou non, a
+## spin_guard_accel. En dessous, l'angle reste libre : la garde ne tient pas
+## le drift, elle empeche seulement le tete-a-queue. Vrai si elle a agi.
+func _apply_spin_guard(t: VehicleTuning, up: Vector3, slip: float, w: float, path_rate: float) -> bool:
+	var max_slip := deg_to_rad(t.drift_max_slip_deg)
+	var predicted := slip + (w - path_rate) * 0.3
+	if absf(predicted) <= max_slip:
+		return false
+	var desired_w := path_rate + t.drift_assist_gain * (signf(predicted) * max_slip - slip)
+	var alpha := clampf((desired_w - w) * 8.0, -t.spin_guard_accel, t.spin_guard_accel)
+	apply_torque(up * alpha * t.inertia_yaw_kgm2)
+	return true
 
 
 ## Elan en drift : en derapage, les pneus « raclent » la vitesse (leur force
