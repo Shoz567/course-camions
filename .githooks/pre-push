@@ -25,7 +25,10 @@ if [ -t 2 ]; then
 fi
 
 # Git fournit sur stdin : <ref locale> <sha local> <ref distante> <sha distant>
-while read -r local_ref local_sha remote_ref remote_sha; do
+# On le garde pour le transmettre a Git LFS (envoi des modeles .glb) : ce hook
+# remplace celui que `git lfs install` aurait pose (core.hooksPath).
+refs=$(cat)
+echo "$refs" | while read -r local_ref local_sha remote_ref remote_sha; do
 	if [ "$remote_ref" = "refs/heads/main" ]; then
 		branch=$(git rev-parse --abbrev-ref HEAD)
 		echo "${RED}pre-push : push direct sur main refuse${RESET}" >&2
@@ -44,6 +47,17 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 		echo "  Voir docs/ENVIRONMENT.md §6.4." >&2
 		exit 1
 	fi
-done
+done || exit 1
+
+# Git LFS : envoie les fichiers suivis (.glb d'Assets_Visuels/) avant les
+# commits qui les referencent. Sans Git LFS installe, on refuse : le push
+# publierait des pointeurs vers des fichiers absents du serveur.
+if git lfs ls-files >/dev/null 2>&1; then
+	echo "$refs" | git lfs pre-push "$@" || exit 1
+elif [ -n "$(git ls-files ':(attr:filter=lfs)')" ]; then
+	echo "${RED}pre-push : Git LFS absent${RESET}" >&2
+	echo "  Installe-le (docs/ENVIRONMENT.md §6.7) : git lfs install" >&2
+	exit 1
+fi
 
 exit 0

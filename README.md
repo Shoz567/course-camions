@@ -49,6 +49,8 @@ puis online.
 git clone https://github.com/Shoz567/course-camions.git
 cd course-camions
 git config core.hooksPath .githooks     # obligatoire : active les vérifications
+git lfs install --skip-repo              # une fois par machine : modèles des camions
+git lfs pull                             # si le clone a précédé la ligne ci-dessus
 make test                                # doit afficher 0 échec
 make run                                 # lance le jeu (menu principal)
 ```

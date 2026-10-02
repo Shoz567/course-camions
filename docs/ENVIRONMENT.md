@@ -214,6 +214,7 @@ changement.
 
 ```bash
 git config core.hooksPath .githooks
+git lfs install --skip-repo      # une fois par machine : modèles .glb (§6.7)
 ```
 
 Les hooks vivent dans `.githooks/` (versionné) et **non** dans `.git/hooks/`,
@@ -359,4 +360,26 @@ le propriétaire peut modifier les paramètres, gérer les accès ou supprimer l
 dépôt. Pour de vrais rôles, il faudrait transférer le dépôt dans une
 organisation GitHub.
 
-Chaque nouveau membre, après son `git clone`, lance la commande du §6.1.
+Chaque nouveau membre, après son `git clone`, lance les commandes du §6.1.
+
+### 6.7 Modèles de l'équipe : Git LFS
+
+Les modèles de camions faits à la main (`Assets_Visuels/**/*.glb`, 4 fichiers,
+8,7 Mo) sont versionnés depuis le 2026-10-02 par **Git LFS** : le dépôt ne
+garde qu'un pointeur de quelques lignes, le fichier est stocké à part sur
+GitHub. Règle dans `.gitattributes` ; les sources (`.fbx`, `.blend`) restent
+hors dépôt (`.gitignore`).
+
+- **Installer** : Git LFS est fourni avec Git for Windows. Une fois par machine,
+  `git lfs install --skip-repo` (filtres seulement : `--skip-repo` empêche LFS
+  de poser ses propres hooks, ceux du projet vivent dans `.githooks/`).
+- **Récupérer** : un `git clone` ou `git pull` télécharge les modèles. Cloné
+  avant d'installer LFS ? `git lfs pull`.
+- **Envoyer** : le hook `pre-push` appelle `git lfs pre-push` ; sans Git LFS, il
+  refuse le push (il publierait des pointeurs vers des fichiers absents).
+- **Le hook `pre-commit`** admet les fichiers suivis par LFS ; un `.glb` hors
+  `Assets_Visuels/` (asset généré) reste refusé.
+- **Sans les modèles** (LFS absent, clone partiel), le jeu tourne : le camion
+  garde ses boîtes de blockout (`TruckVisual`).
+- **Quota** : GitHub offre 1 Go de stockage LFS et 1 Go de téléchargement par
+  mois sur un compte gratuit ; un clone complet en consomme ~9 Mo.
