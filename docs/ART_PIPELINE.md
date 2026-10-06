@@ -152,7 +152,9 @@ corrige, toujours sans toucher à la physique :
   à chaque tick, la roue ne monte pas au-delà, penche de la carrosserie compris
   aux deux bords du pneu ;
 - braquage visuel borné à ce que les passages de roue avant laissent passer
-  (mesuré : 45°, au-delà du braquage max, après le recul des marchepieds).
+  (mesuré : 45°, au-delà du braquage max, après le recul des marchepieds) ;
+- roues **arrière** : montée visuelle bornée à 8 cm (`REAR_WHEEL_MAX_UP`), car
+  la remorque pivote et penche juste au-dessus d'elles (§4 ter, zone balayée).
 
 `truck_wheel_arch_test` le vérifie : chute de 4 m, braquage à fond, drift,
 contre-braquage, freinage ; aucun sommet de carrosserie dans un pneu. Sans ces
@@ -185,6 +187,19 @@ d'essieux ni de roues avec une autre (décision du 2026-10-06).
 | Pompier | fourgon d'un seul bloc jusqu'aux jupes, rideaux alu, grande échelle, enrouleurs | caisse autoportante, col rehaussé | 2 essieux jumelés, jantes chromées |
 | Grue | semi-grue : tourelle, cabine, contrepoids, flèche télescopique couchée | poutre-caisson jaune, stabilisateurs | 4 essieux jumelés, jantes jaunes |
 | Porte-engins | deux chariots élévateurs arrimés, panneau convoi | surbaissé : col de cygne, plancher bas en bois, rampes | 3 essieux, petites roues jumelées grises |
+
+**Zone balayée au-dessus du tracteur** (2026-10-06) : en virage, la remorque
+pivote jusqu'à ±35° et penche jusqu'à ±6° juste au-dessus des roues arrière
+du tracteur. Rien ne doit y entrer : le script le vérifie à chaque remorque
+(`swing_violations`, faces échantillonnées et pas seulement les sommets, roues
+en position haute) et refuse la remorque sinon. En pratique, tout ce qui est
+bas commence derrière y ≈ −3,9 m (Blender) : béquilles, longerons, jupes,
+tubes, plancher bas. Les caisses de l'équipe y sont adaptées par le script :
+petites pièces en cause retirées entières, cadre du porte-voitures coupé net
+(son plancher bas commence derrière les roues du tracteur), ventre de la
+citerne remonté à l'avant en pente douce (une cuve ne se coupe pas).
+`truck_trailer_wheels_test` le vérifie en jeu, les 8 remorques à 35°. Avant :
+165 sommets de la citerne dans une roue du tracteur en drift.
 
 Tout ce qui est généré porte le préfixe `Gen_` ; le script est idempotent
 (deux exécutions donnent des fichiers identiques à l'octet). À relancer si la

@@ -197,6 +197,9 @@ func _physics_process(delta: float) -> void:
 			var edge := Vector3(_arch_hw[i], 0.0, 0.0)
 			var drop := maxf(a.y - edge.y - (_lean_xf * (a - edge)).y, a.y + edge.y - (_lean_xf * (a + edge)).y)
 			up = minf(up, _arch_gap[i] - drop - ARCH_SAFETY)
+			if not _steers[i]:
+				# roues arriere : sous la remorque, qui pivote et penche au-dessus
+				up = minf(up, REAR_WHEEL_MAX_UP)
 		xf.origin.y += up
 		if _steers[i]:
 			xf.basis = steer * xf.basis
@@ -577,6 +580,10 @@ const ARCH_MOVES := {
 const WHEEL_SCALE := 0.92
 ## Jeu garde entre le pneu et la carrosserie a la butee visuelle (m).
 const ARCH_SAFETY := 0.03
+## Montee visuelle max des roues arriere : la remorque pivote (+-35 deg) et
+## penche au-dessus d'elles ; ses pieces basses sont dessinees pour ce jeu
+## (tools/blender/catalogue_tete_commune.py, REAR_WHEEL_MAX_UP : garder en accord).
+const REAR_WHEEL_MAX_UP := 0.08
 ## Braquage visuel max quand aucun angle ne passe (garde-fou).
 const MIN_VISUAL_STEER_DEG := 10.0
 
