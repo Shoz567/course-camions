@@ -1,4 +1,4 @@
-"""Catalogue de vehicules : meme tete de camion partout, seule la remorque change.
+"""Catalogue de vehicules : meme tete de camion partout, une remorque unique chacun.
 
     blender -b -P tools/blender/catalogue_tete_commune.py
     blender -b -P tools/blender/catalogue_tete_commune.py -- --only grue
@@ -8,22 +8,27 @@ Pour chaque vehicule de Assets_Visuels/Armes_et_camions/vehicules/ :
      de course de l'equipe (Camion_Bleu.glb), ajuste a VEHICLE_SPEC comme le
      fait TruckVisual en jeu : demi-tour (avant en -Z Godot), echelle uniforme
      pour une longueur de tracteur de 6,96 m, centre, pneus au sol ;
-  2. la semi-remorque `Remorque` (pivot a la sellette) est conservee. Les
-     porteurs sans remorque (grue, pompier, chasse-neige) et le chariot
-     elevateur recoivent une semi-remorque plateau (celle de remorque.blend)
-     qui porte leur equipement ;
+  2. la semi-remorque `Remorque` (pivot a la sellette) est UNIQUE : chacune a
+     son chassis et son train roulant (nombre, ecartement et taille des
+     essieux, roues simples ou jumelees, jantes, garde-boue, bequilles, feux),
+     generes ici. Les caisses dessinees par l'equipe (conteneur, citerne,
+     betaillere, porte-voitures) sont gardees ; grue, pompier, saleuse et
+     porte-engins sont entierement generes ;
   3. les points d'accroche des armes sont reposes : Socket_Avant,
      Socket_Lateral_G/D et Socket_Toit sur la tete (donc aux MEMES coordonnees
      sur tous les vehicules), Socket_Arriere et Socket_Conteneur sur la remorque.
 
-Le .blend et le .glb de chaque vehicule sont reecrits. Idempotent : relance,
-le script retrouve la remorque deja posee et ne refait que la tete.
+Tout ce qui est genere porte le prefixe GEN : une relance l'efface et le
+refait (idempotent). Le .blend et le .glb de chaque vehicule sont reecrits.
+Repere Blender : avant +Y, haut +Z ; sellette en (0 ; -1,44 ; 2,16).
 """
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
+import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
@@ -33,29 +38,20 @@ from lib import export  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOGUE = REPO_ROOT / "Assets_Visuels" / "Armes_et_camions" / "vehicules"
 TRACTOR_GLB = REPO_ROOT / "Assets_Visuels" / "Camion" / "Camions_Course_Export" / "Camion_Bleu.glb"
-TRAILER_TEMPLATE = CATALOGUE / "remorque.blend"
 
-# VEHICLE_SPEC §2 : longueur du tracteur (5,8 m x 1,2).
+# VEHICLE_SPEC §2 : longueur du tracteur (5,8 m x 1,2) ; sellette §5 bis.
 TRACTOR_LENGTH = 6.96
+KINGPIN = Vector((0.0, -1.44, 2.16))
 TRAILER = "Remorque"
-TEMPLATE_PARTS = ["Remorque_Chassis", "Remorque_Plateau", "Remorque_Roues"]
+GEN = "Gen_"
 TRACTOR_SOCKETS = ["Socket_Avant", "Socket_Lateral_G", "Socket_Lateral_D", "Socket_Toit"]
 TRAILER_SOCKETS = ["Socket_Arriere", "Socket_Conteneur"]
 # Decor de presentation des .blend : conserve, jamais exporte.
 SCENE_PROPS = {"Sol", "Camera", "Soleil"}
-# Sur les caisses de porteur (Porteur_*), ce qui est devant y = 1,0 m est pose sur l'ancienne cabine
-# (supports de gyrophares de la saleuse) : abandonne avec elle.
-CAB_LIMIT_Y = 1.0
-
-# Porteurs et engins sans semi-remorque : objets poses sur le plateau.
-# Ce qui n'est pas liste disparait avec l'ancienne tete (Porteur_Plateau de la
-# grue : le plateau de la remorque le remplace ; Lame_Neige : lame avant).
-EQUIPMENT = {
-    "grue": ["Grue_Tourelle", "Grue_Fleche", "Grue_Crochet"],
-    "pompier": ["Porteur_Pompier", "Echelle_Tourelle", "Echelle"],
-    "chasse_neige": ["Porteur_Saleuse"],
-    "chariot_elevateur": None,   # None = tout l'engin
-}
+# Pieces de l'ancien chassis commun, remplacees par un chassis propre.
+SHARED_PARTS = ("Remorque_Chassis", "Remorque_Roues", "Remorque_Plateau")
+# Chariot elevateur (source du porte-engins), garde d'une execution a l'autre.
+FORKLIFT = "Chariot_Elevateur"
 
 
 def parse_args():
@@ -63,6 +59,9 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--only", nargs="*", default=None)
     return p.parse_args(argv)
+
+
+# ---------------------------------------------------------------- utilitaires
 
 
 def world_bbox(objs):
@@ -122,35 +121,6 @@ def join(objs, name):
     return out
 
 
-def drop_parts_over_cab(obj):
-    """Retire les morceaux detaches du maillage situes sur l'ancienne cabine."""
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    m = obj.matrix_world
-    seen = set()
-    doomed = []
-    for v in bm.verts:
-        if v in seen:
-            continue
-        part, stack = [], [v]
-        seen.add(v)
-        while stack:
-            x = stack.pop()
-            part.append(x)
-            for e in x.link_edges:
-                y = e.other_vert(x)
-                if y not in seen:
-                    seen.add(y)
-                    stack.append(y)
-        if min((m @ x.co).y for x in part) > CAB_LIMIT_Y:
-            doomed += part
-    if doomed:
-        bmesh.ops.delete(bm, geom=doomed, context="VERTS")
-        bm.to_mesh(obj.data)
-    bm.free()
-
-
 def set_origin(obj, point):
     """Deplace l'origine de obj (sans bouger la geometrie)."""
     off = point - obj.matrix_world.translation
@@ -171,90 +141,8 @@ def add_socket(name, loc, parent):
     return e
 
 
-# ---------------------------------------------------------------- remorque
-
-
-def build_plateau_trailer(vehicle):
-    """Semi-remorque plateau de remorque.blend, chargee de l'equipement."""
-    with bpy.data.libraries.load(str(TRAILER_TEMPLATE), link=False) as (src, dst):
-        dst.objects = [TRAILER] + TEMPLATE_PARTS
-    for o in dst.objects:
-        bpy.context.scene.collection.objects.link(o)
-    trailer = bpy.data.objects[TRAILER]
-
-    names = EQUIPMENT[vehicle]
-    if names is None:   # l'engin entier devient le chargement
-        roots = [o for o in bpy.context.scene.objects
-                 if o.parent is None and o.type == "MESH" and o.name not in SCENE_PROPS
-                 and o.name not in dst_names(dst)]
-    else:
-        missing = [n for n in names if n not in bpy.data.objects]
-        if missing:
-            raise SystemExit(f"{vehicle} : equipement introuvable {missing}")
-        roots = [bpy.data.objects[n] for n in names]
-        roots = [o for o in roots if o.parent is None or o.parent.name not in names]
-        for o in roots:
-            for m in [o] + list(o.children_recursive):
-                if m.type == "MESH" and m.name.startswith("Porteur_"):
-                    drop_parts_over_cab(m)
-    load = []
-    for o in roots:
-        load += [o] + list(o.children_recursive)
-    delete([o for o in load if o.name.startswith("Socket_")])
-    load = [o for o in load if alive(o)]
-    if names is None:
-        for o in load:
-            o.name = "Chariot_" + o.name
-    # chaque engin devient une semi-remorque dediee, pas un objet pose
-    meshes = flatten([o for o in load if o.type == "MESH"])
-    delete([o for o in load if alive(o) and o.type != "MESH"])
-    BUILDERS[vehicle](meshes, trailer)
-    for o in meshes:
-        reparent_keep(o, trailer)
-    return trailer
-
-
-# Plateau de remorque.blend (repere Blender : avant +Y, haut +Z).
-DECK_TOP = 2.22
-DECK_FRONT = -0.2     # la caisse commence derriere la sellette (z Godot 0,48)
-DECK_REAR = -15.5
-DECK_HALF_W = 1.57
-# Les caisses de porteur etaient posees sur un chassis a z = 1,1.
-PORTEUR_FLOOR = 1.1
-
-
-def flatten(meshes):
-    """Detache les maillages et applique leurs transformations (repere monde)."""
-    for o in meshes:
-        reparent_keep(o, None)
-        if o.data.users > 1:
-            o.data = o.data.copy()
-    bpy.ops.object.select_all(action="DESELECT")
-    for o in meshes:
-        o.select_set(True)
-    if meshes:
-        bpy.context.view_layer.objects.active = meshes[0]
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    return meshes
-
-
-def transform(meshes, m):
-    for o in meshes:
-        o.data.transform(m)
-        o.data.update()
-
-
-def stretch_on_deck(meshes, floor_z):
-    """Etire le groupe sur toute la longueur du plateau, plancher sur le plateau."""
-    mn, mx = world_bbox(meshes)
-    k = (DECK_FRONT - DECK_REAR) / (mx.y - mn.y)
-    m = (Matrix.Translation((-(mn.x + mx.x) / 2, DECK_FRONT, DECK_TOP))
-         @ Matrix.Diagonal((1.0, k, 1.0, 1.0))
-         @ Matrix.Translation((0.0, -mx.y, -floor_z)))
-    transform(meshes, m)
-
-
-def material(name, color, metallic=0.0, roughness=0.6):
+def material(name, color, metallic=0.0, roughness=0.6, emission=0.0):
+    """Materiau du fichier s'il existe (couleurs de l'equipe), sinon cree."""
     mat = bpy.data.materials.get(name)
     if mat is None:
         mat = bpy.data.materials.new(name)
@@ -263,139 +151,521 @@ def material(name, color, metallic=0.0, roughness=0.6):
         bsdf.inputs["Base Color"].default_value = (*color, 1.0)
         bsdf.inputs["Metallic"].default_value = metallic
         bsdf.inputs["Roughness"].default_value = roughness
+        if emission > 0.0:
+            bsdf.inputs["Emission Color"].default_value = (*color, 1.0)
+            bsdf.inputs["Emission Strength"].default_value = emission
         mat.diffuse_color = (*color, 1.0)
     return mat
 
 
+def M():
+    """Materiaux communs (crees a la demande dans chaque fichier)."""
+    return {
+        "noir": material("Chassis", (0.05, 0.05, 0.05), 0.4, 0.5),
+        "acier": material("Acier_Sellette", (0.35, 0.35, 0.37), 0.8, 0.35),
+        "chrome": material("Chrome", (0.85, 0.85, 0.88), 1.0, 0.1),
+        "alu": material("Aluminium", (0.75, 0.76, 0.78), 0.9, 0.3),
+        "pneu": material("Pneu", (0.03, 0.03, 0.03), 0.0, 0.9),
+        "plastique": material("Plastique_Noir", (0.04, 0.04, 0.04), 0.0, 0.6),
+        "caoutchouc": material("Caoutchouc", (0.02, 0.02, 0.02), 0.0, 0.95),
+        "feu": material("Feu_Arriere", (0.85, 0.02, 0.02), 0.0, 0.3, 2.0),
+        "orange": material("Clignotant", (1.0, 0.45, 0.0), 0.0, 0.3, 2.0),
+        "plaque": material("Plaque_Fond", (0.95, 0.95, 0.95), 0.0, 0.4),
+        "danger": material("Danger_Jaune", (0.95, 0.75, 0.05)),
+        "danger_noir": material("Danger_Noir", (0.03, 0.03, 0.03)),
+        "bois": material("Bois", (0.45, 0.3, 0.15)),
+        "vitre": material("Vitre", (0.1, 0.15, 0.2), 0.0, 0.05),
+    }
+
+
+# ---------------------------------------------------------------- primitives
+# Chaque primitive renvoie un objet dont la geometrie est deja au monde.
+
+
 def box(name, center, size, mat, rot_x=0.0):
-    """Pave, origine au monde (transformations appliquees)."""
     bpy.ops.mesh.primitive_cube_add(size=1.0)
     o = bpy.context.active_object
-    o.name = name
-    o.data.name = name
+    o.name = GEN + name
+    o.data.name = GEN + name
     o.data.transform(Matrix.Rotation(rot_x, 4, "X") @ Matrix.Diagonal((*size, 1.0)))
     o.data.transform(Matrix.Translation(center))
     o.data.materials.append(mat)
     return o
 
 
-def build_pompier(meshes, trailer):
-    """Fourgon pompier sur toute la longueur, echelle allongee sur le toit.
-
-    Fourgon et echelle sont etires chacun sur leur propre longueur : l'echelle,
-    plus longue que le fourgon, deborderait sinon sur le tracteur.
-    """
-    ladder = [o for o in meshes if o.name.startswith("Echelle")]
-    stretch_on_deck([o for o in meshes if o not in ladder], PORTEUR_FLOOR)
-    stretch_on_deck(ladder, PORTEUR_FLOOR)
-
-
-def build_saleuse(meshes, trailer):
-    """Tremie a sel sur toute la longueur, epandeur a l'arriere."""
-    stretch_on_deck(meshes, PORTEUR_FLOOR)
+def beam(name, p0, p1, width, thick, mat):
+    """Pave de largeur `width` (x) et d'epaisseur `thick`, de p0 a p1 (plan YZ)."""
+    p0, p1 = Vector(p0), Vector(p1)
+    d = p1 - p0
+    angle = math.atan2(d.z, d.y)
+    o = box(name, (0, 0, 0), (width, d.length, thick), mat, rot_x=angle)
+    o.data.transform(Matrix.Translation((p0 + p1) / 2))
+    return o
 
 
-def build_grue(meshes, trailer):
-    """Porte-grue : grue a l'arriere sur bequilles, poutres d'acier sanglees."""
-    s = 1.5
-    mn, mx = world_bbox([o for o in meshes if o.name == "Grue_Tourelle"])
-    base = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
-    crane_y = DECK_REAR + 1.9
-    # sur son socle (0,4 m) : la tourelle ne traverse pas le plateau
-    transform(meshes, Matrix.Translation((0.0, crane_y, DECK_TOP + 0.4)) @ Matrix.Scale(s, 4)
-              @ Matrix.Translation(-base))
-    jaune = material("Peinture_Cabine_Jaune", (0.95, 0.75, 0.05))
-    danger = material("Danger_Jaune", (0.95, 0.75, 0.05))
-    noir = material("Chassis", (0.05, 0.05, 0.05), 0.4, 0.5)
-    acier = material("Acier_Poutre", (0.45, 0.16, 0.08), 0.3, 0.55)
-    bois = material("Bois", (0.45, 0.3, 0.15))
-    sangle = material("Sangle", (0.9, 0.35, 0.05), 0.0, 0.8)
-    parts = []
-    # socle de la grue et bequilles stabilisatrices (repliees le long du flanc)
-    parts.append(box("Grue_Socle", (0.0, crane_y, DECK_TOP + 0.2), (2.6, 2.4, 0.4), noir))
+def cyl(name, center, radius, depth, axis, mat, verts=20):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=verts, radius=radius, depth=depth)
+    o = bpy.context.active_object
+    o.name = GEN + name
+    o.data.name = GEN + name
+    rot = {"X": Matrix.Rotation(math.pi / 2, 4, "Y"), "Y": Matrix.Rotation(math.pi / 2, 4, "X"),
+           "Z": Matrix.Identity(4)}[axis]
+    o.data.transform(rot)
+    o.data.transform(Matrix.Translation(center))
+    o.data.materials.append(mat)
+    return o
+
+
+def tube(name, p0, p1, radius, mat, verts=10):
+    """Cylindre de p0 a p1 (verins, tubes, chaines)."""
+    p0, p1 = Vector(p0), Vector(p1)
+    d = p1 - p0
+    bpy.ops.mesh.primitive_cylinder_add(vertices=verts, radius=radius, depth=d.length)
+    o = bpy.context.active_object
+    o.name = GEN + name
+    o.data.name = GEN + name
+    o.data.transform(Vector((0, 0, 1)).rotation_difference(d.normalized()).to_matrix().to_4x4())
+    o.data.transform(Matrix.Translation((p0 + p1) / 2))
+    o.data.materials.append(mat)
+    return o
+
+
+def prism(name, profile, y0, y1, mat):
+    """Profil (x, z) extrude de y0 a y1, ferme aux deux bouts."""
+    me = bpy.data.meshes.new(GEN + name)
+    bm = bmesh.new()
+    a = [bm.verts.new((x, y0, z)) for x, z in profile]
+    b = [bm.verts.new((x, y1, z)) for x, z in profile]
+    n = len(profile)
+    bm.faces.new(a)
+    bm.faces.new(list(reversed(b)))
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((a[i], a[j], b[j], b[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(GEN + name, me)
+    bpy.context.scene.collection.objects.link(o)
+    me.materials.append(mat)
+    return o
+
+
+# ---------------------------------------------------------------- organes
+
+
+def axle(parts, y, r, w, dual, rim, m, track=1.25):
+    """Essieu : pneus (simples larges ou jumeles), jantes, moyeux, essieu."""
     for side in (-1.0, 1.0):
-        for dy in (-0.9, 0.9):
-            y = crane_y + dy
-            parts.append(box("Grue_Bequille_Bras", (side * 1.75, y, 1.75), (0.5, 0.35, 0.3), danger))
-            parts.append(box("Grue_Bequille_Pied", (side * 1.95, y, 1.0), (0.22, 0.22, 1.4), jaune))
-            parts.append(box("Grue_Bequille_Patin", (side * 1.95, y, 0.3), (0.5, 0.5, 0.08), noir))
-    # chargement : trois rangs de poutres sur cales, sangles
-    y0, y1 = DECK_FRONT - 0.5, crane_y + 1.8
-    length = y0 - y1
-    yc = (y0 + y1) / 2
-    for layer in range(3):
-        z = DECK_TOP + 0.12 + layer * 0.5
-        for y in (y0 - 0.8, yc, y1 + 0.8):
-            parts.append(box("Grue_Cale", (0.0, y, z), (2.8, 0.25, 0.12), bois))
-        for i in range(4 - layer % 2):
-            x = (i - (3 - layer % 2) / 2) * 0.7
-            parts.append(box("Grue_Poutre", (x, yc, z + 0.27), (0.3, length, 0.4), acier))
-    top = DECK_TOP + 0.12 + 2 * 0.5 + 0.5
-    for y in (y0 - 2.5, yc, y1 + 2.5):
-        parts.append(box("Grue_Sangle", (0.0, y, top), (2.9, 0.08, 0.03), sangle))
-        for side in (-1.0, 1.0):
-            parts.append(box("Grue_Sangle", (side * 1.45, y, (top + DECK_TOP) / 2),
-                             (0.03, 0.08, top - DECK_TOP), sangle))
-    meshes.append(join(parts, "Grue_Chargement"))
+        xs = [side * (track - w / 2)]
+        if dual:
+            xs.append(side * (track - w * 1.5 - 0.04))
+        for x in xs:
+            parts.append(cyl("Pneu", (x, y, r), r, w, "X", m["pneu"], 24))
+            parts.append(cyl("Jante", (x + side * 0.005, y, r), r * 0.62, w + 0.01, "X", rim, 16))
+        parts.append(cyl("Moyeu", (side * (track - 0.02), y, r), r * 0.22, 0.08, "X", m["chrome"], 10))
+    parts.append(cyl("Essieu", (0.0, y, r), 0.07, 2 * track - 0.3, "X", m["noir"], 8))
 
 
-def build_chariot(meshes, trailer):
-    """Remorque palettes, ridelles, chariot embarque accroche a l'arriere."""
-    bois = material("Bois", (0.45, 0.3, 0.15))
-    film = material("Film_Palette", (0.72, 0.8, 0.86), 0.0, 0.25)
-    carton = material("Carton", (0.62, 0.45, 0.25), 0.0, 0.85)
-    noir = material("Chassis", (0.05, 0.05, 0.05), 0.4, 0.5)
-    danger = material("Danger_Jaune", (0.95, 0.75, 0.05))
-    parts = []
-    # palettes filmees : 2 colonnes, hauteurs variees (fixes : idempotent)
-    heights = [1.3, 1.1, 1.4, 1.2, 1.35, 1.0, 1.25, 1.4, 1.15, 1.3, 1.2, 1.4, 1.1, 1.3, 1.25, 1.35, 1.2, 1.1]
-    for row in range(9):
-        y = DECK_FRONT - 0.85 - row * 1.55
-        for col, x in enumerate((-0.68, 0.68)):
-            h = heights[row * 2 + col]
-            parts.append(box("Chariot_Palette", (x, y, DECK_TOP + 0.07), (1.2, 1.4, 0.14), bois))
-            mat = film if (row + col) % 3 else carton
-            parts.append(box("Chariot_Colis", (x, y, DECK_TOP + 0.14 + h / 2), (1.15, 1.35, h), mat))
-    # ridelles : poteaux et lisses
-    for y in [DECK_FRONT - 0.1 - i * 1.925 for i in range(9)]:
-        for side in (-1.0, 1.0):
-            parts.append(box("Chariot_Poteau", (side * (DECK_HALF_W - 0.04), y, DECK_TOP + 0.9),
-                             (0.08, 0.1, 1.8), noir))
-    for z in (DECK_TOP + 0.9, DECK_TOP + 1.75):
-        for side in (-1.0, 1.0):
-            parts.append(box("Chariot_Lisse", (side * (DECK_HALF_W - 0.04), (DECK_FRONT + DECK_REAR) / 2, z),
-                             (0.06, DECK_FRONT - DECK_REAR, 0.08), danger))
-    # chariot embarque : fourches engagees sous l'arriere du plateau, souleve
-    lift = [o for o in meshes if not o.name.startswith("Chariot_Palette")]
-    mn, mx = world_bbox(lift)
-    rear = DECK_REAR - 0.45
-    transform(lift, Matrix.Translation((0.0, rear + 1.0 - mx.y, 0.35)))
+def kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3):
+    """Plaque d'attelage (dessous a la hauteur de la sellette) et pivot."""
+    parts.append(box("Plaque_Attelage", (0.0, (y_front + KINGPIN.y - 1.0) / 2, (KINGPIN.z + top) / 2),
+                     (width, y_front - KINGPIN.y + 1.0, top - KINGPIN.z), m["acier"]))
+    parts.append(cyl("Pivot_Attelage", (0.0, KINGPIN.y, KINGPIN.z - 0.08), 0.05, 0.16, "Z", m["chrome"], 10))
+
+
+def landing_gear(parts, y, top, m, x=0.95, leg=0.16):
+    """Bequilles avant (deux jambes, patins, manivelle)."""
     for side in (-1.0, 1.0):
-        parts.append(box("Chariot_Fourreau", (side * 0.5, rear + 0.6, 1.0), (0.3, 1.4, 0.25), noir))
-    meshes.append(join(parts, "Chariot_Chargement"))
+        parts.append(box("Bequille", (side * x, y, (0.28 + top) / 2), (leg, leg, top - 0.28), m["noir"]))
+        parts.append(box("Bequille_Patin", (side * x, y, 0.15), (0.32, 0.32, 0.06), m["noir"]))
+    parts.append(box("Bequille_Traverse", (0.0, y, top - 0.35), (2 * x, 0.08, 0.08), m["noir"]))
+    parts.append(box("Manivelle", (x + 0.15, y, top - 0.6), (0.3, 0.04, 0.04), m["acier"]))
 
 
-BUILDERS = {
-    "pompier": build_pompier,
-    "chasse_neige": build_saleuse,
-    "grue": build_grue,
-    "chariot_elevateur": build_chariot,
+def fender(parts, y0, y1, top, width, mat, track=1.25):
+    """Garde-boue au-dessus des roues, de y0 a y1, de chaque cote."""
+    for side in (-1.0, 1.0):
+        parts.append(box("Garde_Boue", (side * (track - width / 2), (y0 + y1) / 2, top),
+                         (width + 0.06, abs(y0 - y1), 0.05), mat))
+
+
+def mud_flaps(parts, y, m, track=1.25):
+    for side in (-1.0, 1.0):
+        parts.append(box("Bavette", (side * (track - 0.35), y, 0.55), (0.6, 0.02, 0.6), m["caoutchouc"]))
+
+
+def rear_bar(parts, y, z, m, width=2.4, lights="bloc"):
+    """Pare-cycliste arriere, feux et plaque, dans un style par remorque."""
+    parts.append(box("Pare_Cycliste", (0.0, y, z), (width, 0.12, 0.16), m["noir"]))
+    for side in (-1.0, 1.0):
+        parts.append(box("Pare_Cycliste_Montant", (side * width * 0.35, y + 0.15, z + 0.35),
+                         (0.1, 0.1, 0.7), m["noir"]))
+        if lights == "rond":
+            for k in range(3):
+                parts.append(cyl("Feu", (side * (width / 2 - 0.15 - k * 0.22), y - 0.07, z + 0.02),
+                                 0.08, 0.04, "Y", m["feu"] if k < 2 else m["orange"], 12))
+        elif lights == "colonne":
+            parts.append(box("Feu", (side * (width / 2 - 0.08), y - 0.07, z + 0.55), (0.1, 0.04, 0.9), m["feu"]))
+        else:
+            parts.append(box("Feu", (side * (width / 2 - 0.3), y - 0.07, z + 0.03), (0.5, 0.04, 0.14), m["feu"]))
+            parts.append(box("Clignotant", (side * (width / 2 - 0.62), y - 0.07, z + 0.03),
+                             (0.12, 0.04, 0.14), m["orange"]))
+    parts.append(box("Plaque", (0.0, y - 0.07, z + 0.03), (0.52, 0.02, 0.12), m["plaque"]))
+
+
+def beacon(parts, x, y, z, m):
+    parts.append(cyl("Gyrophare", (x, y, z), 0.11, 0.18, "Z", m["orange"], 12))
+
+
+# ---------------------------------------------------------------- remorques
+# Chaque fonction ajoute ses pieces a `parts` et renvoie l'arriere de la
+# remorque (y), la hauteur du haut de l'arriere et celle du chassis arriere
+# (points d'accroche Socket_Arriere / Socket_Conteneur).
+
+
+def trailer_conteneur(parts, m):
+    """Chassis squelette porte-conteneur rouge, 3 essieux jumeles, jantes alu."""
+    rouge = material("Peinture_Cabine_Rouge", (0.75, 0.05, 0.05), 0.3, 0.35)
+    kingpin_plate(parts, m, y_front=0.0, width=1.4, top=2.21)
+    for side in (-1.0, 1.0):
+        # longerons : col plat au-dessus de la sellette, plus hauts ensuite
+        parts.append(box("Longeron", (side * 0.5, -1.4, 2.08), (0.16, 2.8, 0.26), rouge))
+        parts.append(beam("Longeron_Col", (side * 0.5, -2.8, 2.08), (side * 0.5, -3.6, 1.88), 0.16, 0.42, rouge))
+        parts.append(box("Longeron", (side * 0.5, -9.6, 1.88), (0.16, 11.9, 0.66), rouge))
+    for y in (-0.15, -3.9, -6.9, -9.9, -15.2):
+        parts.append(box("Traverse_Verrou", (0.0, y, 2.14), (2.9, 0.22, 0.14), rouge))
+        for side in (-1.0, 1.0):
+            parts.append(box("Verrou_Tournant", (side * 1.35, y, 2.2), (0.16, 0.16, 0.06), m["chrome"]))
+    for y in (-11.3, -12.65, -14.0):
+        axle(parts, y, 0.52, 0.28, True, m["alu"], m)
+        fender(parts, y + 0.6, y - 0.6, 1.2, 0.68, m["plastique"])
+    mud_flaps(parts, -14.65, m)
+    landing_gear(parts, -3.9, 1.6, m)
+    rear_bar(parts, -15.45, 0.62, m, lights="bloc")
+    return -15.45, 5.38, 2.21
+
+
+def trailer_citerne(parts, m):
+    """Citerne autoportante : sellette et berceau arriere seulement, 3 essieux
+    en roues simples larges, jantes blanches, tubes a flexibles et garde-boue
+    inox d'un seul tenant."""
+    inox = material("Citerne_Inox", (0.8, 0.82, 0.85), 1.0, 0.2)
+    blanc = material("Jante_Blanche", (0.92, 0.92, 0.9), 0.2, 0.4)
+    kingpin_plate(parts, m, y_front=0.3, width=1.7, top=2.45)
+    parts.append(box("Berceau_Avant", (0.0, -1.2, 2.55), (1.9, 2.6, 0.25), m["noir"]))
+    for y in (-4.5, -8.0):
+        parts.append(box("Selle_Citerne", (0.0, y, 1.45), (1.3, 0.35, 0.2), m["noir"]))
+    for side in (-1.0, 1.0):
+        parts.append(box("Berceau_Arriere", (side * 0.45, -13.3, 1.4), (0.18, 5.0, 0.3), m["noir"]))
+        # tubes a flexibles le long de la citerne
+        parts.append(cyl("Tube_Flexible", (side * 1.15, -6.6, 1.25), 0.11, 7.0, "Y", m["alu"], 14))
+        # protection laterale tubulaire
+        for z in (0.7, 0.98):
+            parts.append(tube("Protection_Laterale", (side * 1.32, -3.4, z), (side * 1.32, -10.7, z), 0.03,
+                              m["chrome"]))
+        for y in (-3.4, -7.0, -10.7):
+            parts.append(box("Protection_Patte", (side * 1.32, y, 1.15), (0.05, 0.05, 0.9), m["noir"]))
+        parts.append(box("Garde_Boue_Inox", (side * 1.08, -13.35, 1.32), (0.62, 4.3, 0.05), inox))
+    for y in (-12.0, -13.35, -14.7):
+        axle(parts, y, 0.56, 0.42, False, blanc, m, track=1.3)
+    mud_flaps(parts, -15.35, m)
+    landing_gear(parts, -2.9, 2.4, m, x=0.8)
+    rear_bar(parts, -15.75, 0.66, m, width=2.3, lights="rond")
+    return -15.75, 5.73, 1.55
+
+
+def trailer_betaillere(parts, m):
+    """Cadre perimetrique, jupes laterales vertes, 3 essieux tres ecartes
+    jumeles, jantes noires, feux en colonne."""
+    vert = material("Peinture_Caisse_Vert", (0.05, 0.35, 0.12), 0.2, 0.4)
+    jante = material("Jante_Noire", (0.06, 0.06, 0.06), 0.6, 0.35)
+    kingpin_plate(parts, m, y_front=0.2, width=1.5, top=2.26)
+    for side in (-1.0, 1.0):
+        parts.append(box("Cadre", (side * 1.62, -7.7, 1.86), (0.14, 15.8, 0.22), m["noir"]))
+        parts.append(box("Longeron", (side * 0.5, -8.3, 1.74), (0.16, 14.6, 0.46), m["noir"]))
+        parts.append(box("Jupe", (side * 1.8, -6.3, 1.25), (0.04, 7.0, 1.2), vert))
+        parts.append(box("Jupe_Liseret", (side * 1.81, -6.3, 0.68), (0.04, 7.0, 0.06), m["danger"]))
+    for y in (-2.0, -5.0, -8.0, -11.0, -14.0):
+        parts.append(box("Traverse", (0.0, y, 1.86), (3.2, 0.14, 0.18), m["noir"]))
+    for y in (-10.6, -12.4, -14.2):
+        axle(parts, y, 0.5, 0.28, True, jante, m)
+        fender(parts, y + 0.58, y - 0.58, 1.15, 0.66, m["noir"])
+        mud_flaps(parts, y - 0.62, m)
+    landing_gear(parts, -2.3, 1.75, m)
+    rear_bar(parts, -15.85, 0.6, m, width=2.6, lights="colonne")
+    return -15.85, 6.69, 1.97
+
+
+def trailer_porte_voitures(parts, m):
+    """Train surbaisse : petites roues simples, 3 essieux serres sous l'arriere,
+    jantes violettes, petits garde-boue, rampes de chargement."""
+    violet = material("Peinture_Cabine_Violet", (0.4, 0.1, 0.6), 0.3, 0.35)
+    kingpin_plate(parts, m, y_front=-0.4, width=1.2, top=2.32)
+    for side in (-1.0, 1.0):
+        parts.append(box("Col_Montant", (side * 0.5, -2.5, 1.62), (0.14, 0.14, 1.36), violet))
+        parts.append(box("Berceau_Arriere", (side * 0.32, -14.4, 0.86), (0.14, 3.6, 0.14), m["noir"]))
+        parts.append(beam("Rampe", (side * 0.8, -16.1, 0.95), (side * 0.8, -16.5, 2.4), 0.55, 0.06, m["alu"]))
+    for y in (-13.3, -14.3, -15.3):
+        axle(parts, y, 0.42, 0.3, False, violet, m, track=1.2)
+        fender(parts, y + 0.42, y - 0.42, 0.95, 0.36, m["plastique"], track=1.2)
+    landing_gear(parts, -2.95, 0.95, m, x=0.7)
+    rear_bar(parts, -16.0, 0.5, m, width=2.2, lights="rond")
+    return -16.24, 5.5, 1.0
+
+
+def trailer_saleuse(parts, m):
+    """Semi-tremie a sel : caisse en V sur toute la longueur, faux-chassis,
+    convoyeur, epandeur, echelle et bache ; 2 essieux en roues simples larges,
+    jantes orange, garde-boue tandem."""
+    orange = material("Peinture_Caisse_Orange", (0.95, 0.42, 0.04), 0.2, 0.4)
+    bache = material("Bache", (0.05, 0.05, 0.06), 0.0, 0.85)
+    kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3)
+    for side in (-1.0, 1.0):
+        parts.append(box("Faux_Chassis", (side * 0.5, -9.0, 1.78), (0.16, 12.8, 0.36), m["noir"]))
+        parts.append(beam("Faux_Chassis_Col", (side * 0.5, -1.0, 2.15), (side * 0.5, -2.6, 1.78), 0.16, 0.36,
+                          m["noir"]))
+    parts.append(prism("Tremie", [(-1.5, 4.7), (1.5, 4.7), (1.5, 3.5), (0.45, 2.0), (-0.45, 2.0), (-1.5, 3.5)],
+                       -0.3, -14.2, orange))
+    for k in range(10):
+        y = -0.9 - k * 1.45
+        for side in (-1.0, 1.0):
+            parts.append(box("Nervure", (side * 1.53, y, 4.1), (0.06, 0.12, 1.2), orange))
+    parts.append(box("Bache", (0.0, -7.25, 4.78), (2.95, 13.8, 0.16), bache))
+    for k in range(7):
+        parts.append(box("Bache_Sangle", (0.0, -1.2 - k * 2.0, 4.87), (2.97, 0.08, 0.03), m["danger"]))
+    parts.append(box("Convoyeur", (0.0, -8.2, 1.85), (0.75, 13.6, 0.3), m["acier"]))
+    parts.append(box("Goulotte", (0.0, -14.75, 1.55), (0.7, 1.1, 0.7), m["alu"]))
+    parts.append(cyl("Epandeur", (0.0, -15.3, 0.95), 0.55, 0.06, "Z", orange, 24))
+    for k in range(4):
+        a = k * math.pi / 4
+        parts.append(box("Epandeur_Pale", (0.0, -15.3, 1.02), (1.0, 0.06, 0.08), m["noir"]))
+        parts[-1].data.transform(Matrix.Translation((0.0, -15.3, 1.02)) @ Matrix.Rotation(a, 4, "Z")
+                                 @ Matrix.Translation((0.0, 15.3, -1.02)))
+    for side in (-1.0, 1.0):
+        parts.append(box("Echelle_Montant", (side * 0.3, -14.27, 3.3), (0.05, 0.05, 2.8), m["alu"]))
+        beacon(parts, side * 1.35, -14.0, 4.95, m)
+    for k in range(7):
+        parts.append(box("Echelle_Barreau", (0.0, -14.27, 2.1 + k * 0.4), (0.6, 0.04, 0.04), m["alu"]))
+    for y in (-12.6, -14.0):
+        axle(parts, y, 0.56, 0.42, False, orange, m, track=1.3)
+    fender(parts, -11.9, -14.7, 1.3, 0.5, m["plastique"], track=1.3)
+    landing_gear(parts, -3.2, 1.6, m)
+    rear_bar(parts, -15.9, 0.6, m, width=2.3, lights="bloc")
+    return -15.9, 4.95, 1.96
+
+
+def trailer_pompier(parts, m):
+    """Fourgon incendie d'un seul bloc : caisse rouge jusqu'aux jupes, rehaussee
+    au-dessus de la sellette, rideaux alu, grande echelle, enrouleurs ; 2
+    essieux jumeles, jantes chromees."""
+    rouge = material("Peinture_Cabine_Pompier", (0.75, 0.03, 0.03), 0.3, 0.35)
+    blanc = material("Texte_Blanc", (0.95, 0.95, 0.95))
+    bleu = material("Gyrophare_Bleu", (0.1, 0.3, 1.0), 0.0, 0.3, 3.0)
+    kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3)
+    parts.append(box("Caisse_Col", (0.0, -1.85, 3.4), (3.1, 3.1, 2.2), rouge))
+    parts.append(box("Caisse_Avant", (0.0, -7.2, 2.62), (3.1, 7.6, 3.76), rouge))
+    parts.append(box("Caisse_Roues", (0.0, -12.55, 2.95), (3.1, 3.1, 3.1), rouge))
+    parts.append(box("Caisse_Arriere", (0.0, -14.7, 2.62), (3.1, 1.2, 3.76), rouge))
+    # rideaux alu par compartiment, rainures horizontales
+    bays = [(-3.6, -5.4), (-5.6, -7.4), (-7.6, -9.4), (-9.6, -10.9), (-11.15, -13.95)]
+    for y0, y1 in bays:
+        z0 = 1.65 if y0 < -11.0 else 1.0
+        for side in (-1.0, 1.0):
+            parts.append(box("Rideau", (side * 1.565, (y0 + y1) / 2, (z0 + 4.2) / 2), (0.03, abs(y1 - y0), 4.2 - z0),
+                             m["alu"]))
+            for k in range(int((4.2 - z0) / 0.35)):
+                parts.append(box("Rideau_Rainure", (side * 1.585, (y0 + y1) / 2, z0 + 0.2 + k * 0.35),
+                                 (0.02, abs(y1 - y0) - 0.06, 0.03), m["noir"]))
+    for side in (-1.0, 1.0):
+        parts.append(box("Bande_Blanche", (side * 1.57, -7.0, 0.85), (0.03, 7.4, 0.14), blanc))
+        parts.append(box("Bande_Reflechissante", (side * 1.57, -8.0, 4.35), (0.03, 15.2, 0.14), m["danger"]))
+        parts.append(box("Passage_Roue", (side * 1.57, -12.55, 1.42), (0.05, 3.2, 0.08), m["alu"]))
+    # toit : passerelle, grande echelle, tourelle
+    parts.append(box("Passerelle", (0.0, -8.0, 4.53), (2.0, 15.0, 0.06), m["alu"]))
+    for side in (-1.0, 1.0):
+        parts.append(box("Echelle_Longeron", (side * 0.5, -6.6, 4.85), (0.08, 12.8, 0.22), m["alu"]))
+    for k in range(32):
+        parts.append(box("Echelle_Barreau", (0.0, -0.4 - k * 0.4, 4.85), (1.0, 0.05, 0.05), m["alu"]))
+    parts.append(cyl("Echelle_Tourelle", (0.0, -13.6, 4.7), 0.95, 0.3, "Z", m["noir"], 24))
+    parts.append(box("Echelle_Pied", (0.0, -13.4, 4.8), (1.1, 1.0, 0.35), rouge))
+    parts.append(box("Rampe_Lumineuse", (0.0, -0.4, 4.6), (2.6, 0.3, 0.12), bleu))
+    # arriere : enrouleurs, marchepied
+    for side in (-1.0, 1.0):
+        parts.append(cyl("Enrouleur", (side * 0.75, -15.4, 2.7), 0.48, 0.3, "Y", blanc, 24))
+        parts.append(cyl("Enrouleur_Flasque", (side * 0.75, -15.56, 2.7), 0.2, 0.04, "Y", rouge, 16))
+    parts.append(box("Marchepied", (0.0, -15.45, 1.0), (2.6, 0.5, 0.06), m["alu"]))
+    for y in (-11.9, -13.3):
+        axle(parts, y, 0.5, 0.28, True, m["chrome"], m)
+    landing_gear(parts, -3.3, 0.85, m)
+    rear_bar(parts, -15.6, 0.62, m, width=2.6, lights="bloc")
+    return -15.6, 4.85, 1.0
+
+
+def trailer_grue(parts, m):
+    """Semi-grue : poutre-caisson centrale jaune sans plateau, grue a l'arriere
+    (tourelle, cabine, contrepoids), fleche telescopique couchee vers l'avant
+    sur son support, bequilles ; 4 essieux jumeles, jantes jaunes."""
+    jaune = material("Peinture_Cabine_Jaune", (0.95, 0.72, 0.03), 0.2, 0.4)
+    kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3)
+    parts.append(box("Col_De_Cygne", (0.0, -1.3, 2.55), (2.5, 3.0, 0.5), jaune))
+    parts.append(beam("Col_Pente", (0.0, -2.8, 2.55), (0.0, -3.8, 2.05), 1.6, 0.6, jaune))
+    parts.append(box("Poutre_Caisson", (0.0, -9.6, 1.95), (1.1, 12.0, 0.8), jaune))
+    for y in (-9.4, -15.0):
+        parts.append(box("Stabilisateur_Bras", (0.0, y, 1.9), (4.4, 0.4, 0.34), m["danger"]))
+        for side in (-1.0, 1.0):
+            parts.append(box("Stabilisateur_Verin", (side * 2.1, y, 1.1), (0.24, 0.24, 1.6), jaune))
+            parts.append(box("Stabilisateur_Patin", (side * 2.1, y, 0.3), (0.6, 0.6, 0.08), m["noir"]))
+            for k in range(3):
+                parts.append(box("Zebra", (side * (1.4 + k * 0.25), y - 0.21, 1.9), (0.1, 0.01, 0.34),
+                                 m["danger_noir"]))
+    # grue
+    parts.append(cyl("Couronne", (0.0, -12.6, 2.52), 1.1, 0.35, "Z", m["noir"], 32))
+    parts.append(box("Tourelle", (0.0, -12.9, 3.2), (2.6, 3.0, 1.0), jaune))
+    parts.append(box("Contrepoids", (0.0, -14.85, 3.3), (2.7, 0.9, 1.2), m["noir"]))
+    for k in range(5):
+        parts.append(box("Contrepoids_Zebra", (-1.2 + k * 0.6, -15.31, 3.3), (0.25, 0.01, 1.2), m["danger"]))
+    parts.append(box("Cabine_Grue", (-0.85, -11.7, 3.55), (0.9, 1.4, 1.7), jaune))
+    parts.append(box("Cabine_Vitre", (-0.85, -10.99, 3.8), (0.8, 0.02, 0.9), m["vitre"]))
+    parts.append(box("Cabine_Vitre", (-1.31, -11.7, 3.8), (0.02, 1.2, 0.9), m["vitre"]))
+    # fleche telescopique couchee vers l'avant, sur son support
+    parts.append(box("Fleche_1", (0.35, -8.9, 4.2), (0.9, 7.6, 0.85), jaune))
+    parts.append(box("Fleche_2", (0.35, -3.3, 4.2), (0.72, 4.0, 0.68), jaune))
+    parts.append(box("Fleche_3", (0.35, -0.6, 4.2), (0.56, 1.6, 0.52), jaune))
+    for k in range(4):
+        parts.append(box("Fleche_Zebra", (0.35, 0.1 - k * 0.3, 4.47), (0.58, 0.14, 0.01),
+                         m["danger_noir"] if k % 2 else m["danger"]))
+    parts.append(box("Pied_Fleche", (0.35, -12.4, 3.95), (0.8, 0.9, 0.7), jaune))
+    parts.append(tube("Verin_Levage", (0.35, -11.2, 3.4), (0.35, -8.6, 3.8), 0.13, m["chrome"]))
+    for side in (-1.0, 1.0):
+        parts.append(beam("Support_Fleche", (side * 0.6, -2.4, 2.8), (side * 0.35, -2.4, 3.78), 0.14, 0.14,
+                          m["noir"]))
+    parts.append(box("Support_Fleche_Selle", (0.35, -2.4, 3.8), (1.1, 0.3, 0.06), m["noir"]))
+    parts.append(box("Moufle", (0.35, 0.05, 3.45), (0.45, 0.35, 0.5), m["danger"]))
+    parts.append(tube("Crochet", (0.35, 0.05, 3.2), (0.35, 0.05, 2.95), 0.05, m["chrome"]))
+    beacon(parts, 0.9, -12.0, 4.5, m)
+    for y in (-10.2, -11.5, -12.8, -14.1):
+        axle(parts, y, 0.5, 0.28, True, jaune, m)
+    fender(parts, -9.6, -14.7, 1.15, 0.66, m["noir"])
+    landing_gear(parts, -3.4, 1.65, m)
+    rear_bar(parts, -15.55, 0.6, m, width=2.4, lights="rond")
+    return -15.55, 3.9, 2.35
+
+
+def trailer_porte_engins(parts, m, forklift):
+    """Porte-engins surbaisse : col de cygne, plancher bas en bois entre les
+    essieux, rampes relevees, deux chariots elevateurs arrimes, panneau convoi ;
+    3 essieux a petites roues jumelees, jantes grises."""
+    gris = material("Jante_Grise", (0.5, 0.5, 0.52), 0.6, 0.4)
+    kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3)
+    parts.append(box("Col_De_Cygne", (0.0, -1.4, 2.5), (2.6, 3.2, 0.4), m["noir"]))
+    parts.append(box("Coffre_Chaines", (0.0, -0.6, 2.95), (2.2, 0.9, 0.5), m["danger"]))
+    parts.append(beam("Col_Descente", (0.0, -3.0, 2.5), (0.0, -4.5, 0.95), 2.6, 0.4, m["noir"]))
+    parts.append(box("Plancher_Bas", (0.0, -8.1, 0.92), (3.0, 7.4, 0.36), m["noir"]))
+    for k in range(14):
+        parts.append(box("Planche", (-1.395 + k * 0.215, -8.1, 1.12), (0.2, 7.3, 0.05), m["bois"]))
+    for side in (-1.0, 1.0):
+        parts.append(box("Rive", (side * 1.52, -8.1, 0.95), (0.08, 7.4, 0.4), m["danger"]))
+        parts.append(beam("Rampe_Relevee", (side * 0.85, -15.75, 1.45), (side * 0.85, -16.4, 3.3), 0.7, 0.08,
+                          m["alu"]))
+        beacon(parts, side * 1.25, -15.65, 2.7, m)
+        parts.append(box("Poteau_Gyro", (side * 1.25, -15.65, 2.05), (0.06, 0.06, 1.2), m["noir"]))
+    parts.append(box("Plancher_Arriere", (0.0, -13.7, 1.25), (2.9, 3.9, 0.3), m["noir"]))
+    parts.append(box("Panneau_Convoi", (0.0, -15.62, 2.05), (2.2, 0.03, 0.55), m["danger"]))
+    for k in range(6):
+        parts.append(box("Panneau_Zebra", (-0.95 + k * 0.38, -15.64, 2.05), (0.12, 0.01, 0.55), m["danger_noir"]))
+    for y in (-12.55, -13.65, -14.75):
+        axle(parts, y, 0.4, 0.24, True, gris, m, track=1.3)
+    landing_gear(parts, -2.0, 2.3, m, x=0.85)
+    rear_bar(parts, -15.75, 0.55, m, width=2.4, lights="bloc")
+    # deux chariots elevateurs arrimes sur le plancher bas, fourches en avant
+    lifts = []
+    for k, y in enumerate((-6.1, -10.1)):
+        lift = forklift if k == 0 else forklift.copy()
+        if k:
+            lift.name = GEN + "Chariot_2"
+            bpy.context.scene.collection.objects.link(lift)
+        lift.matrix_world = Matrix.Translation((0.0, y, 1.145))
+        lifts.append(lift)
+        for side in (-1.0, 1.0):
+            for dy in (-1.2, 1.4):
+                parts.append(tube("Chaine", (side * 0.7, y + dy * 0.8, 1.6), (side * 1.4, y + dy, 1.15), 0.02,
+                                  m["chrome"], 6))
+    return -16.4, 3.3, 1.4, lifts
+
+
+def forklift_source():
+    """Chariot elevateur du fichier, en un maillage, origine au sol au centre."""
+    src = bpy.data.objects.get(FORKLIFT)
+    if src is not None:
+        return src
+    names = ("Body", "Mat", "Fourche", "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR")
+    # deja pose sur une remorque (Chariot_*), sinon le fichier d'origine ; jamais
+    # les noms nus quand la tete de camion (Body, Wheel_*) est deja la
+    pieces = [o for o in bpy.data.objects if o.type == "MESH" and o.name in ["Chariot_" + n for n in names]]
+    if not pieces and bpy.data.objects.get(TRAILER) is None:
+        pieces = [o for o in bpy.data.objects if o.type == "MESH" and o.name in names]
+    if not pieces:
+        raise SystemExit("porte-engins : chariot elevateur introuvable")
+    src = join(pieces, FORKLIFT)
+    mn, mx = world_bbox([src])
+    src.data.transform(Matrix.Translation((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, -mn.z)))
+    src.matrix_world = Matrix.Identity(4)
+    return src
+
+
+TRAILERS = {
+    "remorque": trailer_conteneur,
+    "citerne": trailer_citerne,
+    "betaillere": trailer_betaillere,
+    "porte_voitures": trailer_porte_voitures,
+    "chasse_neige": trailer_saleuse,
+    "pompier": trailer_pompier,
+    "grue": trailer_grue,
+    "chariot_elevateur": trailer_porte_engins,
 }
+# Caisses dessinees par l'equipe, gardees : le reste de la remorque est genere.
+TEAM_BODIES = {"remorque", "citerne", "betaillere", "porte_voitures"}
 
 
-def dst_names(dst):
-    return {o.name for o in dst.objects}
+def build_trailer(vehicle):
+    """Remorque unique du vehicule, sous un pivot `Remorque` a la sellette."""
+    scene = bpy.context.scene
+    trailer = bpy.data.objects.get(TRAILER)
+    lift = forklift_source() if vehicle == "chariot_elevateur" else None
+    keep = set(SCENE_PROPS)
+    if vehicle in TEAM_BODIES:
+        if trailer is None:
+            raise SystemExit(f"{vehicle} : remorque de l'equipe introuvable")
+        keep |= {o.name for o in trailer.children_recursive
+                 if not o.name.startswith(SHARED_PARTS + (GEN, "Socket_"))}
+        keep.add(trailer.name)
+    if lift is not None:
+        keep.add(lift.name)
+    delete([o for o in scene.objects if o.name not in keep])
+    # materiaux et maillages de l'ancienne tete et de l'ancien chassis purges
+    # AVANT de reconstruire : sinon les noms derivent (Chrome.001, .002...) et
+    # deux executions ne donnent plus le meme fichier
+    bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+    if bpy.data.objects.get(TRAILER) is None:
+        trailer = bpy.data.objects.new(TRAILER, None)
+        scene.collection.objects.link(trailer)
+        trailer.location = KINGPIN
+        bpy.context.view_layer.update()
 
-
-def place_trailer_sockets(trailer):
-    """Arriere : haut de l'arriere du chargement. Conteneur : arriere du plateau."""
-    parts = [o for o in trailer.children_recursive if o.type == "MESH"]
-    tmn, tmx = world_bbox(parts)
-    rear = [v for o in parts for v in world_verts(o) if v.y < tmn.y + 1.5 and abs(v.x) < 0.6]
-    top = max(v.z for v in rear)
-    pmn, pmx = world_bbox([bpy.data.objects["Remorque_Plateau"]])
-    add_socket("Socket_Arriere", Vector((0.0, round(tmn.y + 0.15, 2), round(top, 2))), trailer)
-    add_socket("Socket_Conteneur", Vector((0.0, round(pmn.y + 0.3, 2), round(pmx.z + 0.1, 2))), trailer)
+    m = M()
+    parts = []
+    if lift is not None:
+        rear_y, top_z, chassis_z, lifts = trailer_porte_engins(parts, m, lift)
+    else:
+        rear_y, top_z, chassis_z = TRAILERS[vehicle](parts, m)
+        lifts = []
+    pieces = [join(parts, GEN + "Remorque")]
+    for o in pieces + lifts:
+        reparent_keep(o, trailer)
+    add_socket("Socket_Arriere", Vector((0.0, round(rear_y + 0.15, 2), round(top_z, 2))), trailer)
+    add_socket("Socket_Conteneur", Vector((0.0, round(rear_y + 0.3, 2), round(chassis_z + 0.1, 2))), trailer)
+    return trailer
 
 
 # ---------------------------------------------------------------- tete
@@ -417,7 +687,7 @@ def import_tractor():
     s = TRACTOR_LENGTH / (mx.y - mn.y)
     c = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
     # demi-tour autour de Z (avant du modele en -Y Blender -> +Y = -Z Godot)
-    fit = Matrix.Rotation(3.141592653589793, 4, "Z") @ Matrix.Scale(s, 4) @ Matrix.Translation(-c)
+    fit = Matrix.Rotation(math.pi, 4, "Z") @ Matrix.Scale(s, 4) @ Matrix.Translation(-c)
     root.matrix_world = fit @ root.matrix_world
     bpy.context.view_layer.update()
 
@@ -468,24 +738,13 @@ def place_tractor_sockets(body):
 
 def process(blend):
     vehicle = blend.stem
+    if vehicle not in TRAILERS:
+        raise SystemExit(f"{vehicle} : remorque inconnue")
     bpy.ops.wm.open_mainfile(filepath=str(blend))
     scene = bpy.context.scene
-
-    trailer = bpy.data.objects.get(TRAILER)
-    new_trailer = trailer is None
-    if new_trailer:
-        if vehicle not in EQUIPMENT:
-            raise SystemExit(f"{vehicle} : ni remorque ni equipement connu")
-        trailer = build_plateau_trailer(vehicle)
-
+    trailer = build_trailer(vehicle)
     keep = {trailer} | set(trailer.children_recursive)
     delete([o for o in scene.objects if o not in keep and o.name not in SCENE_PROPS])
-    if new_trailer:
-        delete([o for o in trailer.children_recursive if o.name.startswith("Socket_")])
-        place_trailer_sockets(trailer)
-    for n in TRAILER_SOCKETS:
-        if n not in bpy.data.objects:
-            raise SystemExit(f"{vehicle} : {n} manquant sur la remorque")
 
     body, wheels, s = import_tractor()
     socks = place_tractor_sockets(body)
@@ -499,7 +758,9 @@ def process(blend):
     expected = sorted(TRACTOR_SOCKETS + TRAILER_SOCKETS)
     if names != expected:
         raise SystemExit(f"{vehicle} : sockets {names} != {expected}")
-    print(f"OK {vehicle} echelle_tete={s:.3f} sockets={len(names)} "
+    tris = sum(len(p.vertices) - 2 for o in trailer.children_recursive if o.type == "MESH"
+               for p in o.data.polygons)
+    print(f"OK {vehicle} echelle_tete={s:.3f} sockets={len(names)} tris_remorque={tris} "
           + " ".join(f"{k[7:]}={tuple(round(x, 2) for x in v)}" for k, v in socks.items()))
 
 

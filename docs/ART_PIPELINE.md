@@ -150,13 +150,24 @@ Les véhicules de `Assets_Visuels/Armes_et_camions/vehicules/` (bétaillère,
 citerne, porte-voitures, remorque, grue, pompier, chasse-neige, chariot
 élévateur) partagent **tous la même tête** : le tracteur de `Camion_Bleu.glb`,
 ajusté comme le fait `TruckVisual` (avant en −Z, tracteur de 6,96 m, pneus au
-sol). Seule la semi-remorque `Remorque` (pivot à la sellette) change. Grue,
-pompier, chasse-neige et chariot, à l'origine des porteurs, deviennent des
-semi-remorques **dédiées** sur le châssis de `remorque.blend` : porte-grue sur
-béquilles avec poutres sanglées, fourgon pompier et grande échelle sur toute la
-longueur, trémie à sel sur toute la longueur, remorque à palettes avec ridelles
-et chariot embarqué à l'arrière. Ils sont assemblés par script, à relancer si
-la tête change :
+sol). Seule la semi-remorque `Remorque` (pivot à la sellette) change, et
+**chacune est unique, structure comprise** : aucune ne partage de châssis,
+d'essieux ni de roues avec une autre (décision du 2026-10-06).
+
+| Remorque | Caisse | Châssis | Train roulant |
+|---|---|---|---|
+| Conteneur | conteneur de l'équipe | squelette porte-conteneur rouge, verrous tournants | 3 essieux jumelés, jantes alu |
+| Citerne | citerne de l'équipe | autoportante : berceaux avant / arrière, tubes à flexibles, protections tubulaires | 3 essieux, roues simples larges, jantes blanches, garde-boue inox |
+| Bétaillère | caisse de l'équipe | cadre périmétrique, jupes latérales vertes | 3 essieux très écartés, jumelés, jantes noires, feux en colonne |
+| Porte-voitures | cadre et voitures de l'équipe | train surbaissé, rampes relevées | 3 essieux serrés, petites roues violettes |
+| Saleuse | semi-trémie en V, bâche, convoyeur, épandeur, échelle | faux-châssis | 2 essieux, roues simples larges orange |
+| Pompier | fourgon d'un seul bloc jusqu'aux jupes, rideaux alu, grande échelle, enrouleurs | caisse autoportante, col rehaussé | 2 essieux jumelés, jantes chromées |
+| Grue | semi-grue : tourelle, cabine, contrepoids, flèche télescopique couchée | poutre-caisson jaune, stabilisateurs | 4 essieux jumelés, jantes jaunes |
+| Porte-engins | deux chariots élévateurs arrimés, panneau convoi | surbaissé : col de cygne, plancher bas en bois, rampes | 3 essieux, petites roues jumelées grises |
+
+Tout ce qui est généré porte le préfixe `Gen_` ; le script est idempotent
+(deux exécutions donnent des fichiers identiques à l'octet). À relancer si la
+tête change :
 
 ```
 blender -b -P tools/blender/catalogue_tete_commune.py
@@ -170,7 +181,7 @@ blender -b -P tools/blender/catalogue_tete_commune.py
 | `Socket_Lateral_G` / `_D` | `Body` | (∓1,73 ; 1,1 ; 0), flancs entre les essieux |
 | `Socket_Toit` | `Body` | (0 ; 4,39 ; −1,74), toit de cabine |
 | `Socket_Arriere` | `Remorque` | arrière du chargement, propre à chaque remorque |
-| `Socket_Conteneur` | `Remorque` | arrière du plateau / de la caisse, propre à chaque remorque |
+| `Socket_Conteneur` | `Remorque` | arrière du châssis, propre à chaque remorque |
 
 Les quatre premiers sont sur la tête : **mêmes coordonnées partout**, par
 construction. Les deux derniers suivent la remorque (et pivotent avec elle).
@@ -178,8 +189,9 @@ Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
 
 En jeu, seule la remorque de ces véhicules sert : c'est la remorque au choix
 du sas READY (VEHICLE_SPEC §5 bis), chargée par `TruckVisual.set_trailer_type`.
-**Budget dépassé, à reprendre** : 32 000 à 54 000 triangles par remorque,
-123 000 pour le porte-voitures, à multiplier par 6 camions et jusqu'à 6 vues.
+Triangles par remorque : 1 800 (saleuse) à 12 600 (citerne), roues générées en
+bas poly. **Restent au-dessus du budget** : le porte-engins (53 000, les deux
+chariots élévateurs) et le porte-voitures (97 000, les cinq voitures).
 
 ### Style
 

@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = &"pompier"
 display_name = "POMPIER"
-tagline = "fourgon et grande échelle, équilibrée"
+tagline = "fourgon incendie et grande échelle, équilibré"
 model = "../Assets_Visuels/Armes_et_camions/vehicules/pompier.glb"
-box_size = Vector3(3.15, 3.43, 15.32)
-box_center = Vector3(0, 3.88, 8.14)
+box_size = Vector3(3.19, 2.82, 15.22)
+box_center = Vector3(0, 3.57, 8.09)
 top_speed_mult = 1.0
 accel_mult = 0.99
 grip_mult = 1.0

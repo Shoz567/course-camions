@@ -5,11 +5,11 @@
 [resource]
 script = ExtResource("1")
 id = &"chariot_elevateur"
-display_name = "CHARIOT"
-tagline = "palettes et chariot embarqué : légère et vive, mais fragile et longue"
+display_name = "PORTE-ENGINS"
+tagline = "porte-engins surbaissé, deux chariots arrimés : léger et vif, mais fragile"
 model = "../Assets_Visuels/Armes_et_camions/vehicules/chariot_elevateur.glb"
-box_size = Vector3(3.15, 1.86, 18.38)
-box_center = Vector3(0, 3.09, 9.67)
+box_size = Vector3(3.0, 2.09, 15.96)
+box_center = Vector3(0, 3.21, 8.46)
 top_speed_mult = 1.04
 accel_mult = 1.06
 grip_mult = 1.0

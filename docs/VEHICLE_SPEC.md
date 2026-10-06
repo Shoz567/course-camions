@@ -204,14 +204,17 @@ ci-dessus reste celle d'un camion sans remorque choisie (tests de conduite).
 
 | Remorque | Vitesse | Accél. | Adhérence | PV larguée | Masse larguée | Caisse (l × h × L) |
 |---|---|---|---|---|---|---|
-| Conteneur (défaut) | = | = | = | 50 | 9 000 kg | 3,15 × 4,20 × 15,32 |
-| Citerne | −4 % | −8 % | = | 75 | 12 000 kg | 2,98 × 3,57 × 15,32 |
-| Bétaillère | −3 % | −5 % | −3 % | 60 | 10 000 kg | 3,64 × 4,53 × 15,32 |
-| Porte-voitures | −2 % | −4 % | −4 % | 50 | 8 500 kg | 3,00 × 3,34 × 15,76 |
-| Grue (porte-grue) | −1 % | −3 % | +3 % | 45 | 7 500 kg | 3,15 × 5,17 × 15,32 |
-| Pompier (fourgon + échelle) | = | −1 % | = | 50 | 8 000 kg | 3,15 × 3,43 × 15,32 |
-| Saleuse (trémie) | −1 % | −2 % | +6 % | 50 | 8 000 kg | 3,15 × 2,69 × 15,32 |
-| Chariot (palettes + chariot embarqué) | +4 % | +6 % | = | 35 | 5 500 kg | 3,15 × 1,86 × 18,38 |
+| Conteneur (défaut) | = | = | = | 50 | 9 000 kg | 3,09 × 4,20 × 15,07 |
+| Citerne | −4 % | −8 % | = | 75 | 12 000 kg | 2,98 × 3,57 × 15,36 |
+| Bétaillère | −3 % | −5 % | −3 % | 60 | 10 000 kg | 3,64 × 4,53 × 15,46 |
+| Porte-voitures | −2 % | −4 % | −4 % | 50 | 8 500 kg | 3,00 × 3,34 × 16,05 |
+| Grue (semi-grue) | −1 % | −3 % | +3 % | 45 | 7 500 kg | 2,80 × 2,46 × 15,16 |
+| Pompier (fourgon incendie) | = | −1 % | = | 50 | 8 000 kg | 3,19 × 2,82 × 15,22 |
+| Saleuse (semi-trémie) | −1 % | −2 % | +6 % | 50 | 8 000 kg | 3,12 × 2,88 × 15,51 |
+| Porte-engins (2 chariots) | +4 % | +6 % | = | 35 | 5 500 kg | 3,00 × 2,09 × 15,96 |
+
+Chaque remorque est **unique**, structure comprise (ART_PIPELINE §4 ter) :
+aucune ne partage de châssis, d'essieux ni de roues avec une autre.
 
 **Premier jet, à équilibrer en jouant.** `TrailerType.validate()` refuse un
 multiplicateur hors de [0,8 ; 1,2]. Vérifié par `trailer_type_test` et
