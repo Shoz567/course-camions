@@ -327,7 +327,7 @@ passer le compte propriétaire à GitHub Pro, ou rendre le dépôt public.
 
 | | |
 |---|---|
-| URL | `https://github.com/Shoz567/ragdoll-brawler` |
+| URL | `https://github.com/Shoz567/course-camions` |
 | Visibilité | **privé** |
 | Branche par défaut | `main` |
 | Authentification | `gh` CLI (GitHub CLI 2.101.0), protocole HTTPS |
