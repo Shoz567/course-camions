@@ -144,6 +144,34 @@ dont le bas est à 1,8 m (VEHICLE_SPEC §5). **À
 vérifier** : les nœuds `Logo_001`, `Embleme_004/005` et `Plaque_AV_UE` ne
 doivent reproduire aucune marque existante (`CLAUDE.md` §1).
 
+### 4 ter. Catalogue de véhicules : même tête, remorque différente
+
+Les véhicules de `Assets_Visuels/Armes_et_camions/vehicules/` (bétaillère,
+citerne, porte-voitures, remorque, grue, pompier, chasse-neige, chariot
+élévateur) partagent **tous la même tête** : le tracteur de `Camion_Bleu.glb`,
+ajusté comme le fait `TruckVisual` (avant en −Z, tracteur de 6,96 m, pneus au
+sol). Seule la semi-remorque `Remorque` (pivot à la sellette) change. Grue,
+pompier, chasse-neige et chariot portent leur équipement sur une semi-remorque
+plateau. Ils sont assemblés par script, à relancer si la tête change :
+
+```
+blender -b -P tools/blender/catalogue_tete_commune.py
+```
+
+**Points d'accroche des armes** : 6 nœuds vides, mêmes noms sur chaque véhicule.
+
+| Nœud | Parent | Position Godot (x ; y ; z) |
+|---|---|---|
+| `Socket_Avant` | `Body` | (0 ; 1,2 ; −3,25), pare-chocs |
+| `Socket_Lateral_G` / `_D` | `Body` | (∓1,73 ; 1,1 ; 0), flancs entre les essieux |
+| `Socket_Toit` | `Body` | (0 ; 4,39 ; −1,74), toit de cabine |
+| `Socket_Arriere` | `Remorque` | arrière du chargement, propre à chaque remorque |
+| `Socket_Conteneur` | `Remorque` | arrière du plateau / de la caisse, propre à chaque remorque |
+
+Les quatre premiers sont sur la tête : **mêmes coordonnées partout**, par
+construction. Les deux derniers suivent la remorque (et pivotent avec elle).
+Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
+
 ### Style
 
 Formes franches et lisibles de loin — en écran partagé à 4, chaque camion
