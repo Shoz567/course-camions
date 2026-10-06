@@ -252,9 +252,6 @@ Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
 
 En jeu, seule la remorque de ces véhicules sert : c'est la remorque au choix
 du sas READY (VEHICLE_SPEC §5 bis), chargée par `TruckVisual.set_trailer_type`.
-Triangles par remorque : voir « Qualité » ci-dessus. Les roues sont générées en
-bas poly. **Restent au-dessus du budget** : le porte-engins (53 000, les deux
-chariots élévateurs) et le porte-voitures (97 000, les cinq voitures).
 
 ### Style
 
