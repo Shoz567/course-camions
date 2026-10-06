@@ -151,8 +151,12 @@ citerne, porte-voitures, remorque, grue, pompier, chasse-neige, chariot
 élévateur) partagent **tous la même tête** : le tracteur de `Camion_Bleu.glb`,
 ajusté comme le fait `TruckVisual` (avant en −Z, tracteur de 6,96 m, pneus au
 sol). Seule la semi-remorque `Remorque` (pivot à la sellette) change. Grue,
-pompier, chasse-neige et chariot portent leur équipement sur une semi-remorque
-plateau. Ils sont assemblés par script, à relancer si la tête change :
+pompier, chasse-neige et chariot, à l'origine des porteurs, deviennent des
+semi-remorques **dédiées** sur le châssis de `remorque.blend` : porte-grue sur
+béquilles avec poutres sanglées, fourgon pompier et grande échelle sur toute la
+longueur, trémie à sel sur toute la longueur, remorque à palettes avec ridelles
+et chariot embarqué à l'arrière. Ils sont assemblés par script, à relancer si
+la tête change :
 
 ```
 blender -b -P tools/blender/catalogue_tete_commune.py

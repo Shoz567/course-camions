@@ -1,7 +1,8 @@
 extends PhysicsTest
 
 ## Choix de la remorque dans le sas READY (dev/race.tscn, 2 joueurs) :
-##   - au chargement : Classique, affichee avec ses stats et les fleches ;
+##   - au chargement : la remorque par defaut, affichee avec ses stats et les
+##     fleches ;
 ##   - stick a droite (manette 0), deux poussees : J1 passe a la 3e remorque
 ##     (une poussee maintenue = une seule remorque) ; stick a gauche (manette
 ##     1) : J2 boucle sur la derniere ;
@@ -74,9 +75,9 @@ func _test_tick(t: int) -> void:
 
 func _test_finish() -> void:
 	var start: Array = _seen.get("start", [-1, -1, ""])
-	check("au chargement : Classique pour tous", start[0] == 0 and start[1] == 0, str(start))
+	check("au chargement : remorque par defaut pour tous", start[0] == 0 and start[1] == 0, str(start))
 	check("sas : remorque, fleches et stats affichees",
-		String(start[2]).contains("REMORQUE : CLASSIQUE") and String(start[2]).contains("◄")
+		String(start[2]).contains("REMORQUE : " + TrailerCatalog.default_type().display_name) and String(start[2]).contains("◄")
 		and String(start[2]).contains("[CARRÉ]"), String(start[2]))
 
 	var last := TrailerCatalog.count() - 1

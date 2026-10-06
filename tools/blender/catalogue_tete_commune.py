@@ -205,16 +205,182 @@ def build_plateau_trailer(vehicle):
     if names is None:
         for o in load:
             o.name = "Chariot_" + o.name
-    # sur le plateau : centre en x et en longueur, pose sur le dessus
-    pmn, pmx = world_bbox([bpy.data.objects["Remorque_Plateau"]])
-    lmn, lmx = world_bbox(load)
-    offset = Vector((-(lmn.x + lmx.x) / 2,
-                     (pmn.y + pmx.y) / 2 - (lmn.y + lmx.y) / 2,
-                     pmx.z - lmn.z))
-    for o in roots:
+    # chaque engin devient une semi-remorque dediee, pas un objet pose
+    meshes = flatten([o for o in load if o.type == "MESH"])
+    delete([o for o in load if alive(o) and o.type != "MESH"])
+    BUILDERS[vehicle](meshes, trailer)
+    for o in meshes:
         reparent_keep(o, trailer)
-        o.matrix_world.translation += offset
     return trailer
+
+
+# Plateau de remorque.blend (repere Blender : avant +Y, haut +Z).
+DECK_TOP = 2.22
+DECK_FRONT = -0.2     # la caisse commence derriere la sellette (z Godot 0,48)
+DECK_REAR = -15.5
+DECK_HALF_W = 1.57
+# Les caisses de porteur etaient posees sur un chassis a z = 1,1.
+PORTEUR_FLOOR = 1.1
+
+
+def flatten(meshes):
+    """Detache les maillages et applique leurs transformations (repere monde)."""
+    for o in meshes:
+        reparent_keep(o, None)
+        if o.data.users > 1:
+            o.data = o.data.copy()
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    if meshes:
+        bpy.context.view_layer.objects.active = meshes[0]
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    return meshes
+
+
+def transform(meshes, m):
+    for o in meshes:
+        o.data.transform(m)
+        o.data.update()
+
+
+def stretch_on_deck(meshes, floor_z):
+    """Etire le groupe sur toute la longueur du plateau, plancher sur le plateau."""
+    mn, mx = world_bbox(meshes)
+    k = (DECK_FRONT - DECK_REAR) / (mx.y - mn.y)
+    m = (Matrix.Translation((-(mn.x + mx.x) / 2, DECK_FRONT, DECK_TOP))
+         @ Matrix.Diagonal((1.0, k, 1.0, 1.0))
+         @ Matrix.Translation((0.0, -mx.y, -floor_z)))
+    transform(meshes, m)
+
+
+def material(name, color, metallic=0.0, roughness=0.6):
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        bsdf.inputs["Base Color"].default_value = (*color, 1.0)
+        bsdf.inputs["Metallic"].default_value = metallic
+        bsdf.inputs["Roughness"].default_value = roughness
+        mat.diffuse_color = (*color, 1.0)
+    return mat
+
+
+def box(name, center, size, mat, rot_x=0.0):
+    """Pave, origine au monde (transformations appliquees)."""
+    bpy.ops.mesh.primitive_cube_add(size=1.0)
+    o = bpy.context.active_object
+    o.name = name
+    o.data.name = name
+    o.data.transform(Matrix.Rotation(rot_x, 4, "X") @ Matrix.Diagonal((*size, 1.0)))
+    o.data.transform(Matrix.Translation(center))
+    o.data.materials.append(mat)
+    return o
+
+
+def build_pompier(meshes, trailer):
+    """Fourgon pompier sur toute la longueur, echelle allongee sur le toit.
+
+    Fourgon et echelle sont etires chacun sur leur propre longueur : l'echelle,
+    plus longue que le fourgon, deborderait sinon sur le tracteur.
+    """
+    ladder = [o for o in meshes if o.name.startswith("Echelle")]
+    stretch_on_deck([o for o in meshes if o not in ladder], PORTEUR_FLOOR)
+    stretch_on_deck(ladder, PORTEUR_FLOOR)
+
+
+def build_saleuse(meshes, trailer):
+    """Tremie a sel sur toute la longueur, epandeur a l'arriere."""
+    stretch_on_deck(meshes, PORTEUR_FLOOR)
+
+
+def build_grue(meshes, trailer):
+    """Porte-grue : grue a l'arriere sur bequilles, poutres d'acier sanglees."""
+    s = 1.5
+    mn, mx = world_bbox([o for o in meshes if o.name == "Grue_Tourelle"])
+    base = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
+    crane_y = DECK_REAR + 1.9
+    # sur son socle (0,4 m) : la tourelle ne traverse pas le plateau
+    transform(meshes, Matrix.Translation((0.0, crane_y, DECK_TOP + 0.4)) @ Matrix.Scale(s, 4)
+              @ Matrix.Translation(-base))
+    jaune = material("Peinture_Cabine_Jaune", (0.95, 0.75, 0.05))
+    danger = material("Danger_Jaune", (0.95, 0.75, 0.05))
+    noir = material("Chassis", (0.05, 0.05, 0.05), 0.4, 0.5)
+    acier = material("Acier_Poutre", (0.45, 0.16, 0.08), 0.3, 0.55)
+    bois = material("Bois", (0.45, 0.3, 0.15))
+    sangle = material("Sangle", (0.9, 0.35, 0.05), 0.0, 0.8)
+    parts = []
+    # socle de la grue et bequilles stabilisatrices (repliees le long du flanc)
+    parts.append(box("Grue_Socle", (0.0, crane_y, DECK_TOP + 0.2), (2.6, 2.4, 0.4), noir))
+    for side in (-1.0, 1.0):
+        for dy in (-0.9, 0.9):
+            y = crane_y + dy
+            parts.append(box("Grue_Bequille_Bras", (side * 1.75, y, 1.75), (0.5, 0.35, 0.3), danger))
+            parts.append(box("Grue_Bequille_Pied", (side * 1.95, y, 1.0), (0.22, 0.22, 1.4), jaune))
+            parts.append(box("Grue_Bequille_Patin", (side * 1.95, y, 0.3), (0.5, 0.5, 0.08), noir))
+    # chargement : trois rangs de poutres sur cales, sangles
+    y0, y1 = DECK_FRONT - 0.5, crane_y + 1.8
+    length = y0 - y1
+    yc = (y0 + y1) / 2
+    for layer in range(3):
+        z = DECK_TOP + 0.12 + layer * 0.5
+        for y in (y0 - 0.8, yc, y1 + 0.8):
+            parts.append(box("Grue_Cale", (0.0, y, z), (2.8, 0.25, 0.12), bois))
+        for i in range(4 - layer % 2):
+            x = (i - (3 - layer % 2) / 2) * 0.7
+            parts.append(box("Grue_Poutre", (x, yc, z + 0.27), (0.3, length, 0.4), acier))
+    top = DECK_TOP + 0.12 + 2 * 0.5 + 0.5
+    for y in (y0 - 2.5, yc, y1 + 2.5):
+        parts.append(box("Grue_Sangle", (0.0, y, top), (2.9, 0.08, 0.03), sangle))
+        for side in (-1.0, 1.0):
+            parts.append(box("Grue_Sangle", (side * 1.45, y, (top + DECK_TOP) / 2),
+                             (0.03, 0.08, top - DECK_TOP), sangle))
+    meshes.append(join(parts, "Grue_Chargement"))
+
+
+def build_chariot(meshes, trailer):
+    """Remorque palettes, ridelles, chariot embarque accroche a l'arriere."""
+    bois = material("Bois", (0.45, 0.3, 0.15))
+    film = material("Film_Palette", (0.72, 0.8, 0.86), 0.0, 0.25)
+    carton = material("Carton", (0.62, 0.45, 0.25), 0.0, 0.85)
+    noir = material("Chassis", (0.05, 0.05, 0.05), 0.4, 0.5)
+    danger = material("Danger_Jaune", (0.95, 0.75, 0.05))
+    parts = []
+    # palettes filmees : 2 colonnes, hauteurs variees (fixes : idempotent)
+    heights = [1.3, 1.1, 1.4, 1.2, 1.35, 1.0, 1.25, 1.4, 1.15, 1.3, 1.2, 1.4, 1.1, 1.3, 1.25, 1.35, 1.2, 1.1]
+    for row in range(9):
+        y = DECK_FRONT - 0.85 - row * 1.55
+        for col, x in enumerate((-0.68, 0.68)):
+            h = heights[row * 2 + col]
+            parts.append(box("Chariot_Palette", (x, y, DECK_TOP + 0.07), (1.2, 1.4, 0.14), bois))
+            mat = film if (row + col) % 3 else carton
+            parts.append(box("Chariot_Colis", (x, y, DECK_TOP + 0.14 + h / 2), (1.15, 1.35, h), mat))
+    # ridelles : poteaux et lisses
+    for y in [DECK_FRONT - 0.1 - i * 1.925 for i in range(9)]:
+        for side in (-1.0, 1.0):
+            parts.append(box("Chariot_Poteau", (side * (DECK_HALF_W - 0.04), y, DECK_TOP + 0.9),
+                             (0.08, 0.1, 1.8), noir))
+    for z in (DECK_TOP + 0.9, DECK_TOP + 1.75):
+        for side in (-1.0, 1.0):
+            parts.append(box("Chariot_Lisse", (side * (DECK_HALF_W - 0.04), (DECK_FRONT + DECK_REAR) / 2, z),
+                             (0.06, DECK_FRONT - DECK_REAR, 0.08), danger))
+    # chariot embarque : fourches engagees sous l'arriere du plateau, souleve
+    lift = [o for o in meshes if not o.name.startswith("Chariot_Palette")]
+    mn, mx = world_bbox(lift)
+    rear = DECK_REAR - 0.45
+    transform(lift, Matrix.Translation((0.0, rear + 1.0 - mx.y, 0.35)))
+    for side in (-1.0, 1.0):
+        parts.append(box("Chariot_Fourreau", (side * 0.5, rear + 0.6, 1.0), (0.3, 1.4, 0.25), noir))
+    meshes.append(join(parts, "Chariot_Chargement"))
+
+
+BUILDERS = {
+    "pompier": build_pompier,
+    "chasse_neige": build_saleuse,
+    "grue": build_grue,
+    "chariot_elevateur": build_chariot,
+}
 
 
 def dst_names(dst):

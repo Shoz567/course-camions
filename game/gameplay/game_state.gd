@@ -48,7 +48,7 @@ var speed_class: int = SpeedClass.NORMAL
 var requested_players: int = 0
 
 ## Remorque choisie par chaque joueur dans le sas READY (index dans
-## TrailerCatalog), gardee d'une course a l'autre. 0 = Classique.
+## TrailerCatalog), gardee d'une course a l'autre. 0 = Conteneur (defaut).
 var trailer_choice: PackedInt32Array = PackedInt32Array([0, 0, 0, 0, 0, 0])
 
 

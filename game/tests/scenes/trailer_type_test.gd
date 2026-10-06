@@ -2,8 +2,8 @@ extends PhysicsTest
 
 ## Remorques au choix (TrailerCatalog, TrailerType) :
 ##   - chaque remorque du catalogue charge et passe validate() ; ids uniques ;
-##   - la Classique (defaut) ne change rien : caisse de TruckSpec, stats a 1,
-##     reglage identique au reglage de base ;
+##   - chaque remorque a son modele ; le Conteneur (defaut) ne change pas la
+##     conduite : stats a 1, reglage identique au reglage de base ;
 ##   - les stats s'appliquent au reglage ; validate() refuse un 0 et un
 ##     multiplicateur hors bornes ;
 ##   - Truck.set_trailer_type : la caisse de collision prend la taille et la
@@ -43,14 +43,16 @@ func _test_finish() -> void:
 	check("le choix boucle (index -1 = derniere)",
 		TrailerCatalog.at(-1) == TrailerCatalog.at(TrailerCatalog.count() - 1))
 
-	var classic := TrailerCatalog.default_type()
-	check("defaut : Classique, caisse de TruckSpec, sans modele",
-		classic.id == &"classique" and classic.model == ""
-		and classic.box_size.is_equal_approx(TruckSpec.TRAILER_SIZE)
-		and classic.box_center.is_equal_approx(TruckSpec.TRAILER_CENTER))
+	var ref := TrailerCatalog.default_type()
+	var no_model := PackedStringArray()
+	for i in TrailerCatalog.count():
+		if TrailerCatalog.at(i).model == "":
+			no_model.append(String(TrailerCatalog.at(i).id))
+	check("chaque remorque a son modele (plus de remorque d'origine)", no_model.is_empty(), str(no_model))
+	check("defaut : Conteneur", ref.id == &"conteneur", String(ref.id))
 	var base := _a.tuning
-	var same := classic.apply_to(base)
-	check("Classique : reglage identique au reglage de base",
+	var same := ref.apply_to(base)
+	check("Conteneur : reglage identique au reglage de base (reference)",
 		is_equal_approx(same.top_speed_kmh, base.top_speed_kmh)
 		and is_equal_approx(same.engine_accel_ms2, base.engine_accel_ms2)
 		and is_equal_approx(same.lateral_grip_g, base.lateral_grip_g)

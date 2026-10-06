@@ -6,7 +6,7 @@ extends Resource
 ## les stats servent a les equilibrer (decision du 2026-10-06).
 ##
 ## Les stats sont des MULTIPLICATEURS du reglage du camion (deja ajuste a la
-## categorie de vitesse) : la remorque « Classique » vaut 1 partout et laisse
+## categorie de vitesse) : le Conteneur (defaut) vaut 1 partout et laisse
 ## la conduite mesuree (baseline.json) intacte. La masse du camion, elle, ne
 ## change pas (VEHICLE_SPEC §2) : le poids se traduit en acceleration.
 ##

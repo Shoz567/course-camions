@@ -245,7 +245,7 @@ func _add_player(i: int) -> Player:
 	t.tuning = p.base_tuning
 	add_child(t)
 	p.truck = t
-	# remorque choisie a la course precedente (Classique la premiere fois)
+	# remorque choisie a la course precedente (Conteneur la premiere fois)
 	set_trailer(p, GameState.trailer_choice[i] if i < GameState.trailer_choice.size() else 0)
 	race.watch(t)
 	auto_reset.watch(t)

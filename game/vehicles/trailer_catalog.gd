@@ -2,11 +2,11 @@ class_name TrailerCatalog
 extends RefCounted
 
 ## Les semi-remorques proposees dans le sas READY, dans l'ordre du choix. La
-## premiere est celle par defaut : la remorque du modele de course, sans
-## modification de la conduite.
+## premiere est celle par defaut : le Conteneur, stats a 1 (reference de la
+## conduite mesuree). La remorque d'origine du modele de course n'est plus
+## proposee (2026-10-06).
 
 const PATHS: PackedStringArray = [
-	"res://vehicles/trailers/classique.tres",
 	"res://vehicles/trailers/conteneur.tres",
 	"res://vehicles/trailers/citerne.tres",
 	"res://vehicles/trailers/betaillere.tres",

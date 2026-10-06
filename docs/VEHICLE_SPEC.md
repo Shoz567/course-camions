@@ -194,22 +194,24 @@ Avant la course, dans le sas READY, chaque joueur choisit sa semi-remorque
   vitesse ; PV et masse de la remorque une fois larguée ;
 - **capacité** : champ `ability`, vide en attendant le Module 8.
 
-La remorque **Classique** (par défaut) reprend la caisse ci-dessus et des stats
-à 1 : la conduite mesurée (`baseline.json`) ne change pas. Masse, centre de
-masse et inertie du camion restent ceux du tracteur pour toutes les
-remorques : le poids d'une remorque se traduit en accélération, pas en masse.
+La remorque d'origine du modèle de course n'est **plus proposée** (décision du
+2026-10-06) : chaque camion tire une remorque du catalogue. Le **Conteneur**
+(par défaut) a des stats à 1 : c'est la référence, la conduite mesurée
+(`baseline.json`) ne change pas. Masse, centre de masse et inertie du camion
+restent ceux du tracteur pour toutes les remorques : le poids d'une remorque se
+traduit en accélération, pas en masse. La caisse de `TruckSpec.TRAILER_*`
+ci-dessus reste celle d'un camion sans remorque choisie (tests de conduite).
 
 | Remorque | Vitesse | Accél. | Adhérence | PV larguée | Masse larguée | Caisse (l × h × L) |
 |---|---|---|---|---|---|---|
-| Classique | = | = | = | 50 | 9 000 kg | 3,60 × 3,72 × 15,60 |
-| Conteneur | = | −2 % | = | 55 | 9 500 kg | 3,15 × 4,20 × 15,32 |
+| Conteneur (défaut) | = | = | = | 50 | 9 000 kg | 3,15 × 4,20 × 15,32 |
 | Citerne | −4 % | −8 % | = | 75 | 12 000 kg | 2,98 × 3,57 × 15,32 |
 | Bétaillère | −3 % | −5 % | −3 % | 60 | 10 000 kg | 3,64 × 4,53 × 15,32 |
 | Porte-voitures | −2 % | −4 % | −4 % | 50 | 8 500 kg | 3,00 × 3,34 × 15,76 |
-| Grue | −1 % | −3 % | +3 % | 45 | 7 500 kg | 3,15 × 3,20 × 15,32 |
-| Pompier | = | −1 % | = | 50 | 8 000 kg | 3,15 × 3,43 × 15,32 |
-| Saleuse | −1 % | −2 % | +6 % | 50 | 8 000 kg | 3,15 × 3,24 × 15,32 |
-| Chariot | +4 % | +6 % | = | 35 | 5 500 kg | 3,15 × 3,16 × 15,32 |
+| Grue (porte-grue) | −1 % | −3 % | +3 % | 45 | 7 500 kg | 3,15 × 5,17 × 15,32 |
+| Pompier (fourgon + échelle) | = | −1 % | = | 50 | 8 000 kg | 3,15 × 3,43 × 15,32 |
+| Saleuse (trémie) | −1 % | −2 % | +6 % | 50 | 8 000 kg | 3,15 × 2,69 × 15,32 |
+| Chariot (palettes + chariot embarqué) | +4 % | +6 % | = | 35 | 5 500 kg | 3,15 × 1,86 × 18,38 |
 
 **Premier jet, à équilibrer en jouant.** `TrailerType.validate()` refuse un
 multiplicateur hors de [0,8 ; 1,2]. Vérifié par `trailer_type_test` et

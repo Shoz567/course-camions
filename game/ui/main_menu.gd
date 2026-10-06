@@ -89,6 +89,8 @@ func _spawn_trucks() -> void:
 		t.transform = Showroom.slot(i, LocalRace.MAX_PLAYERS)
 		t.freeze = true
 		showroom.turntable.add_child(t)
+		# remorque choisie par ce joueur (sas READY), jamais celle d'origine
+		(t.get_node("Visual") as TruckVisual).set_trailer_type(TrailerCatalog.at(GameState.trailer_choice[i]))
 		trucks.append(t)
 	_orbit_center = showroom.focus
 	camera.h_offset = frame_offset
