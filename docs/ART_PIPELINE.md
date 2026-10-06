@@ -201,6 +201,24 @@ citerne remonté à l'avant en pente douce (une cuve ne se coupe pas).
 `truck_trailer_wheels_test` le vérifie en jeu, les 8 remorques à 35°. Avant :
 165 sommets de la citerne dans une roue du tracteur en drift.
 
+**Qualité, au niveau de la tête** (2026-10-06, « des qualités graphiques
+beaucoup moins élevées que la tête ») :
+
+- toutes les pièces générées sont **chanfreinées et lissées** (arêtes vives
+  au-delà de 35°), comme la tête ; aucune texture, des matériaux réglés comme
+  ceux de la tête (chrome, aluminium, peinture semi-brillante, pneu mat, feux
+  émissifs) ;
+- **roues de révolution** : pneu profilé (talons, flancs bombés, épaulements
+  arrondis, deux rainures), jante à fût et voile emboutie, moyeu, écrous
+  hexagonaux, tambours ; nombre d'écrous et d'ajours propre à chaque remorque ;
+- **détails de vraie semi-remorque** : marquage de contour rétroréfléchissant
+  (flancs et arrière), feux de gabarit latéraux, blocs de feux arrière avec
+  catadioptres triangulaires, pare-cycliste zébré, têtes d'accouplement et
+  flexibles d'air spiralés rouge et bleu, roue de secours, coffre à outils,
+  dévidoirs du pompier, damier des véhicules de secours ;
+- 18 000 à 39 000 triangles par remorque (la tête : 25 600), sauf porte-engins
+  (77 000) et porte-voitures (113 000) à cause de leur chargement.
+
 **Remorque vivante** (2026-10-06, « les roues de la remorque passent dans le
 sol, la remorque est trop rigide ») : chaque essieu est un objet à part
 (`Gen_Essieu_N`, origine au centre de l'essieu). En jeu, `TruckVisual` pose la
@@ -234,7 +252,7 @@ Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
 
 En jeu, seule la remorque de ces véhicules sert : c'est la remorque au choix
 du sas READY (VEHICLE_SPEC §5 bis), chargée par `TruckVisual.set_trailer_type`.
-Triangles par remorque : 1 800 (saleuse) à 12 600 (citerne), roues générées en
+Triangles par remorque : voir « Qualité » ci-dessus. Les roues sont générées en
 bas poly. **Restent au-dessus du budget** : le porte-engins (53 000, les deux
 chariots élévateurs) et le porte-voitures (97 000, les cinq voitures).
 

@@ -164,27 +164,71 @@ def material(name, color, metallic=0.0, roughness=0.6, emission=0.0):
 
 
 def M():
-    """Materiaux communs (crees a la demande dans chaque fichier)."""
+    """Materiaux communs, regles comme ceux de la tete (Camion_*.glb : couleur
+    unie, metal / rugosite, emission des feux), crees a la demande."""
     return {
-        "noir": material("Chassis", (0.05, 0.05, 0.05), 0.4, 0.5),
-        "acier": material("Acier_Sellette", (0.35, 0.35, 0.37), 0.8, 0.35),
-        "chrome": material("Chrome", (0.85, 0.85, 0.88), 1.0, 0.1),
-        "alu": material("Aluminium", (0.75, 0.76, 0.78), 0.9, 0.3),
-        "pneu": material("Pneu", (0.03, 0.03, 0.03), 0.0, 0.9),
-        "plastique": material("Plastique_Noir", (0.04, 0.04, 0.04), 0.0, 0.6),
-        "caoutchouc": material("Caoutchouc", (0.02, 0.02, 0.02), 0.0, 0.95),
-        "feu": material("Feu_Arriere", (0.85, 0.02, 0.02), 0.0, 0.3, 2.0),
-        "orange": material("Clignotant", (1.0, 0.45, 0.0), 0.0, 0.3, 2.0),
-        "plaque": material("Plaque_Fond", (0.95, 0.95, 0.95), 0.0, 0.4),
-        "danger": material("Danger_Jaune", (0.95, 0.75, 0.05)),
-        "danger_noir": material("Danger_Noir", (0.03, 0.03, 0.03)),
-        "bois": material("Bois", (0.45, 0.3, 0.15)),
-        "vitre": material("Vitre", (0.1, 0.15, 0.2), 0.0, 0.05),
+        "noir": material("Chassis", (0.05, 0.05, 0.05), 0.3, 0.6),
+        "acier": material("Acier_Sellette", (0.12, 0.12, 0.13), 0.9, 0.4),
+        "chrome": material("Chrome", (0.9, 0.9, 0.9), 1.0, 0.08),
+        "alu": material("Aluminium", (0.7, 0.7, 0.72), 1.0, 0.3),
+        "pneu": material("Pneu", (0.01, 0.01, 0.01), 0.0, 0.85),
+        "plastique": material("Plastique_Noir", (0.02, 0.02, 0.02), 0.0, 0.55),
+        "caoutchouc": material("Caoutchouc", (0.015, 0.015, 0.015), 0.0, 0.95),
+        "feu": material("Feu_Arriere", (0.6, 0.0, 0.0), 0.0, 0.1, 2.0),
+        "orange": material("Clignotant", (1.0, 0.45, 0.0), 0.0, 0.1, 1.5),
+        "recul": material("Feu_Recul", (0.95, 0.95, 0.9), 0.0, 0.05, 0.6),
+        "catadioptre": material("Catadioptre", (0.75, 0.0, 0.0), 0.2, 0.12, 0.3),
+        "plaque": material("Plaque_Fond", (0.85, 0.85, 0.83), 0.0, 0.35),
+        "danger": material("Danger_Jaune", (0.95, 0.75, 0.05), 0.0, 0.4),
+        "danger_noir": material("Danger_Noir", (0.03, 0.03, 0.03), 0.0, 0.5),
+        "bois": material("Bois", (0.45, 0.3, 0.15), 0.0, 0.7),
+        "vitre": material("Vitre", (0.04, 0.06, 0.07), 0.0, 0.02),
+        "bande_rouge": material("Bande_Reflechissante_Rouge", (0.8, 0.02, 0.02), 0.1, 0.2, 0.2),
+        "bande_blanche": material("Bande_Reflechissante_Blanche", (0.95, 0.95, 0.95), 0.1, 0.2, 0.1),
+        "bande_jaune": material("Bande_Reflechissante_Jaune", (1.0, 0.72, 0.0), 0.1, 0.2, 0.15),
+        "flexible_rouge": material("Flexible_Rouge", (0.7, 0.02, 0.02), 0.0, 0.4),
+        "flexible_bleu": material("Flexible_Bleu", (0.02, 0.15, 0.7), 0.0, 0.4),
     }
 
-
 # ---------------------------------------------------------------- primitives
-# Chaque primitive renvoie un objet dont la geometrie est deja au monde.
+# Chaque primitive renvoie un objet dont la geometrie est deja au monde, finie
+# comme la tete : aretes vives chanfreinees, ombrage lisse, aretes nettes
+# au-dela de SHARP_DEG.
+
+SHARP_DEG = 35.0
+
+
+def finish(o, bevel, segments=2):
+    """Chanfrein des aretes vives (largeur `bevel`, 0 = aucun) et ombrage :
+    lisse partout, net sur les aretes de plus de SHARP_DEG."""
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    sharp = math.radians(SHARP_DEG)
+    if bevel > 0.0:
+        edges = [e for e in bm.edges if e.is_manifold and e.calc_face_angle(0.0) > sharp]
+        if edges:
+            bmesh.ops.bevel(bm, geom=edges, offset=bevel, offset_type="OFFSET", segments=segments,
+                            profile=0.5, affect="EDGES", clamp_overlap=True)
+    for face in bm.faces:
+        face.smooth = True
+    for e in bm.edges:
+        e.smooth = not (e.is_manifold and e.calc_face_angle(0.0) > sharp) and e.is_manifold
+    bm.to_mesh(o.data)
+    # sans texture, les UV ne servent a rien (et leur bruit flottant cassait
+    # l'idempotence a l'octet)
+    for uv in list(o.data.uv_layers):
+        o.data.uv_layers.remove(uv)
+    bm.free()
+    return o
+
+
+def bevel_for(size):
+    """Chanfrein proportionne a la plus petite cote (rien sous 3 cm)."""
+    d = min(size)
+    if d < 0.03:
+        return 0.0, 1
+    return min(0.035, d * 0.18), (2 if d > 0.12 else 1)
+
 
 
 def box(name, center, size, mat, rot_x=0.0):
@@ -195,7 +239,8 @@ def box(name, center, size, mat, rot_x=0.0):
     o.data.transform(Matrix.Rotation(rot_x, 4, "X") @ Matrix.Diagonal((*size, 1.0)))
     o.data.transform(Matrix.Translation(center))
     o.data.materials.append(mat)
-    return o
+    w, seg = bevel_for(size)
+    return finish(o, w, seg)
 
 
 def beam(name, p0, p1, width, thick, mat):
@@ -218,7 +263,8 @@ def cyl(name, center, radius, depth, axis, mat, verts=20):
     o.data.transform(rot)
     o.data.transform(Matrix.Translation(center))
     o.data.materials.append(mat)
-    return o
+    w = min(0.02, radius * 0.15, depth * 0.2)
+    return finish(o, w if w >= 0.004 else 0.0, 1)
 
 
 def tube(name, p0, p1, radius, mat, verts=10):
@@ -232,7 +278,7 @@ def tube(name, p0, p1, radius, mat, verts=10):
     o.data.transform(Vector((0, 0, 1)).rotation_difference(d.normalized()).to_matrix().to_4x4())
     o.data.transform(Matrix.Translation((p0 + p1) / 2))
     o.data.materials.append(mat)
-    return o
+    return finish(o, 0.0)
 
 
 def prism(name, profile, y0, y1, mat):
@@ -253,7 +299,41 @@ def prism(name, profile, y0, y1, mat):
     o = bpy.data.objects.new(GEN + name, me)
     bpy.context.scene.collection.objects.link(o)
     me.materials.append(mat)
-    return o
+    return finish(o, 0.03, 2)
+
+
+def lathe(name, profile, segs, mat, center, side, closed=False):
+    """Piece de revolution autour de l'axe X : profil (decalage le long de
+    l'axe, vers l'exterieur si side > 0 ; rayon). `closed` : le profil boucle
+    (pneu). Les rayons nuls se referment au centre."""
+    cx, cy, cz = center
+    me = bpy.data.meshes.new(GEN + name)
+    bm = bmesh.new()
+    rings = []
+    for i in range(segs):
+        a = 2.0 * math.pi * i / segs
+        ca, sa = math.cos(a), math.sin(a)
+        rings.append([bm.verts.new((cx + side * x, cy + ca * r, cz + sa * r)) for x, r in profile])
+    n = len(profile)
+    last = n if closed else n - 1
+    for i in range(segs):
+        ra, rb = rings[i], rings[(i + 1) % segs]
+        for j in range(last):
+            k = (j + 1) % n
+            quad = (ra[j], rb[j], rb[k], ra[k])
+            if len({v.co.to_tuple(5) for v in quad}) >= 3:
+                try:
+                    bm.faces.new(quad)
+                except ValueError:
+                    pass
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(GEN + name, me)
+    bpy.context.scene.collection.objects.link(o)
+    me.materials.append(mat)
+    return finish(o, 0.0)
 
 
 # ---------------------------------------------------------------- organes
@@ -265,25 +345,64 @@ AXLES = []
 AXLE_PREFIX = GEN + "Essieu_"
 
 
-def axle(parts, y, r, w, dual, rim, m, track=1.25):
-    """Essieu : pneus (simples larges ou jumeles), jantes, moyeux, essieu. Un
+# Segments des pieces de revolution des roues (rond a l'ecran, budget tenu).
+WHEEL_SEGS = 28
+
+
+def tire_profile(r, w):
+    """Profil d'un pneu de poids lourd : talons, flancs bombes, epaulements
+    arrondis, bande de roulement a deux rainures (x le long de l'axe)."""
+    h = w / 2.0
+    side = [(-h + 0.02, 0.62 * r), (-h - 0.005, 0.70 * r), (-h - 0.012, 0.82 * r), (-h + 0.0, 0.92 * r),
+            (-h + 0.03, 0.975 * r), (-h + 0.075, r)]
+    tread = [(-0.30 * h, r), (-0.26 * h, 0.975 * r), (-0.16 * h, 0.975 * r), (-0.12 * h, r),
+             (0.12 * h, r), (0.16 * h, 0.975 * r), (0.26 * h, 0.975 * r), (0.30 * h, r)]
+    other = [(-x, rr) for x, rr in reversed(side)]
+    return side + tread + other
+
+
+def wheel(pieces, x, y, r, w, side, rim, m, outer=True, nuts=10, vents=0):
+    """Une roue : pneu profile, jante (fut + voile emboutie), moyeu, ecrous
+    hexagonaux, ajours. `outer` : roue exterieure (voile et ecrous visibles)."""
+    c = (x, y, r)
+    pieces.append(lathe("Pneu", tire_profile(r, w), WHEEL_SEGS, m["pneu"], c, side, closed=True))
+    h = w / 2.0
+    if not outer:
+        pieces.append(lathe("Jante", [(-h + 0.01, 0.6 * r), (h - 0.01, 0.6 * r), (h - 0.03, 0.3 * r),
+                                      (h - 0.03, 0.0)], WHEEL_SEGS, rim, c, side))
+        return
+    pieces.append(lathe("Jante", [(-h + 0.01, 0.6 * r), (h - 0.03, 0.6 * r), (h - 0.005, 0.63 * r),
+                                  (h + 0.005, 0.66 * r), (h - 0.01, 0.6 * r), (h - 0.05, 0.52 * r),
+                                  (h - 0.07, 0.36 * r), (h - 0.06, 0.24 * r), (h - 0.05, 0.0)],
+                        WHEEL_SEGS, rim, c, side))
+    pieces.append(lathe("Moyeu", [(h - 0.05, 0.21 * r), (h - 0.01, 0.2 * r), (h + 0.03, 0.17 * r),
+                                  (h + 0.07, 0.12 * r), (h + 0.08, 0.0)], 16, m["chrome"], c, side))
+    for k in range(nuts):
+        a = 2.0 * math.pi * k / nuts
+        pieces.append(cyl("Ecrou", (x + side * (h - 0.03), y + math.cos(a) * 0.29 * r, r + math.sin(a) * 0.29 * r),
+                          0.028, 0.06, "X", m["chrome"], 6))
+    for k in range(vents):
+        a = 2.0 * math.pi * (k + 0.5) / vents
+        pieces.append(cyl("Ajour", (x + side * (h - 0.058), y + math.cos(a) * 0.44 * r, r + math.sin(a) * 0.44 * r),
+                          0.05 * r + 0.012, 0.012, "X", m["noir"], 10))
+
+
+def axle(parts, y, r, w, dual, rim, m, track=1.25, nuts=10, vents=0):
+    """Essieu : roues (simples larges ou jumelees), essieu et tambours. Un
     objet a part (AXLES), origine au centre de l'essieu ; `parts` n'est pas
     utilise (garde pour l'appel uniforme des remorques)."""
     pieces = []
     for side in (-1.0, 1.0):
-        xs = [side * (track - w / 2)]
+        wheel(pieces, side * (track - w / 2), y, r, w, side, rim, m, True, nuts, vents)
         if dual:
-            xs.append(side * (track - w * 1.5 - 0.04))
-        for x in xs:
-            pieces.append(cyl("Pneu", (x, y, r), r, w, "X", m["pneu"], 24))
-            pieces.append(cyl("Jante", (x + side * 0.005, y, r), r * 0.62, w + 0.01, "X", rim, 16))
-        pieces.append(cyl("Moyeu", (side * (track - 0.02), y, r), r * 0.22, 0.08, "X", m["chrome"], 10))
-    pieces.append(cyl("Essieu", (0.0, y, r), 0.07, 2 * track - 0.3, "X", m["noir"], 8))
+            wheel(pieces, side * (track - w * 1.5 - 0.03), y, r, w, side, rim, m, False)
+        inner = track - w * (2 if dual else 1) - 0.06
+        pieces.append(cyl("Tambour", (side * (inner - 0.06), y, r), 0.28 * r, 0.14, "X", m["acier"], 16))
+    pieces.append(cyl("Essieu", (0.0, y, r), 0.07, 2 * track - 0.4, "X", m["noir"], 12))
     o = join(pieces, f"{AXLE_PREFIX}{len(AXLES) + 1}")
     set_origin(o, Vector((0.0, y, r)))
     AXLES.append(o)
     return o
-
 
 def kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3):
     """Plaque d'attelage (dessous a la hauteur de la sellette) et pivot."""
@@ -314,26 +433,126 @@ def mud_flaps(parts, y, m, track=1.25):
 
 
 def rear_bar(parts, y, z, m, width=2.4, lights="bloc"):
-    """Pare-cycliste arriere, feux et plaque, dans un style par remorque."""
+    """Pare-cycliste arriere avec ses montants, blocs de feux et catadioptres,
+    plaque (style de feux propre a chaque remorque)."""
     parts.append(box("Pare_Cycliste", (0.0, y, z), (width, 0.12, 0.16), m["noir"]))
+    parts.append(box("Pare_Cycliste_Zebra", (0.0, y - 0.065, z), (width * 0.9, 0.01, 0.1), m["bande_rouge"]))
     for side in (-1.0, 1.0):
         parts.append(box("Pare_Cycliste_Montant", (side * width * 0.35, y + 0.15, z + 0.35),
                          (0.1, 0.1, 0.7), m["noir"]))
-        if lights == "rond":
-            for k in range(3):
-                parts.append(cyl("Feu", (side * (width / 2 - 0.15 - k * 0.22), y - 0.07, z + 0.02),
-                                 0.08, 0.04, "Y", m["feu"] if k < 2 else m["orange"], 12))
-        elif lights == "colonne":
-            parts.append(box("Feu", (side * (width / 2 - 0.08), y - 0.07, z + 0.55), (0.1, 0.04, 0.9), m["feu"]))
+        if lights == "colonne":
+            parts.append(box("Feux_Boitier", (side * (width / 2 - 0.08), y - 0.04, z + 0.55), (0.14, 0.07, 0.95),
+                             m["plastique"]))
+            for k, mat in enumerate((m["feu"], m["feu"], m["orange"], m["recul"])):
+                parts.append(box("Feu", (side * (width / 2 - 0.08), y - 0.08, z + 0.2 + k * 0.22),
+                                 (0.1, 0.02, 0.18), mat))
+            tri = prism("Catadioptre", [(-0.09, -0.07), (0.09, -0.07), (0.0, 0.08)], y - 0.012, y + 0.008,
+                        m["catadioptre"])
+            tri.data.transform(Matrix.Translation((side * (width / 2 - 0.35), 0.0, z + 0.02)))
+            parts.append(tri)
         else:
-            parts.append(box("Feu", (side * (width / 2 - 0.3), y - 0.07, z + 0.03), (0.5, 0.04, 0.14), m["feu"]))
-            parts.append(box("Clignotant", (side * (width / 2 - 0.62), y - 0.07, z + 0.03),
-                             (0.12, 0.04, 0.14), m["orange"]))
+            light_cluster(parts, side * (width / 2 - 0.3), y - 0.07, z + 0.2, m, style=lights)
     parts.append(box("Plaque", (0.0, y - 0.07, z + 0.03), (0.52, 0.02, 0.12), m["plaque"]))
-
+    parts.append(box("Plaque_Eclairage", (0.0, y - 0.07, z + 0.12), (0.12, 0.03, 0.03), m["plastique"]))
 
 def beacon(parts, x, y, z, m):
-    parts.append(cyl("Gyrophare", (x, y, z), 0.11, 0.18, "Z", m["orange"], 12))
+    parts.append(cyl("Gyrophare_Socle", (x, y, z - 0.1), 0.13, 0.04, "Z", m["plastique"], 16))
+    parts.append(cyl("Gyrophare", (x, y, z), 0.11, 0.18, "Z", m["orange"], 16))
+
+
+# ---------------------------------------------------------------- details
+# Ce qui fait une vraie semi-remorque : marquage de contour, feux de gabarit,
+# blocs de feux, catadioptres, flexibles d'air, roue de secours, coffre.
+
+
+def contour_tape(parts, x, y0, y1, z, mats, seg=0.5, height=0.05):
+    """Bande retroreflechissante le long d'un flanc (x fixe), de y0 a y1 :
+    segments alternes si plusieurs materiaux (marquage de contour)."""
+    side = 1.0 if x >= 0 else -1.0
+    n = max(1, int(abs(y1 - y0) / seg))
+    step = (y1 - y0) / n
+    for k in range(n):
+        y = y0 + step * (k + 0.5)
+        parts.append(box("Bande", (x + side * 0.006, y, z), (0.012, abs(step) * 0.92, height), mats[k % len(mats)]))
+
+
+def rear_outline(parts, y, x_half, z0, z1, m, mats=None):
+    """Marquage de contour arriere : cadre rouge (ou alterne) autour de la caisse."""
+    mats = mats or [m["bande_rouge"]]
+    parts.append(box("Contour_Bas", (0.0, y - 0.006, z0), (2 * x_half, 0.012, 0.05), mats[0]))
+    parts.append(box("Contour_Haut", (0.0, y - 0.006, z1), (2 * x_half, 0.012, 0.05), mats[-1]))
+    for side in (-1.0, 1.0):
+        n = max(1, int((z1 - z0) / 0.45))
+        for k in range(n):
+            z = z0 + (z1 - z0) * (k + 0.5) / n
+            parts.append(box("Contour_Montant", (side * x_half, y - 0.006, z), (0.05, 0.012, (z1 - z0) / n * 0.9),
+                             mats[k % len(mats)]))
+
+
+def side_markers(parts, x, y0, y1, z, m, spacing=3.0):
+    """Feux de gabarit lateraux orange : boitier noir et cabochon."""
+    side = 1.0 if x >= 0 else -1.0
+    n = max(1, int(abs(y1 - y0) / spacing))
+    for k in range(n + 1):
+        y = y0 + (y1 - y0) * k / max(n, 1)
+        parts.append(box("Gabarit_Boitier", (x + side * 0.02, y, z), (0.04, 0.13, 0.07), m["plastique"]))
+        parts.append(box("Gabarit", (x + side * 0.045, y, z), (0.012, 0.1, 0.045), m["orange"]))
+
+
+def light_cluster(parts, x, y, z, m, width=0.48, style="bloc"):
+    """Bloc de feux arriere : boitier, feu rouge, clignotant, recul, et
+    catadioptre triangulaire (obligatoire sur une remorque)."""
+    parts.append(box("Feux_Boitier", (x, y + 0.03, z), (width + 0.04, 0.07, 0.17), m["plastique"]))
+    if style == "rond":
+        for k, mat in enumerate((m["feu"], m["orange"], m["recul"])):
+            parts.append(cyl("Feu", (x - width / 2 + 0.08 + k * (width - 0.16) / 2, y - 0.01, z), 0.058, 0.03, "Y",
+                             mat, 16))
+    else:
+        parts.append(box("Feu", (x - width * 0.18, y - 0.01, z), (width * 0.5, 0.025, 0.11), m["feu"]))
+        parts.append(box("Clignotant", (x + width * 0.2, y - 0.01, z), (width * 0.18, 0.025, 0.11), m["orange"]))
+        parts.append(box("Recul", (x + width * 0.4, y - 0.01, z), (width * 0.12, 0.025, 0.11), m["recul"]))
+    # catadioptre triangulaire sous le bloc
+    tri = prism("Catadioptre", [(-0.09, -0.07), (0.09, -0.07), (0.0, 0.08)], y - 0.012, y + 0.008, m["catadioptre"])
+    tri.data.transform(Matrix.Translation((x, 0.0, z - 0.2)))
+    parts.append(tri)
+
+
+def air_couplings(parts, y, z, m, x=0.35, coils=3):
+    """Tetes d'accouplement (rouge : alimentation, bleue : frein) sur la face
+    avant, et flexibles spirales qui pendent vers l'avant."""
+    for side, mat in ((-1.0, m["flexible_rouge"]), (1.0, m["flexible_bleu"])):
+        cx = side * x
+        parts.append(box("Tete_Accouplement", (cx, y + 0.06, z), (0.12, 0.12, 0.1), mat))
+        prev = Vector((cx, y + 0.12, z))
+        steps = coils * 10
+        for k in range(1, steps + 1):
+            t = k / steps
+            a = 2.0 * math.pi * coils * t
+            p = Vector((cx + math.cos(a) * 0.07, y + 0.12 + 0.38 * t, z - 0.25 * t + math.sin(a) * 0.07))
+            parts.append(tube("Flexible", prev, p, 0.014, mat, 6))
+            prev = p
+
+
+def spare_wheel(parts, y, z, r, w, rim, m):
+    """Roue de secours couchee sous le chassis, dans son berceau."""
+    pieces = []
+    wheel(pieces, 0.0, 0.0, r, w, 1.0, rim, m, True, 8, 0)
+    o = join(pieces, GEN + "Roue_Secours")
+    o.data.transform(Matrix.Translation((0.0, 0.0, -r)))
+    o.data.transform(Matrix.Rotation(math.pi / 2, 4, "Y"))
+    o.data.transform(Matrix.Translation((0.0, y, z)))
+    o.matrix_world = Matrix.Identity(4)
+    parts.append(o)
+    for side in (-1.0, 1.0):
+        parts.append(box("Berceau_Secours", (side * (r + 0.04), y, z + 0.1), (0.05, 0.08, 0.35), m["noir"]))
+
+
+def toolbox(parts, x, y, z, m, length=1.0, mat=None):
+    """Coffre a outils sous le chassis : caisse, couvercle, poignee."""
+    side = 1.0 if x >= 0 else -1.0
+    parts.append(box("Coffre", (x, y, z), (0.5, length, 0.45), mat or m["alu"]))
+    parts.append(box("Coffre_Couvercle", (x + side * 0.252, y, z + 0.02), (0.01, length - 0.06, 0.36), m["plastique"]))
+    parts.append(box("Coffre_Poignee", (x + side * 0.27, y, z + 0.12), (0.02, 0.18, 0.03), m["chrome"]))
 
 
 # ---------------------------------------------------------------- remorques
@@ -356,11 +575,17 @@ def trailer_conteneur(parts, m):
         for side in (-1.0, 1.0):
             parts.append(box("Verrou_Tournant", (side * 1.35, y, 2.2), (0.16, 0.16, 0.06), m["chrome"]))
     for y in (-11.3, -12.65, -14.0):
-        axle(parts, y, 0.52, 0.28, True, m["alu"], m)
+        axle(parts, y, 0.52, 0.28, True, m["alu"], m, nuts=10, vents=10)
         fender(parts, y + 0.6, y - 0.6, 1.2, 0.68, m["plastique"])
     mud_flaps(parts, -14.65, m)
     landing_gear(parts, -5.0, 1.6, m)
     rear_bar(parts, -15.45, 0.62, m, lights="bloc")
+    for side in (-1.0, 1.0):
+        contour_tape(parts, side * 1.55, -0.2, -15.1, 2.3, [m["bande_blanche"]])
+        side_markers(parts, side * 1.47, -3.9, -14.4, 2.02, m, 3.5)
+    rear_outline(parts, -15.42, 1.42, 2.4, 5.2, m)
+    air_couplings(parts, 0.14, 2.75, m)
+    spare_wheel(parts, -6.2, 1.1, 0.52, 0.28, m["alu"], m)
     return -15.45, 5.38, 2.21
 
 
@@ -386,10 +611,15 @@ def trailer_citerne(parts, m):
             parts.append(box("Protection_Patte", (side * 1.32, y, 1.15), (0.05, 0.05, 0.9), m["noir"]))
         parts.append(box("Garde_Boue_Inox", (side * 1.08, -13.35, 1.32), (0.62, 4.3, 0.05), inox))
     for y in (-12.0, -13.35, -14.7):
-        axle(parts, y, 0.56, 0.42, False, blanc, m, track=1.3)
+        axle(parts, y, 0.56, 0.42, False, blanc, m, track=1.3, nuts=10, vents=0)
     mud_flaps(parts, -15.35, m)
     landing_gear(parts, -4.6, 1.5, m, x=0.8)
     rear_bar(parts, -15.75, 0.66, m, width=2.3, lights="rond")
+    for side in (-1.0, 1.0):
+        side_markers(parts, side * 1.34, -4.3, -10.7, 1.2, m, 2.1)
+        contour_tape(parts, side * 1.33, -4.3, -10.7, 0.88, [m["bande_jaune"]], 0.6, 0.04)
+    air_couplings(parts, 0.45, 2.7, m, coils=4)
+    toolbox(parts, 0.9, -10.95, 1.0, m, 0.8, inox)
     return -15.75, 5.73, 1.55
 
 
@@ -407,11 +637,17 @@ def trailer_betaillere(parts, m):
     for y in (-4.1, -6.5, -9.0, -11.5, -14.0):
         parts.append(box("Traverse", (0.0, y, 1.86), (3.2, 0.14, 0.18), m["noir"]))
     for y in (-10.6, -12.4, -14.2):
-        axle(parts, y, 0.5, 0.28, True, jante, m)
+        axle(parts, y, 0.5, 0.28, True, jante, m, nuts=8, vents=5)
         fender(parts, y + 0.58, y - 0.58, 1.15, 0.66, m["noir"])
         mud_flaps(parts, y - 0.62, m)
     landing_gear(parts, -4.4, 1.75, m)
     rear_bar(parts, -15.85, 0.6, m, width=2.6, lights="colonne")
+    for side in (-1.0, 1.0):
+        contour_tape(parts, side * 1.82, -4.0, -15.6, 2.06, [m["bande_blanche"]])
+        side_markers(parts, side * 1.82, -4.0, -15.0, 2.14, m, 2.75)
+    rear_outline(parts, -15.78, 1.75, 2.1, 6.55, m, [m["bande_rouge"], m["bande_blanche"]])
+    air_couplings(parts, 0.32, 2.5, m)
+    spare_wheel(parts, -8.4, 1.15, 0.5, 0.28, jante, m)
     return -15.85, 6.69, 1.97
 
 
@@ -424,10 +660,15 @@ def trailer_porte_voitures(parts, m):
         parts.append(box("Berceau_Arriere", (side * 0.32, -14.4, 0.86), (0.14, 3.6, 0.14), m["noir"]))
         parts.append(beam("Rampe", (side * 0.8, -16.1, 0.95), (side * 0.8, -16.5, 2.4), 0.55, 0.06, m["alu"]))
     for y in (-13.3, -14.3, -15.3):
-        axle(parts, y, 0.42, 0.3, False, violet, m, track=1.2)
+        axle(parts, y, 0.42, 0.3, False, violet, m, track=1.2, nuts=6, vents=0)
         fender(parts, y + 0.42, y - 0.42, 0.95, 0.36, m["plastique"], track=1.2)
     landing_gear(parts, -4.5, 0.95, m, x=0.7)
     rear_bar(parts, -16.0, 0.5, m, width=2.2, lights="rond")
+    for side in (-1.0, 1.0):
+        side_markers(parts, side * 1.53, -4.5, -15.5, 1.05, m, 2.75)
+        contour_tape(parts, side * 1.535, -4.0, -16.0, 0.97, [m["bande_jaune"]])
+    air_couplings(parts, 0.3, 2.45, m, coils=2)
+    toolbox(parts, 0.8, -12.4, 0.62, m, 0.7, m["plastique"])
     return -16.24, 5.5, 1.0
 
 
@@ -465,10 +706,16 @@ def trailer_saleuse(parts, m):
     for k in range(7):
         parts.append(box("Echelle_Barreau", (0.0, -14.27, 2.1 + k * 0.4), (0.6, 0.04, 0.04), m["alu"]))
     for y in (-12.6, -14.0):
-        axle(parts, y, 0.56, 0.42, False, orange, m, track=1.3)
+        axle(parts, y, 0.56, 0.42, False, orange, m, track=1.3, nuts=10, vents=6)
     fender(parts, -11.9, -14.7, 1.3, 0.5, m["plastique"], track=1.3)
     landing_gear(parts, -4.8, 1.6, m)
     rear_bar(parts, -15.9, 0.6, m, width=2.3, lights="bloc")
+    for side in (-1.0, 1.0):
+        contour_tape(parts, side * 1.56, -0.6, -14.0, 4.55, [m["bande_jaune"]])
+        side_markers(parts, side * 1.53, -0.8, -13.8, 3.62, m, 2.6)
+    rear_outline(parts, -14.22, 1.45, 3.55, 4.65, m)
+    air_couplings(parts, -0.3, 2.65, m)
+    toolbox(parts, -1.0, -10.6, 1.25, m, 0.8)
     return -15.9, 4.95, 1.96
 
 
@@ -479,6 +726,7 @@ def trailer_pompier(parts, m):
     rouge = material("Peinture_Cabine_Pompier", (0.75, 0.03, 0.03), 0.3, 0.35)
     blanc = material("Texte_Blanc", (0.95, 0.95, 0.95))
     bleu = material("Gyrophare_Bleu", (0.1, 0.3, 1.0), 0.0, 0.3, 3.0)
+    tuyau = material("Tuyau_Incendie", (0.16, 0.16, 0.17), 0.0, 0.7)
     kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3)
     parts.append(box("Caisse_Col", (0.0, -2.2, 3.4), (3.1, 3.8, 2.2), rouge))
     parts.append(box("Caisse_Avant", (0.0, -7.55, 2.62), (3.1, 6.9, 3.76), rouge))
@@ -509,13 +757,23 @@ def trailer_pompier(parts, m):
     parts.append(box("Rampe_Lumineuse", (0.0, -0.4, 4.6), (2.6, 0.3, 0.12), bleu))
     # arriere : enrouleurs, marchepied
     for side in (-1.0, 1.0):
-        parts.append(cyl("Enrouleur", (side * 0.75, -15.4, 2.7), 0.48, 0.3, "Y", blanc, 24))
-        parts.append(cyl("Enrouleur_Flasque", (side * 0.75, -15.56, 2.7), 0.2, 0.04, "Y", rouge, 16))
+        # enrouleur de tuyau : tambour de tuyau enroule (axe horizontal), flasques
+        parts.append(cyl("Enrouleur_Tuyau", (side * 0.75, -15.5, 2.75), 0.36, 0.5, "X", tuyau, 32))
+        for dx in (-0.27, 0.27):
+            parts.append(cyl("Enrouleur_Flasque", (side * 0.75 + dx, -15.5, 2.75), 0.44, 0.03, "X", m["alu"], 32))
+        parts.append(cyl("Enrouleur_Axe", (side * 0.75, -15.5, 2.75), 0.06, 0.62, "X", m["chrome"], 12))
+        parts.append(box("Enrouleur_Support", (side * 0.75, -15.38, 2.3), (0.62, 0.12, 0.5), m["alu"]))
     parts.append(box("Marchepied", (0.0, -15.45, 1.0), (2.6, 0.5, 0.06), m["alu"]))
     for y in (-11.9, -13.3):
-        axle(parts, y, 0.5, 0.28, True, m["chrome"], m)
+        axle(parts, y, 0.5, 0.28, True, m["chrome"], m, nuts=10, vents=8)
     landing_gear(parts, -4.4, 0.8, m)
     rear_bar(parts, -15.6, 0.62, m, width=2.6, lights="bloc")
+    for side in (-1.0, 1.0):
+        # damier jaune / rouge des vehicules de secours
+        contour_tape(parts, side * 1.6, -4.25, -10.75, 0.95, [m["bande_jaune"], m["bande_rouge"]], 0.4, 0.12)
+        side_markers(parts, side * 1.56, -4.3, -14.9, 0.8, m, 2.6)
+    rear_outline(parts, -15.31, 1.5, 0.85, 4.45, m, [m["bande_rouge"], m["bande_jaune"]])
+    air_couplings(parts, -0.3, 2.6, m)
     return -15.6, 4.85, 1.0
 
 
@@ -562,10 +820,15 @@ def trailer_grue(parts, m):
     parts.append(tube("Crochet", (0.35, 0.05, 3.2), (0.35, 0.05, 2.95), 0.05, m["chrome"]))
     beacon(parts, 0.9, -12.0, 4.5, m)
     for y in (-10.2, -11.5, -12.8, -14.1):
-        axle(parts, y, 0.5, 0.28, True, jaune, m)
+        axle(parts, y, 0.5, 0.28, True, jaune, m, nuts=10, vents=4)
     fender(parts, -9.6, -14.7, 1.15, 0.66, m["noir"])
     landing_gear(parts, -4.6, 1.65, m)
     rear_bar(parts, -15.55, 0.6, m, width=2.4, lights="rond")
+    for side in (-1.0, 1.0):
+        contour_tape(parts, side * 0.555, -3.9, -15.4, 1.65, [m["bande_rouge"], m["bande_blanche"]])
+        side_markers(parts, side * 0.56, -4.0, -9.0, 1.98, m, 2.5)
+    air_couplings(parts, 0.2, 2.55, m)
+    toolbox(parts, 0.85, -6.5, 1.75, m, 1.2, jaune)
     return -15.55, 3.9, 2.35
 
 
@@ -592,7 +855,7 @@ def trailer_porte_engins(parts, m, forklift):
     for k in range(6):
         parts.append(box("Panneau_Zebra", (-0.95 + k * 0.38, -15.64, 2.05), (0.12, 0.01, 0.55), m["danger_noir"]))
     for y in (-12.55, -13.65, -14.75):
-        axle(parts, y, 0.4, 0.24, True, gris, m, track=1.3)
+        axle(parts, y, 0.4, 0.24, True, gris, m, track=1.3, nuts=6, vents=4)
     landing_gear(parts, -4.6, 1.55, m, x=0.85)
     rear_bar(parts, -15.75, 0.55, m, width=2.4, lights="bloc")
     # deux chariots elevateurs arrimes, fourches en avant : l'un sur le plancher
@@ -610,6 +873,10 @@ def trailer_porte_engins(parts, m, forklift):
             for dy in (-1.2, 1.4):
                 parts.append(tube("Chaine", (side * 0.7, y + dy * 0.8, z + 0.455), (side * 1.4, y + dy, z + 0.005), 0.02,
                                   m["chrome"], 6))
+    for side in (-1.0, 1.0):
+        contour_tape(parts, side * 1.565, -5.2, -11.8, 0.82, [m["bande_rouge"], m["bande_blanche"]])
+        side_markers(parts, side * 1.56, -5.2, -11.6, 1.05, m, 2.1)
+    air_couplings(parts, 0.2, 2.55, m)
     return -16.4, 3.3, 1.4, lifts
 
 
