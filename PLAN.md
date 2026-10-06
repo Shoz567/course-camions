@@ -289,7 +289,7 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 | 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[x]` |
 | 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[x]` |
 | 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) ; **remasterisation visuelle** (taille x2, balise stroboscopique/lumineuse haute visibilité) | track-designer | `[x]` lot 3 ; `damage_visuals_test`, `track_hazards_test` |
-| 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP cabine uniquement), barils explosifs (-15 HP), remorque bouclier, mort et respawn après 3 s (PV discrets/internes avant dégradations) | gameplay-engineer | `[x]` `TruckHealth` (nœud « Health » du camion), signal `Truck.wall_impact` par forme touchée ; `truck_health_test` |
+| 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP), barils explosifs (-15 HP), mort et respawn après 3 s ; lot 4 : PV séparés tête / remorque (plus de bouclier), carcasse laissée sur la route | gameplay-engineer | `[x]` `TruckHealth` (nœud « Health » du camion), signal `Truck.wall_impact` par forme touchée ; `truck_health_test`, `truck_damage_split_test` |
 | 4.5.5 | Remorques larguées persistantes (50 HP) : restent sur piste sans disparition, nouvelle remorque réapparue sur le tracteur, interdiction de largage les 5 premières secondes | gameplay-engineer | `[x]` dégâts selon l'énergie du choc, explosion à 0 PV ; `trailer_hp_test`, `truck_cargo_test` (dégradation visuelle de la remorque : 4.5.6) |
 | 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive (tracteur & remorque) | visual-artist | `[x]` lot 3 : `DamageFx`, `TruckDamageFx`, `DetachedTrailer` ; `damage_visuals_test` |
 | 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[x]` dans la course (`LocalRace`, état LOBBY) ; `race_ready_test` |
@@ -358,6 +358,39 @@ Réalisation du lot 3 :
 - **Remorque larguée** : trace à chaque choc qui l'abîme ; sous 60 % de ses
   PV, flancs noircis et fumée grise ; sous 30 %, toit noirci, fumée
   anthracite et étincelles ; à 0, explosion.
+
+**Lot 4 (2026-10-06, demandes utilisateur : « augmenter la gravité », « bien
+distinguer les dégâts faits à la tête du camion et à la remorque », « quand le
+camion explose, il reste au milieu du chemin », « que des bouts partent »)**
+- `[x]` **Gravité de vol** : en l'air, le camion tombe à 1,6 g
+  (`VehicleTuning.air_gravity_factor`) ; au sol, rien ne change (adhérence,
+  freinage, `baseline.json` intacts). Saut de plaque : même hauteur (4,7 m),
+  1,4 s de vol au lieu de 1,8 s (`PadEffects.jump_up_speed_ms` 8 → 9,5 m/s,
+  réception amortie jusqu'à 4,5 m/s au lieu de 3). Butée de suspension
+  (`bump_stop_*`) : une chute de 6 m ne pose plus le châssis au sol.
+- `[x]` **PV séparés** (`TruckHealth`) : la tête (100 PV) et la remorque
+  attelée (PV de la remorque choisie, `TrailerType.dropped_hp`). Ce que la
+  remorque encaisse ne touche jamais la tête (fin de la règle « bouclier ») ;
+  à 0 PV elle explose et disparaît, l'explosion coûte 20 PV à la tête, et une
+  nouvelle remorque arrive après la recharge du cargo. HUD : « REM » et sa
+  jauge sous les PV de la tête.
+- `[x]` **Obstacles qui blessent** : percuter une remorque larguée ou une
+  carcasse (`Truck.hazard_impact`) coûte jusqu'à 40 PV à la partie touchée
+  (40 × (v / 33 m/s)², de face à 100 km/h : ~28) ; l'obstacle s'abîme aussi.
+  Jamais sa propre remorque larguée.
+- `[x]` **Carcasse sur la route** : à 0 PV, la tête explose et sa carcasse
+  calcinée reste en place (`TruckWreck`, 60 PV, obstacle), avec la remorque
+  attelée et ses PV restants ; le joueur réapparaît 3 s plus tard sur un
+  camion neuf, à côté de ce qui encombre la route.
+- `[x]` **Carrosserie déformable** (`BodyDamage`, `Debris`) : la tôle
+  s'enfonce au point touché (jusqu'à 45 cm), maillages subdivisés au premier
+  choc pour que les grands panneaux plient, sans fente ; au-delà de 9 m/s, les
+  pièces extérieures proches s'arrachent (rétros, phares, pare-chocs...) et
+  des éclats de tôle volent ; à l'explosion, tout ce qui dépasse part.
+  Préparation au sas READY (~0,5 s par modèle, une fois) ; un choc coûte
+  ~10 ms.
+- `[x]` `make test` à 100 % (`truck_damage_split_test`,
+  `truck_body_damage_test` ajoutés).
 
 ---
 

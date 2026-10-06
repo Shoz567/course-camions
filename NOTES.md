@@ -18,12 +18,12 @@
 ### Module 2 : Système de Points de Vie (HP) & Mort / Respawn
 - [x] **Barre de PV (100 HP)** (Lot 2, `TruckHealth`) :
   - Suivi des 100 HP (affichage discret / petit ou interne avant dégradations visuelles).
-  - Calcul des dégâts : uniquement le tracteur (cabine / avant) encaisse les dégâts sur les PV du joueur.
+  - Deux réserves (2026-10-06) : la tête (100 PV) et la remorque attelée (ses propres PV). Les dégâts de la remorque ne touchent jamais la tête ; à 0 PV elle explose, et c'est l'explosion qui blesse la tête (-20 PV).
   - Chocs contre les murs : **-1 à -5 HP** selon la violence / vitesse de l'impact.
   - Percussion d'un baril explosif : **-15 HP**.
-  - La remorque agit comme un **bouclier défensif** (protège l'arrière du joueur, les chocs dessus n'entament pas les 100 HP du tracteur).
+  - Remorques larguées et carcasses sur la route : les percuter blesse la partie touchée (jusqu'à 40 PV) et les abîme.
 - [x] **Mort & Respawn** (épave gelée 3 s, explosion, réapparition sur la ligne de course) :
-  - À 0 HP : explosion / fumée, immobilisation pendant **3 secondes**, puis réapparition (respawn) sur la piste avec 100 HP restaurés.
+  - À 0 HP : explosion, la carcasse calcinée reste sur la route (obstacle), puis réapparition après **3 secondes** sur un camion neuf, à côté d'elle.
 
 ### Module 3 : Course & Règles (4 Tours)
 - [x] **4 Laps** :

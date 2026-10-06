@@ -48,7 +48,7 @@ func _physics_process(_delta: float) -> void:
 		_lock -= 1
 	if _cooldown > 0:
 		_cooldown -= 1
-	if _truck == null or not _truck.is_trailer_detached() or _cooldown > 0:
+	if _truck == null or not _truck.is_trailer_detached() or _cooldown > 0 or _truck.is_wrecked():
 		return
 	# recharge finie : une nouvelle remorque apparait (l'ancienne reste)
 	_waiting += 1
@@ -115,3 +115,15 @@ func drop() -> DetachedTrailer:
 	last_trailer = trailer
 	dropped.emit(trailer)
 	return trailer
+
+
+## Remorque detruite sur le camion (TruckHealth, 0 PV de remorque) : elle
+## disparait dans l'explosion, sans rien laisser sur la route. Le tracteur
+## roule seul, puis une nouvelle remorque arrive apres la recharge, comme
+## apres un largage.
+func lose_trailer() -> void:
+	if _truck == null or _truck.is_trailer_detached():
+		return
+	_truck.detach_trailer()
+	_cooldown = cooldown_ticks
+	_waiting = 0

@@ -313,6 +313,26 @@ func make_trailer_copy() -> Node3D:
 	return copy
 
 
+## Copie du tracteur seul (carrosserie cabossee, roues, sans la remorque),
+## dans le repere du camion : le visuel de la carcasse (TruckWreck). Maillages
+## partages, rien n'est recharge.
+func make_wreck_copy() -> Node3D:
+	var root := Node3D.new()
+	root.name = "WreckVisual"
+	root.transform = transform
+	for c in get_children():
+		var n := c as Node3D
+		if n == null or not n.visible or n == _ground_ray or String(n.name) == String(TRAILER_PIVOT):
+			continue
+		var copy := n.duplicate() as Node3D
+		var pivot := copy.get_node_or_null(NodePath(TRAILER_PIVOT))
+		if pivot != null:
+			copy.remove_child(pivot)
+			pivot.free()
+		root.add_child(copy)
+	return root
+
+
 ## Remorque choisie (sas READY) : son modele remplace celui de la remorque du
 ## camion, sous le pivot de la sellette (il suit donc l'articulation, le penche
 ## et la copie larguee). Sans modele charge (boites, headless), la boite de

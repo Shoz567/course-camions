@@ -31,7 +31,9 @@ extends RigidBody3D
 ##   remorque larguee percutee (cargo_hit) : ralenti et deporte en lacet.
 ##   impacts contre un mur (wall_impact) : signales avec la vitesse normale et
 ##       la forme touchee (tracteur ou remorque) ; les PV sont l'affaire du
-##       gameplay (TruckHealth). Epave (set_wrecked) : gelee, sans force.
+##       gameplay (TruckHealth). Chocs contre un obstacle de la piste
+##       (hazard_impact) : idem. Epave (set_wrecked) : gelee, sans force,
+##       sans collision.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
@@ -70,11 +72,17 @@ signal wall_impact_at(normal_speed_ms: float, on_trailer: bool, point: Vector3, 
 ## vitesse d'approche, partie touchee, point et normale (monde, tournee vers
 ## le camion). Purement informatif : aucun degat de PV.
 signal body_impact(approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Le meme debut de contact, quand l'autre corps est un obstacle de la piste
+## (couche 5 : remorque larguee, epave) : c'est lui qui fait des degats
+## (TruckHealth).
+signal hazard_impact(obstacle: Node3D, approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 
 ## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
 ## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
 const TRAILER_BLOCK_MASK := (1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)) \
 		| (1 << (5 - 1))
+## Couche 5 `hazard` (VEHICLE_SPEC §7) : obstacles poses sur la piste.
+const HAZARD_BIT := 1 << (5 - 1)
 
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
@@ -209,6 +217,7 @@ var _body_contacts: Dictionary = {}
 var _contact_step: int = 0
 ## Epave (0 PV, TruckHealth) : gelee, aucune force, aucune commande.
 var _wrecked: bool = false
+var _layers_before_wreck: Vector2i = Vector2i.ZERO
 
 var _reset_pending: bool = false
 ## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
@@ -436,8 +445,17 @@ func get_wall_contact_ticks() -> int:
 
 
 ## Epave (0 PV) : gelee sur place, plus aucune force ni commande, jusqu'a ce
-## que le gameplay la relance (set_wrecked(false) puis reset_to).
+## que le gameplay la relance (set_wrecked(false) puis reset_to). Elle ne
+## touche plus rien : la carcasse laissee sur la route est un obstacle a part
+## (TruckWreck), le camion attend seulement sa reapparition.
 func set_wrecked(on: bool) -> void:
+	if on and not _wrecked:
+		_layers_before_wreck = Vector2i(collision_layer, collision_mask)
+		collision_layer = 0
+		collision_mask = 0
+	elif not on and _wrecked:
+		collision_layer = _layers_before_wreck.x
+		collision_mask = _layers_before_wreck.y
 	_wrecked = on
 	freeze = on
 	_boost_ticks = 0
@@ -514,6 +532,9 @@ func _note_body_contact(state: PhysicsDirectBodyState3D, i: int, obj: Object, at
 		approach = maxf(approach, (other - v).dot(n))
 	var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
 	body_impact.emit(approach, shape_node == _trailer_shape, at, n)
+	var body := obj as CollisionObject3D
+	if body != null and body.collision_layer & HAZARD_BIT:
+		hazard_impact.emit(body, approach, shape_node == _trailer_shape, at, n)
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:

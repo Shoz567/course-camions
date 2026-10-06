@@ -7,8 +7,9 @@ extends PhysicsTest
 ##      au premier impact (degats proportionnels a la vitesse normale) ;
 ##   C. frottement : le nez entre a 8 deg, ~2,8 m/s vers le mur : -1 PV (sous
 ##      ~5 deg, c'est la remorque, plus large, qui toucherait d'abord) ;
-##   D. REGLE BOUCLIER : marche arriere a 12 m/s dans un mur, seule la
-##      remorque touche : impact signale, aucun PV perdu ;
+##   D. marche arriere a 12 m/s dans un mur, seule la remorque touche :
+##      impact signale, aucun PV perdu par la TETE (la remorque a ses propres
+##      PV, truck_damage_split_test) ;
 ##   E. 0 PV : explosion, epave gelee 3 s (180 ticks) meme plein gaz, aucun
 ##      degat de plus, puis reapparition a l'endroit fourni, 100 PV.
 ## Vitesses posees au tick 0 (CLAUDE.md §10 b).
@@ -123,8 +124,8 @@ func _test_finish() -> void:
 	for im: Array in _d_impacts:
 		trailer_hit = trailer_hit or im[0]
 		front_hit = front_hit or not im[0]
-	check("D bouclier : la remorque touche le mur", trailer_hit and not front_hit, str(_d_impacts))
-	check("D bouclier : aucun PV perdu", TruckHealth.of(_d).hp == 100.0 and _events[_d].is_empty(),
+	check("D la remorque touche le mur", trailer_hit and not front_hit, str(_d_impacts))
+	check("D la tete ne perd aucun PV", TruckHealth.of(_d).hp == 100.0 and _events[_d].is_empty(),
 		"%.0f PV" % TruckHealth.of(_d).hp)
 	check("E 0 PV : epave gelee, explosion", _e_frozen and _e_explosion and _e_destroyed == 1)
 	check("E epave : aucun degat de plus", _events[_e].size() == 2, str(_events[_e]))

@@ -27,6 +27,8 @@ var _cargo: TruckCargo
 var _health: TruckHealth
 var _hp_label: Label
 var _hp_bar: ProgressBar
+var _trailer_hp_label: Label
+var _trailer_hp_bar: ProgressBar
 var _center: Label
 var _help: Label
 var _standings: Label
@@ -128,10 +130,17 @@ func _ready() -> void:
 	_hp_bar.add_theme_stylebox_override("background", h_bg)
 	_hp_bar.add_theme_stylebox_override("fill", h_fill)
 	add_child(_hp_bar)
+	# PV de la remorque attelee, sous ceux de la tete (deux reserves distinctes)
+	_trailer_hp_label = _label(14, Vector2(24, 160) * k)
+	_trailer_hp_bar = _hp_bar.duplicate() as ProgressBar
+	_trailer_hp_bar.position = Vector2(108, 166) * k
+	add_child(_trailer_hp_bar)
 	if truck != null:
 		_health = TruckHealth.of(truck)
 	_hp_label.visible = _health != null
 	_hp_bar.visible = _health != null
+	_trailer_hp_label.visible = _health != null
+	_trailer_hp_bar.visible = _health != null
 	_help = _label(14, Vector2.ZERO)
 	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_help.offset_left = 24 * k
@@ -205,6 +214,13 @@ func _process(_delta: float) -> void:
 		var tint := Color(0.35, 1.0, 0.45) if ratio > 0.6 else (Color(1.0, 0.8, 0.2) if ratio > 0.3 else Color(1.0, 0.3, 0.2))
 		_hp_label.modulate = tint
 		_hp_bar.modulate = tint
+		var has_trailer := not truck.is_trailer_detached()
+		var t_ratio := _health.trailer_hp / maxf(_health.trailer_max_hp, 1.0) if has_trailer else 0.0
+		_trailer_hp_label.text = "REM %d" % ceili(_health.trailer_hp) if has_trailer else "REM --"
+		_trailer_hp_bar.value = t_ratio
+		var t_tint := Color(0.4, 0.8, 1.0) if t_ratio > 0.6 else (Color(1.0, 0.8, 0.2) if t_ratio > 0.3 else Color(1.0, 0.3, 0.2))
+		_trailer_hp_label.modulate = t_tint
+		_trailer_hp_bar.modulate = t_tint
 	var text := _center_text
 	var color := _center_color
 	# epave : prioritaire sur le GO et le compte a rebours de la scene

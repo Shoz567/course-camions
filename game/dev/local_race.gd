@@ -411,6 +411,9 @@ func _physics_process(_delta: float) -> void:
 				MenuSound.play_confirm()
 			_square_was[i] = f.boost
 		if all_ready():
+			# carrosseries deformables preparees maintenant, pas au premier choc
+			for p in players:
+				BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
 			state = State.COUNTDOWN
 			_state_tick = tick
 			_last_countdown_sec = -1

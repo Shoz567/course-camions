@@ -2,24 +2,49 @@ class_name TruckHealth
 extends Node
 
 ## Points de vie du camion (enfant « Health » du camion, comme le cargo).
+## DEUX reserves distinctes (2026-10-06 : « il faut bien distinguer les degats
+## faits a la tete du camion et a la remorque ») :
 ##
-##   - 100 PV ; le gameplay inflige les degats par damage(montant, source).
-##   - Murs : le camion signale chaque impact contre une glissiere
-##     (Truck.wall_impact, vitesse normale a l'impact). REGLE BOUCLIER : seul
-##     le tracteur (cabine, chassis) encaisse ; un choc de la remorque contre
-##     un mur ne coute rien. Degats de wall_damage_min (frottement leger) a
-##     wall_damage_max (choc frontal violent), selon la vitesse normale.
-##   - Barils explosifs : BARREL_DAMAGE, inflige par PadEffects.
-##   - A 0 PV : explosion, epave immobilisee wreck_ticks (3 s), puis
-##     reapparition sur la piste (respawn_provider, RaceLaps.respawn_transform
-##     en course) avec tous ses PV.
+##   - la TETE (tracteur : cabine, chassis) : max_hp (100). A 0 : explosion ;
+##     la carcasse RESTE sur la route (TruckWreck, obstacle), la remorque
+##     encore attelee aussi (DetachedTrailer, avec ses PV restants), et le
+##     joueur reapparait apres wreck_ticks (3 s) sur un camion neuf, a cote de
+##     ce qui encombre la route (respawn_provider, RaceLaps.respawn_transform
+##     en course) ;
+##   - la REMORQUE attelee : trailer_max_hp, ceux de la remorque choisie
+##     (TrailerType.dropped_hp : les memes PV attelee ou larguee). Ce qu'elle
+##     encaisse ne touche JAMAIS la tete. A 0 : elle explose et disparait, et
+##     c'est l'explosion qui blesse la tete (TRAILER_EXPLOSION_DAMAGE) ; le
+##     tracteur roule seul jusqu'a sa nouvelle remorque (TruckCargo).
+##
+## Ce qui fait des degats, a la partie touchee (tete ou remorque) :
+##   - murs : de wall_damage_min (frottement) a wall_damage_max (choc frontal
+##     violent), selon la vitesse normale (Truck.wall_impact) ;
+##   - obstacles de la route (remorque larguee, carcasse : Truck.hazard_impact)
+##     selon l'energie du choc : jusqu'a hazard_damage_max de plein fouet a
+##     hazard_full_speed_ms. Jamais sa propre remorque larguee (le
+##     proprietaire n'est pas penalise, DetachedTrailer) ;
+##   - barils explosifs : BARREL_DAMAGE a la tete, inflige par PadEffects.
+## Les chocs entre camions ne coutent rien.
 ## Durees en ticks physiques (CLAUDE.md §7).
 
 signal damaged(amount: float, source: StringName)
 signal destroyed
 signal respawned
+## La remorque attelee a perdu `amount` PV (il lui en reste trailer_hp).
+signal trailer_damaged(amount: float, source: StringName)
+## Elle vient d'exploser, centree en `at` (monde).
+signal trailer_destroyed(at: Vector3)
+## Carcasse et remorque laissees sur la route a la destruction.
+signal wreck_left(wreck: TruckWreck, trailer: DetachedTrailer)
 
 const BARREL_DAMAGE := 15.0
+## Explosion de la remorque attelee : degats a la tete.
+const TRAILER_EXPLOSION_DAMAGE := 20.0
+## PV de remorque sans TrailerType.
+const DEFAULT_TRAILER_HP := 50.0
+## Decalages lateraux essayes pour reapparaitre a cote d'un obstacle (m).
+const RESPAWN_OFFSETS: PackedFloat32Array = [0.0, 7.0, -7.0, 14.0, -14.0, 21.0, -21.0]
 
 @export var max_hp: float = 100.0
 @export var wall_damage_min: float = 1.0
@@ -28,16 +53,29 @@ const BARREL_DAMAGE := 15.0
 ## violent (wall_damage_max). Vitesse normale au mur, m/s.
 @export var wall_speed_light_ms: float = 2.0
 @export var wall_speed_hard_ms: float = 18.0
+## Obstacle percute : degats = max x (v / v_pleine)^2, plafonnes au max ; rien
+## sous hazard_min_speed_ms (pousser, frotter). De plein fouet a 100 km/h :
+## ~28 PV ; a 60 km/h : ~10.
+@export var hazard_damage_max: float = 40.0
+@export var hazard_full_speed_ms: float = 33.0
+@export var hazard_min_speed_ms: float = 4.0
 @export var wreck_ticks: int = 180
 
 var hp: float = 100.0
+var trailer_hp: float = DEFAULT_TRAILER_HP
+var trailer_max_hp: float = DEFAULT_TRAILER_HP
 ## Transformation de reapparition (Truck -> Transform3D). Par defaut : sur
 ## place, a plat, 1 m au-dessus.
 var respawn_provider: Callable
+## Derniere carcasse laissee sur la route (tests).
+var last_wreck: TruckWreck
 
 var _truck: Truck
 var _dead_pending: bool = false
+var _trailer_pending: bool = false
 var _wreck_left: int = 0
+var _trailer_type: TrailerType
+var _respawn_query: PhysicsShapeQueryParameters3D
 
 
 ## Le noeud de PV d'un camion (null s'il n'en a pas).
@@ -52,21 +90,51 @@ func wall_damage_for(normal_speed_ms: float) -> float:
 	return roundf(lerpf(wall_damage_min, wall_damage_max, u))
 
 
+## Degats d'un obstacle percute a cette vitesse d'approche (m/s), entier.
+func hazard_damage_for(approach_ms: float) -> float:
+	if approach_ms < hazard_min_speed_ms:
+		return 0.0
+	return roundf(hazard_damage_max * minf(pow(approach_ms / hazard_full_speed_ms, 2.0), 1.0))
+
+
 func _ready() -> void:
 	hp = max_hp
 	_truck = get_parent() as Truck
 	if _truck != null:
 		_truck.wall_impact.connect(_on_wall_impact)
+		_truck.hazard_impact.connect(_on_hazard_impact)
+		_truck.trailer_reattached.connect(_on_trailer_reattached)
+		_sync_trailer_type()
+	var shape := BoxShape3D.new()
+	# camion entier, remorque dans l'axe, au-dessus de la chaussee
+	shape.size = Vector3(4.0, 3.6, 22.0)
+	_respawn_query = PhysicsShapeQueryParameters3D.new()
+	_respawn_query.shape = shape
+	_respawn_query.collision_mask = Truck.TRAILER_BLOCK_MASK
 
 
 func _on_wall_impact(normal_speed_ms: float, on_trailer: bool) -> void:
 	if on_trailer:
-		return   # la remorque sert de bouclier
-	damage(wall_damage_for(normal_speed_ms), &"mur")
+		damage_trailer(wall_damage_for(normal_speed_ms), &"mur")
+	else:
+		damage(wall_damage_for(normal_speed_ms), &"mur")
 
 
-## Retire `amount` PV (sans effet sur une epave). A 0 : destruction au
-## prochain tick physique (le camion n'est jamais modifie pendant un pas).
+func _on_hazard_impact(obstacle: Node3D, approach_ms: float, on_trailer: bool, _point: Vector3,
+		_normal: Vector3) -> void:
+	# sa propre remorque larguee : le proprietaire n'est pas penalise
+	var trailer := obstacle as DetachedTrailer
+	if trailer != null and trailer.dropped_by == _truck:
+		return
+	var amount := hazard_damage_for(approach_ms)
+	if on_trailer:
+		damage_trailer(amount, &"obstacle")
+	else:
+		damage(amount, &"obstacle")
+
+
+## Retire `amount` PV a la tete (sans effet sur une epave). A 0 : destruction
+## au prochain tick physique (le camion n'est jamais modifie pendant un pas).
 func damage(amount: float, source: StringName = &"") -> void:
 	if amount <= 0.0 or is_wrecked() or _dead_pending:
 		return
@@ -74,6 +142,19 @@ func damage(amount: float, source: StringName = &"") -> void:
 	damaged.emit(amount, source)
 	if hp <= 0.0:
 		_dead_pending = true
+
+
+## Retire `amount` PV a la remorque attelee, jamais a la tete. A 0 : elle
+## explose au prochain tick physique.
+func damage_trailer(amount: float, source: StringName = &"") -> void:
+	if amount <= 0.0 or is_wrecked() or _dead_pending or _trailer_pending:
+		return
+	if _truck == null or _truck.is_trailer_detached():
+		return
+	trailer_hp = maxf(0.0, trailer_hp - amount)
+	trailer_damaged.emit(amount, source)
+	if trailer_hp <= 0.0:
+		_trailer_pending = true
 
 
 func is_wrecked() -> bool:
@@ -88,17 +169,88 @@ func wreck_seconds_left() -> int:
 func _physics_process(_delta: float) -> void:
 	if _truck == null:
 		return
+	_sync_trailer_type()
 	if _dead_pending:
 		_dead_pending = false
-		_wreck_left = wreck_ticks
-		_truck.set_wrecked(true)
-		ExplosionFx.spawn(_truck.get_parent(), _truck.global_transform * TruckSpec.CENTER_OF_MASS, 8.0)
-		destroyed.emit()
+		_trailer_pending = false
+		_destroy()
 		return
+	if _trailer_pending:
+		_trailer_pending = false
+		_explode_trailer()
 	if _wreck_left > 0:
 		_wreck_left -= 1
 		if _wreck_left == 0:
 			_respawn()
+
+
+## Remorque choisie (sas READY) : ses PV, remorque neuve.
+func _sync_trailer_type() -> void:
+	if _truck.trailer_type == _trailer_type and trailer_max_hp > 0.0:
+		return
+	_trailer_type = _truck.trailer_type
+	trailer_max_hp = _trailer_type.dropped_hp if _trailer_type != null else DEFAULT_TRAILER_HP
+	trailer_hp = trailer_max_hp
+
+
+func _on_trailer_reattached() -> void:
+	trailer_hp = trailer_max_hp
+
+
+## Centre monde de la caisse de remorque attelee.
+func trailer_center() -> Vector3:
+	return _truck.global_transform * Truck.trailer_local_transform(_truck.get_trailer_angle(),
+		_truck.trailer_box_center).origin
+
+
+func _explode_trailer() -> void:
+	if _truck.is_trailer_detached():
+		return
+	var at := trailer_center()
+	# la remorque disparait (ses debris sont l'affaire de TruckDamageFx)
+	trailer_destroyed.emit(at)
+	var cargo := _truck.get_node_or_null(^"Cargo") as TruckCargo
+	if cargo != null:
+		cargo.lose_trailer()
+	else:
+		_truck.detach_trailer()
+	trailer_hp = 0.0
+	ExplosionFx.spawn(_truck.get_parent(), at, 9.0)
+	damage(TRAILER_EXPLOSION_DAMAGE, &"remorque")
+
+
+## 0 PV : explosion ; la carcasse et la remorque attelee restent sur la route,
+## le camion (cache, sans collision) attend sa reapparition.
+func _destroy() -> void:
+	_wreck_left = wreck_ticks
+	# d'abord les effets (pieces arrachees, suie) : la carcasse les reprend
+	destroyed.emit()
+	var world := _truck.get_parent()
+	var visual := _truck.get_node_or_null(^"Visual") as TruckVisual
+	var wreck := TruckWreck.new()
+	if visual != null:
+		wreck.set_visual(visual.make_wreck_copy())
+	wreck.transform = _truck.global_transform
+	world.add_child(wreck)
+	wreck.linear_velocity = _truck.linear_velocity * 0.6
+	var left_trailer: DetachedTrailer = null
+	if not _truck.is_trailer_detached():
+		left_trailer = DetachedTrailer.new()
+		left_trailer.configure(_truck.trailer_type)
+		left_trailer.initial_hp = trailer_hp
+		if visual != null:
+			left_trailer.set_visual(visual.make_trailer_copy())
+		left_trailer.transform = _truck.detach_trailer()
+		world.add_child(left_trailer)
+		left_trailer.linear_velocity = _truck.linear_velocity * 0.6
+		# carcasse et remorque se chevauchent a l'attelage : jamais repoussees
+		left_trailer.add_collision_exception_with(wreck)
+	last_wreck = wreck
+	_truck.set_wrecked(true)
+	if visual != null:
+		visual.visible = false
+	ExplosionFx.spawn(world, _truck.global_transform * TruckSpec.CENTER_OF_MASS, 8.0)
+	wreck_left.emit(wreck, left_trailer)
 
 
 func _respawn() -> void:
@@ -108,7 +260,33 @@ func _respawn() -> void:
 	else:
 		var f := -_truck.global_basis.z
 		xf = Transform3D(Basis(Vector3.UP, atan2(-f.x, -f.z)), _truck.global_position + Vector3.UP)
+	xf = _free_spot(xf)
 	_truck.set_wrecked(false)
 	_truck.reset_to(xf)
+	# camion neuf : remorque neuve attelee
+	_truck.reattach_trailer(true)
+	var visual := _truck.get_node_or_null(^"Visual") as Node3D
+	if visual != null:
+		visual.visible = true
 	hp = max_hp
+	trailer_hp = trailer_max_hp
 	respawned.emit()
+
+
+## `xf`, ou la place libre la plus proche sur sa transversale : jamais dans la
+## carcasse ni dans une remorque laissee sur la route.
+func _free_spot(xf: Transform3D) -> Transform3D:
+	var space := _truck.get_world_3d().direct_space_state
+	for dx in RESPAWN_OFFSETS:
+		var cand := xf.translated(xf.basis.x.normalized() * dx)
+		# boite au-dessus de la chaussee, de l'avant du tracteur au bout de la
+		# remorque
+		_respawn_query.transform = cand * Transform3D(Basis.IDENTITY, Vector3(0.0, 2.4, 6.5))
+		var blocked := false
+		for h: Dictionary in space.intersect_shape(_respawn_query, 4):
+			if h["collider"] != _truck:
+				blocked = true
+				break
+		if not blocked:
+			return cand
+	return xf
