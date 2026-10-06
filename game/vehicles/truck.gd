@@ -765,7 +765,9 @@ func _physics_process(_delta: float) -> void:
 		var fs := 0.0
 		if debug_suspension:
 			var v_up := _point_velocity(anchor, com).dot(up)
-			fs = maxf(_k * (_free_length[i] - p.hub_distance) - damp * v_up, 0.0)
+			var bump := maxf(t.bump_stop_start_m - p.hub_distance, 0.0)
+			fs = maxf(_k * (_free_length[i] - p.hub_distance + bump * t.bump_stop_stiffness_ratio)
+				- damp * v_up, 0.0)
 			apply_force(n * fs, anchor - origin)
 		p.load_n = fs
 
@@ -825,6 +827,8 @@ func _physics_process(_delta: float) -> void:
 		if debug_anti_roll:
 			_apply_anti_roll(up, fwd)
 	else:
+		# gravite de vol : le complement au-dela de la gravite du projet
+		apply_central_force(Vector3.DOWN * _gravity * (t.air_gravity_factor - 1.0) * mass)
 		_update_landing_estimate()
 		if debug_air_control:
 			_apply_air_control(up, steer_in)
@@ -1210,7 +1214,7 @@ func _update_landing_estimate() -> void:
 	# surestimait le temps restant : l'alignement sur le sol demarrait trop tard,
 	# et un camion secoue en vol touchait le sol a 26 deg, chassis compris.
 	var v_down := -linear_velocity.y
-	var g := _gravity
+	var g := _gravity * tuning.air_gravity_factor
 	# racine positive de g t^2 / 2 + v_down t - d = 0
 	_ticks_to_impact = (-v_down + sqrt(v_down * v_down + 2.0 * g * _ground_d)) / g \
 		* Engine.physics_ticks_per_second

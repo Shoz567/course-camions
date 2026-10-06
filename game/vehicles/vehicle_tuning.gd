@@ -19,6 +19,13 @@ extends Resource
 @export_range(0.0, 5.0, 0.01, "suffix:Hz") var suspension_frequency_hz: float = 0.0
 ## Taux d'amortissement (1 = critique). Spike V1 : 0,45.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float = 0.0
+## Butee de fin de course (caoutchouc) : sous cette distance ancrage -> moyeu,
+## le ressort se raidit. Au repos (0,54 m) et en roulant, elle ne touche rien ;
+## elle arrete une chute lourde avant que le chassis ne touche (gravite de vol,
+## 2026-10-06).
+@export_range(0.0, 0.7, 0.01, "suffix:m") var bump_stop_start_m: float = 0.0
+## Raideur ajoutee dans la butee, en multiple de la raideur du ressort.
+@export_range(0.0, 50.0, 0.1) var bump_stop_stiffness_ratio: float = 0.0
 
 @export_group("Inertie")
 ## Moments d'inertie imposes (kg.m2), axes locaux. Sans eux, Godot les deduit
@@ -256,6 +263,12 @@ extends Resource
 @export_range(0.0, 720.0, 0.1, "suffix:°/s") var air_yaw_rate_deg_s: float = 0.0
 ## En l'air : acceleration angulaire max pour atteindre ce lacet.
 @export_range(0.0, 50.0, 0.01, "suffix:rad/s²") var air_control_accel: float = 0.0
+## Gravite en vol, en multiple de la gravite du projet (2026-10-06, « il faut
+## augmenter la gravite pour qu'elle soit plus realiste »). Au sol, rien ne
+## change (charge des roues, adherence, freinage : METRICS.md) ; en l'air, le
+## camion retombe plus vite : un saut de meme hauteur dure moins longtemps, la
+## trajectoire n'a plus l'air de flotter. 1 = gravite du projet seule.
+@export_range(1.0, 4.0, 0.01) var air_gravity_factor: float = 0.0
 
 
 ## Liste des erreurs de reglage ; vide = valide.

@@ -18,7 +18,7 @@ extends Node
 @export var track: TrackBlockout
 @export var boost_extra_kmh: float = 40.0
 @export var boost_ticks: int = 90            # 1,5 s
-@export var jump_up_speed_ms: float = 8.0
+@export var jump_up_speed_ms: float = 9.5
 @export var cooldown_ticks: int = 60
 @export var puddle_slip_ticks: int = 60
 @export var puddle_speed_factor: float = 1.0
