@@ -146,21 +146,54 @@ def add_socket(name, loc, parent):
     return e
 
 
+# Palette canonique (2026-10-06, « les textures ont quelques incoherences ») :
+# un meme nom de materiau avait des reglages differents d'un fichier a l'autre
+# (jaune de la grue != jaune des chariots, deux Danger_Jaune...). Chaque nom
+# ci-dessous a les MEMES reglages partout, pieces generees comme caisses de
+# l'equipe ; ils suivent la tete (Camion_*.glb) : peintures de cabine
+# semi-brillantes (metal 0,35 / rugosite 0,25), peintures de caisse satinees
+# (0 / 0,35). nom -> (couleur, metal, rugosite, emission)
+CANON = {
+    "Danger_Jaune": ((1.0, 0.62, 0.0), 0.0, 0.35, 0.0),
+    "Danger_Noir": ((0.02, 0.02, 0.02), 0.0, 0.4, 0.0),
+    "Caoutchouc": ((0.01, 0.01, 0.01), 0.0, 0.95, 0.0),
+    "Texte_Blanc": ((0.9, 0.9, 0.9), 0.0, 0.4, 0.0),
+    "Peinture_Cabine_Jaune": ((1.0, 0.55, 0.0), 0.35, 0.25, 0.0),
+    "Peinture_Cabine_Pompier": ((0.75, 0.03, 0.03), 0.35, 0.25, 0.0),
+    "Peinture_Caisse_Orange": ((0.95, 0.42, 0.04), 0.0, 0.35, 0.0),
+    # inox : 100 % metallique, la cuve ne refletait que le ciel et virait au
+    # noir la nuit (Cyber City) ; un inox brosse garde sa teinte claire
+    "Citerne_Inox": ((0.8, 0.81, 0.83), 0.6, 0.3, 0.0),
+}
+
+
 def material(name, color, metallic=0.0, roughness=0.6, emission=0.0):
-    """Materiau du fichier s'il existe (couleurs de l'equipe), sinon cree."""
+    """Materiau `name` : reglages de CANON s'il y figure (partout les memes),
+    sinon celui du fichier s'il existe (couleurs de l'equipe), sinon cree."""
+    canon = CANON.get(name)
+    if canon is not None:
+        color, metallic, roughness, emission = canon
     mat = bpy.data.materials.get(name)
+    if mat is not None and canon is None:
+        return mat
     if mat is None:
         mat = bpy.data.materials.new(name)
         mat.use_nodes = True
-        bsdf = mat.node_tree.nodes.get("Principled BSDF")
-        bsdf.inputs["Base Color"].default_value = (*color, 1.0)
-        bsdf.inputs["Metallic"].default_value = metallic
-        bsdf.inputs["Roughness"].default_value = roughness
-        if emission > 0.0:
-            bsdf.inputs["Emission Color"].default_value = (*color, 1.0)
-            bsdf.inputs["Emission Strength"].default_value = emission
-        mat.diffuse_color = (*color, 1.0)
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Base Color"].default_value = (*color, 1.0)
+    bsdf.inputs["Metallic"].default_value = metallic
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Emission Color"].default_value = (*color, 1.0)
+    bsdf.inputs["Emission Strength"].default_value = emission
+    mat.diffuse_color = (*color, 1.0)
     return mat
+
+
+def apply_canon():
+    """Aligne sur CANON les materiaux deja presents (caisses de l'equipe)."""
+    for name in CANON:
+        if bpy.data.materials.get(name) is not None:
+            material(name, (0.0, 0.0, 0.0))
 
 
 def M():
@@ -1108,6 +1141,7 @@ def build_trailer(vehicle):
         trailer.location = KINGPIN
         bpy.context.view_layer.update()
 
+    apply_canon()
     m = M()
     AXLES.clear()
     parts = []

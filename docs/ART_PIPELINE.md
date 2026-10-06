@@ -216,6 +216,13 @@ beaucoup moins élevées que la tête ») :
   catadioptres triangulaires, pare-cycliste zébré, têtes d'accouplement et
   flexibles d'air spiralés rouge et bleu, roue de secours, coffre à outils,
   dévidoirs du pompier, damier des véhicules de secours ;
+- **palette canonique** (`CANON` dans le script) : un même nom de matériau a
+  les mêmes réglages dans toutes les remorques, pièces générées comme caisses
+  de l'équipe (avant : deux `Danger_Jaune`, un jaune de grue différent de celui
+  des chariots…). Peintures de cabine semi-brillantes (métal 0,35, rugosité
+  0,25), de caisse satinées (0 / 0,35), comme la tête. L'inox de la citerne
+  n'est plus 100 % métallique : de nuit (Cyber City), il ne reflétait que le
+  ciel et virait au noir ;
 - 18 000 à 39 000 triangles par remorque (la tête : 25 600), sauf porte-engins
   (77 000) et porte-voitures (113 000) à cause de leur chargement.
 
