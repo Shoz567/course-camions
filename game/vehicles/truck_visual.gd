@@ -21,6 +21,10 @@ extends Node3D
 ## - Remorque articulee : le noeud `Remorque` du modele (ou la boite de
 ##   blockout) est accroche a un pivot pose sur la sellette (TruckSpec.KINGPIN)
 ##   et tourne avec l'angle de remorque du camion, comme sa boite de collision.
+## - Remorque vivante (2026-10-06) : la remorque affichee suit le sol sous ses
+##   essieux (tangage autour de la sellette, roulis), chaque essieu a sa
+##   suspension, les roues (remorque et tete) tournent. Purement visuel : la
+##   caisse de collision reste articulee en lacet seulement (truck_trailer_ground_test).
 ## - Passages de roue (2026-10-06) : garde-boue releves, marchepieds recules,
 ##   roues reduites de 8 % ; butee visuelle mesuree sur la geometrie, penche
 ##   compris, et braquage visuel borne : les roues ne traversent plus la
@@ -62,6 +66,8 @@ const MODEL_ROOT := &"ExternalModel"
 const TRAILER_PIVOT := &"TrailerPivot"
 ## Modele de la remorque choisie, sous TRAILER_PIVOT (set_trailer_type).
 const TRAILER_SKIN := &"TrailerSkin"
+## Essieux des remorques du catalogue (tools/blender/catalogue_tete_commune.py).
+const AXLE_PREFIX := "Gen_Essieu_"
 
 ## Chemin absolu -> PackedScene du modele ajuste (null si absent ou illisible).
 ## Une ressource, pas un noeud orphelin : rien ne fuit a la sortie.
@@ -89,6 +95,46 @@ var _arch_hw: PackedFloat32Array = []
 var _steer_limit_deg: float = 90.0
 ## Penche courant de la carrosserie (autour du centre de masse).
 var _lean_xf: Transform3D = Transform3D.IDENTITY
+## Roues de la tete qui tournent : groupe de maillages sous chaque pivot, sa
+## pose au repos, son rayon (m) et son angle courant.
+var _wheel_groups: Array[Node3D] = []
+var _wheel_group_rest: Array[Transform3D] = []
+var _wheel_radius: PackedFloat32Array = []
+var _wheel_spin: PackedFloat32Array = []
+
+@export_group("Remorque vivante")
+## La remorque affichee suit le sol sous ses essieux (tangage autour de la
+## sellette, roulis) : ses roues ne passent plus dans le sol sur les bosses et
+## dans les creux. PUREMENT VISUEL (2026-10-06) : la caisse de collision reste
+## articulee en lacet seulement (VEHICLE_SPEC §5 bis).
+@export var trailer_follows_ground: bool = true
+## Ressort qui amene la remorque vers le sol (Hz, amortissement).
+@export_range(0.5, 10.0, 0.1, "suffix:Hz") var trailer_ground_frequency_hz: float = 4.0
+@export_range(0.0, 2.0, 0.01) var trailer_ground_damping_ratio: float = 0.8
+## Bornes du tangage et du roulis pris au sol.
+@export_range(0.0, 30.0, 0.5, "suffix:°") var trailer_max_pitch_deg: float = 14.0
+@export_range(0.0, 20.0, 0.5, "suffix:°") var trailer_max_ground_roll_deg: float = 7.0
+## Debattement visuel de chaque essieu de remorque (vers le haut / le bas).
+@export_range(0.0, 0.5, 0.01, "suffix:m") var trailer_axle_bump_m: float = 0.25
+@export_range(0.0, 0.5, 0.01, "suffix:m") var trailer_axle_droop_m: float = 0.12
+
+## Essieux de la remorque (modele du catalogue : Gen_Essieu_*) : noeud, pose au
+## repos, rayon, debattement et angle courants ; centre du train et demi-voie
+## (repere du pivot de sellette).
+var _axles: Array[Node3D] = []
+var _axle_rest: Array[Transform3D] = []
+var _axle_radius: PackedFloat32Array = []
+var _axle_offset: PackedFloat32Array = []
+var _axle_spin: PackedFloat32Array = []
+var _bogie_z: float = 0.0
+var _bogie_half_track: float = 1.0
+## Tangage et roulis pris au sol (rad) et leurs vitesses (ressort visuel).
+var _trailer_pitch: float = 0.0
+var _trailer_pitch_rate: float = 0.0
+var _trailer_ground_roll: float = 0.0
+var _trailer_ground_roll_rate: float = 0.0
+## Rayon reutilise pour sonder le sol (couche world), sans allocation.
+var _ground_ray: RayCast3D
 
 @export_group("Penche visuel de la carrosserie")
 ## La CARROSSERIE (noeud Body) penche selon l'acceleration du camion : roulis
@@ -130,6 +176,14 @@ func get_lean_deg() -> Vector2:
 
 func _ready() -> void:
 	_truck = get_parent() as Truck
+	_ground_ray = RayCast3D.new()
+	_ground_ray.name = "GroundProbe"
+	_ground_ray.top_level = true
+	_ground_ray.enabled = false
+	_ground_ray.collision_mask = 1 << (TruckSpec.LAYER_WORLD - 1)
+	add_child(_ground_ray)
+	if _truck != null:
+		_ground_ray.add_exception(_truck)
 	if external_model != "" and (DisplayServer.get_name() != "headless" or load_external_in_headless):
 		_attach_external()
 	if not model_loaded:
@@ -171,9 +225,10 @@ func _physics_process(delta: float) -> void:
 	if _truck == null:
 		return
 	_update_lean(delta)
+	# chemin parcouru ce tick le long de l'axe du camion : rotation des roues
+	var roll_dist := _truck.linear_velocity.dot(-_truck.global_basis.z) * delta
 	if _trailer_pivot != null:
-		_trailer_pivot.basis = Basis(Vector3.UP, _truck.get_trailer_angle()) \
-			* Basis(Vector3.BACK, deg_to_rad(_lean.y * lean_trailer_roll_ratio))
+		_update_trailer_pose(delta, roll_dist)
 		# remorque larguee : elle est sur la route, plus derriere le tracteur
 		_trailer_pivot.visible = not _truck.is_trailer_detached()
 	if _pivots.is_empty():
@@ -204,6 +259,12 @@ func _physics_process(delta: float) -> void:
 		if _steers[i]:
 			xf.basis = steer * xf.basis
 		p.transform = xf
+		# roues qui tournent : autour de l'axe du moyeu (le pivot porte le
+		# demi-tour du modele : +X local = -X du camion, d'ou le signe)
+		if i < _wheel_groups.size() and _wheel_groups[i] != null:
+			_wheel_spin[i] = fposmod(_wheel_spin[i] + roll_dist / _wheel_radius[i], TAU)
+			_wheel_groups[i].transform = Transform3D(Basis(Vector3.RIGHT, _wheel_spin[i]), Vector3.ZERO) \
+				* _wheel_group_rest[i]
 
 
 ## Penche de la carrosserie : cible deduite de l'acceleration du camion (au sol
@@ -274,6 +335,7 @@ func set_trailer_type(type: TrailerType) -> void:
 			for n in skin.find_children("*", "MeshInstance3D", true, false):
 				(n as MeshInstance3D).layers |= DamageFx.LAYER_BIT
 			_trailer_pivot.add_child(skin)
+	_collect_axles(skin)
 	# remorque d'origine (modele du camion ou boite) : cachee sous un habillage
 	for c in _trailer_pivot.get_children():
 		if c != skin and c is Node3D and String(c.name) != TRAILER_SKIN:
@@ -285,6 +347,114 @@ func set_trailer_type(type: TrailerType) -> void:
 			var center := type.box_center if type != null else TruckSpec.TRAILER_CENTER
 			mesh.transform = Transform3D(Basis.from_scale(size / TruckSpec.TRAILER_SIZE),
 				center - TruckSpec.KINGPIN)
+
+
+## Essieux de l'habillage (Gen_Essieu_*, origine au centre de l'essieu) : ce
+## sont eux qui suivent le sol et tournent. Sans habillage : aucun, et la
+## remorque garde la pose rigide d'avant (boites, remorque d'origine).
+func _collect_axles(skin: Node3D) -> void:
+	_axles.clear()
+	_axle_rest.clear()
+	_axle_radius.clear()
+	_axle_offset.clear()
+	_axle_spin.clear()
+	_trailer_pitch = 0.0
+	_trailer_pitch_rate = 0.0
+	_trailer_ground_roll = 0.0
+	_trailer_ground_roll_rate = 0.0
+	if skin == null:
+		return
+	var z_sum := 0.0
+	var half := 0.0
+	for n in skin.find_children(AXLE_PREFIX + "*", "Node3D", true, false):
+		var a := n as Node3D
+		var box := _subtree_aabb(a, Transform3D.IDENTITY)
+		_axles.append(a)
+		_axle_rest.append(a.transform)
+		_axle_radius.append(maxf(box.size.y / 2.0, 0.1))
+		_axle_offset.append(0.0)
+		_axle_spin.append(0.0)
+		z_sum += (skin.transform * a.position).z
+		half = maxf(half, box.size.x / 2.0)
+	if not _axles.is_empty():
+		_bogie_z = z_sum / _axles.size()
+		# sonde sous les pneus exterieurs, pas sous l'essieu
+		_bogie_half_track = maxf(half - 0.3, 0.5)
+
+
+## Pose de la remorque affichee : lacet de la physique, roulis du penche, et
+## (habillage a essieux) tangage + roulis pris au sol sous le train de roues,
+## suspension de chaque essieu, roues qui tournent. Aucune allocation.
+func _update_trailer_pose(delta: float, roll_dist: float) -> void:
+	var yaw := Basis(Vector3.UP, _truck.get_trailer_angle())
+	var lean_roll := deg_to_rad(_lean.y * lean_trailer_roll_ratio)
+	if _axles.is_empty() or not trailer_follows_ground or delta <= 0.0:
+		_trailer_pivot.basis = yaw * Basis(Vector3.BACK, lean_roll)
+		return
+	# pose du camion APRES le pas physique qui suit (ce code passe avant lui) :
+	# sans cette prediction, la remorque a un tick de retard sur l'assiette du
+	# tracteur, soit jusqu'a 7 cm a 13 m de la sellette quand il tangue
+	var txf := _predicted_truck_xf(delta)
+	var kp := TruckSpec.KINGPIN
+	var target_pitch := 0.0
+	var target_roll := 0.0
+	var grounded := false
+	if not _truck.is_trailer_detached():
+		# bas des pneus du train (exterieurs gauche et droit), remorque a plat
+		var bl := txf * (kp + yaw * Vector3(-_bogie_half_track, -kp.y, _bogie_z))
+		var br := txf * (kp + yaw * Vector3(_bogie_half_track, -kp.y, _bogie_z))
+		var hl := _ground_height(bl)
+		var hr := _ground_height(br)
+		if not is_nan(hl) and not is_nan(hr):
+			grounded = true
+			var el := hl - bl.y   # > 0 : le pneu serait dans le sol
+			var er := hr - br.y
+			# tangage autour de la sellette (> 0 abaisse l'arriere) ; roulis (> 0
+			# leve la droite)
+			target_pitch = -atan2((el + er) * 0.5, _bogie_z)
+			target_roll = atan2(er - el, 2.0 * _bogie_half_track)
+	var max_pitch := deg_to_rad(trailer_max_pitch_deg)
+	var max_roll := deg_to_rad(trailer_max_ground_roll_deg)
+	target_pitch = clampf(target_pitch, -max_pitch, max_pitch)
+	target_roll = clampf(target_roll, -max_roll, max_roll)
+	var w := TAU * trailer_ground_frequency_hz
+	var c := 2.0 * trailer_ground_damping_ratio * w
+	_trailer_pitch_rate += (w * w * (target_pitch - _trailer_pitch) - c * _trailer_pitch_rate) * delta
+	_trailer_pitch += _trailer_pitch_rate * delta
+	_trailer_ground_roll_rate += (w * w * (target_roll - _trailer_ground_roll) - c * _trailer_ground_roll_rate) * delta
+	_trailer_ground_roll += _trailer_ground_roll_rate * delta
+	if grounded and _trailer_pitch > target_pitch:
+		# butee : le ressort peut etre en retard, les roues jamais dans le sol
+		_trailer_pitch = target_pitch
+		_trailer_pitch_rate = minf(_trailer_pitch_rate, 0.0)
+	var b := yaw * Basis(Vector3.RIGHT, _trailer_pitch) * Basis(Vector3.BACK, _trailer_ground_roll + lean_roll)
+	_trailer_pivot.basis = b
+	# suspension de chaque essieu (le sol sous lui) et rotation des roues
+	var skin_xf := _axles[0].get_parent_node_3d().transform
+	for i in _axles.size():
+		var rest := _axle_rest[i]
+		var target := 0.0
+		if grounded:
+			var bottom := txf * (kp + b * (skin_xf * (rest.origin + Vector3(0.0, -_axle_radius[i] + _axle_offset[i], 0.0))))
+			var h := _ground_height(bottom)
+			if not is_nan(h):
+				target = clampf(_axle_offset[i] + h - bottom.y, -trailer_axle_droop_m, trailer_axle_bump_m)
+		# le sol pousse : l'essieu remonte tout de suite ; il redescend en douceur
+		_axle_offset[i] = target if target > _axle_offset[i] else lerpf(_axle_offset[i], target, 0.5)
+		_axle_spin[i] = fposmod(_axle_spin[i] - roll_dist / _axle_radius[i], TAU)
+		_axles[i].transform = Transform3D(rest.basis * Basis(Vector3.RIGHT, _axle_spin[i]),
+			rest.origin + Vector3(0.0, _axle_offset[i], 0.0))
+
+
+## Hauteur du sol (couche world) sous le point monde `p`, NAN si rien a moins
+## de 3 m en dessous (en l'air).
+func _ground_height(p: Vector3) -> float:
+	_ground_ray.global_position = p + Vector3(0.0, 2.5, 0.0)
+	_ground_ray.target_position = Vector3(0.0, -5.5, 0.0)
+	_ground_ray.force_raycast_update()
+	if not _ground_ray.is_colliding():
+		return NAN
+	return _ground_ray.get_collision_point().y
 
 
 ## Habillage de remorque en place (null : remorque d'origine).
@@ -330,6 +500,12 @@ func _attach_external() -> void:
 		_arch_gap.append(arch.x)
 		_arch_point.append(Vector3(arch.y, arch.z, arch.w))
 		_arch_hw.append((p.get_meta(&"tire", Vector2.ZERO) as Vector2).y)
+		# groupe de maillages de la roue (seul enfant du pivot) : il tourne
+		var g: Node3D = p.get_child(0) as Node3D if p.get_child_count() > 0 else null
+		_wheel_groups.append(g)
+		_wheel_group_rest.append(g.transform if g != null else Transform3D.IDENTITY)
+		_wheel_radius.append(maxf((p.get_meta(&"tire", Vector2(0.5, 0.0)) as Vector2).x, 0.1))
+		_wheel_spin.append(0.0)
 	_steer_limit_deg = float(model.get_meta(&"visual_steer_max_deg", 90.0))
 	# les boites de blockout s'effacent, sans disparaitre (tests, repli)
 	for n in [&"Body", TRAILER_PIVOT, &"Wheel_FL", &"Wheel_FR", &"Wheel_RL", &"Wheel_RR"]:
@@ -715,3 +891,14 @@ static func _subtree_aabb(node: Node, xf: Transform3D) -> AABB:
 		for c in n.get_children():
 			stack.append([c, t])
 	return box
+
+
+## Pose du camion apres le prochain pas physique, extrapolee de ses vitesses.
+func _predicted_truck_xf(delta: float) -> Transform3D:
+	var xf := _truck.global_transform
+	var w := _truck.angular_velocity
+	var angle := w.length() * delta
+	if angle > 1e-6:
+		xf.basis = Basis(w / w.length(), angle) * xf.basis
+	xf.origin += _truck.linear_velocity * delta
+	return xf

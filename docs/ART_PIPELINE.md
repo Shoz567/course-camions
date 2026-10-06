@@ -201,6 +201,15 @@ citerne remonté à l'avant en pente douce (une cuve ne se coupe pas).
 `truck_trailer_wheels_test` le vérifie en jeu, les 8 remorques à 35°. Avant :
 165 sommets de la citerne dans une roue du tracteur en drift.
 
+**Remorque vivante** (2026-10-06, « les roues de la remorque passent dans le
+sol, la remorque est trop rigide ») : chaque essieu est un objet à part
+(`Gen_Essieu_N`, origine au centre de l'essieu). En jeu, `TruckVisual` pose la
+remorque affichée sur le sol sous son train de roues (tangage autour de la
+sellette, roulis), donne à chaque essieu sa suspension et fait tourner les
+roues (remorque et tête). Purement visuel : la caisse de collision reste
+articulée en lacet seulement (VEHICLE_SPEC §5 bis). `truck_trailer_ground_test`
+le vérifie sur un relief de 6° : enfoncement max 3,7 cm (1,26 m sans).
+
 Tout ce qui est généré porte le préfixe `Gen_` ; le script est idempotent
 (deux exécutions donnent des fichiers identiques à l'octet). À relancer si la
 tête change :

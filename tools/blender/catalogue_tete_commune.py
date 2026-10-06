@@ -259,17 +259,30 @@ def prism(name, profile, y0, y1, mat):
 # ---------------------------------------------------------------- organes
 
 
+# Essieux de la remorque en cours : objets separes (origine au centre de
+# l'essieu) que TruckVisual anime (suspension par essieu, rotation des roues).
+AXLES = []
+AXLE_PREFIX = GEN + "Essieu_"
+
+
 def axle(parts, y, r, w, dual, rim, m, track=1.25):
-    """Essieu : pneus (simples larges ou jumeles), jantes, moyeux, essieu."""
+    """Essieu : pneus (simples larges ou jumeles), jantes, moyeux, essieu. Un
+    objet a part (AXLES), origine au centre de l'essieu ; `parts` n'est pas
+    utilise (garde pour l'appel uniforme des remorques)."""
+    pieces = []
     for side in (-1.0, 1.0):
         xs = [side * (track - w / 2)]
         if dual:
             xs.append(side * (track - w * 1.5 - 0.04))
         for x in xs:
-            parts.append(cyl("Pneu", (x, y, r), r, w, "X", m["pneu"], 24))
-            parts.append(cyl("Jante", (x + side * 0.005, y, r), r * 0.62, w + 0.01, "X", rim, 16))
-        parts.append(cyl("Moyeu", (side * (track - 0.02), y, r), r * 0.22, 0.08, "X", m["chrome"], 10))
-    parts.append(cyl("Essieu", (0.0, y, r), 0.07, 2 * track - 0.3, "X", m["noir"], 8))
+            pieces.append(cyl("Pneu", (x, y, r), r, w, "X", m["pneu"], 24))
+            pieces.append(cyl("Jante", (x + side * 0.005, y, r), r * 0.62, w + 0.01, "X", rim, 16))
+        pieces.append(cyl("Moyeu", (side * (track - 0.02), y, r), r * 0.22, 0.08, "X", m["chrome"], 10))
+    pieces.append(cyl("Essieu", (0.0, y, r), 0.07, 2 * track - 0.3, "X", m["noir"], 8))
+    o = join(pieces, f"{AXLE_PREFIX}{len(AXLES) + 1}")
+    set_origin(o, Vector((0.0, y, r)))
+    AXLES.append(o)
+    return o
 
 
 def kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3):
@@ -829,6 +842,7 @@ def build_trailer(vehicle):
         bpy.context.view_layer.update()
 
     m = M()
+    AXLES.clear()
     parts = []
     if lift is not None:
         rear_y, top_z, chassis_z, lifts = trailer_porte_engins(parts, m, lift)
@@ -838,10 +852,10 @@ def build_trailer(vehicle):
     team = [o for o in trailer.children_recursive if o.type == "MESH" and not o.name.startswith(GEN)]
     for o in team:
         trim_swing_zone(o)
-    bad = swing_violations(parts + lifts + team)
+    bad = swing_violations(parts + AXLES + lifts + team)
     if bad:
         raise SystemExit(f"{vehicle} : en virage, la remorque traverse les roues du tracteur : {bad}")
-    pieces = [join(parts, GEN + "Remorque")]
+    pieces = [join(parts, GEN + "Remorque")] + list(AXLES)
     for o in pieces + lifts:
         reparent_keep(o, trailer)
     add_socket("Socket_Arriere", Vector((0.0, round(rear_y + 0.15, 2), round(top_z, 2))), trailer)
