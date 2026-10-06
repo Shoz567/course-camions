@@ -21,6 +21,10 @@ extends Node3D
 ## - Remorque articulee : le noeud `Remorque` du modele (ou la boite de
 ##   blockout) est accroche a un pivot pose sur la sellette (TruckSpec.KINGPIN)
 ##   et tourne avec l'angle de remorque du camion, comme sa boite de collision.
+## - Passages de roue (2026-10-06) : garde-boue releves, marchepieds recules,
+##   roues reduites de 8 % ; butee visuelle mesuree sur la geometrie, penche
+##   compris, et braquage visuel borne : les roues ne traversent plus la
+##   carrosserie (truck_wheel_arch_test).
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
 
 ## Chemin du modele, relatif au dossier du projet Godot (game/). Vide = boites.
@@ -76,6 +80,15 @@ var _steers: Array[bool] = []
 ## Mode modele : rayon associe a chaque pivot. Vide en mode boites (pivot i =
 ## rayon i).
 var _probe_of: PackedInt32Array = []
+## Mode modele : jeu sous le passage de chaque roue (m) et haut du pneu au
+## repos (repere du camion) : butee visuelle, penche compris. Vide en boites.
+var _arch_gap: PackedFloat32Array = []
+var _arch_point: PackedVector3Array = []
+var _arch_hw: PackedFloat32Array = []
+## Braquage visuel max : ce que les passages de roue avant laissent passer.
+var _steer_limit_deg: float = 90.0
+## Penche courant de la carrosserie (autour du centre de masse).
+var _lean_xf: Transform3D = Transform3D.IDENTITY
 
 @export_group("Penche visuel de la carrosserie")
 ## La CARROSSERIE (noeud Body) penche selon l'acceleration du camion : roulis
@@ -165,7 +178,8 @@ func _physics_process(delta: float) -> void:
 		_trailer_pivot.visible = not _truck.is_trailer_detached()
 	if _pivots.is_empty():
 		return
-	var steer := Basis(Vector3.UP, -deg_to_rad(_truck.get_steer_deg()))
+	var steer_deg := clampf(_truck.get_steer_deg(), -_steer_limit_deg, _steer_limit_deg)
+	var steer := Basis(Vector3.UP, -deg_to_rad(steer_deg))
 	var rest_hub := TruckSpec.rest_hub_distance()
 	for i in _pivots.size():
 		var p := _pivots[i]
@@ -173,7 +187,17 @@ func _physics_process(delta: float) -> void:
 			continue
 		var probe := _truck.get_probe(_probe_index(i))
 		var xf := _rest[i]
-		xf.origin.y += rest_hub - probe.hub_distance
+		var up := rest_hub - probe.hub_distance
+		if not _arch_gap.is_empty():
+			# butee visuelle : le pneu reste sous son passage de roue, meme quand
+			# la carrosserie penche vers lui (la physique n'est pas touchee)
+			# abaissement de la carrosserie au-dessus des DEUX bords du pneu (le
+			# roulis la fait descendre d'un cote du moyeu, monter de l'autre)
+			var a := _arch_point[i]
+			var edge := Vector3(_arch_hw[i], 0.0, 0.0)
+			var drop := maxf(a.y - edge.y - (_lean_xf * (a - edge)).y, a.y + edge.y - (_lean_xf * (a + edge)).y)
+			up = minf(up, _arch_gap[i] - drop - ARCH_SAFETY)
+		xf.origin.y += up
 		if _steers[i]:
 			xf.basis = steer * xf.basis
 		p.transform = xf
@@ -210,7 +234,8 @@ func _update_lean(delta: float) -> void:
 
 	var lean_basis := Basis(Vector3.RIGHT, deg_to_rad(_lean.x)) * Basis(Vector3.BACK, deg_to_rad(_lean.y))
 	var pivot := TruckSpec.CENTER_OF_MASS
-	_body.transform = Transform3D(lean_basis, pivot - lean_basis * pivot) * _body_rest
+	_lean_xf = Transform3D(lean_basis, pivot - lean_basis * pivot)
+	_body.transform = _lean_xf * _body_rest
 
 
 ## Copie de la remorque (modele ou boite), dans le repere de la sellette : le
@@ -298,6 +323,11 @@ func _attach_external() -> void:
 				best = i
 		_probe_of.append(best)
 		_steers.append(best < 2)
+		var arch: Vector4 = p.get_meta(&"arch", Vector4(INF, 0.0, 0.0, 0.0))
+		_arch_gap.append(arch.x)
+		_arch_point.append(Vector3(arch.y, arch.z, arch.w))
+		_arch_hw.append((p.get_meta(&"tire", Vector2.ZERO) as Vector2).y)
+	_steer_limit_deg = float(model.get_meta(&"visual_steer_max_deg", 90.0))
 	# les boites de blockout s'effacent, sans disparaitre (tests, repli)
 	for n in [&"Body", TRAILER_PIVOT, &"Wheel_FL", &"Wheel_FR", &"Wheel_RL", &"Wheel_RR"]:
 		var mock := get_node_or_null(NodePath(n)) as Node3D
@@ -492,8 +522,20 @@ static func _fit(raw: Node3D, strip: PackedStringArray, exclude: PackedStringArr
 		var name_axle := ("F" if pivot.position.z < 0.0 else "R")
 		pivot.name = "WheelPivot_%s%s_%d" % [name_axle, name_side, gi]
 		g.transform = Transform3D(group_xf[gi].basis, group_xf[gi].origin - hub_m)
+		# rayon et demi-largeur du pneu, dans le repere du camion
+		var gsize := _subtree_aabb(g, Transform3D(group_xf[gi].basis, Vector3.ZERO)).size * s
+		# roues un peu reduites, bas du pneu toujours au sol : du jeu sous les
+		# passages de roue (le modele a des roues plus grandes que la spec)
+		var r := gsize.y / 2.0
+		g.transform = Transform3D(g.transform.basis.scaled(Vector3.ONE * WHEEL_SCALE),
+			g.transform.origin * WHEEL_SCALE)
+		pivot.position.y -= r * (1.0 - WHEEL_SCALE)
 		pivot.add_child(g)
 		root.add_child(pivot)
+		pivot.set_meta(&"tire", Vector2(r * WHEEL_SCALE, gsize.x / 2.0 * WHEEL_SCALE))
+	# 4 bis. passages de roue : pieces deplacees, puis jeu mesure roue par roue
+	_open_wheel_arches(raw, f, trailer_prefix)
+	_measure_arches(raw, f, trailer_prefix, root)
 	# 5. la semi-remorque sous un pivot a la sellette (meme pose au repos)
 	var trailer := _first_with_prefix(raw, trailer_prefix)
 	if trailer != null:
@@ -519,6 +561,97 @@ static func _fit(raw: Node3D, strip: PackedStringArray, exclude: PackedStringArr
 		"wheel_groups": groups.size(),
 	})
 	return root
+
+
+## Passages de roue du modele de l'equipe, trop justes (mesure 2026-10-06 :
+## 10 cm sous les garde-boue et l'embleme, le support de marchepied dans la roue avant au
+## repos) : garde-boue releves, marchepieds recules (repere du camion, m).
+const ARCH_MOVES := {
+	"Garde_Boue": Vector3(0.0, 0.12, 0.0),
+	"Embleme": Vector3(0.0, 0.12, 0.0),
+	"Marchepied": Vector3(0.0, 0.0, 0.2),
+	"Support_Marche": Vector3(0.0, 0.0, 0.2),
+}
+## Roues de la tete reduites de 8 % (bas du pneu au sol) : 13 a 15 cm de jeu
+## gagnes sous les passages de roue, que la cabine (joints de porte) bornait.
+const WHEEL_SCALE := 0.92
+## Jeu garde entre le pneu et la carrosserie a la butee visuelle (m).
+const ARCH_SAFETY := 0.03
+## Braquage visuel max quand aucun angle ne passe (garde-fou).
+const MIN_VISUAL_STEER_DEG := 10.0
+
+
+static func _open_wheel_arches(raw: Node3D, f: Transform3D, trailer_prefix: String) -> void:
+	for n in raw.find_children("*", "Node3D", true, false):
+		var node := n as Node3D
+		if _under_prefix(node, raw, PackedStringArray([trailer_prefix])):
+			continue
+		for prefix: String in ARCH_MOVES:
+			if String(node.name).begins_with(prefix):
+				var parent_xf := f * _transform_to(node.get_parent() as Node3D, raw) \
+					if node.get_parent() != raw else f
+				node.position += parent_xf.basis.inverse() * (ARCH_MOVES[prefix] as Vector3)
+				break
+
+
+## Jeu sous chaque passage de roue (meta `arch` du pivot : jeu au-dessus du
+## pneu, point du haut du pneu) et braquage visuel possible pour les roues
+## avant (meta `visual_steer_max_deg` de la racine). Mesure une fois, sur les
+## sommets de la carrosserie (ni roues, ni remorque), dans le repere du camion.
+static func _measure_arches(raw: Node3D, f: Transform3D, trailer_prefix: String, root: Node3D) -> void:
+	var verts := PackedVector3Array()
+	for n in raw.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or _under_prefix(mi, raw, PackedStringArray([trailer_prefix])):
+			continue
+		var xf := f * _transform_to(mi, raw)
+		for si in mi.mesh.get_surface_count():
+			for v: Vector3 in mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX]:
+				verts.append(xf * v)
+	var steer_max := 90.0
+	for p in root.get_children():
+		var pivot := p as Node3D
+		if pivot == null or not pivot.has_meta(&"tire"):
+			continue
+		var tire: Vector2 = pivot.get_meta(&"tire")
+		var r := tire.x
+		var hw := tire.y
+		var hub := pivot.position
+		# sommets proches : dans la bande du pneu (x), au-dessus du bas du moyeu
+		var near := PackedVector3Array()
+		for v in verts:
+			if absf(v.x - hub.x) <= hw + 0.4 and v.y > hub.y - r * 0.3 and Vector2(v.y - hub.y, v.z - hub.z).length() < r + 0.8:
+				near.append(v - hub)
+		var gap := 1.0
+		for d in near:
+			if absf(d.x) <= hw:
+				gap = minf(gap, Vector2(d.y, d.z).length() - r)
+		gap = maxf(gap, 0.0)
+		pivot.set_meta(&"arch", Vector4(gap, hub.x, hub.y + r, hub.z))
+		if hub.z >= 0.0:
+			continue
+		# roue avant : plus grand angle (1 deg pres) sans sommet de carrosserie
+		# dans le pneu, au repos ; les sommets deja dedans au repos ne comptent pas
+		var inside0 := _inside_tire(near, r, hw, 0.0)
+		var limit := 0.0
+		for deg in range(1, 46):
+			if _inside_tire(near, r, hw, deg_to_rad(float(deg))) > inside0 \
+					or _inside_tire(near, r, hw, -deg_to_rad(float(deg))) > inside0:
+				break
+			limit = float(deg)
+		steer_max = minf(steer_max, maxf(limit, MIN_VISUAL_STEER_DEG))
+	root.set_meta(&"visual_steer_max_deg", steer_max)
+
+
+## Nombre de sommets (repere du moyeu) dans le pneu braque de `angle`.
+static func _inside_tire(near: PackedVector3Array, r: float, hw: float, angle: float) -> int:
+	var b := Basis(Vector3.UP, -angle)
+	var count := 0
+	for d in near:
+		var l := b * d
+		if absf(l.x) <= hw and Vector2(l.y, l.z).length() <= r:
+			count += 1
+	return count
 
 
 ## Vrai si `node` ou l'un de ses ancetres (jusqu'a `root` exclu) porte un nom

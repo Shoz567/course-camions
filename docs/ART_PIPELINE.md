@@ -137,6 +137,27 @@ visibles : cabine plus large (3,5 m) et plus haute (4,4 m) que sa collision, et
 roues visuelles à l'empattement du modèle (≈ 3,0 m) au lieu de 3,8 m.
 `truck_visual_test` vérifie l'ajustement ; il se saute sans le modèle.
 
+**Passages de roue** (2026-10-06, « en drift, à l'atterrissage, en virage, les
+roues traversent ») : le modèle laissait ~10 cm sous ses garde-boue, alors que
+la roue visuelle suit tout le débattement (mesuré : +36 cm à l'atterrissage,
++24 cm en drift) et que la carrosserie penche vers elle (5,5°, ~14 cm). Le
+support de marchepied était même dans la roue avant au repos. `TruckVisual`
+corrige, toujours sans toucher à la physique :
+
+- garde-boue et emblèmes relevés de 12 cm, marchepieds reculés de 20 cm ;
+- roues de la tête réduites de 8 %, bas du pneu au sol (elles restent plus
+  grandes que la spec) : jeu sous les passages porté de 12 / 14 cm à 20 / 36 cm
+  (avant / arrière) ;
+- **butée visuelle** : jeu mesuré roue par roue sur la géométrie au chargement ;
+  à chaque tick, la roue ne monte pas au-delà, penche de la carrosserie compris
+  aux deux bords du pneu ;
+- braquage visuel borné à ce que les passages de roue avant laissent passer
+  (mesuré : 45°, au-delà du braquage max, après le recul des marchepieds).
+
+`truck_wheel_arch_test` le vérifie : chute de 4 m, braquage à fond, drift,
+contre-braquage, freinage ; aucun sommet de carrosserie dans un pneu. Sans ces
+corrections : 247 sommets traversés (cabine, garde-boue, joint de porte, siège).
+
 **À corriger à la source** (blender-modeler / camarades) : avant en −Z, échelle
 appliquée, empattement 3,8 m, voie 2,1 m, roues de 0,55 m, objets `Body` +
 `Wheel_FL/FR/RL/RR` pivotés au moyeu (§4), caisse de remorque de 13,0 × 3,0 m
