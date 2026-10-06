@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"chasse_neige"
+display_name = "SALEUSE"
+tagline = "accroche la route, même glissante"
+model = "../Assets_Visuels/Armes_et_camions/vehicules/chasse_neige.glb"
+box_size = Vector3(3.15, 3.24, 15.32)
+box_center = Vector3(0, 3.78, 8.14)
+top_speed_mult = 0.99
+accel_mult = 0.98
+grip_mult = 1.06
+dropped_hp = 50.0
+dropped_mass_kg = 8000.0
+ability = &""

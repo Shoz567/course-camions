@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"classique"
+display_name = "CLASSIQUE"
+tagline = "la semi-remorque de course, avec aileron"
+model = ""
+box_size = Vector3(3.6, 3.72, 15.6)
+box_center = Vector3(0, 4.02, 8.28)
+top_speed_mult = 1.0
+accel_mult = 1.0
+grip_mult = 1.0
+dropped_hp = 50.0
+dropped_mass_kg = 9000.0
+ability = &""

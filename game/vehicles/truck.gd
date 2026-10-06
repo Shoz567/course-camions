@@ -36,7 +36,7 @@ extends RigidBody3D
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
 ##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit(),
-##   detach_trailer(), reattach_trailer(), set_wrecked()
+##   detach_trailer(), reattach_trailer(), set_wrecked(), set_trailer_type()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -182,6 +182,10 @@ var _slow_decel: float = 0.0
 var _slip_ticks: int = 0
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
+## Remorque choisie (null : celle du modele, caisse de TruckSpec) et sa caisse.
+var trailer_type: TrailerType
+var trailer_box_size: Vector3 = TruckSpec.TRAILER_SIZE
+var trailer_box_center: Vector3 = TruckSpec.TRAILER_CENTER
 
 ## Mur touche au dernier pas physique (lu dans _integrate_forces) : normale
 ## moyenne, horizontale, tournee vers le camion. ZERO = aucun mur.
@@ -465,10 +469,29 @@ func get_trailer_angle_deg() -> float:
 
 
 ## Pose de la caisse de remorque dans le repere du camion, pour un angle donne :
-## rotation en lacet autour de la sellette.
-static func trailer_local_transform(angle: float) -> Transform3D:
+## rotation en lacet autour de la sellette. `center` : centre de la caisse au
+## repos (celui de la remorque choisie, TrailerType.box_center).
+static func trailer_local_transform(angle: float, center: Vector3 = TruckSpec.TRAILER_CENTER) -> Transform3D:
 	var b := Basis(Vector3.UP, angle)
-	return Transform3D(b, TruckSpec.KINGPIN + b * (TruckSpec.TRAILER_CENTER - TruckSpec.KINGPIN))
+	return Transform3D(b, TruckSpec.KINGPIN + b * (center - TruckSpec.KINGPIN))
+
+
+## Remorque choisie (sas READY) : sa caisse de collision remplace celle du
+## camion. A appeler camion a l'arret, remorque accrochee (avant le depart). Le
+## reglage de conduite (TrailerType.apply_to) est l'affaire de la course.
+func set_trailer_type(type: TrailerType) -> void:
+	trailer_type = type
+	trailer_box_size = type.box_size if type != null else TruckSpec.TRAILER_SIZE
+	trailer_box_center = type.box_center if type != null else TruckSpec.TRAILER_CENTER
+	if _trailer_shape == null:
+		return
+	# la forme vient de truck.tscn, partagee par tous les camions : copie propre
+	var box := (_trailer_shape.shape as BoxShape3D).duplicate() as BoxShape3D
+	box.size = trailer_box_size
+	_trailer_shape.shape = box
+	_trailer_query.shape = box
+	_trailer_applied = _trailer_angle
+	_trailer_shape.transform = trailer_local_transform(_trailer_angle, trailer_box_center)
 
 
 # --- simulation ------------------------------------------------------------------
@@ -1048,7 +1071,7 @@ func _update_trailer(up: Vector3, com: Vector3, v_fwd: float, right: Vector3) ->
 ## glisse, il ne se couche pas). Retourne la vitesse de balayage restante.
 func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 	var t := tuning
-	_trailer_query.transform = global_transform * trailer_local_transform(angle)
+	_trailer_query.transform = global_transform * trailer_local_transform(angle, trailer_box_center)
 	_trailer_query.collision_mask = 1 << (TruckSpec.LAYER_VEHICLE - 1)
 	var hits := get_world_3d().direct_space_state.intersect_shape(_trailer_query, 4)
 	if hits.is_empty():
@@ -1056,7 +1079,7 @@ func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 	var now := Engine.get_physics_frames()
 	var tb := global_basis * Basis(Vector3.UP, angle)
 	var kingpin := global_transform * TruckSpec.KINGPIN
-	var reach := TruckSpec.TRAILER_CENTER.z + TruckSpec.TRAILER_SIZE.z / 2.0 - TruckSpec.KINGPIN.z
+	var reach := trailer_box_center.z + trailer_box_size.z / 2.0 - TruckSpec.KINGPIN.z
 	for h: Dictionary in hits:
 		var other := h["collider"] as Truck
 		if other == null or other == self:
@@ -1088,7 +1111,7 @@ func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 
 ## Vrai si la caisse de remorque, a cet angle, touche un corps de `mask`.
 func _trailer_hits(angle: float, mask: int) -> bool:
-	_trailer_query.transform = global_transform * trailer_local_transform(angle)
+	_trailer_query.transform = global_transform * trailer_local_transform(angle, trailer_box_center)
 	_trailer_query.collision_mask = mask
 	return not get_world_3d().direct_space_state.intersect_shape(_trailer_query, 1).is_empty()
 
@@ -1099,7 +1122,7 @@ func _set_trailer_angle(angle: float) -> void:
 	_trailer_angle = angle
 	if _trailer_shape != null and absf(angle - _trailer_applied) > 1.7e-4:
 		_trailer_applied = angle
-		_trailer_shape.transform = trailer_local_transform(angle)
+		_trailer_shape.transform = trailer_local_transform(angle, trailer_box_center)
 
 
 ## En l'air : ressort angulaire amorti critiquement vers l'horizontale (sans

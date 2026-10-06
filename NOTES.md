@@ -57,6 +57,7 @@
 
 ### Module 7 : Flux Menu & Sas READY
 - [x] **Sas READY** (Lot 2 : dans la course, chaque joueur valide avec Carré avant le compte à rebours).
+- [x] **Choix de la remorque dans le sas READY** (2026-10-06) : ◄ ► sur sa manette, 9 remorques (`TrailerCatalog`) avec taille et stats propres (VEHICLE_SPEC §5 bis, « Remorque au choix »). Stats à équilibrer ; capacités en attente du Module 8.
 - [ ] **Bouton READY au menu principal** :
   - Remplacer le bouton "COMMENCER" direct par un bouton **"READY"**.
 

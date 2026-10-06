@@ -49,6 +49,9 @@ const HAZARD_LAYER := 5
 ## nouveau choc.
 @export var hit_gap_ticks: int = 20
 
+## Caisse de la remorque, repere du camion (TrailerType ; defaut : TruckSpec).
+var box_size: Vector3 = TruckSpec.TRAILER_SIZE
+var box_center: Vector3 = TruckSpec.TRAILER_CENTER
 ## Camion qui l'a larguee : jamais penalise ; ne la heurte pas au debut.
 var dropped_by: Truck
 var age_ticks: int = 0
@@ -92,15 +95,30 @@ func _init() -> void:
 	pm.friction = 1.0
 	pm.bounce = 0.0
 	physics_material_override = pm
-	# boite pleine hauteur : du sol (roues comprises) au toit de la caisse
-	var top := TruckSpec.TRAILER_CENTER.y + TruckSpec.TRAILER_SIZE.y / 2.0
 	var cs := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(TruckSpec.TRAILER_SIZE.x, top, TruckSpec.TRAILER_SIZE.z)
-	cs.shape = box
-	cs.position = Vector3(0.0, top / 2.0 - TruckSpec.KINGPIN.y, TruckSpec.TRAILER_CENTER.z - TruckSpec.KINGPIN.z)
+	cs.shape = BoxShape3D.new()
 	add_child(cs)
 	_shape = cs
+	_shape_box()
+
+
+## Remorque choisie par le joueur : caisse, PV et masse. Avant add_child.
+func configure(type: TrailerType) -> void:
+	if type == null:
+		return
+	box_size = type.box_size
+	box_center = type.box_center
+	trailer_mass = type.dropped_mass_kg
+	max_hp = type.dropped_hp
+	_shape_box()
+
+
+## Boite pleine hauteur : du sol (roues comprises) au toit de la caisse.
+func _shape_box() -> void:
+	var top := box_center.y + box_size.y / 2.0
+	var box := _shape.shape as BoxShape3D
+	box.size = Vector3(box_size.x, top, box_size.z)
+	_shape.position = Vector3(0.0, top / 2.0 - TruckSpec.KINGPIN.y, box_center.z - TruckSpec.KINGPIN.z)
 
 
 ## Visuel de la remorque (copie du camion, repere de la sellette).
@@ -218,7 +236,7 @@ func _update_damage_stage() -> void:
 		return
 	var c := _shape.global_position
 	var b := _shape.global_basis
-	var half := TruckSpec.TRAILER_SIZE / 2.0
+	var half := box_size / 2.0
 	if stage >= 1 and damage_stage < 1:
 		# flancs noircis
 		for side: float in [-1.0, 1.0]:

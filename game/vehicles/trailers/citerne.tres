@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"citerne"
+display_name = "CITERNE"
+tagline = "lourde et robuste, lente à lancer"
+model = "../Assets_Visuels/Armes_et_camions/vehicules/citerne.glb"
+box_size = Vector3(2.98, 3.57, 15.32)
+box_center = Vector3(0, 3.95, 8.14)
+top_speed_mult = 0.96
+accel_mult = 0.92
+grip_mult = 1.0
+dropped_hp = 75.0
+dropped_mass_kg = 12000.0
+ability = &""

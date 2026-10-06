@@ -101,6 +101,8 @@ func _on_cargo_requested() -> void:
 func drop() -> DetachedTrailer:
 	var trailer := DetachedTrailer.new()
 	trailer.dropped_by = _truck
+	# caisse, PV et masse de la remorque choisie (defaut si aucune)
+	trailer.configure(_truck.trailer_type)
 	var visual := _truck.get_node_or_null(^"Visual") as TruckVisual
 	if visual != null:
 		trailer.set_visual(visual.make_trailer_copy())

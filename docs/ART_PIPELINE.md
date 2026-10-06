@@ -172,6 +172,11 @@ Les quatre premiers sont sur la tête : **mêmes coordonnées partout**, par
 construction. Les deux derniers suivent la remorque (et pivotent avec elle).
 Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
 
+En jeu, seule la remorque de ces véhicules sert : c'est la remorque au choix
+du sas READY (VEHICLE_SPEC §5 bis), chargée par `TruckVisual.set_trailer_type`.
+**Budget dépassé, à reprendre** : 32 000 à 54 000 triangles par remorque,
+123 000 pour le porte-voitures, à multiplier par 6 camions et jusqu'à 6 vues.
+
 ### Style
 
 Formes franches et lisibles de loin — en écran partagé à 4, chaque camion

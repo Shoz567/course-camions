@@ -178,6 +178,43 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
   propre : ce choc la remplace.
 - Vérifié par `truck_trailer_test` (dérapage, coup de volant, mur, balayage).
 
+### Remorque au choix (2026-10-06)
+
+Avant la course, dans le sas READY, chaque joueur choisit sa semi-remorque
+(◄ ► sur sa manette, Carré pour valider). Une remorque est un `TrailerType`
+(`game/vehicles/trailers/*.tres`, ordre dans `TrailerCatalog`) :
+
+- **modèle** : le nœud `Remorque` d'un véhicule du catalogue
+  (`Assets_Visuels/Armes_et_camions/vehicules/`, ART_PIPELINE §4 ter), posé à
+  la sellette ;
+- **caisse de collision** propre (`box_size`, `box_center`), mesurée sur le
+  modèle, toujours à partir de z = 0,48 (derrière la cabine) ;
+- **stats** : multiplicateurs de vitesse max, d'accélération (poussée et
+  boost) et d'adhérence latérale, appliqués au réglage de la catégorie de
+  vitesse ; PV et masse de la remorque une fois larguée ;
+- **capacité** : champ `ability`, vide en attendant le Module 8.
+
+La remorque **Classique** (par défaut) reprend la caisse ci-dessus et des stats
+à 1 : la conduite mesurée (`baseline.json`) ne change pas. Masse, centre de
+masse et inertie du camion restent ceux du tracteur pour toutes les
+remorques : le poids d'une remorque se traduit en accélération, pas en masse.
+
+| Remorque | Vitesse | Accél. | Adhérence | PV larguée | Masse larguée | Caisse (l × h × L) |
+|---|---|---|---|---|---|---|
+| Classique | = | = | = | 50 | 9 000 kg | 3,60 × 3,72 × 15,60 |
+| Conteneur | = | −2 % | = | 55 | 9 500 kg | 3,15 × 4,20 × 15,32 |
+| Citerne | −4 % | −8 % | = | 75 | 12 000 kg | 2,98 × 3,57 × 15,32 |
+| Bétaillère | −3 % | −5 % | −3 % | 60 | 10 000 kg | 3,64 × 4,53 × 15,32 |
+| Porte-voitures | −2 % | −4 % | −4 % | 50 | 8 500 kg | 3,00 × 3,34 × 15,76 |
+| Grue | −1 % | −3 % | +3 % | 45 | 7 500 kg | 3,15 × 3,20 × 15,32 |
+| Pompier | = | −1 % | = | 50 | 8 000 kg | 3,15 × 3,43 × 15,32 |
+| Saleuse | −1 % | −2 % | +6 % | 50 | 8 000 kg | 3,15 × 3,24 × 15,32 |
+| Chariot | +4 % | +6 % | = | 35 | 5 500 kg | 3,15 × 3,16 × 15,32 |
+
+**Premier jet, à équilibrer en jouant.** `TrailerType.validate()` refuse un
+multiplicateur hors de [0,8 ; 1,2]. Vérifié par `trailer_type_test` et
+`race_trailer_choice_test`.
+
 ## 5 quater bis. Direction et dérapage maîtrisé (2026-09-30)
 
 - Train avant vif : roues à 4°/tick (braquage complet en 8 ticks), angle à

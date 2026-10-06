@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"grue"
+display_name = "GRUE"
+tagline = "plateau bas, bien posée en virage"
+model = "../Assets_Visuels/Armes_et_camions/vehicules/grue.glb"
+box_size = Vector3(3.15, 3.2, 15.32)
+box_center = Vector3(0, 3.76, 8.14)
+top_speed_mult = 0.99
+accel_mult = 0.97
+grip_mult = 1.03
+dropped_hp = 45.0
+dropped_mass_kg = 7500.0
+ability = &""
