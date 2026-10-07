@@ -475,6 +475,18 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   (5°/tick). Mesuré : 0,877 → 0,961 g, rayon mini à 50 km/h 21,6 → 19,7 m
   (`make baseline`). Aller au-delà demande de changer la cible de
   VEHICLE_SPEC (question posée à l'utilisateur).
+- `[x]` **Relief des matières** (2026-10-07, objectif « modèles plus lisses et
+  réalistes, avec des détails en relief ») : `truck_body.gdshader` dessine
+  un relief procédural par matière (`TruckMaterials._relief_of`), ses axes
+  mesurés par maillage (`_set_relief_frame`) — tôle ondulée trapézoïdale des
+  conteneurs ISO (ondes de 28 cm, 3,6 cm de creux, toit en ondes larges,
+  portes comprises), sculptures des pneus (4 rainures en zigzag, lamelles en
+  quinconce, flancs nervurés), cordons de soudure des viroles de citerne,
+  lames nervurées de la bétaillère, plis de bâche ; la crasse se loge dans
+  les creux, le relief s'efface au loin (pas de scintillement). Matières
+  jusque-là oubliées : caisse du conteneur, inox poli de la citerne, bâche,
+  bandes réfléchissantes, extincteurs, tuyaux. 4 vues : 6,3 → 6,5 ms par
+  image.
 
 ---
 

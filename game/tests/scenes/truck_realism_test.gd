@@ -130,6 +130,20 @@ func _test_finish() -> void:
 	var skin := vn.get_trailer_skin()
 	check("A remorque detaillee : garde-boue cintres", skin != null
 		and not skin.find_children("Detail_Garde_Boue_Cintre*", "MeshInstance3D", true, false).is_empty())
+	# relief (2026-10-07, « plus lisses et realistes, avec du relief ») : tole
+	# ondulee du conteneur le long de la caisse (axe horizontal), sculptures
+	# des pneus autour de l'axe de la roue (rayon de pneu)
+	var box := _material(skin, "Conteneur") if skin != null else []
+	var box_mat := box[1] as ShaderMaterial if box.size() == 2 else null
+	var box_axis := _relief_axis(skin, "Conteneur")
+	check("A conteneur en tole ondulee, ondes le long de la caisse", box_mat != null
+		and int(box_mat.get_shader_parameter(&"relief")) == TruckMaterials.RELIEF_CORRUGATED
+		and absf(box_axis.y) < 0.1 and Vector3(box_axis.x, box_axis.y, box_axis.z).length() > 0.9, str(box_axis))
+	var tyre_axis := _relief_axis(vd, "Pneu")
+	var tyre_mat := (_material(vd, "Pneu")[1]) as ShaderMaterial
+	check("A pneus sculptes : axe de roue et rayon de pneu", tyre_mat != null
+		and int(tyre_mat.get_shader_parameter(&"relief")) == TruckMaterials.RELIEF_TYRE
+		and tyre_axis.w > 0.35 and tyre_axis.w < 0.7, str(tyre_axis))
 
 	var spots := _lamps(vn, "SpotLight3D")
 	var fwd := -_night.global_basis.z
@@ -154,3 +168,17 @@ func _test_finish() -> void:
 	var ed := (lamp_day[1] as BaseMaterial3D).emission_energy_multiplier if lamp_day.size() == 2 else INF
 	var en := (lamp_night[1] as BaseMaterial3D).emission_energy_multiplier if lamp_night.size() == 2 else 0.0
 	check("C verres des phares : a peine lumineux de jour, allumes la nuit", ed * 4.0 < en, "%.2f / %.2f" % [ed, en])
+
+
+## relief_axis du premier maillage dont un materiau d'origine porte ce prefixe.
+func _relief_axis(root: Node, prefix: String) -> Vector4:
+	if root == null:
+		return Vector4.ZERO
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		for s in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(s)
+			if src != null and src.resource_name.begins_with(prefix):
+				var v: Variant = mi.get_instance_shader_parameter(&"relief_axis")
+				return v if v is Vector4 else Vector4.ZERO
+	return Vector4.ZERO

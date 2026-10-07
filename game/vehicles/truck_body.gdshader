@@ -36,6 +36,14 @@ uniform float grime = 1.0;
 uniform sampler2D grime_tex : filter_linear_mipmap_anisotropic, repeat_enable;
 // cicatrices sur cette matiere (pneus : non)
 uniform float scars = 1.0;
+// relief de la matiere (2026-10-07, « plus lisses et realistes, avec du
+// relief ») : 0 aucun, 1 tole ondulee (conteneur), 2 sculptures de pneu,
+// 3 viroles soudees (citerne), 4 lames nervurees (betaillere), 5 bache.
+// Pas et profondeur en metres ; axes par maillage (relief_axis, relief_center,
+// poses par TruckMaterials.upgrade).
+uniform int relief = 0;
+uniform float relief_pitch = 0.28;
+uniform float relief_depth = 0.03;
 
 global uniform vec3 truck_grime_color;
 global uniform float truck_wetness;
@@ -51,6 +59,10 @@ instance uniform vec4 scar4 = vec4(0.0);
 instance uniform vec4 scar5 = vec4(0.0);
 instance uniform vec4 scar6 = vec4(0.0);
 instance uniform vec4 scar7 = vec4(0.0);
+// relief : axe principal du maillage (unitaire ; w : rayon exterieur d'un
+// pneu) et centre (pneu : axe de la roue)
+instance uniform vec4 relief_axis = vec4(0.0);
+instance uniform vec4 relief_center = vec4(0.0);
 
 varying vec3 obj_pos;
 varying vec3 obj_n;
@@ -98,6 +110,99 @@ vec3 bump(vec3 n, vec3 pos, float h) {
 	return normalize(abs(det) * n - grad);
 }
 
+
+// Relief de la matiere au point p (repere du maillage), normale n : hauteur
+// (m, a ajouter au bump) et creux (0 .. 1, assombri et sali).
+vec2 relief_at(vec3 p, vec3 n, vec3 up) {
+	vec3 axis = relief_axis.xyz;
+	if (relief == 0 || dot(axis, axis) < 0.5) {
+		return vec2(0.0);
+	}
+	float h = 0.0;
+	if (relief == 1 || relief == 4) {
+		// tole ondulee : trapezes verticaux le long de la caisse (et en travers
+		// sur les faces avant et arriere) ; toit : ondes larges et plates.
+		// lames nervurees : arrondis horizontaux sur les flancs.
+		float up_n = abs(dot(n, up));
+		vec3 side = normalize(cross(up, axis));
+		float s;
+		float pitch = relief_pitch;
+		float depth = relief_depth;
+		if (relief == 4) {
+			if (up_n > 0.5) {
+				return vec2(0.0);
+			}
+			s = dot(p, up);
+		} else if (up_n > 0.7) {
+			s = dot(p, axis);
+			pitch *= 2.2;
+			depth *= 0.4;
+		} else if (up_n < 0.35) {
+			s = abs(dot(n, axis)) > 0.7 ? dot(p, side) : dot(p, axis);
+		} else {
+			return vec2(0.0);
+		}
+		float u = s / pitch;
+		// au loin, une onde tient dans moins de 3 pixels : effacee
+		float fade = 1.0 - smoothstep(0.12, 0.35, fwidth(u));
+		float f = fract(u);
+		float prof;
+		if (relief == 4) {
+			prof = 0.5 + 0.5 * cos(f * 6.2832);
+		} else {
+			// crete 0 .. 0,3, flanc, creux 0,5 .. 0,8, flanc
+			prof = 1.0 - smoothstep(0.3, 0.5, f) + smoothstep(0.8, 1.0, f);
+		}
+		h = prof * depth * fade;
+		return vec2(h, (1.0 - prof) * fade * (relief == 4 ? 0.5 : 1.0));
+	}
+	if (relief == 2) {
+		// pneu : bande de roulement (rainures en zigzag, lamelles en
+		// quinconce), flanc a peine nervure
+		vec3 d = p - relief_center.xyz;
+		float x = dot(d, axis);
+		vec3 rv = d - axis * x;
+		float r = length(rv);
+		float rad = relief_axis.w;
+		if (rad <= 0.0) {
+			return vec2(0.0);
+		}
+		float tread = (1.0 - smoothstep(0.35, 0.6, abs(dot(n, axis)))) * smoothstep(0.86, 0.94, r / rad);
+		vec3 b1 = normalize(cross(axis, abs(axis.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+		vec3 b2 = cross(axis, b1);
+		float c = atan(dot(rv, b1), dot(rv, b2)) * rad;
+		float zig = (abs(fract(c / 0.055) - 0.5) * 2.0 - 0.5) * 0.012;
+		float gx = (x + zig) / relief_pitch;
+		float row = floor(gx);
+		float groove = 1.0 - smoothstep(0.1, 0.18, abs(fract(gx) - 0.5));
+		float sipe = 1.0 - smoothstep(0.05, 0.12, abs(fract(c / 0.05 + row * 0.5) - 0.5));
+		float fade = 1.0 - smoothstep(0.15, 0.4, fwidth(c / 0.05));
+		float cut = max(groove, sipe * 0.6) * tread * fade;
+		// flanc : anneaux concentriques fins
+		float wall = smoothstep(0.6, 0.8, abs(dot(n, axis))) * (1.0 - smoothstep(0.15, 0.4, fwidth(r / 0.012)));
+		float ring = (0.5 + 0.5 * cos(r / 0.012 * 6.2832)) * wall * smoothstep(0.6, 0.7, r / rad)
+			* (1.0 - smoothstep(0.82, 0.88, r / rad));
+		return vec2(-cut * relief_depth + ring * 0.0008, cut);
+	}
+	if (relief == 3) {
+		// citerne : cordon de soudure entre deux viroles, tous les relief_pitch
+		if (abs(dot(n, axis)) > 0.5) {
+			return vec2(0.0);
+		}
+		float s = dot(p, axis);
+		float dist = (fract(s / relief_pitch + 0.5) - 0.5) * relief_pitch;
+		float bead = exp(-dist * dist / (0.009 * 0.009));
+		float fade = 1.0 - smoothstep(0.2, 0.5, fwidth(s / 0.02));
+		return vec2(bead * relief_depth * fade, -bead * 0.6 * fade);
+	}
+	// bache : plis verticaux irreguliers et sangles tendues
+	float s = dot(p, axis);
+	float fold = sin(s / relief_pitch * 6.2832 + sin(dot(p, up) * 1.7) * 1.4);
+	float strap = 1.0 - smoothstep(0.02, 0.035, abs(fract(s / (relief_pitch * 3.0)) - 0.5) * relief_pitch * 3.0);
+	float fade = 1.0 - smoothstep(0.2, 0.5, fwidth(s / relief_pitch));
+	return vec2((fold * 0.5 + 0.5) * relief_depth * fade + strap * 0.004, (0.5 - 0.5 * fold) * 0.6 * fade);
+}
+
 void fragment() {
 	vec3 col = albedo.rgb;
 	float rough = roughness;
@@ -105,6 +210,13 @@ void fragment() {
 	float coat = clearcoat;
 	float detail = tri(detail_tex, obj_pos, obj_n, detail_scale, detail_stretch);
 	rough = clamp(rough + (detail - 0.5) * rough_variation, 0.02, 1.0);
+
+	// relief de la matiere : ondes, sculptures, soudures ; la crasse se loge
+	// dans les creux
+	vec3 up_m = normalize(height_row.xyz + vec3(0.0, 1e-5, 0.0));
+	vec2 rel = relief_at(obj_pos, normalize(obj_n), up_m);
+	col *= 1.0 - 0.18 * max(rel.y, 0.0);
+	col = mix(col, col * 1.08, max(-rel.y, 0.0));
 
 	// salissure : basse, en plaques ; coulures ; poussiere sur le dessus
 	float patches = tri(grime_tex, obj_pos, obj_n, 0.35, vec2(1.0));
@@ -117,7 +229,7 @@ void fragment() {
 	float top = smoothstep(0.6, 0.95, n_world.y) * smoothstep(0.35, 0.75, patches) * 0.35;
 	// voile d'usure general, leger : rien n'est neuf
 	float age = 0.08 + 0.1 * smoothstep(0.4, 0.8, patches);
-	float dirt = clamp((low * (0.8 + 0.25 * fine) + streak + top + age) * grime, 0.0, 1.0);
+	float dirt = clamp((low * (0.8 + 0.25 * fine) + streak + top + age + max(rel.y, 0.0) * 0.25) * grime, 0.0, 1.0);
 	float wet = truck_wetness;
 	vec3 grime_col = mix(truck_grime_color, truck_grime_color * 0.35, wet) * (0.9 + 0.2 * fine);
 	col = mix(col, grime_col, dirt * 0.6);
@@ -208,6 +320,6 @@ void fragment() {
 	CLEARCOAT = coat;
 	CLEARCOAT_ROUGHNESS = clearcoat_roughness;
 	EMISSION = emission * emission_energy;
-	float h = detail * bump_strength * (1.0 - dirt * 0.5) + fine * 0.0006 * dirt + scar_h;
+	float h = detail * bump_strength * (1.0 - dirt * 0.5) + fine * 0.0006 * dirt + scar_h + rel.x;
 	NORMAL = bump(NORMAL, VERTEX, h);
 }

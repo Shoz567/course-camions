@@ -13,6 +13,7 @@ extends RefCounted
 ##   pneus       gomme gris-noir mate, poussiereuse ; caoutchouc, joints ;
 ##   chassis     acier peint, sale ;
 ##   plastiques  grain mat ; vitres : verre fume tres lisse ;
+##   citerne     inox poli brosse en long ; bache : toile mate ;
 ##   feux        reflecteur chrome derriere un verre lisse : allume la nuit
 ##               (TruckLights.night), eteint de jour (plus de pave blanc).
 ##
@@ -20,6 +21,9 @@ extends RefCounted
 ## route (boue basse, coulures, poussiere sur le dessus, pluie) y est
 ## calculee d'apres la hauteur au-dessus du sol, posee par maillage
 ## (upgrade). Couleur de la salissure et pluie : set_weather (par circuit).
+## Relief par matiere (_relief_of) : tole ondulee des conteneurs, sculptures
+## des pneus, soudures des citernes, lames des betailleres, plis des baches ;
+## ses axes sont mesures par maillage (_set_relief_frame).
 ## Textures procedurales (bruit), aucun fichier. Une copie par materiau
 ## source, partagee par tous les camions (cache). Purement visuel.
 
@@ -29,6 +33,12 @@ const PAINT_SATURATION := 0.86
 const PAINT_VALUE := 0.94
 ## Salissure de la route (set_weather) : crasse de ville, poussiere de plage.
 const CITY_GRIME := Color(0.1, 0.085, 0.07)
+## Reliefs de truck_body.gdshader (`relief`).
+const RELIEF_CORRUGATED := 1
+const RELIEF_TYRE := 2
+const RELIEF_TANK := 3
+const RELIEF_SLATS := 4
+const RELIEF_TARP := 5
 const BEACH_GRIME := Color(0.46, 0.39, 0.29)
 
 static var _cache: Dictionary = {}
@@ -70,7 +80,47 @@ static func upgrade(root: Node3D, frame: Node3D = null, ground_y: float = NAN) -
 		var xf := inv * mi.global_transform
 		mi.set_instance_shader_parameter(&"height_row",
 			Vector4(xf.basis.x.y, xf.basis.y.y, xf.basis.z.y, xf.origin.y - ground_y))
+		_set_relief_frame(mi, Vector3(xf.basis.x.y, xf.basis.y.y, xf.basis.z.y).normalized())
 	return count
+
+
+## Axes du relief d'un maillage (repere du maillage, `up` : le haut) :
+## pneus - axe de la roue (le plus court d'une roue, le plus long d'un
+## essieu et de ses deux roues), centre et rayon exterieur ; caisse, citerne,
+## bache - plus grande dimension horizontale (la longueur).
+static func _set_relief_frame(mi: MeshInstance3D, up: Vector3) -> void:
+	var kinds: Array[int] = []
+	for s in mi.mesh.get_surface_count():
+		var m := mi.get_active_material(s) as ShaderMaterial
+		if m != null and m.shader == BODY_SHADER:
+			var k := int(m.get_shader_parameter(&"relief"))
+			if k > 0:
+				kinds.append(k)
+	if kinds.is_empty():
+		return
+	var box := mi.mesh.get_aabb()
+	var axes: Array[Vector3] = [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
+	var size: Array[float] = [box.size.x, box.size.y, box.size.z]
+	if kinds.count(RELIEF_TYRE) == kinds.size():
+		var order: Array[int] = [0, 1, 2]
+		order.sort_custom(func(a: int, b: int) -> bool: return size[a] < size[b])
+		var axle: int = order[2] if size[order[2]] > 1.5 * size[order[1]] else order[0]
+		var others := 0.0
+		for k in 3:
+			if k != axle:
+				others += size[k]
+		var a := axes[axle]
+		var c := box.get_center()
+		mi.set_instance_shader_parameter(&"relief_axis", Vector4(a.x, a.y, a.z, others / 4.0))
+		mi.set_instance_shader_parameter(&"relief_center", Vector4(c.x, c.y, c.z, 0.0))
+		return
+	var best := -1
+	for k in 3:
+		if absf(axes[k].dot(up)) < 0.5 and (best < 0 or size[k] > size[best]):
+			best = k
+	if best >= 0:
+		var a := axes[best]
+		mi.set_instance_shader_parameter(&"relief_axis", Vector4(a.x, a.y, a.z, 0.0))
 
 
 ## Plus bas point des maillages sous `root`, dans le repere de `frame`.
@@ -122,9 +172,18 @@ static func realistic(src: BaseMaterial3D) -> Material:
 ## « Chrome.001 »...), &"" si inconnue.
 static func kind_of(material_name: String) -> StringName:
 	var n := material_name.to_lower()
-	for p: String in ["peinture", "bande_deco", "texte_logo", "danger", "aimant", "flamme"]:
+	for p: String in ["peinture", "bande_deco", "texte_logo", "danger", "aimant", "flamme", "conteneur", "extincteur"]:
 		if n.begins_with(p):
 			return &"paint"
+	if n.begins_with("citerne"):
+		return &"tank"
+	if n.begins_with("bache"):
+		return &"fabric"
+	for p: String in ["bande_reflechissante", "catadioptre"]:
+		if n.begins_with(p):
+			return &"plastic"
+	if n.begins_with("tuyau"):
+		return &"rubber"
 	if n.begins_with("chrome"):
 		return &"chrome"
 	if n.begins_with("jante"):
@@ -215,6 +274,24 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 			rough = 0.7
 			bump = 0.00008
 			grime = 1.5
+		&"tank":
+			# inox poli d'une citerne : clair, presque miroir, brosse en long
+			col = Color(0.78, 0.79, 0.8)
+			metal = 1.0
+			rough = 0.2
+			bump = 0.00002
+			scale = 1.2
+			stretch = Vector2(1.0, 16.0)
+			variation = 0.18
+			grime = 0.8
+		&"fabric":
+			# bache de PVC : mate, grain de toile
+			metal = 0.0
+			rough = 0.82
+			spec = 0.4
+			bump = 0.00012
+			scale = 14.0
+			variation = 0.08
 		&"plastic":
 			metal = 0.0
 			rough = minf(maxf(rough, 0.5) + 0.15, 0.95)
@@ -237,7 +314,31 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 	m.set_shader_parameter(&"grime", grime)
 	m.set_shader_parameter(&"scars", scars)
 	m.set_shader_parameter(&"grime_tex", _grime)
+	var r: Array = _relief_of(src.resource_name)
+	m.set_shader_parameter(&"relief", r[0])
+	m.set_shader_parameter(&"relief_pitch", r[1])
+	m.set_shader_parameter(&"relief_depth", r[2])
 	return m
+
+
+## Relief d'une matiere d'apres son nom (truck_body.gdshader, `relief`) :
+## [type, pas (m), profondeur (m)]. D'apres des photos : conteneur ISO
+## (ondes trapezoidales de 28 cm, 3,6 cm de creux), pneus poids lourd
+## (4 rainures en zigzag), citerne en viroles soudees de 1,6 m, betaillere
+## en lames d'alu nervurees, rideau de bache plisse.
+static func _relief_of(material_name: String) -> Array:
+	var n := material_name.to_lower()
+	if n.begins_with("conteneur"):
+		return [RELIEF_CORRUGATED, 0.28, 0.036]
+	if n.begins_with("pneu"):
+		return [RELIEF_TYRE, 0.075, 0.012]
+	if n.begins_with("citerne"):
+		return [RELIEF_TANK, 1.6, 0.004]
+	if n.begins_with("peinture_caisse_vert"):
+		return [RELIEF_SLATS, 0.07, 0.006]
+	if n.begins_with("bache"):
+		return [RELIEF_TARP, 0.42, 0.018]
+	return [0, 0.28, 0.0]
 
 
 static func _apply_lamp_or_glass(m: BaseMaterial3D, kind: StringName) -> void:
