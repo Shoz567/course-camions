@@ -160,6 +160,8 @@ func _ready() -> void:
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
 	_apply_graphics()
+	# de nuit, les phares des camions eclairent la route
+	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
 	music = RaceMusic.new()
@@ -277,6 +279,9 @@ func _add_player(i: int) -> Player:
 	view_parent.add_child(cam)
 	cam.snap()
 	p.camera = cam
+	# nuit pluvieuse : la pluie tombe autour de chaque camera
+	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
+		view_parent.add_child(RainFx.make(cam.get_camera()))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)

@@ -279,7 +279,9 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 					var x := (n + 0.5) / seats * length - length / 2.0
 					var local := Vector3(x, y + 0.55, k * row_depth + row_depth * 0.55)
 					xfs.append(stand.transform * Transform3D(Basis.IDENTITY.scaled(Vector3(0.5, 1.1, 0.4)), local))
-					colors.append(Color.from_hsv(_rand(), 0.6, 0.85))
+					# vetements : couleurs ternes, beaucoup de noir, de gris et de blanc
+					var sat := 0.05 if _rand() < 0.4 else 0.55
+					colors.append(Color.from_hsv(_rand(), sat, 0.08 + 0.6 * _rand()))
 					custom.append(Color(_rand(), (x + length / 2.0) / length, 0.0, 0.0))
 			var depth := rows * row_depth
 			var top := 1.2 + rows * row_rise
@@ -306,10 +308,15 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.use_custom_data = true
-	var person := BoxMesh.new()
+	var person := CylinderMesh.new()
+	person.top_radius = 0.5
+	person.bottom_radius = 0.45
+	person.height = 1.0
+	person.radial_segments = 8
+	person.rings = 8
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://tracks/materials/crowd.gdshader")
-	mat.set_shader_parameter("glow", 0.45 if night else 0.0)
+	mat.set_shader_parameter("glow", 0.08 if night else 0.0)
 	person.material = mat
 	mm.mesh = person
 	mm.instance_count = xfs.size()

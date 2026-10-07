@@ -54,11 +54,14 @@ func _test_finish() -> void:
 
 func _check_environment() -> void:
 	var env := load("res://tracks/cyber_night.tres") as Environment
-	var sky := env.sky.sky_material as ProceduralSkyMaterial
+	# ciel realiste (sky_night.gdshader, 2026-10-07) : nuages bas eclaires
+	# par la ville
+	var sky := env.sky.sky_material as ShaderMaterial
+	var top: Color = sky.get_shader_parameter("zenith_color") if sky != null else Color.WHITE
+	var hz: Color = sky.get_shader_parameter("glow_color") if sky != null else Color.BLACK
 	check("nuit : glow et brouillard actifs", env.glow_enabled and env.fog_enabled)
-	check("nuit : ciel bleu nuit en haut", sky.sky_top_color.get_luminance() < 0.05
-		and sky.sky_top_color.b > sky.sky_top_color.r, str(sky.sky_top_color))
-	var hz := sky.sky_horizon_color
+	check("nuit : ciel bleu nuit en haut", top.get_luminance() < 0.05
+		and top.b > top.r, str(top))
 	check("nuit : horizon pourpre", hz.r > hz.g and hz.b > hz.g, str(hz))
 	var fog := env.fog_light_color
 	check("nuit : brouillard bleute", fog.b > fog.r and fog.g > fog.r, str(fog))

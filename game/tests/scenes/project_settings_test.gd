@@ -8,8 +8,8 @@ extends PhysicsTest
 ## Affichage et rendu (demande du 2026-09-30) : base 1920 x 1080 sans
 ## fenetre reduite imposee, plein ecran sans bordure, MSAA 2x ; les deux
 ## environnements decrivent le rendu complet (reflets SSR, eclairage indirect
-## SSIL, occlusion SSAO) et GraphicsSettings en retire selon la qualite
-## choisie et le nombre de vues.
+## SSIL, occlusion SSAO ; brouillard volumetrique de nuit) et GraphicsSettings
+## en retire selon la qualite choisie et le nombre de vues.
 
 
 func _test_setup() -> void:
@@ -58,6 +58,17 @@ func _check_lighting() -> void:
 	check("qualite haute : tout a 1 vue, sans SSIL a 4 vues, SSAO seul a 6 ; moyenne : SSAO ; basse : rien",
 		seen == [[true, true, true], [true, false, true], [false, false, true], [false, false, true],
 		[false, false, false]], str(seen))
+	# brouillard volumetrique de Cyber City (halo des phares sous la pluie) :
+	# qualite haute jusqu'a 2 vues seulement ; la plage n'en a pas
+	var fog := []
+	for c: Array in [[GraphicsSettings.Quality.HIGH, 1], [GraphicsSettings.Quality.HIGH, 2],
+			[GraphicsSettings.Quality.HIGH, 4], [GraphicsSettings.Quality.MEDIUM, 1], [GraphicsSettings.Quality.HIGH, 1]]:
+		GraphicsSettings.apply_environment(env, c[0], c[1])
+		fog.append(env.volumetric_fog_enabled)
+	var day := (load("res://tracks/playa_sun.tres") as Environment).duplicate() as Environment
+	GraphicsSettings.apply_environment(day, GraphicsSettings.Quality.HIGH, 1)
+	check("volumetrique : haute a 1-2 vues, coupe a 4 vues et en moyenne ; jamais a la plage",
+		fog == [true, true, false, false, true] and not day.volumetric_fog_enabled, str(fog))
 	var vp := SubViewport.new()
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.HIGH)
 	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED

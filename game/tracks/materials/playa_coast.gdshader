@@ -54,29 +54,48 @@ void fragment() {
 	vec3 grass = mix(vec3(0.09, 0.3, 0.07), vec3(0.22, 0.44, 0.12), vnoise(w * 0.35));
 	vec3 ground = mix(sand, grass, green);
 
-	// mer
+	// mer : l'eau est sombre, sa couleur vient surtout du ciel qu'elle reflete
+	// (Fresnel : miroir a l'horizon, transparente a la verticale) ; sur les
+	// hauts-fonds, le sable clair remonte en turquoise.
 	float depth = clamp(-shore / 0.45, 0.0, 1.0);  // 0 au bord, 1 au large
-	vec3 shallow = vec3(0.05, 0.72, 0.68);
-	vec3 deep = vec3(0.0, 0.2, 0.5);
-	vec3 sea = mix(shallow, deep, smoothstep(0.05, 0.9, depth));
-	sea = mix(mix(sand * 0.85, shallow, 0.55), sea, smoothstep(0.0, 0.12, depth));
+	vec3 shallow = vec3(0.03, 0.42, 0.4);
+	vec3 deep = vec3(0.0, 0.05, 0.12);
+	vec3 sea = mix(shallow, deep, smoothstep(0.03, 0.7, depth));
+	sea = mix(mix(sand * 0.75, shallow, 0.6), sea, smoothstep(0.0, 0.1, depth));
 	float swell = vnoise(w * 0.05 + TIME * vec2(0.05, 0.03));
 	// rouleaux : lignes d'ecume paralleles au rivage, qui avancent vers lui
 	float roll = sin(depth * 70.0 + TIME * 1.4 + swell * 7.0);
 	float foam = smoothstep(0.8, 1.0, roll) * smoothstep(0.45, 0.02, depth) * (0.4 + 0.6 * vnoise(w * 0.4));
 	foam += smoothstep(0.02, 0.0, abs(shore)) * 0.9;
-	sea = mix(sea, vec3(0.97), clamp(foam, 0.0, 1.0));
+	// moutons au large, rares
+	foam += smoothstep(0.78, 0.86, vnoise(w * 0.06 + TIME * vec2(0.03, -0.02))) * smoothstep(0.3, 0.8, depth)
+		* smoothstep(0.6, 0.9, vnoise(w * 0.7 + TIME * 0.4)) * 0.5;
+	foam = clamp(foam, 0.0, 1.0);
+	sea = mix(sea, vec3(0.92), foam);
 
 	ALBEDO = mix(ground, sea, water);
-	ROUGHNESS = mix(0.92, 0.16 + 0.5 * clamp(foam, 0.0, 1.0), water);
-	SPECULAR = mix(0.25, 0.45, water);
-	// vaguelettes : normale du plan inclinee par deux trains d'ondes
-	vec2 q = w * 0.35 + vec2(vnoise(w * 0.07), vnoise(w * 0.07 + 31.0)) * 2.5;
-	vec2 slope = vec2(
-		cos(q.x * 1.3 + q.y * 0.7 + TIME * 1.7) + 0.6 * cos(q.x * 2.9 - q.y * 1.9 + TIME * 2.3),
-		cos(q.y * 1.1 - q.x * 0.5 + TIME * 1.3) + 0.6 * cos(q.y * 3.1 + q.x * 2.3 + TIME * 2.1)) * 0.035 * water;
-	// au loin, les vaguelettes sont plus fines qu'un pixel : on les efface (moire)
-	slope *= smoothstep(260.0, 40.0, length(VERTEX));
+	ROUGHNESS = mix(0.92, 0.04 + 0.6 * foam, water);
+	SPECULAR = mix(0.25, 0.5, water);
+	// houle et clapot : quatre trains d'ondes de longueurs differentes, plus
+	// du bruit ; les plus courtes s'effacent au loin (plus fines qu'un pixel),
+	// la houle longue reste jusqu'a l'horizon
+	float dist = length(VERTEX);
+	vec2 q = w + (vec2(vnoise(w * 0.02), vnoise(w * 0.02 + 31.0)) - 0.5) * 40.0;
+	vec2 slope = vec2(0.0);
+	// x, y : direction ; z : nombre d'onde (rad/m) ; w : pulsation (rad/s)
+	vec4 dirs[4] = vec4[](vec4(0.8, 0.6, 0.045, 0.9), vec4(-0.5, 0.86, 0.11, 1.6),
+		vec4(0.96, -0.28, 0.29, 2.6), vec4(0.2, 0.98, 0.7, 4.1));
+	for (int k = 0; k < 4; k++) {
+		vec2 dk = dirs[k].xy;
+		float kk = dirs[k].z;            // nombre d'onde (rad/m)
+		float fade = smoothstep(3.0 / kk * 60.0, 3.0 / kk * 8.0, dist);
+		float ph = dot(dk, q) * kk + TIME * dirs[k].w;
+		// pente : la houle longue est douce, le clapot plus raide
+		slope += dk * cos(ph) * (0.05 + 0.03 * float(k)) * fade;
+	}
+	float nf = smoothstep(120.0, 20.0, dist);
+	slope += (vec2(vnoise(w * 1.3 + TIME * 0.6), vnoise(w * 1.3 - TIME * 0.6 + 7.0)) - 0.5) * 0.3 * nf;
+	slope *= water * (1.0 - foam * 0.7);
 	vec3 n_world = normalize(vec3(-slope.x, 1.0, -slope.y));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
 }

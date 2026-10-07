@@ -22,6 +22,7 @@ light_color = Color(1, 0.93, 0.78, 1)
 light_energy = 1.1
 shadow_enabled = true
 directional_shadow_max_distance = 220.0
+light_angular_distance = 0.5
 
 [node name="Track02" parent="." instance=ExtResource("2")]
 

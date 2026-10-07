@@ -354,12 +354,17 @@ func set_trailer_type(type: TrailerType) -> void:
 			skin.name = TRAILER_SKIN
 			for n in skin.find_children("*", "MeshInstance3D", true, false):
 				(n as MeshInstance3D).layers |= DamageFx.LAYER_BIT
+			TruckMaterials.upgrade(skin)
 			_trailer_pivot.add_child(skin)
 	_collect_axles(skin)
 	# remorque d'origine (modele du camion ou boite) : cachee sous un habillage
 	for c in _trailer_pivot.get_children():
 		if c != skin and c is Node3D and String(c.name) != TRAILER_SKIN:
 			(c as Node3D).visible = skin == null
+	if model_loaded:
+		TruckLights.set_tail_lights(_trailer_pivot,
+			type.box_center if type != null else TruckSpec.TRAILER_CENTER,
+			type.box_size if type != null else TruckSpec.TRAILER_SIZE)
 	if not model_loaded:
 		var mesh := _trailer_pivot.get_node_or_null(^"TrailerMesh") as Node3D
 		if mesh != null:
@@ -501,6 +506,13 @@ func _attach_external() -> void:
 	fit_report = model.get_meta(&"fit_report", {})
 	if not livery.is_empty():
 		apply_livery(model, livery)
+	# matieres realistes (vernis, chrome, gomme...) et phares qui eclairent
+	TruckMaterials.upgrade(model)
+	if TruckLights.add_headlights(model) > 0 and get_parent() != null:
+		# les deux projecteurs remplacent le phare central du camion
+		var central := get_parent().get_node_or_null(^"Headlights") as Light3D
+		if central != null:
+			central.visible = false
 	_trailer_pivot = model.get_node_or_null(NodePath(TRAILER_PIVOT)) as Node3D
 	# groupes de roues : pivot au moyeu, associe au rayon le plus proche
 	for pivot in model.find_children("WheelPivot_*", "Node3D", false, false):

@@ -3,22 +3,40 @@
 [sub_resource type="Shader" id="shader"]
 code = "shader_type spatial;
 
-// Sol de la ville, hors piste : dalle sombre quadrillee de fines lignes cyan
-// tous les 20 m (lecture de la vitesse), en coordonnees monde.
+// Sol de la ville, hors piste : dalles de beton de 5 m detrempees par la
+// pluie (joints sombres, joints de dilatation tous les 20 m : lecture de la
+// vitesse), flaques miroir dans les creux, taches. En coordonnees monde.
 varying vec3 world_pos;
+
+#include \"res://tracks/materials/asphalt.gdshaderinc\"
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
+float joint(vec2 g, float width_m, float cell) {
+	vec2 d = abs(fract(g / cell - 0.5) - 0.5) * cell;
+	float w = max(fwidth(g.x), fwidth(g.y));
+	return 1.0 - smoothstep(width_m, width_m + w * 1.5, min(d.x, d.y));
+}
+
 void fragment() {
-	vec2 g = world_pos.xz / 20.0;
-	vec2 d = abs(fract(g - 0.5) - 0.5) / max(fwidth(g), vec2(1e-4));
-	float line = 1.0 - min(min(d.x, d.y), 1.0);
-	float tile = mod(floor(g.x) + floor(g.y), 2.0);
-	ALBEDO = vec3(0.02, 0.022, 0.034) + vec3(0.006) * tile + vec3(0.0, 0.04, 0.06) * line;
-	EMISSION = vec3(0.0, 0.3, 0.5) * line * 0.5;
-	ROUGHNESS = 0.75;
+	vec2 p = world_pos.xz;
+	float slab = a_hash(floor(p / 5.0));
+	float big = a_fbm(p * 0.02);
+	vec3 col = vec3(0.075, 0.075, 0.08) * (0.8 + 0.3 * slab) * (0.8 + 0.4 * big);
+	float stain = smoothstep(0.55, 0.75, a_fbm(p * 0.15 + 4.0));
+	col *= 1.0 - 0.35 * stain;
+	float j = max(joint(p, 0.03, 5.0), joint(p, 0.08, 20.0));
+	col *= 1.0 - 0.7 * j;
+	float pool = smoothstep(0.55, 0.63, a_fbm(p * 0.08 + 9.0) + 0.1 * j);
+	col *= 0.6;
+	ALBEDO = col;
+	ROUGHNESS = mix(mix(0.42, 0.6, a_noise(p * 2.0)), 0.04, pool);
+	SPECULAR = 0.5;
+	float k = a_detail(p, 4.0);
+	float h = (a_noise(p * 4.0) * 0.5 - j) * k * (1.0 - pool);
+	NORMAL = asphalt_bump(NORMAL, VERTEX, h * 0.01, 1.0);
 }
 "
 

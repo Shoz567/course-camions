@@ -395,6 +395,33 @@ camion explose, il reste au milieu du chemin », « que des bouts partent »)**
 - `[x]` `make test` à 100 % (`truck_damage_split_test`,
   `truck_body_damage_test` ajoutés).
 
+**Rendu réaliste (2026-10-07, demande utilisateur : « améliore les graphismes,
+je veux qu'il soit le plus réaliste possible »)** — tout est procédural
+(shaders, bruits) : aucun asset tiers, aucun nouveau fichier lourd.
+- `[x]` **Bitume** (`asphalt.gdshaderinc`, partagé par les deux chaussées) :
+  gravillons effacés au loin (pas de scintillement), ornières de gomme dans
+  chaque voie, taches d'huile, rustines, fissures colmatées, salissures le
+  long des murs, marquages usés, micro-relief. Cyber City : chaussée
+  détrempée, flaques miroir dans les ornières, gouttes qui ricochent.
+- `[x]` **Ciels** (`sky_day.gdshader`, `sky_night.gdshader`) : plage —
+  atmosphère, halo et disque solaire, cumulus éclairés par le soleil ; ville —
+  plafond nuageux éclairé par la ville, étoiles dans les trouées. Rendu AgX,
+  ombres douces du soleil (`light_angular_distance`), filtrage anisotrope 16x.
+- `[x]` **Mer** : eau sombre qui reflète le ciel (Fresnel), houle et clapot
+  sur quatre trains d'ondes, moutons au large, écume au rivage.
+- `[x]` **Camions** (`TruckMaterials`) : peinture vernie, chrome, métal
+  brossé, gomme, plastiques grenés, verre fumé, d'après les noms de matériaux
+  des modèles ; textures de bruit en triplanaire. **Phares qui éclairent**
+  (`TruckLights`) la nuit : deux projecteurs et deux feux arrière par camion,
+  halo dans la bruine (brouillard volumétrique, qualité haute, ≤ 2 vues).
+- `[x]` **Pluie** (`RainFx`) autour de chaque caméra à Cyber City ;
+  glissières en béton taché / acier rayé et mouillé ; sol de la ville et toit
+  du showroom en dalles de béton mouillées ; spectateurs en silhouettes
+  (tête, buste, jambes) aux couleurs de vêtements ternes.
+- `[x]` Coût mesuré (RTX 5060 Ti, 1920 × 1080, qualité haute) : 4 vues
+  5,7 → 5,9 ms par image ; 1 vue 2,2 → 3,5 ms (brouillard volumétrique et
+  reflets). `make test` à 100 % (`truck_realism_test` ajouté).
+
 ---
 
 ## Phase 5 — Art généré par Blender

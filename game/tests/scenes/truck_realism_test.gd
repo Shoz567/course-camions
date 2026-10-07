@@ -1,0 +1,104 @@
+extends PhysicsTest
+
+## Rendu realiste des camions (2026-10-07 : « ameliore les graphismes, le plus
+## realiste possible ») : matieres (TruckMaterials) et feux qui eclairent
+## (TruckLights). SAUTE si les modeles sont absents (clone sans Git LFS).
+##
+##   A. matieres : la peinture est vernie (clearcoat) avec un relief, les
+##      pneus en gomme noire mate, les vitres lisses ; les couleurs d'origine
+##      sont gardees ;
+##   B. de nuit : deux projecteurs sous les phares, qui visent l'avant du
+##      camion et un peu le sol ; le phare central est coupe ; deux feux
+##      arriere rouges au bout de la remorque, remplaces (pas ajoutes) quand
+##      la remorque change ;
+##   C. de jour : aucune lampe ajoutee, phare central d'origine ; les verres
+##      des phares a peine lumineux (bien moins que la nuit).
+
+var _night: Truck
+var _day: Truck
+var _ok: bool = false
+
+
+func _test_setup() -> void:
+	duration_ticks = 2
+	TruckVisual.load_external_in_headless = true
+	add_floor(200.0)
+	TruckLights.night = true
+	_night = TruckTestUtil.spawn_truck(self, Vector3(0.0, 0.0, 0.0), Vector3(0.0, 30.0, 0.0))
+	TruckLights.night = false
+	_day = TruckTestUtil.spawn_truck(self, Vector3(40.0, 0.0, 0.0))
+	for t: Truck in [_night, _day]:
+		var v := t.get_node("Visual") as TruckVisual
+		if not v.model_loaded:
+			skip("modele externe absent (%s)" % v.external_model)
+			return
+	TruckLights.night = true
+	var type := load("res://vehicles/trailers/citerne.tres") as TrailerType
+	(_night.get_node("Visual") as TruckVisual).set_trailer_type(type)
+	(_night.get_node("Visual") as TruckVisual).set_trailer_type(load("res://vehicles/trailers/conteneur.tres") as TrailerType)
+	TruckLights.night = false
+	_ok = true
+
+
+## Materiau effectif de la premiere surface dont le materiau d'origine porte
+## ce prefixe.
+func _material(root: Node, prefix: String) -> Array:
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		for s in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(s)
+			if src != null and src.resource_name.begins_with(prefix):
+				return [src, mi.get_surface_override_material(s)]
+	return []
+
+
+func _lamps(root: Node, cls: String) -> Array[Node]:
+	var out: Array[Node] = []
+	for n in root.find_children("*", cls, true, false):
+		if n.is_in_group(TruckLights.GROUP):
+			out.append(n)
+	return out
+
+
+func _test_finish() -> void:
+	TruckVisual.load_external_in_headless = false
+	TruckLights.night = false
+	if not _ok:
+		return
+	var vn := _night.get_node("Visual") as TruckVisual
+	var vd := _day.get_node("Visual") as TruckVisual
+
+	var paint := _material(vd, "Peinture_Cabine")
+	var p := paint[1] as BaseMaterial3D if paint.size() == 2 else null
+	check("A peinture vernie, avec relief, couleur d'origine", p != null and p.clearcoat_enabled
+		and p.normal_texture != null and p.albedo_color.is_equal_approx((paint[0] as BaseMaterial3D).albedo_color))
+	var tyre := _material(vd, "Pneu")
+	var r := tyre[1] as BaseMaterial3D if tyre.size() == 2 else null
+	check("A pneus en gomme noire mate", r != null and r.albedo_color.get_luminance() < 0.05 and r.roughness >= 0.9)
+	var glass := _material(vd, "Vitre")
+	var g := glass[1] as BaseMaterial3D if glass.size() == 2 else null
+	check("A vitres lisses", g != null and g.roughness <= 0.01)
+
+	var spots := _lamps(vn, "SpotLight3D")
+	var fwd := -_night.global_basis.z
+	var aimed := spots.size() == 2
+	for s: Node in spots:
+		var dir := -(s as Node3D).global_basis.z
+		aimed = aimed and dir.dot(fwd) > 0.95 and dir.y < 0.0
+	check("B nuit : deux projecteurs qui visent devant et le sol", aimed, "%d" % spots.size())
+	check("B nuit : phare central coupe", not (_night.get_node("Headlights") as Node3D).visible)
+	var tails := _lamps(vn, "OmniLight3D")
+	var behind := tails.size() == 2
+	for l: Node in tails:
+		var local := _night.global_transform.affine_inverse() * (l as Node3D).global_position
+		behind = behind and local.z > TruckSpec.KINGPIN.z + 8.0 and (l as OmniLight3D).light_color.r > 0.9
+	check("B nuit : deux feux arriere rouges au bout de la remorque (remplaces au changement)", behind,
+		"%d" % tails.size())
+
+	check("C jour : aucune lampe ajoutee", _lamps(vd, "Light3D").is_empty())
+	check("C jour : phare central d'origine", (_day.get_node("Headlights") as Node3D).visible)
+	var lamp_day := _material(vd, "Phare")
+	var lamp_night := _material(vn, "Phare")
+	var ed := (lamp_day[1] as BaseMaterial3D).emission_energy_multiplier if lamp_day.size() == 2 else INF
+	var en := (lamp_night[1] as BaseMaterial3D).emission_energy_multiplier if lamp_night.size() == 2 else 0.0
+	check("C verres des phares : a peine lumineux de jour, allumes la nuit", ed * 4.0 < en, "%.2f / %.2f" % [ed, en])
