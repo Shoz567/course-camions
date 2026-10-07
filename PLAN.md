@@ -436,7 +436,7 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   remorques plus réalistes », « ajoute des détails surtout sur les remorques,
   inspire-toi d'images en ligne ») : `tools/blender/realisme_vehicules.py`
   (`make vehicules`) écrit des versions `Realiste/` à côté des modèles de
-  l'équipe, jamais modifiés. Tête : pare-soleil, calandre à grille, phares à
+  l'équipe, jamais modifiés. Tête : calandre à grille, phares à
   doubles optiques cerclées, antibrouillards, poignées de maintien,
   pare-chaleur des cheminées, cornets de rétroviseur, garde-boue arrière
   noirs. Remorques : garde-boue cintrés au-dessus de chaque roue (plus de
@@ -446,6 +446,15 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   autocollant « ANGLES MORTS ». Détails fusionnés par famille (draw calls) et
   arrachables (`BodyDamage`, préfixe `Detail_`). 4 vues : 5,8 → 6,4 ms par
   image ; un choc sur la carrosserie : 10 → 13 ms.
+- `[x]` **Silhouette de cabine** (2026-10-07, « c'est toujours beaucoup trop
+  carré ») : la tête est remodelée par un champ de déformation doux
+  (`reshape_cab`) — coins avant arrondis de 28 cm au-dessus des roues, face
+  avant et pare-brise inclinés (46 cm de recul en haut du pare-brise en jeu),
+  toit bombé, flancs rentrants de 7 %, pare-chocs enveloppant ; autocollants
+  et logos déplacés d'un bloc. Le pare-soleil, devenu une casquette sur un
+  pare-brise incliné, est retiré. Caisses de remorques gardées droites
+  (conteneur, bétaillère, fourgon : des boîtes dans la réalité). Rendu
+  inchangé (4 vues : 6,4 ms par image), aucun pneu traversé.
 
 ---
 

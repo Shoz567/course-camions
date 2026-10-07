@@ -102,11 +102,31 @@ func _test_finish() -> void:
 			var c := ab.get_endpoint(k)
 			lowest = minf(lowest, row.x * c.x + row.y * c.y + row.z * c.z + row.w)
 	check_near("A salissure : hauteur au sol mesuree depuis le bas des pneus (m)", lowest, 0.0, 0.05)
-	# modeles detailles (tools/blender/realisme_vehicules.py) : pare-soleil,
+	# modeles detailles (tools/blender/realisme_vehicules.py) : calandre,
 	# optiques, antibrouillards... sur la tete ; garde-boue cintres sur la remorque
 	check("A tete detaillee (Realiste/, pieces Detail_)", vd.external_model.contains("/Realiste/")
-		and vd.find_children("Detail_Pare_Soleil*", "MeshInstance3D", true, false).size() == 1
+		and vd.find_children("Detail_Calandre_Grille*", "MeshInstance3D", true, false).size() == 1
 		and vd.find_children("Detail_Antibrouillard*", "MeshInstance3D", true, false).size() == 2)
+	# silhouette : le pare-brise est incline (son haut est plus en arriere que
+	# son bas, au moins 15 cm), plus une face plate de boite
+	var glass_rake := 0.0
+	for n in vd.find_children("Pare_Brise*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		var top_z := -INF
+		var low_z := INF
+		var top_back := 0.0
+		var low_back := 0.0
+		var inv := _day.global_transform.affine_inverse() * mi.global_transform
+		for v: Vector3 in mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]:
+			var q := inv * v
+			if q.y > top_z:
+				top_z = q.y
+				top_back = q.z
+			if q.y < low_z:
+				low_z = q.y
+				low_back = q.z
+		glass_rake = top_back - low_back
+	check_above("A cabine profilee : pare-brise incline (m)", glass_rake, 0.15)
 	var skin := vn.get_trailer_skin()
 	check("A remorque detaillee : garde-boue cintres", skin != null
 		and not skin.find_children("Detail_Garde_Boue_Cintre*", "MeshInstance3D", true, false).is_empty())

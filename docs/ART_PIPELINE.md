@@ -268,7 +268,10 @@ modifier**, et écrit à côté, dans un dossier `Realiste/`, les versions que l
 jeu charge (`TruckVisual.external_model`, `TrailerType.model`) :
 
 - arêtes encore vives chanfreinées (2 segments) et lissage par angle ;
-- tête : pare-soleil, grille de calandre, entourage et optiques des phares,
+- tête : silhouette d'une cabine routière (coins avant arrondis, face avant
+  et pare-brise inclinés, toit bombé, flancs rentrants, pare-chocs
+  enveloppant) par un champ de déformation doux après subdivision des grandes
+  faces ; grille de calandre, entourage et optiques des phares,
   antibrouillards, poignées de maintien, pare-chaleur des cheminées, cornets
   de rétroviseur, garde-boue arrière noirs ;
 - remorques : garde-boue plats remplacés par des garde-boue cintrés au-dessus

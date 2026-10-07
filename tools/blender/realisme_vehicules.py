@@ -17,8 +17,9 @@ Ce qui faisait « maquette » et ce que le script y change :
      angles marques recoit un chanfrein arrondi (2 segments, 4 a 18 mm selon
      sa taille) qui accroche la lumiere, et un lissage par angle (faces
      planes nettes, aretes adoucies). Pneus, jantes, textes, plaques : intacts ;
-  2. tracteur : details d'un vrai camion de route - pare-soleil au-dessus du
-     pare-brise, grille de calandre a barreaux verticaux, entourage noir et
+  2. tracteur : silhouette d'une cabine de route (coins avant arrondis, face
+     avant et pare-brise inclines, toit bombe, flancs rentrants : reshape_cab)
+     et details - grille de calandre a barreaux verticaux, entourage noir et
      optiques rondes dans les phares, antibrouillards dans le pare-chocs,
      poignees de maintien chromees a cote des portes, pare-chaleur sur les
      cheminees d'echappement, cornets sous les retroviseurs, garde-boue
@@ -235,7 +236,7 @@ def soften(objects):
 FAMILIES = [("Calandre", "Calandre_Grille", False), ("Phare", "Phare_Optique", True),
             ("Antibrouillard", "Antibrouillard", True), ("Poignee", "Poignee_Maintien", True),
             ("Pare_Chaleur", "Pare_Chaleur", True), ("Retro", "Retro_Angle_Mort", True),
-            ("Pare_Soleil", "Pare_Soleil", False), ("Piece_Coin", "Pieces_Coin", False),
+            ("Piece_Coin", "Pieces_Coin", False),
             ("Barre_Verrou", "Verrous", False), ("Poignee_Verrou", "Verrous", False)]
 
 
@@ -268,20 +269,12 @@ def merge_details(objects):
 
 def detail_tractor(root):
     """Details d'un tracteur de route. Repere : avant en -Y."""
-    paint = find("Cabine")[0].material_slots[0].material
     black = material("Plastique_Noir")
     dark = material("Carbone")
     chrome = material("Chrome")
     lamp = material("Phare")
     alu = material("Aluminium")
     added = []
-
-    # pare-soleil au-dessus du pare-brise, bord avant un peu plus bas
-    glass = find("Pare_Brise")[0]
-    lo, hi = wbox(glass)
-    w = hi.x - lo.x + 0.12
-    added.append(add_box(DETAIL + "Pare_Soleil", (w, 0.3, 0.035), Vector((0.0, lo.y - 0.08, hi.z + 0.05)),
-                         paint, root, rot=(math.radians(8.0), 0.0, 0.0)))
 
     # calandre : barreaux verticaux derriere les lames chromees
     grille = find("Calandre")[0]
@@ -363,6 +356,106 @@ def detail_tractor(root):
         added.append(add_box(DETAIL + "Retro_Angle_Mort", (hi.x - lo.x, hi.y - lo.y, 0.2),
                              Vector((c.x, c.y, lo.z - 0.16)), black, root))
     return merge_details(added)
+
+
+# --- silhouette de la cabine ------------------------------------------------------
+# « C'est toujours beaucoup trop carre » (2026-10-07) : une cabine de camion de
+# route n'est pas une boite. Champ de deformation doux applique a toute la
+# tete (cabine, vitres, phares, details), roues et chassis exclus :
+#   - coins avant arrondis en plan (ramenes de BULGE m vers l'arriere), au-dessus
+#     des roues seulement : rien ne s'approche des pneus ;
+#   - face avant et pare-brise inclines vers l'arriere (RAKE m en haut) ;
+#   - flancs qui rentrent en montant (TUMBLEHOME), toit bombe (CROWN).
+# Les grandes faces planes sont d'abord subdivisees (aretes <= MAX_EDGE) pour
+# pouvoir se courber.
+BULGE = 0.28
+RAKE = 0.32
+TUMBLEHOME = 0.07
+CROWN = 0.08
+MAX_EDGE = 0.18
+# Pieces plates collees a la caisse : deplacees d'un bloc, jamais tordues.
+RIGID = ("Embleme", "Texte", "Logo", "T_", "Plaque", "Poignee")
+# Pare-chocs et ce qu'il porte : extremites ramenees de WRAP m (pare-chocs
+# enveloppant), sous le haut des pneus ; il reste devant les roues.
+WRAP = 0.1
+WRAP_PARTS = ("Pare_Choc", "Lame_Avant", "Clignotant", "Plaque_AV", "Detail_Antibrouillard")
+
+
+def smoothstep(a, b, x):
+    t = max(0.0, min(1.0, (x - a) / (b - a)))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def subdivide_long_edges(obj, max_len):
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    mw = obj.matrix_world
+    for _ in range(6):
+        long_edges = [e for e in bm.edges
+                      if ((mw @ e.verts[0].co) - (mw @ e.verts[1].co)).length > max_len]
+        if not long_edges:
+            break
+        bmesh.ops.subdivide_edges(bm, edges=long_edges, cuts=1, use_grid_fill=True)
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def reshape_cab(trailer):
+    cab = find_base("Cabine")[0]
+    lo, hi = wbox(cab)
+    half = hi.x
+    y_front, y_back = lo.y, hi.y
+    z_low, z_top = lo.z, hi.z
+    belt = wbox(find_base("Pare_Brise")[0])[0].z
+    # haut des pneus avant : les coins ne s'arrondissent qu'au-dessus
+    wheels = [o for o in bpy.data.objects if o.name.startswith("Roue_")]
+    tyre_top = max(wbox(m)[1].z for w in wheels for m in w.children_recursive if m.type == "MESH")
+
+    def deform(p, body, wrap=False):
+        u = max(-1.0, min(1.0, p.x / half))
+        front = smoothstep(y_back, y_front, p.y)
+        up = smoothstep(belt - 0.05, z_top, p.z)
+        q = Vector(p)
+        high = smoothstep(tyre_top - 0.05, tyre_top + 0.4, p.z)
+        q.y += (BULGE * high + (WRAP if wrap else 0.0) * (1.0 - high)) * u ** 4 * front ** 3
+        q.y += RAKE * up ** 1.2 * front ** 1.5
+        if body:
+            q.x *= 1.0 - TUMBLEHOME * up
+        q.z += CROWN * (1.0 - u * u) * smoothstep(z_top - 0.4, z_top, p.z)
+        return q
+
+    count = 0
+    for obj in list(bpy.data.objects):
+        if obj.type != "MESH" or (trailer is not None and is_under(obj, trailer)):
+            continue
+        if any(is_under(obj, w) for w in wheels) or obj.name.startswith(("Longeron", "Socket_")):
+            continue
+        olo, ohi = wbox(obj)
+        if olo.y > y_back + 0.3 or ohi.z < tyre_top - 0.1:
+            continue
+        # pieces fixees a la caisse (centre devant l'arriere) : elles suivent
+        # aussi le rentre des flancs ; les cheminees, derriere, restent droites
+        body = (olo.y + ohi.y) / 2.0 < y_back - 0.1
+        wrap = obj.name.startswith(WRAP_PARTS)
+        mw = obj.matrix_world
+        inv = mw.inverted()
+        if obj.name.startswith(RIGID):
+            # autocollant, logo : deplace d'un bloc (le tordre en ferait une
+            # goutte d'eau)
+            center = (olo + ohi) / 2.0
+            shift = deform(center, body, wrap) - center
+            for v in obj.data.vertices:
+                v.co = inv @ ((mw @ v.co) + shift)
+        else:
+            clear_custom_normals(obj)
+            if max(ohi - olo) > 0.3:
+                subdivide_long_edges(obj, MAX_EDGE)
+            for v in obj.data.vertices:
+                v.co = inv @ deform(mw @ v.co, body, wrap)
+            smooth(obj.data)
+        obj.data.update()
+        count += 1
+    return count
 
 
 # --- remorques -------------------------------------------------------------------
@@ -509,6 +602,8 @@ def process(src, dst, kind):
         done, before, after = soften(targets)
         root = roots[0]
         added = detail_tractor(root)
+        reshaped = reshape_cab(trailer)
+        print(f"silhouette : {reshaped} pieces deformees")
     else:
         trailer = next((o for o in bpy.data.objects if o.name == "Remorque"), None)
         if trailer is None:
