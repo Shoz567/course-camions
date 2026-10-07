@@ -14,7 +14,11 @@ extends PhysicsTest
 ##      (aretes vives, coutures) le restent apres ;
 ##   D. reapparition : camion neuf, aucune bosse, toutes ses pieces ;
 ##   E. cout : un choc de plus sur une carrosserie deja copiee reste sous
-##      MAX_DENT_MS (pas d'a-coup en course).
+##      MAX_DENT_MS (pas d'a-coup en course) ;
+##   F. tole fatiguee (2026-10-07, « plus on tape sur une paroi, plus elle se
+##      deforme, en s'enfoncant ») : quatre coups identiques au meme endroit
+##      de la citerne - chacun creuse plus que le precedent, le quatrieme au
+##      moins 1,5 fois plus que le premier.
 
 const MIN_DENT := 0.15
 const MAX_DENT_MS := 25.0
@@ -32,6 +36,8 @@ var _restored: Array = []
 var _ms: float = 0.0
 var _first_ms: float = 0.0
 var _prewarm_ms: float = 0.0
+## F : profondeur du creux apres chaque coup (m).
+var _steps: PackedFloat32Array = []
 
 
 func _test_setup() -> void:
@@ -101,6 +107,11 @@ func _test_tick(t: int) -> void:
 	var t0 := Time.get_ticks_usec()
 	fx.crush(at, -_b.global_basis.x, 15.0, true)
 	_ms = (Time.get_ticks_usec() - t0) / 1000.0
+	# F : quatre coups identiques au meme endroit, cote gauche de la citerne
+	var spot := _b.global_transform * Vector3(-1.5, 3.2, 6.0)
+	for k in 4:
+		fx.crush(spot, _b.global_basis.x, 4.0, true)
+		_steps.append(_dent_near(tank, spot, 1.2))
 	# D : reapparition
 	(_a.get_node("DamageFx") as TruckDamageFx).clear_all()
 	var hidden := 0
@@ -124,6 +135,25 @@ func _max_dent(root: Node3D) -> float:
 			var was: PackedVector3Array = ref.surface_get_arrays(k)[Mesh.ARRAY_VERTEX]
 			for i in mini(now.size(), was.size()):
 				best = maxf(best, now[i].distance_to(was[i]) * s)
+	return best
+
+
+## Plus grand deplacement d'un sommet a moins de `reach` de `point` (m, monde).
+func _dent_near(root: Node3D, point: Vector3, reach: float) -> float:
+	var best := 0.0
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if not mi.has_meta(BodyDamage.META_PRISTINE):
+			continue
+		var ref := BodyDamage.tessellated(mi.get_meta(BodyDamage.META_PRISTINE) as Mesh)
+		var xf := mi.global_transform
+		for k in mi.mesh.get_surface_count():
+			var now: PackedVector3Array = mi.mesh.surface_get_arrays(k)[Mesh.ARRAY_VERTEX]
+			var was: PackedVector3Array = ref.surface_get_arrays(k)[Mesh.ARRAY_VERTEX]
+			for i in mini(now.size(), was.size()):
+				var w := xf * was[i]
+				if w.distance_to(point) < reach:
+					best = maxf(best, w.distance_to(xf * now[i]))
 	return best
 
 
@@ -182,3 +212,13 @@ func _test_finish() -> void:
 	check_below("C aucune fente (m)", _b_crack, 0.001)
 	check("D reapparition : aucune bosse, aucune piece manquante", _restored == [0, 0], str(_restored))
 	check_below("E choc de plus (ms)", _ms, MAX_DENT_MS)
+	var gains := PackedFloat32Array()
+	var prev := 0.0
+	for d in _steps:
+		gains.append(d - prev)
+		prev = d
+	var deeper := gains.size() == 4
+	for k in range(1, gains.size()):
+		deeper = deeper and gains[k] > gains[k - 1]
+	check("F tole fatiguee : chaque coup au meme endroit creuse plus que le precedent", deeper
+		and gains[3] > gains[0] * 1.5, "creux %s m" % [_steps])

@@ -240,16 +240,23 @@ vec2 relief_at(vec3 p, vec3 n, vec3 up) {
 // chocs violents (ou repetes au meme endroit, BodyScars les aggrave) trouent.
 const float HOLE_AT = 0.6;
 
-// gravite de la cicatrice `sc` au point p, en distance VRAIE (pas seulement
-// dans le plan, comme scar_at) : la paroi d'en face, a 3 m, n'est jamais
-// percee par le meme choc
-float hole_at(vec4 sc, vec3 p) {
+// gravite de la cicatrice `sc` au point p (normale n) : distance dans le plan
+// de la paroi, comme scar_at - la tole enfoncee par les coups repetes
+// (BodyDamage) s'eloigne du point d'impact, elle doit pouvoir se dechirer -
+// mais rien au-dela de HOLE_DEPTH le long de la normale : la paroi d'en face,
+// a 3 m, n'est jamais percee par le meme choc
+const float HOLE_DEPTH = 1.2;
+
+float hole_at(vec4 sc, vec3 p, vec3 n) {
 	if (sc.w <= 0.0) {
 		return 0.0;
 	}
 	float r = mod(sc.w, 8.0);
 	float sev = floor(sc.w / 8.0) / 255.0;
-	return sev * (1.0 - smoothstep(0.15, 1.0, length(p - sc.xyz) / r));
+	vec3 dv = p - sc.xyz;
+	float dn = dot(dv, n);
+	float d = sqrt(max(dot(dv, dv) - dn * dn, 0.0)) / r;
+	return sev * (1.0 - smoothstep(0.15, 1.0, d)) * (1.0 - smoothstep(HOLE_DEPTH * 0.7, HOLE_DEPTH, abs(dn)));
 }
 #endif
 
@@ -264,10 +271,11 @@ void fragment() {
 	float tear = 0.0;
 	float lip = 0.0;
 	if (scar0.w > 0.0 && scars > 0.0) {
-		float hm = max(max(max(hole_at(scar0, obj_pos), hole_at(scar1, obj_pos)),
-			max(hole_at(scar2, obj_pos), hole_at(scar3, obj_pos))),
-			max(max(hole_at(scar4, obj_pos), hole_at(scar5, obj_pos)),
-			max(hole_at(scar6, obj_pos), hole_at(scar7, obj_pos))));
+		vec3 hn = normalize(obj_n);
+		float hm = max(max(max(hole_at(scar0, obj_pos, hn), hole_at(scar1, obj_pos, hn)),
+			max(hole_at(scar2, obj_pos, hn), hole_at(scar3, obj_pos, hn))),
+			max(max(hole_at(scar4, obj_pos, hn), hole_at(scar5, obj_pos, hn)),
+			max(hole_at(scar6, obj_pos, hn), hole_at(scar7, obj_pos, hn))));
 		float jag = tri(detail_tex, obj_pos, obj_n, 1.6, vec2(1.0)) * 0.6
 			+ tri(grime_tex, obj_pos * 3.0, obj_n, 0.6, vec2(1.0)) * 0.4;
 		float v = hm * scars + (jag - 0.5) * 0.4;

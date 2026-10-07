@@ -6,7 +6,9 @@ extends RefCounted
 ## bouts partent »). Purement visuel : la physique ne voit que ses boites.
 ##
 ##   - dent() : enfonce les sommets proches du point d'impact, dans le sens du
-##     choc, avec une chute douce et un froissement irregulier ; les normales
+##     choc, avec une chute douce et un froissement irregulier ; la tole se
+##     fatigue : un nouveau coup pres d'un creux deja la l'enfonce plus
+##     profond et plus large (META_HITS) ; les normales
 ##     des faces touchees sont recalculees (le creux accroche la lumiere). Les
 ##     aretes vives restent vives : un sommet n'additionne que les faces qui le
 ##     partagent par son indice, et les modeles dupliquent les sommets aux
@@ -51,6 +53,16 @@ const MAX_DISPLACEMENT := 0.8
 ## Tableaux de surfaces de la copie propre a une instance (meta, liberee avec elle).
 const META_ARRAYS := &"dent_arrays"
 const META_BASE := &"dent_base"
+## Tole fatiguee (2026-10-07 : « plus on tape sur une paroi, plus elle se
+## deforme, en s'enfoncant ») : chaque coup deja recu au meme endroit (a moins
+## du rayon du creux) enfonce le suivant de FATIGUE_PER_HIT de plus (au plus
+## FATIGUE_MAX fois) et l'elargit de FATIGUE_SPREAD. Coups retenus par
+## maillage : Array de Vector4 (point local, nombre).
+const META_HITS := &"dent_hits"
+const FATIGUE_PER_HIT := 0.5
+const FATIGUE_MAX := 3.0
+const FATIGUE_SPREAD := 0.12
+const MAX_HIT_SPOTS := 24
 
 
 ## Enfonce la carrosserie sous `root` autour de `point` (monde) : sommets a
@@ -72,8 +84,50 @@ static func dent(root: Node3D, point: Vector3, push: Vector3, radius: float) -> 
 		var s := absf(xf.basis.get_scale().x)
 		if s < 1e-4:
 			continue
-		moved += _dent_instance(mi, inv * point, inv.basis * push, radius / s)
+		var p := inv * point
+		var r := radius / s
+		# tole fatiguee : chaque coup pres d'un creux deja la l'enfonce plus
+		# (et sur une zone un peu plus large)
+		var n_prev := _fatigue(mi, p, r)
+		var k := minf(1.0 + FATIGUE_PER_HIT * n_prev, FATIGUE_MAX)
+		moved += _dent_instance(mi, p, inv.basis * push * k, r * (1.0 + FATIGUE_SPREAD * minf(n_prev, 4.0)))
 	return moved
+
+
+## Coups deja recus par `mi` a moins de `r` du point local `p` (avant celui-
+## ci), puis ce coup compte : le plus proche est renforce, sinon un nouveau.
+static func _fatigue(mi: MeshInstance3D, p: Vector3, r: float) -> int:
+	var hits: Array = mi.get_meta(META_HITS, [])
+	var best := -1
+	var best_d := INF
+	for i in hits.size():
+		var h: Vector4 = hits[i]
+		var d := Vector3(h.x, h.y, h.z).distance_to(p)
+		if d < r and d < best_d:
+			best = i
+			best_d = d
+	var n := 0
+	if best >= 0:
+		var h: Vector4 = hits[best]
+		n = int(h.w)
+		hits[best] = Vector4(h.x, h.y, h.z, h.w + 1.0)
+	elif hits.size() < MAX_HIT_SPOTS:
+		hits.append(Vector4(p.x, p.y, p.z, 1.0))
+	mi.set_meta(META_HITS, hits)
+	return n
+
+
+## Coups deja recus au meme endroit (au plus proche de `point`, monde) par la
+## carrosserie sous `root` (tests).
+static func hits_near(root: Node3D, point: Vector3) -> int:
+	var best := 0
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		var p := mi.global_transform.affine_inverse() * point
+		for h: Vector4 in mi.get_meta(META_HITS, []):
+			if Vector3(h.x, h.y, h.z).distance_to(p) < 1.0:
+				best = maxi(best, int(h.w))
+	return best
 
 
 ## Prepare a l'avance (subdivision, voisinage) toutes les carrosseries
@@ -106,6 +160,8 @@ static func restore(root: Node3D) -> void:
 		if mi.has_meta(META_DETACHED):
 			mi.remove_meta(META_DETACHED)
 			mi.visible = true
+		if mi.has_meta(META_HITS):
+			mi.remove_meta(META_HITS)
 	BodyScars.clear(root)
 
 

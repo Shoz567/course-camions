@@ -546,8 +546,17 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   deux faces). Au cœur d'une cicatrice grave (gravité locale > 0,6 : choc
   violent, ou chocs répétés au même endroit), la coque est découpée à bord
   déchiqueté, lèvre de tôle nue puis bord noirci ; par le trou, l'intérieur
-  vide de la coque (apprêt sombre). Distance vraie au choc : la paroi d'en
-  face n'est jamais percée par le même choc. Le tracteur reste plein.
+  vide de la coque (apprêt sombre). La paroi d'en face (au-delà de 1,2 m le
+  long de la normale) n'est jamais percée par le même choc. Le tracteur reste
+  plein.
+- `[x]` **Tôle fatiguée** (2026-10-07, « plus on tape sur une paroi d'une
+  remorque ou du camion, plus elle se déforme, en s'enfonçant ») : chaque coup
+  près d'un creux déjà là l'enfonce 50 % de plus par coup reçu (jusqu'à ×3)
+  et un peu plus large (`BodyDamage`, `META_HITS`). Mesuré
+  (`truck_body_damage_test` F, quatre coups à 4 m/s au même endroit) : creux
+  de 6, 14, 25, 37 cm, chaque coup creuse plus que le précédent. Le trou de
+  la coque se mesure dans le plan de la paroi : la tôle enfoncée se
+  déchire au lieu de s'éloigner du point d'impact.
 
 ---
 
