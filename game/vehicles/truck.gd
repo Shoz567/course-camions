@@ -34,11 +34,15 @@ extends RigidBody3D
 ##       gameplay (TruckHealth). Chocs contre un obstacle de la piste
 ##       (hazard_impact) ou un autre camion (truck_impact) : idem. Epave
 ##       (set_wrecked) : gelee, sans force, sans collision.
+##   pneu eclate (burst_tire, decide par le gameplay : TruckTires) : la roue
+##       perd de l'adherence laterale, sa jante freine (le camion tire de
+##       ce cote), et le coin de la caisse descend du rayon perdu.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
 ##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit(),
-##   detach_trailer(), reattach_trailer(), set_wrecked(), set_trailer_type()
+##   detach_trailer(), reattach_trailer(), set_wrecked(), set_trailer_type(),
+##   burst_tire(), repair_tires()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -80,6 +84,10 @@ signal hazard_impact(obstacle: Node3D, approach_ms: float, on_trailer: bool, poi
 ## Le meme debut de contact, quand l'autre corps est un camion : les deux
 ## camions s'abiment, chacun a la partie touchee (TruckHealth).
 signal truck_impact(other: Truck, approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Le pneu de la roue `wheel` (ordre FL, FR, RL, RR) vient d'eclater ; tous
+## remis a neuf (repair_tires).
+signal tire_burst(wheel: int)
+signal tires_repaired
 
 ## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
 ## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
@@ -111,6 +119,8 @@ const STOP_SPEED_MS := 0.5
 @export var debug_landing_cushion: bool = true
 @export var debug_boost: bool = true
 @export var debug_wall_unstick: bool = true
+## Pneu eclate : adherence, freinage de la jante, roue affaissee.
+@export var debug_tire_burst: bool = true
 ## Traces DebugDraw du camion (actifs seulement si DebugDraw.enabled).
 @export var debug_draw: bool = true
 
@@ -192,6 +202,8 @@ var _slow_ticks: int = 0
 var _slow_decel: float = 0.0
 ## Perte d'adherence laterale temporaire (flaque savonnette)
 var _slip_ticks: int = 0
+## Pneus eclates (1 : eclate), ordre FL, FR, RL, RR.
+var _burst: PackedByteArray = PackedByteArray([0, 0, 0, 0])
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 ## Remorque choisie (null : celle du modele, caisse de TruckSpec) et sa caisse.
@@ -441,6 +453,41 @@ func is_slipping() -> bool:
 func cargo_hit(crate_position: Vector3) -> void:
 	_cargo_hit_pending = true
 	_cargo_hit_from = crate_position
+
+
+## Le pneu de la roue `wheel` eclate : moins d'adherence a cette roue, la jante
+## freine et le coin de la caisse descend (VehicleTuning, groupe « Pneu
+## eclate »). Jusqu'a repair_tires. Faux s'il etait deja eclate.
+func burst_tire(wheel: int) -> bool:
+	if wheel < 0 or wheel >= 4 or _burst[wheel] != 0:
+		return false
+	_burst[wheel] = 1
+	_apply_tire_drop()
+	tire_burst.emit(wheel)
+	return true
+
+
+## Quatre pneus neufs (camion qui reapparait).
+func repair_tires() -> void:
+	if _burst.count(1) == 0:
+		return
+	_burst.fill(0)
+	_apply_tire_drop()
+	tires_repaired.emit()
+
+
+func is_tire_burst(wheel: int) -> bool:
+	return _burst[wheel] != 0
+
+
+func burst_tire_count() -> int:
+	return _burst.count(1)
+
+
+func _apply_tire_drop() -> void:
+	for i in _probes.size():
+		var on := _burst[i] != 0 and debug_tire_burst and tuning != null
+		_probes[i].radius_loss = tuning.tire_burst_drop_m if on else 0.0
 
 
 ## Ticks de frottement continu contre un mur (0 = libre).
@@ -820,6 +867,8 @@ func _physics_process(_delta: float) -> void:
 			var mu := t.lateral_grip_g * p.surface_grip * (rear_grip if rear else 1.0)
 			if _slip_ticks > 0:
 				mu *= 0.12 if rear else 0.22
+			if _burst[i] != 0 and debug_tire_burst:
+				mu *= t.tire_burst_grip_factor
 			f_lat = -mu * fs * clampf(v_lat / v_ref, -1.0, 1.0)
 
 		# 1.4 longitudinal : 4 roues motrices, forces proportionnelles a la masse.
@@ -831,6 +880,10 @@ func _physics_process(_delta: float) -> void:
 				# a main s'efface avec l'accelerateur (2026-10-01, « le derapage
 				# freine trop »)
 				decel += _handbrake_blend * t.handbrake_decel_ms2 * (1.0 - _input.throttle)
+			# pneu eclate : la jante roule sur la gomme a plat et freine sa roue
+			# (le camion tire de ce cote)
+			if _burst[i] != 0 and debug_tire_burst:
+				decel += t.tire_burst_drag_ms2
 			var sat := clampf(v_long / t.grip_saturation_speed_ms, -1.0, 1.0)
 			f_long -= decel * m_wheel * sat
 

@@ -1,0 +1,168 @@
+class_name TruckTires
+extends Node3D
+
+## Pneus du tracteur (enfant « Tires » du camion), 2026-10-07 : « quand un pneu
+## est touche, il eclate, on perd en adherence, en maniabilite ».
+##
+## Un choc de cote (mur, autre camion, remorque larguee, epave) a la hauteur
+## d'une roue et assez violent fait eclater son pneu (Truck.burst_tire) :
+##   - la normale du choc est surtout laterale (repere du camion) : un choc
+##     frontal prend le pare-chocs, pas les roues, et un frottement le long
+##     d'un mur n'est pas assez violent ;
+##   - le point touche est devant ou derriere l'essieu d'au plus AXLE_REACH_M
+##     (un camion pris de cote signale le coin de l'autre, a ~1,4 m de son
+##     axe) ; contre un autre corps, sous MAX_HIT_HEIGHT_M (pas la cabine, ni une
+##     remorque, plus haute) ; un mur, lui, descend jusqu'au sol ;
+##   - la vitesse vers l'obstacle depasse BURST_SPEED_MS (~25 km/h de plein
+##     cote, ou un mur pris a ~15 deg a 100 km/h).
+## Les roues de la remorque, purement visuelles, n'eclatent pas.
+## L'eclatement : detonation, bouffee de fumee, lambeaux de gomme. La roue
+## creve reste a plat jusqu'a la reapparition du camion (pneus neufs).
+## Deterministe : aucun tirage aleatoire (CLAUDE.md §7).
+
+## Vitesse vers l'obstacle (m/s) a partir de laquelle le pneu touche eclate.
+const BURST_SPEED_MS := 7.0
+## Part laterale minimale de la normale du choc (repere du camion).
+const SIDE_MIN := 0.45
+## Etendue d'une roue le long du camion, de part et d'autre de son essieu (m) :
+## l'avant du pare-chocs et l'arriere du chassis comptent, pas le milieu.
+const AXLE_REACH_M := 1.7
+## Au-dessus (repere du camion, m) : cabine ou remorque, pas une roue.
+const MAX_HIT_HEIGHT_M := 2.3
+
+static var _bang_stream: AudioStreamWAV
+static var _rubber: StandardMaterial3D
+
+var _truck: Truck
+var _bang: AudioStreamPlayer3D
+
+
+## Roue (ordre FL, FR, RL, RR) dont le pneu eclate sous ce choc, ou -1.
+## `point` et `normal` (tournee vers le camion) en monde, `speed_ms` : vitesse
+## vers l'obstacle. Un mur descend jusqu'au sol : sa hauteur de contact ne
+## compte pas (il touche souvent le haut de la cabine en premier), max_height
+## INF.
+static func wheel_hit(truck_xf: Transform3D, point: Vector3, normal: Vector3, speed_ms: float,
+		max_height: float = MAX_HIT_HEIGHT_M) -> int:
+	if speed_ms < BURST_SPEED_MS:
+		return -1
+	var n := (truck_xf.basis.inverse() * normal).normalized()
+	if absf(n.x) < SIDE_MIN:
+		return -1
+	var p := truck_xf.affine_inverse() * point
+	if p.y > max_height:
+		return -1
+	# normale vers le camion : choc venu de la gauche -> normale vers +X
+	var left := n.x > 0.0
+	for i in 4:
+		var a := TruckSpec.ANCHORS[i]
+		if (a.x < 0.0) == left and absf(p.z - a.z) <= AXLE_REACH_M:
+			return i
+	return -1
+
+
+func _ready() -> void:
+	_truck = get_parent() as Truck
+	if _truck == null:
+		return
+	_truck.wall_impact_at.connect(_on_impact.bind(INF))
+	_truck.body_impact.connect(_on_impact.bind(MAX_HIT_HEIGHT_M))
+	_truck.tire_burst.connect(_on_tire_burst)
+	var health := TruckHealth.of(_truck)
+	if health != null:
+		health.respawned.connect(_truck.repair_tires)
+	if DisplayServer.get_name() != "headless":
+		if _bang_stream == null:
+			_bang_stream = _build_bang_stream()
+		_bang = AudioStreamPlayer3D.new()
+		_bang.name = "Bang"
+		_bang.stream = _bang_stream
+		_bang.unit_size = 18.0
+		_bang.max_distance = 160.0
+		add_child(_bang)
+
+
+func _on_impact(speed: float, _on_trailer: bool, point: Vector3, normal: Vector3, max_height: float) -> void:
+	if _truck.is_wrecked():
+		return
+	var i := wheel_hit(_truck.global_transform, point, normal, speed, max_height)
+	if i >= 0:
+		_truck.burst_tire(i)
+
+
+## Centre de la roue `wheel` (monde) : sous son ancrage, au moyeu.
+func wheel_center(wheel: int) -> Vector3:
+	var p := _truck.get_probe(wheel)
+	return p.global_position - _truck.global_basis.y * p.hub_distance
+
+
+## Effets apres le pas physique (l'eclatement arrive pendant un contact).
+func _on_tire_burst(wheel: int) -> void:
+	_burst_fx.call_deferred(wheel)
+
+
+func _burst_fx(wheel: int) -> void:
+	if not is_inside_tree():
+		return
+	var at := wheel_center(wheel)
+	var side := _truck.global_basis.x * signf(TruckSpec.ANCHORS[wheel].x)
+	var world := _truck.get_parent()
+	if world == null:
+		return
+	# lanieres de gomme, projetees vers l'exterieur (deterministe)
+	if _rubber == null:
+		_rubber = StandardMaterial3D.new()
+		_rubber.albedo_color = Color(0.035, 0.035, 0.037)
+		_rubber.roughness = 0.9
+	for k in 4:
+		var h := fposmod(sin(float(k * 7 + wheel) * 12.9898 + float(Engine.get_physics_frames()) * 0.731) * 43758.55, 1.0)
+		var dir := (side + _truck.global_basis.z * (h - 0.5) * 1.6 + Vector3.UP * (0.5 + h)).normalized()
+		var size := Vector3(lerpf(0.1, 0.2, h), 0.025, lerpf(0.25, 0.6, 1.0 - h))
+		Debris.shard(world, at + dir * 0.5, size, _rubber, _truck.linear_velocity * 0.9 + dir * lerpf(3.0, 6.0, h))
+	# bouffee de poussiere et de caoutchouc
+	var puff := DamageFx.make_smoke()
+	puff.name = "TirePuff"
+	puff.one_shot = true
+	puff.explosiveness = 0.9
+	puff.amount = 14
+	puff.lifetime = 1.1
+	puff.color = Color(0.55, 0.53, 0.5, 0.75)
+	puff.direction = side + Vector3.UP * 0.4
+	puff.spread = 45.0
+	puff.initial_velocity_min = 3.0
+	puff.initial_velocity_max = 6.0
+	world.add_child(puff)
+	puff.global_position = at
+	puff.emitting = true
+	puff.finished.connect(puff.queue_free)
+	if _bang != null:
+		_bang.global_position = at
+		_bang.play()
+
+
+## Detonation : claquement de bruit blanc tres bref sur un coup sourd, puis le
+## souffle de l'air qui s'echappe. Genere une fois, partage.
+static func _build_bang_stream() -> AudioStreamWAV:
+	const RATE := 22050
+	const DURATION_S := 0.6
+	var n := roundi(RATE * DURATION_S)
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var low := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var noise := rng.randf_range(-1.0, 1.0)
+		low = lerpf(low, noise, 0.08)
+		var crack := noise * exp(-t / 0.018)
+		var thump := sin(TAU * 58.0 * t) * exp(-t / 0.07)
+		var hiss := low * 2.5 * exp(-t / 0.22) * minf(1.0, t / 0.02)
+		var v := crack * 0.9 + thump * 0.8 + hiss * 0.35
+		data.encode_s16(i * 2, clampi(roundi(clampf(v, -1.0, 1.0) * 32000.0), -32768, 32767))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = RATE
+	wav.stereo = false
+	wav.data = data
+	return wav

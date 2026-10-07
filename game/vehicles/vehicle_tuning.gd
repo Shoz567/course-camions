@@ -172,6 +172,18 @@ extends Resource
 ## biais a 150 km/h se couche moins (10,9 deg contre 13,2 a 0,2).
 @export_range(0.0, 1.0, 0.01) var chassis_friction: float = 0.0
 
+@export_group("Pneu eclate")
+## Pneu eclate (Truck.burst_tire, 2026-10-07 : « quand un pneu est touche, il
+## eclate, on perd en adherence, en maniabilite ») : adherence laterale de
+## cette roue, en fraction de l'adherence normale (0 .. 1).
+@export_range(0.0, 1.0, 0.01) var tire_burst_grip_factor: float = 0.0
+## Freinage de la jante qui roule sur la gomme a plat, a cette roue seule :
+## le camion tire du cote creve et perd un peu de vitesse max.
+@export_range(0.0, 10.0, 0.01, "suffix:m/s²") var tire_burst_drag_ms2: float = 0.0
+## Rayon perdu : la jante descend d'autant vers le sol, ce coin de la caisse
+## aussi.
+@export_range(0.0, 0.5, 0.01, "suffix:m") var tire_burst_drop_m: float = 0.0
+
 @export_group("Direction")
 ## Angle de braquage max, atteint a basse vitesse.
 @export_range(0.0, 60.0, 0.1, "suffix:°") var max_steer_deg: float = 0.0
@@ -296,6 +308,10 @@ func validate() -> PackedStringArray:
 		errors.append("grip_slip_angle_deg = %s : doit etre < 45" % grip_slip_angle_deg)
 	if auto_countersteer_ratio >= 1.0:
 		errors.append("auto_countersteer_ratio = %s : doit etre < 1" % auto_countersteer_ratio)
+	if tire_burst_grip_factor >= 1.0:
+		errors.append("tire_burst_grip_factor = %s : doit etre < 1" % tire_burst_grip_factor)
+	if tire_burst_drop_m >= TruckSpec.WHEEL_RADIUS * 0.5:
+		errors.append("tire_burst_drop_m = %s : la jante passerait sous le sol" % tire_burst_drop_m)
 	if handbrake_engage_ticks < 1.0 or handbrake_release_ticks < 1.0:
 		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:

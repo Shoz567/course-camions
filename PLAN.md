@@ -475,6 +475,17 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   (5°/tick). Mesuré : 0,877 → 0,961 g, rayon mini à 50 km/h 21,6 → 19,7 m
   (`make baseline`). Puis cible relevée à ~1,15 g (accord de l'utilisateur,
   2026-10-07) : adhérence 1,19 g, mesuré 1,145 g, rayon mini 16,4 m.
+- `[x]` **Pneus qui éclatent** (2026-10-07, « quand un pneu est touché, il
+  éclate, on perd en adhérence, en maniabilité ») : un choc de côté à hauteur
+  de roue, à plus de 7 m/s vers l'obstacle (mur, camion, remorque larguée,
+  épave), fait éclater le pneu de ce côté et de cet essieu
+  (`TruckTires.wheel_hit`) ; un choc frontal ou un frottement, non. La roue
+  garde 45 % de son adhérence latérale, sa jante freine (3 m/s²) et le coin
+  descend de 18 cm (`VehicleTuning`, groupe « Pneu éclaté », `debug_tire_burst`).
+  Mesuré (`tire_burst_test`) : plein braquage 30 % de virage en moins, le
+  camion tire de 5° du côté crevé en 5 s, 13 % de vitesse en moins. Pneu
+  écrasé sous la jante et déchiré (`truck_body.gdshader`, `tyre_burst`),
+  détonation, fumée, lanières de gomme. Pneus neufs à la réapparition.
 - `[x]` **Relief des matières** (2026-10-07, objectif « modèles plus lisses et
   réalistes, avec des détails en relief ») : `truck_body.gdshader` dessine
   un relief procédural par matière (`TruckMaterials._relief_of`), ses axes

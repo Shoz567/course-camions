@@ -19,6 +19,9 @@ var surface_grip: float = 1.0
 var load_n: float = 0.0
 ## Vitesse du point de contact le long de l'axe avant de la roue (m/s).
 var long_speed: float = 0.0
+## Rayon perdu par un pneu eclate (m) : la roue porte sur sa jante, le moyeu
+## descend d'autant vers le sol (Truck.burst_tire).
+var radius_loss: float = 0.0
 
 
 func _ready() -> void:
@@ -40,7 +43,7 @@ func probe() -> void:
 		return
 	contact_point = get_collision_point()
 	contact_normal = get_collision_normal()
-	hub_distance = global_position.distance_to(contact_point) - TruckSpec.WHEEL_RADIUS
+	hub_distance = global_position.distance_to(contact_point) - (TruckSpec.WHEEL_RADIUS - radius_loss)
 	surface_grip = 1.0
 	var c := get_collider()
 	if c != null and c.has_meta(&"surface"):

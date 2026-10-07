@@ -63,6 +63,10 @@ instance uniform vec4 scar7 = vec4(0.0);
 // pneu) et centre (pneu : axe de la roue)
 instance uniform vec4 relief_axis = vec4(0.0);
 instance uniform vec4 relief_center = vec4(0.0);
+// pneu eclate (TruckVisual.set_tyre_burst) : ecrasement en fraction du rayon
+// (0 : neuf). Le bas du pneu, toujours vers le sol meme quand la roue tourne,
+// s'aplatit et ses flancs gonflent ; la gomme est dechiree.
+instance uniform float tyre_burst = 0.0;
 
 varying vec3 obj_pos;
 varying vec3 obj_n;
@@ -72,6 +76,27 @@ void vertex() {
 	obj_pos = VERTEX;
 	obj_n = NORMAL;
 	h_ground = dot(height_row.xyz, VERTEX) + height_row.w;
+	if (relief == 2 && tyre_burst > 0.0 && relief_axis.w > 0.0) {
+		vec3 ax = normalize(relief_axis.xyz);
+		float rad = relief_axis.w;
+		vec3 d = VERTEX - relief_center.xyz;
+		vec3 rv = d - ax * dot(d, ax);
+		// le sol dans le repere du maillage (la roue tourne, lui non)
+		vec3 down = transpose(MODEL_NORMAL_MATRIX) * vec3(0.0, -1.0, 0.0);
+		down = normalize(down - ax * dot(down, ax) + vec3(0.0, 1e-6, 0.0));
+		float below = dot(rv, down);
+		float floor_d = rad * (1.0 - tyre_burst);
+		// meplat pose au sol
+		float push = max(below - floor_d, 0.0);
+		VERTEX -= down * push;
+		// flancs : la gomme ecrasee gonfle de cote, pres du sol
+		float squash = smoothstep(floor_d - 0.5 * rad * tyre_burst, rad, below);
+		VERTEX += ax * dot(NORMAL, ax) * squash * tyre_burst * 0.5 * rad;
+		NORMAL = normalize(mix(NORMAL, down, clamp(push / (0.1 * rad), 0.0, 1.0) * (1.0 - abs(dot(NORMAL, ax)))));
+		// le reste de la bande, degonfle : ondule legerement
+		VERTEX -= normalize(rv + vec3(1e-6)) * tyre_burst * 0.06 * rad
+			* (0.5 + 0.5 * sin(dot(rv, cross(ax, down)) / rad * 9.0));
+	}
 }
 
 // gravite (0 .. 1) de la cicatrice `sc` au point p de normale n : disque au
@@ -217,6 +242,33 @@ void fragment() {
 	vec2 rel = relief_at(obj_pos, normalize(obj_n), up_m);
 	col *= 1.0 - 0.1 * max(rel.y, 0.0);
 	col = mix(col, col * 1.08, max(-rel.y, 0.0));
+	// pneu eclate : bande arrachee par lambeaux (carcasse textile, nappe d'acier
+	// a nu au fond), bord dechiquete sombre, plus de sculptures
+	float torn_h = 0.0;
+	if (relief == 2 && tyre_burst > 0.0) {
+		// lambeaux arraches en bandes autour de la roue : bruit lent le long de
+		// la circonference (direction du rayon, sans couture), rapide en travers
+		vec3 ax = normalize(relief_axis.xyz);
+		vec3 d = obj_pos - relief_center.xyz;
+		float x = dot(d, ax);
+		vec3 rdir = normalize(d - ax * x + vec3(1e-6));
+		vec3 b1 = normalize(cross(ax, abs(ax.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+		vec2 ring = vec2(dot(rdir, b1), dot(rdir, cross(ax, b1)));
+		float tn = texture(grime_tex, ring * 0.22 + vec2(0.37, x * 1.6)).r * 0.75
+			+ texture(detail_tex, ring * 0.5 + vec2(x * 4.0, 0.21)).r * 0.25;
+		float aa = fwidth(tn) * 1.5 + 0.004;
+		float zone = 1.0 - smoothstep(0.45, 0.75, abs(dot(normalize(obj_n), ax)));
+		float torn = smoothstep(0.47 - aa, 0.47 + aa, tn) * zone;
+		float steel_t = smoothstep(0.6, 0.66, tn) * zone;
+		float lip = (smoothstep(0.43 - aa, 0.45, tn) - smoothstep(0.47 - aa, 0.47 + aa, tn)) * zone;
+		col = mix(col, vec3(0.17, 0.15, 0.12), torn);
+		col = mix(col, vec3(0.3, 0.3, 0.29), steel_t);
+		col *= 1.0 - lip * 0.6;
+		rough = mix(rough, mix(0.95, 0.55, steel_t), torn);
+		metal = mix(metal, 0.6, steel_t);
+		rel.x *= 1.0 - torn;
+		torn_h = -torn * 0.006 - steel_t * 0.003 + lip * 0.002;
+	}
 
 	// salissure : basse, en plaques ; coulures ; poussiere sur le dessus
 	float patches = tri(grime_tex, obj_pos, obj_n, 0.35, vec2(1.0));
@@ -320,6 +372,6 @@ void fragment() {
 	CLEARCOAT = coat;
 	CLEARCOAT_ROUGHNESS = clearcoat_roughness;
 	EMISSION = emission * emission_energy;
-	float h = detail * bump_strength * (1.0 - dirt * 0.5) + fine * 0.0006 * dirt + scar_h + rel.x;
+	float h = detail * bump_strength * (1.0 - dirt * 0.5) + fine * 0.0006 * dirt + scar_h + rel.x + torn_h;
 	NORMAL = bump(NORMAL, VERTEX, h);
 }

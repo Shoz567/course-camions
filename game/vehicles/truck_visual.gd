@@ -29,6 +29,9 @@ extends Node3D
 ##   roues reduites de 8 % ; butee visuelle mesuree sur la geometrie, penche
 ##   compris, et braquage visuel borne : les roues ne traversent plus la
 ##   carrosserie (truck_wheel_arch_test).
+## - Pneu eclate (Truck.tire_burst) : le pneu de chaque groupe de roues associe
+##   s'ecrase sous la jante, au sol (truck_body.gdshader, tyre_burst), et
+##   montre sa carcasse dechiree ; la jante descend avec le rayon (physique).
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
 
 ## Chemin du modele, relatif au dossier du projet Godot (game/). Vide = boites.
@@ -187,6 +190,8 @@ func _ready() -> void:
 	add_child(_ground_ray)
 	if _truck != null:
 		_ground_ray.add_exception(_truck)
+		_truck.tire_burst.connect(_on_tire_burst)
+		_truck.tires_repaired.connect(_on_tires_repaired)
 	if external_model != "" and (DisplayServer.get_name() != "headless" or load_external_in_headless):
 		_attach_external()
 	if not model_loaded:
@@ -211,6 +216,35 @@ func _ready() -> void:
 	# ne marquent qu'elle, jamais la route
 	for n in find_children("*", "MeshInstance3D", true, false):
 		(n as MeshInstance3D).layers |= DamageFx.LAYER_BIT
+
+
+## Pneu de la roue physique `wheel` eclate : les pneus de ses groupes de roues
+## s'ecrasent du rayon perdu (en fraction de leur rayon).
+func _on_tire_burst(wheel: int) -> void:
+	var drop := _truck.tuning.tire_burst_drop_m if _truck.tuning != null else 0.0
+	for k in _pivots.size():
+		if _pivots[k] != null and _probe_index(k) == wheel:
+			var r := _wheel_radius[k] if k < _wheel_radius.size() else TruckSpec.WHEEL_RADIUS
+			set_tyre_burst(_pivots[k], clampf(drop / r, 0.0, 0.45))
+
+
+func _on_tires_repaired() -> void:
+	for p in _pivots:
+		if p != null:
+			set_tyre_burst(p, 0.0)
+
+
+## Ecrasement `amount` (fraction du rayon, 0 : pneu neuf) des pneus sous
+## `wheel_root` : les maillages en gomme sculptee (relief de pneu).
+static func set_tyre_burst(wheel_root: Node, amount: float) -> int:
+	var n := 0
+	for c in wheel_root.find_children("*", "MeshInstance3D", true, false):
+		var mi := c as MeshInstance3D
+		var ax: Variant = mi.get_instance_shader_parameter(&"relief_axis")
+		if ax is Vector4 and (ax as Vector4).w > 0.0:
+			mi.set_instance_shader_parameter(&"tyre_burst", amount)
+			n += 1
+	return n
 
 
 ## Noeud qui porte les traces de choc : la caisse de la remorque (elle suit
