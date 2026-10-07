@@ -473,8 +473,8 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   adhérence latérale 0,9 → 0,99 g (haut de la tolérance de VEHICLE_SPEC §6),
   pneus plus vifs (saturation à 5° au lieu de 6°), direction plus rapide
   (5°/tick). Mesuré : 0,877 → 0,961 g, rayon mini à 50 km/h 21,6 → 19,7 m
-  (`make baseline`). Aller au-delà demande de changer la cible de
-  VEHICLE_SPEC (question posée à l'utilisateur).
+  (`make baseline`). Puis cible relevée à ~1,15 g (accord de l'utilisateur,
+  2026-10-07) : adhérence 1,19 g, mesuré 1,145 g, rayon mini 16,4 m.
 - `[x]` **Relief des matières** (2026-10-07, objectif « modèles plus lisses et
   réalistes, avec des détails en relief ») : `truck_body.gdshader` dessine
   un relief procédural par matière (`TruckMaterials._relief_of`), ses axes

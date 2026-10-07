@@ -282,7 +282,7 @@ dessinées sur les valeurs mesurées (`docs/METRICS.md`), pas sur ces cibles.
 | 0 → 100 km/h | 6,0 s (360 ticks) | ± 5 % |
 | Freinage 100 → 0 | < 45 m | — |
 | Retournement | jamais, plein braquage à 80 km/h | — |
-| Adhérence latérale max | ~0,9 g | ± 10 % |
+| Adhérence latérale max | ~1,15 g (relevée de 0,9 g le 2026-10-07 : « mieux tourner sans déraper ») | ± 10 % |
 
 ## 7. Couches de collision
 

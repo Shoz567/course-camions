@@ -33,6 +33,9 @@ et mesure chaque grandeur selon le protocole du tableau ci-dessous.
 
 Première mesure : 2026-09-26, Godot 4.7.2 (vitesse max 149,2 km/h, 0 → 100 en
 6,03 s, freinage 38,7 m, rayon mini 21,6 m à 50 km/h, 0,877 g).
+Mesure en vigueur : 2026-10-07, après le relèvement de la cible d'adhérence
+(VEHICLE_SPEC §6, ~1,15 g) : rayon mini 16,4 m à 50 km/h, 1,145 g ; vitesse,
+accélération et freinage inchangés.
 
 ## 3. Le tableau
 

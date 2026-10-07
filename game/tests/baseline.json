@@ -18,8 +18,8 @@
   "top_speed_kmh": 149.2,
   "accel_0_100_s": 6.03,
   "braking_100_0_m": 38.7,
-  "min_turn_radius_m": 19.7,
-  "max_lateral_g": 0.961,
+  "min_turn_radius_m": 16.4,
+  "max_lateral_g": 1.145,
 
   "truck_tris": null,
   "track_tris": null,
