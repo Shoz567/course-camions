@@ -487,6 +487,12 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   jusque-là oubliées : caisse du conteneur, inox poli de la citerne, bâche,
   bandes réfléchissantes, extincteurs, tuyaux. 4 vues : 6,3 → 6,5 ms par
   image.
+- `[x]` **Pièces plus lisses** : normales pondérées par l'aire après chaque
+  chanfrein (plus de dégradé qui « gonfle » les faces planes) ; les châssis
+  et caisses fusionnés des remorques, jusque-là laissés à arêtes vives
+  (sommets dédoublés par l'export glTF, pièces trop lourdes), sont recousus
+  et chanfreinés (7 mm), avec un plafond de triangles par pièce. Têtes
+  ~125 k triangles, remorques 51 à 150 k ; 4 vues : 6,5 ms par image.
 
 ---
 

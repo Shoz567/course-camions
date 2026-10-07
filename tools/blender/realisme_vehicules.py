@@ -70,6 +70,15 @@ KEEP_MATERIALS = ("Pneu", "Jante", "Texte", "Plaque", "Vitre")
 KEEP_NAMES = ("Texte", "Plaque", "Embleme", "Logo", "T_", "Joint_Porte", "Essuie_Glace", "Ecrou", "Moyeu",
               "Voile_Jante", "Pneu", "Jante", "Gen_Essieu_", "Socket_")
 MAX_BEVEL_TRIS = 12000
+# Pieces fusionnees plus lourdes (chassis de remorque...) : chanfrein simple
+# (un segment) jusqu'a ce plafond.
+MAX_CHAMFER_TRIS = 40000
+# ... et seulement entre deux faces d'au moins cette aire (m2) : panneaux,
+# longerons, pare-chocs ; pas les tubes ni les echelles (triangles inutiles).
+HEAVY_MIN_FACE_M2 = 0.015
+# Une piece ne fait jamais plus de ce multiple de ses triangles (une petite
+# piece peut en gagner 3000).
+MAX_CHAMFER_GROWTH = 2.0
 
 
 def parse_args():
@@ -165,19 +174,23 @@ def _place(name, mesh, loc, mat, parent, rot=(0.0, 0.0, 0.0)):
     obj.parent = parent
     obj.matrix_world = world
     smooth(mesh)
+    weighted_normals(obj)
     return obj
 
 
-def bevel_bm(bm, min_dim, scale=1.0):
+def bevel_bm(bm, min_dim, scale=1.0, segments=BEVEL_SEGMENTS, min_area=0.0):
     """Chanfrein arrondi des aretes vives d'un bmesh (unites locales ; `scale` :
-    metres par unite locale)."""
+    metres par unite locale). `min_area` (m2) : seules les aretes entre deux
+    faces au moins aussi grandes (pas les tubes, echelles, rambardes)."""
     width = max(BEVEL_MIN, min(BEVEL_MAX, min_dim * BEVEL_RATIO)) / max(scale, 1e-6)
     bm.edges.ensure_lookup_table()
     sharp = math.radians(SHARP_DEG)
-    edges = [e for e in bm.edges if e.is_manifold and e.calc_face_angle(0.0) > sharp]
+    area = min_area / max(scale * scale, 1e-12)
+    edges = [e for e in bm.edges if e.is_manifold and e.calc_face_angle(0.0) > sharp
+             and (area <= 0.0 or min(f.calc_area() for f in e.link_faces) >= area)]
     if not edges:
         return 0
-    bmesh.ops.bevel(bm, geom=edges, offset=width, offset_type="OFFSET", segments=BEVEL_SEGMENTS,
+    bmesh.ops.bevel(bm, geom=edges, offset=width, offset_type="OFFSET", segments=segments,
                     profile=0.5, affect="EDGES", clamp_overlap=True)
     return len(edges)
 
@@ -186,6 +199,20 @@ def smooth(mesh):
     """Faces lissees, aretes au-dela de SMOOTH_DEG gardees nettes."""
     mesh.shade_smooth()
     mesh.set_sharp_from_angle(angle=math.radians(SMOOTH_DEG))
+
+
+def weighted_normals(obj):
+    """Normales ponderees par l'aire des faces : les grandes faces planes
+    restent planes (plus de degrade qui les « gonfle »), la lumiere ne roule
+    que sur les chanfreins - l'aspect d'une piece emboutie, lisse."""
+    if obj.data.users > 1:
+        obj.data = obj.data.copy()
+    mod = obj.modifiers.new("Normales_Ponderees", "WEIGHTED_NORMAL")
+    mod.mode = "FACE_AREA"
+    mod.keep_sharp = True
+    mod.weight = 50
+    with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+        bpy.ops.object.modifier_apply(modifier=mod.name)
 
 
 def clear_custom_normals(obj):
@@ -208,7 +235,7 @@ def soften(objects):
         if mats and all(m.startswith(KEEP_MATERIALS) for m in mats):
             continue
         tris = tri_count(obj)
-        if tris > MAX_BEVEL_TRIS:
+        if tris > MAX_CHAMFER_TRIS:
             continue
         scale = max(obj.matrix_world.to_scale())
         lo, hi = wbox(obj)
@@ -216,14 +243,31 @@ def soften(objects):
         min_dim = min(d for d in dims if d > 1e-4) if any(d > 1e-4 for d in dims) else 0.0
         if min_dim < 0.03:
             continue
+        # piece fusionnee (des dizaines de pieces dans un maillage : la boite
+        # englobante ne dit rien de leur taille) : chanfrein simple de 7 mm,
+        # puis entre grandes faces seulement, tant que la piece depasse
+        # MAX_CHAMFER_GROWTH
+        heavy = tris > MAX_BEVEL_TRIS
+        tries = [(0.06, 1, HEAVY_MIN_FACE_M2), (0.06, 1, 4.0 * HEAVY_MIN_FACE_M2)]
+        if not heavy:
+            tries.insert(0, (min_dim, BEVEL_SEGMENTS, 0.0))
         clear_custom_normals(obj)
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-        n = bevel_bm(bm, min_dim, scale)
+        for k, (dim, segments, area) in enumerate(tries):
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+            # l'export glTF dedouble les sommets le long des aretes vives
+            # (normales plates) : sans les recoudre, rien n'est chanfreinable
+            bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5 / max(scale, 1e-6))
+            n = bevel_bm(bm, dim, scale, segments, area)
+            out = sum(len(f.verts) - 2 for f in bm.faces)
+            if out <= max(MAX_CHAMFER_GROWTH * tris, tris + 3000) or k == len(tries) - 1:
+                break
+            bm.free()
         bm.to_mesh(obj.data)
         bm.free()
         smooth(obj.data)
         if n:
+            weighted_normals(obj)
             done += 1
             before += tris
             after += tri_count(obj)
@@ -453,6 +497,7 @@ def reshape_cab(trailer):
             for v in obj.data.vertices:
                 v.co = inv @ deform(mw @ v.co, body, wrap)
             smooth(obj.data)
+            weighted_normals(obj)
         obj.data.update()
         count += 1
     return count
@@ -608,8 +653,10 @@ def process(src, dst, kind):
         trailer = next((o for o in bpy.data.objects if o.name == "Remorque"), None)
         if trailer is None:
             raise SystemExit(f"{src.name} : pas de noeud Remorque")
-        done, before, after = soften([o for o in bpy.data.objects if is_under(o, trailer)])
+        # details d'abord : les planches de garde-boue se reperent avant que la
+        # soudure des sommets (soften) ne les fonde dans leurs supports
         added = detail_trailer(src.stem, trailer)
+        done, before, after = soften([o for o in bpy.data.objects if is_under(o, trailer)])
     objs = list(bpy.data.objects)
     export.to_glb(dst, objs)
     total = sum(tri_count(o) for o in objs if o.type == "MESH")

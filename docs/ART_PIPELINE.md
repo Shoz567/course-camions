@@ -267,7 +267,13 @@ lit les têtes `Camion_*.glb` et les véhicules du catalogue **sans jamais les
 modifier**, et écrit à côté, dans un dossier `Realiste/`, les versions que le
 jeu charge (`TruckVisual.external_model`, `TrailerType.model`) :
 
-- arêtes encore vives chanfreinées (2 segments) et lissage par angle ;
+- arêtes encore vives chanfreinées (2 segments) et lissage par angle, puis
+  normales pondérées par l'aire des faces (les grandes faces restent planes,
+  la lumière roule sur les chanfreins). Les sommets dédoublés par l'export
+  glTF le long des arêtes vives sont d'abord recousus. Pièces fusionnées
+  (châssis de remorque…) : chanfrein simple de 7 mm entre grandes faces ; une
+  pièce ne dépasse jamais deux fois ses triangles (une petite pièce peut en
+  gagner 3 000) ;
 - tête : silhouette d'une cabine routière (coins avant arrondis, face avant
   et pare-brise inclinés, toit bombé, flancs rentrants, pare-chocs
   enveloppant) par un champ de déformation doux après subdivision des grandes

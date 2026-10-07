@@ -143,8 +143,8 @@ vec2 relief_at(vec3 p, vec3 n, vec3 up) {
 			return vec2(0.0);
 		}
 		float u = s / pitch;
-		// au loin, une onde tient dans moins de 3 pixels : effacee
-		float fade = 1.0 - smoothstep(0.12, 0.35, fwidth(u));
+		// au loin, une onde tient dans moins de 6 pixels : effacee (crenelage)
+		float fade = 1.0 - smoothstep(0.05, 0.16, fwidth(u));
 		float f = fract(u);
 		float prof;
 		if (relief == 4) {
@@ -176,7 +176,7 @@ vec2 relief_at(vec3 p, vec3 n, vec3 up) {
 		float row = floor(gx);
 		float groove = 1.0 - smoothstep(0.1, 0.18, abs(fract(gx) - 0.5));
 		float sipe = 1.0 - smoothstep(0.05, 0.12, abs(fract(c / 0.05 + row * 0.5) - 0.5));
-		float fade = 1.0 - smoothstep(0.15, 0.4, fwidth(c / 0.05));
+		float fade = 1.0 - smoothstep(0.08, 0.25, fwidth(c / 0.05));
 		float cut = max(groove, sipe * 0.6) * tread * fade;
 		// flanc : anneaux concentriques fins
 		float wall = smoothstep(0.6, 0.8, abs(dot(n, axis))) * (1.0 - smoothstep(0.15, 0.4, fwidth(r / 0.012)));
@@ -215,7 +215,7 @@ void fragment() {
 	// dans les creux
 	vec3 up_m = normalize(height_row.xyz + vec3(0.0, 1e-5, 0.0));
 	vec2 rel = relief_at(obj_pos, normalize(obj_n), up_m);
-	col *= 1.0 - 0.18 * max(rel.y, 0.0);
+	col *= 1.0 - 0.1 * max(rel.y, 0.0);
 	col = mix(col, col * 1.08, max(-rel.y, 0.0));
 
 	// salissure : basse, en plaques ; coulures ; poussiere sur le dessus
