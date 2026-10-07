@@ -524,7 +524,11 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
     poulie, câble, moufle, crochet), vérin fût + tige, stabilisateurs à
     vérins et patins ronds, caisson nervuré ;
   - `[x]` fourgon incendie : vrais rideaux roulants (lames de 5 cm en relief,
-    matière `Volet_Roulant`), barre basse à poignée, coffre d'enroulement.
+    matière `Volet_Roulant`), barre basse à poignée, coffre d'enroulement ;
+  - `[x]` porte-engins : chariots élévateurs générés (celui du fichier était
+    un jouet en boîtes) - contrepoids arrondi, protège-conducteur tubulaire à
+    toit à lames, mât à deux montants (vérin, chaînes), dosseret, fourches,
+    bandages pleins, siège, volant, bouteille de gaz, phares, gyrophare.
 - `[x]` **Remorques creuses, percées par les chocs** (2026-10-07, « que les
   remorques soient vides : dès qu'elle s'abîme, ça fait des trous dans la
   coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des

@@ -55,8 +55,6 @@ TRAILER_SOCKETS = ["Socket_Arriere", "Socket_Conteneur"]
 SCENE_PROPS = {"Sol", "Camera", "Soleil"}
 # Pieces de l'ancien chassis commun, remplacees par un chassis propre.
 SHARED_PARTS = ("Remorque_Chassis", "Remorque_Roues", "Remorque_Plateau")
-# Chariot elevateur (source du porte-engins), garde d'une execution a l'autre.
-FORKLIFT = "Chariot_Elevateur"
 
 
 def parse_args():
@@ -1020,24 +1018,79 @@ def trailer_porte_engins(parts, m, forklift):
     return -16.4, 3.3, 1.4, lifts
 
 
-def forklift_source():
-    """Chariot elevateur du fichier, en un maillage, origine au sol au centre."""
-    src = bpy.data.objects.get(FORKLIFT)
-    if src is not None:
-        return src
-    names = ("Body", "Mat", "Fourche", "Wheel_FL", "Wheel_FR", "Wheel_RL", "Wheel_RR")
-    # deja pose sur une remorque (Chariot_*), sinon le fichier d'origine ; jamais
-    # les noms nus quand la tete de camion (Body, Wheel_*) est deja la
-    pieces = [o for o in bpy.data.objects if o.type == "MESH" and o.name in ["Chariot_" + n for n in names]]
-    if not pieces and bpy.data.objects.get(TRAILER) is None:
-        pieces = [o for o in bpy.data.objects if o.type == "MESH" and o.name in names]
-    if not pieces:
-        raise SystemExit("porte-engins : chariot elevateur introuvable")
-    src = join(pieces, FORKLIFT)
-    mn, mx = world_bbox([src])
-    src.data.transform(Matrix.Translation((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, -mn.z)))
-    src.matrix_world = Matrix.Identity(4)
-    return src
+def build_forklift(m):
+    """Chariot elevateur genere (2026-10-07, « refais les modeles » : celui du
+    fichier etait un jouet en boites), fourches vers +Y, en un maillage,
+    origine au sol au centre. Caisse jaune, contrepoids gris arrondi, protege-
+    conducteur a montants tubulaires et toit a lames, mat a deux montants
+    (verin chrome, chaines), tablier et dosseret, fourches, bandages pleins,
+    siege, volant, bouteille de gaz, phares de travail, gyrophare."""
+    jaune = material("Danger_Jaune", (1.0, 0.62, 0.0))
+    gris = m["acier"]
+    noir = m["plastique"]
+    pieces = []
+    # caisse : capot incline vers l'avant, plancher ; contrepoids arrondi
+    pieces.append(prism_x("Chariot_Caisse", [(0.62, 0.22), (0.62, 0.78), (0.42, 0.98), (-0.55, 1.08),
+                                              (-0.55, 0.16), (0.45, 0.16)], -0.52, 0.52, jaune))
+    pieces.append(prism_x("Chariot_Contrepoids", [(-0.55, 0.14), (-0.55, 1.12), (-0.78, 1.1), (-0.95, 0.98),
+                                                  (-1.02, 0.75), (-1.02, 0.35), (-0.92, 0.18)], -0.56, 0.56,
+                          gris))
+    pieces.append(box("Chariot_Plancher", (0.0, 0.25, 0.99), (0.9, 0.5, 0.04), noir))
+    # roues : bandages pleins, jantes, avant motrices plus grandes
+    for y, r, w in ((0.36, 0.32, 0.26), (-0.72, 0.25, 0.2)):
+        for side in (-1.0, 1.0):
+            x = side * (0.52 + w / 2)
+            pieces.append(cyl("Chariot_Bandage", (x, y, r), r, w, "X", m["pneu"], 24))
+            pieces.append(cyl("Chariot_Jante", (x + side * 0.01, y, r), r * 0.55, w + 0.01, "X", jaune, 16))
+            pieces.append(cyl("Chariot_Moyeu", (x + side * 0.02, y, r), r * 0.2, w + 0.02, "X", gris, 10))
+    # poste de conduite
+    pieces.append(box("Chariot_Siege", (0.0, -0.3, 1.18), (0.5, 0.45, 0.12), noir))
+    pieces.append(beam("Chariot_Dossier", (0.0, -0.5, 1.22), (0.0, -0.58, 1.65), 0.48, 0.1, noir))
+    pieces.append(tube("Chariot_Colonne", (0.0, 0.42, 1.0), (0.0, 0.25, 1.45), 0.04, noir, 8))
+    pieces.append(torus("Chariot_Volant", (0.0, 0.24, 1.47), 0.17, 0.02, "Z", noir))
+    for dx in (-0.12, 0.12):
+        pieces.append(tube("Chariot_Levier", (dx, 0.52, 1.0), (dx, 0.45, 1.3), 0.012, noir, 6))
+    # protege-conducteur : quatre montants, toit a lames
+    for side in (-1.0, 1.0):
+        x = side * 0.48
+        pieces.append(tube("Chariot_Montant", (x, 0.5, 0.95), (x, 0.38, 2.15), 0.035, noir, 10))
+        pieces.append(tube("Chariot_Montant", (x, -0.62, 1.1), (x, -0.58, 2.15), 0.035, noir, 10))
+        pieces.append(box("Chariot_Toit_Rive", (x, -0.1, 2.17), (0.06, 1.1, 0.06), noir))
+    for k in range(6):
+        pieces.append(box("Chariot_Toit_Lame", (0.0, -0.55 + k * 0.18, 2.18), (0.96, 0.05, 0.03), noir))
+    for side in (-1.0, 1.0):
+        pieces.append(cyl("Chariot_Phare", (side * 0.42, 0.45, 2.1), 0.06, 0.08, "Y", m["recul"], 12))
+    beacon(pieces, 0.0, -0.4, 2.3, m)
+    # bouteille de gaz couchee sur le contrepoids, sangle
+    pieces.append(cyl("Chariot_Bouteille", (0.0, -0.82, 1.33), 0.16, 0.8, "X", m["alu"], 20))
+    for dx in (-0.25, 0.25):
+        pieces.append(cyl("Chariot_Bouteille_Sangle", (dx, -0.82, 1.33), 0.17, 0.03, "X", noir, 20))
+    # mat : montants exterieurs et interieurs, traverses, verin, chaines
+    for side in (-1.0, 1.0):
+        pieces.append(box("Chariot_Mat", (side * 0.34, 0.7, 1.28), (0.09, 0.13, 2.2), gris))
+        pieces.append(box("Chariot_Mat_Int", (side * 0.25, 0.73, 1.33), (0.07, 0.1, 2.1), gris))
+        pieces.append(box("Chariot_Chaine", (side * 0.12, 0.78, 1.3), (0.035, 0.015, 1.6), noir))
+    for z in (0.3, 2.35):
+        pieces.append(box("Chariot_Mat_Traverse", (0.0, 0.7, z), (0.78, 0.11, 0.08), gris))
+    pieces.append(tube("Chariot_Verin", (0.0, 0.66, 0.3), (0.0, 0.66, 2.1), 0.05, m["chrome"], 12))
+    # tablier, dosseret a barreaux, fourches
+    pieces.append(box("Chariot_Tablier", (0.0, 0.82, 0.42), (0.98, 0.06, 0.36), gris))
+    pieces.append(box("Chariot_Dosseret_Haut", (0.0, 0.82, 1.2), (0.98, 0.05, 0.05), gris))
+    for k in range(6):
+        pieces.append(box("Chariot_Dosseret", (-0.45 + k * 0.18, 0.82, 0.88), (0.035, 0.035, 0.64), gris))
+    for side in (-1.0, 1.0):
+        x = side * 0.3
+        pieces.append(box("Chariot_Fourche_Talon", (x, 0.87, 0.3), (0.1, 0.05, 0.48), gris))
+        pieces.append(prism("Chariot_Fourche", [(x - 0.05, 0.03), (x + 0.05, 0.03), (x + 0.05, 0.075),
+                                                (x - 0.05, 0.085)], 2.0, 0.87, gris))
+    # feux arriere dans le contrepoids
+    for side in (-1.0, 1.0):
+        pieces.append(box("Chariot_Feu", (side * 0.4, -1.02, 0.95), (0.12, 0.02, 0.06), m["feu"]))
+    lift = join(pieces, GEN + "Chariot")
+    mn, mx = world_bbox([lift])
+    lift.data.transform(Matrix.Translation((-(mn.x + mx.x) / 2, -(mn.y + mx.y) / 2, -mn.z)))
+    lift.matrix_world = Matrix.Identity(4)
+    return lift
 
 
 # Roues arriere du tracteur telles qu'affichees en jeu (TruckVisual : modele
@@ -1359,7 +1412,6 @@ def build_trailer(vehicle):
     """Remorque unique du vehicule, sous un pivot `Remorque` a la sellette."""
     scene = bpy.context.scene
     trailer = bpy.data.objects.get(TRAILER)
-    lift = forklift_source() if vehicle == "chariot_elevateur" else None
     keep = set(SCENE_PROPS)
     if vehicle in TEAM_BODIES:
         if trailer is None:
@@ -1367,8 +1419,6 @@ def build_trailer(vehicle):
         keep |= {o.name for o in trailer.children_recursive
                  if not o.name.startswith(SHARED_PARTS + (GEN, "Socket_"))}
         keep.add(trailer.name)
-    if lift is not None:
-        keep.add(lift.name)
     delete([o for o in scene.objects if o.name not in keep])
     # materiaux et maillages de l'ancienne tete et de l'ancien chassis purges
     # AVANT de reconstruire : sinon les noms derivent (Chrome.001, .002...) et
@@ -1384,8 +1434,8 @@ def build_trailer(vehicle):
     m = M()
     AXLES.clear()
     parts = []
-    if lift is not None:
-        rear_y, top_z, chassis_z, lifts = trailer_porte_engins(parts, m, lift)
+    if vehicle == "chariot_elevateur":
+        rear_y, top_z, chassis_z, lifts = trailer_porte_engins(parts, m, build_forklift(m))
     else:
         rear_y, top_z, chassis_z = TRAILERS[vehicle](parts, m)
         lifts = []
