@@ -106,18 +106,48 @@ void vertex() {
 	}
 }
 
-// gravite (0 .. 1) de la cicatrice `sc` au point p de normale n : disque au
-// bord irregulier ; l'ecart le long de la normale compte peu (la tole touchee
-// s'est enfoncee, le point de contact est sur la boite de collision)
-float scar_at(vec4 sc, vec3 p, vec3 n, float wobble) {
+// tirage fixe (0 .. 1) propre a une cicatrice, d'apres son centre
+float scar_hash(vec3 c) {
+	return fract(sin(dot(c, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+}
+
+// Forme d'un choc (2026-10-07 : « des ronds trop parfaits, pas realiste ») :
+// distance au centre de la cicatrice `sc`, dans le plan de la paroi (normale
+// n, haut up), rapportee a son rayon (1 = bord). Un ovale couche (le camion
+// glisse le long de ce qu'il touche, la trace s'etire a l'horizontale), au
+// bord lobe ; allongement et lobes tires d'apres le centre, propres a chaque
+// choc. dn : ecart le long de la normale. th : angle autour du centre.
+float scar_dist(vec4 sc, vec3 p, vec3 n, vec3 up, out float dn, out float th) {
+	float r = mod(sc.w, 8.0);
+	vec3 dv = p - sc.xyz;
+	dn = dot(dv, n);
+	vec3 t1 = cross(up, n);
+	float l = dot(t1, t1);
+	// toit, plancher : l'axe de la caisse
+	t1 = l > 1e-3 ? t1 * inversesqrt(l) : normalize(cross(vec3(1.0, 0.0, 0.0), n) + vec3(0.0, 0.0, 1e-5));
+	vec3 t2 = cross(n, t1);
+	float h = scar_hash(sc.xyz);
+	float a = dot(dv, t1) / (1.2 + 0.55 * h);
+	float b = dot(dv, t2) / (0.9 + 0.2 * fract(h * 7.0));
+	th = atan(b, a);
+	float lobe = 1.0 + 0.2 * sin(2.0 * th + h * 6.28) + 0.13 * sin(3.0 * th + h * 19.0)
+		+ 0.07 * sin(5.0 * th + h * 37.0);
+	return sqrt(a * a + b * b) / (r * lobe);
+}
+
+// gravite (0 .. 1) de la cicatrice `sc` au point p de normale n : tache de
+// forme irreguliere (scar_dist), bord ronge (wobble) ; l'ecart le long de la
+// normale compte peu (la tole touchee s'est enfoncee, le point de contact est
+// sur la boite de collision)
+float scar_at(vec4 sc, vec3 p, vec3 n, vec3 up, float wobble) {
 	if (sc.w <= 0.0) {
 		return 0.0;
 	}
-	float r = mod(sc.w, 8.0);
 	float sev = floor(sc.w / 8.0) / 255.0;
-	vec3 dv = p - sc.xyz;
-	float dn = dot(dv, n);
-	float d = sqrt(max(dot(dv, dv) - 0.85 * dn * dn, 0.0)) / r + (wobble - 0.5) * 0.45;
+	float dn;
+	float th;
+	float d = scar_dist(sc, p, n, up, dn, th);
+	d = sqrt(d * d + 0.15 * dn * dn / (mod(sc.w, 8.0) * mod(sc.w, 8.0))) + (wobble - 0.5) * 0.45;
 	return sev * (1.0 - smoothstep(0.2, 1.0, d));
 }
 
@@ -236,27 +266,35 @@ vec2 relief_at(vec3 p, vec3 n, vec3 up) {
 }
 
 #ifdef HOLLOW
-// Seuil de la gravite locale au-dela duquel la coque est percee : seuls les
-// chocs violents (ou repetes au meme endroit, BodyScars les aggrave) trouent.
-const float HOLE_AT = 0.6;
+// Seuil de la gravite locale au-dela duquel la coque est percee : la tole
+// s'enfonce d'abord (BodyDamage), seuls les chocs tres violents ou repetes
+// au meme endroit (BodyScars les aggrave) finissent par la dechirer.
+const float HOLE_AT = 0.74;
 
-// gravite de la cicatrice `sc` au point p (normale n) : distance dans le plan
-// de la paroi, comme scar_at - la tole enfoncee par les coups repetes
-// (BodyDamage) s'eloigne du point d'impact, elle doit pouvoir se dechirer -
-// mais rien au-dela de HOLE_DEPTH le long de la normale : la paroi d'en face,
-// a 3 m, n'est jamais percee par le meme choc
+// gravite de la cicatrice `sc` au point p (normale n) pour la dechirure :
+// meme forme que scar_at, dans le plan de la paroi - la tole enfoncee par
+// les coups repetes (BodyDamage) s'eloigne du point d'impact, elle doit
+// pouvoir se dechirer - mais rien au-dela de HOLE_DEPTH le long de la
+// normale : la paroi d'en face, a 3 m, n'est jamais percee par le meme choc.
+// La tole percee se fend en etoile : quelques fentes etroites partent du
+// trou, a des angles propres a chaque choc.
 const float HOLE_DEPTH = 1.2;
 
-float hole_at(vec4 sc, vec3 p, vec3 n) {
+float hole_at(vec4 sc, vec3 p, vec3 n, vec3 up) {
 	if (sc.w <= 0.0) {
 		return 0.0;
 	}
-	float r = mod(sc.w, 8.0);
 	float sev = floor(sc.w / 8.0) / 255.0;
-	vec3 dv = p - sc.xyz;
-	float dn = dot(dv, n);
-	float d = sqrt(max(dot(dv, dv) - dn * dn, 0.0)) / r;
-	return sev * (1.0 - smoothstep(0.15, 1.0, d)) * (1.0 - smoothstep(HOLE_DEPTH * 0.7, HOLE_DEPTH, abs(dn)));
+	float dn;
+	float th;
+	float d = scar_dist(sc, p, n, up, dn, th);
+	float h = scar_hash(sc.xyz + vec3(3.1));
+	// fentes : jusqu'a ~1,6 fois le rayon du trou, pas plus (la tole voisine
+	// tient)
+	float rays = pow(max(sin(3.0 * th + h * 6.28), 0.0), 14.0) * 0.28
+		+ pow(max(sin(5.0 * th + h * 23.0), 0.0), 22.0) * 0.16;
+	d *= 1.0 - rays * smoothstep(0.85, 1.0, sev);
+	return sev * (1.0 - smoothstep(0.1, 1.0, d)) * (1.0 - smoothstep(HOLE_DEPTH * 0.7, HOLE_DEPTH, abs(dn)));
 }
 #endif
 
@@ -272,13 +310,17 @@ void fragment() {
 	float lip = 0.0;
 	if (scar0.w > 0.0 && scars > 0.0) {
 		vec3 hn = normalize(obj_n);
-		float hm = max(max(max(hole_at(scar0, obj_pos, hn), hole_at(scar1, obj_pos, hn)),
-			max(hole_at(scar2, obj_pos, hn), hole_at(scar3, obj_pos, hn))),
-			max(max(hole_at(scar4, obj_pos, hn), hole_at(scar5, obj_pos, hn)),
-			max(hole_at(scar6, obj_pos, hn), hole_at(scar7, obj_pos, hn))));
-		float jag = tri(detail_tex, obj_pos, obj_n, 1.6, vec2(1.0)) * 0.6
-			+ tri(grime_tex, obj_pos * 3.0, obj_n, 0.6, vec2(1.0)) * 0.4;
-		float v = hm * scars + (jag - 0.5) * 0.4;
+		vec3 hu = normalize(height_row.xyz + vec3(0.0, 1e-5, 0.0));
+		float hm = max(max(max(hole_at(scar0, obj_pos, hn, hu), hole_at(scar1, obj_pos, hn, hu)),
+			max(hole_at(scar2, obj_pos, hn, hu), hole_at(scar3, obj_pos, hn, hu))),
+			max(max(hole_at(scar4, obj_pos, hn, hu), hole_at(scar5, obj_pos, hn, hu)),
+			max(hole_at(scar6, obj_pos, hn, hu), hole_at(scar7, obj_pos, hn, hu))));
+		// bord dechire : grandes echancrures (bruit lent), dents de tole
+		// arrachee (bruit fin, etire en travers des ondes)
+		float jag = tri(grime_tex, obj_pos * 1.4, obj_n, 0.6, vec2(1.0)) * 0.55
+			+ tri(detail_tex, obj_pos, obj_n, 1.6, vec2(1.0)) * 0.3
+			+ tri(detail_tex, obj_pos, obj_n, 7.0, vec2(1.0, 0.35)) * 0.15;
+		float v = hm * scars + (jag - 0.5) * 0.55;
 		if (v > HOLE_AT) {
 			discard;
 		}
@@ -358,14 +400,14 @@ void fragment() {
 	if (scar0.w > 0.0 && scars > 0.0) {
 		float wob = tri(grime_tex, obj_pos * 2.3, obj_n, 0.35, vec2(1.0));
 		vec3 nf = normalize(obj_n);
-		float m = scar_at(scar0, obj_pos, nf, wob);
-		m = max(m, scar_at(scar1, obj_pos, nf, wob));
-		m = max(m, scar_at(scar2, obj_pos, nf, wob));
-		m = max(m, scar_at(scar3, obj_pos, nf, wob));
-		m = max(m, scar_at(scar4, obj_pos, nf, wob));
-		m = max(m, scar_at(scar5, obj_pos, nf, wob));
-		m = max(m, scar_at(scar6, obj_pos, nf, wob));
-		m = max(m, scar_at(scar7, obj_pos, nf, wob));
+		float m = scar_at(scar0, obj_pos, nf, up_m, wob);
+		m = max(m, scar_at(scar1, obj_pos, nf, up_m, wob));
+		m = max(m, scar_at(scar2, obj_pos, nf, up_m, wob));
+		m = max(m, scar_at(scar3, obj_pos, nf, up_m, wob));
+		m = max(m, scar_at(scar4, obj_pos, nf, up_m, wob));
+		m = max(m, scar_at(scar5, obj_pos, nf, up_m, wob));
+		m = max(m, scar_at(scar6, obj_pos, nf, up_m, wob));
+		m = max(m, scar_at(scar7, obj_pos, nf, up_m, wob));
 		m *= scars;
 		if (m > 0.001) {
 			// repere du frottement, fixe (jamais la normale du pixel : sur une

@@ -34,6 +34,8 @@ const MIN_BODY_MARK_SPEED := 3.0
 const DENT_SPEED := 2.5
 const HARD_SPEED := 20.0
 const PART_SPEED := 9.0
+## Creux d'une paroi de remorque, rapporte a celui de la cabine.
+const TRAILER_DENT_MULT := 1.6
 ## Pieces exterieures arrachees par une explosion.
 const EXPLOSION_PARTS := 24
 
@@ -126,7 +128,7 @@ func _on_body_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vec
 
 ## Choc a `speed` (m/s) au point `point`, `normal` tournee vers le camion :
 ## la tole s'enfonce dans le sens du choc (creux de 3 a 45 cm, sur 0,7 a
-## 1,9 m), et au-dela de PART_SPEED les pieces proches s'arrachent et des
+## 1,9 m ; TRAILER_DENT_MULT fois plus sur la remorque), et au-dela de PART_SPEED les pieces proches s'arrachent et des
 ## eclats volent. Purement visuel.
 func crush(point: Vector3, normal: Vector3, speed: float, on_trailer: bool) -> void:
 	if _visual == null or speed < DENT_SPEED:
@@ -134,7 +136,11 @@ func crush(point: Vector3, normal: Vector3, speed: float, on_trailer: bool) -> v
 	var root := _visual.mark_parent(on_trailer)
 	point = _on_body(point, normal, on_trailer)
 	var sev := clampf((speed - DENT_SPEED) / (HARD_SPEED - DENT_SPEED), 0.0, 1.0)
-	BodyDamage.dent(root, point, normal * lerpf(0.03, 0.45, sev), lerpf(0.7, 1.9, sev))
+	# la caisse d'une remorque est une tole mince sur un cadre : elle cede
+	# plus que la cabine (2026-10-07 : « enfoncer la coque
+	# plutot que faire des trous »)
+	var deep := TRAILER_DENT_MULT if on_trailer else 1.0
+	BodyDamage.dent(root, point, normal * lerpf(0.03, 0.45, sev) * deep, lerpf(0.7, 1.9, sev))
 	if speed < PART_SPEED:
 		return
 	var world := _truck.get_parent()

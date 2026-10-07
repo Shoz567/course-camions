@@ -63,6 +63,8 @@ const FATIGUE_PER_HIT := 0.5
 const FATIGUE_MAX := 3.0
 const FATIGUE_SPREAD := 0.12
 const MAX_HIT_SPOTS := 24
+## Bord lobe d'un creux : jusqu'a LOBE_MAX fois son rayon.
+const LOBE_MAX := 1.4
 
 
 ## Enfonce la carrosserie sous `root` autour de `point` (monde) : sommets a
@@ -189,8 +191,36 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 	if surfaces.is_empty():
 		return 0
 	var topo: Array = _topology(mi.get_meta(META_BASE) as Mesh)
+	# forme du creux (2026-10-07 : « des ronds trop parfaits ») : ovale couche
+	# (le choc glisse, la tole s'enfonce en longueur), bord lobe et plis en
+	# travers, tires d'apres le point d'impact - deux coups au meme endroit
+	# creusent la meme forme. Repere : n (sens du choc), t1 (horizontal), t2.
+	var n := push.normalized()
+	var t1 := Vector3.UP.cross(n)
+	if t1.length_squared() < 1e-3:
+		t1 = Vector3.RIGHT.cross(n)
+	t1 = t1.normalized()
+	var t2 := n.cross(t1)
+	var h := _hash3(p * 0.37)
+	# aire voisine de celle du disque de rayon r : autant de sommets a deplacer
+	# (le cout d'un choc en depend)
+	var stretch := 1.1 + 0.4 * h
+	var squash := 0.75 + 0.15 * _hash3(p * 0.53 + Vector3.ONE)
+	var ph := Vector3(h * TAU, _hash3(p * 0.71) * TAU, _hash3(p * 0.29 + Vector3.UP) * TAU)
+	var fold_a := _hash3(p * 0.91) * PI
+	var fold := t1 * cos(fold_a) + t2 * sin(fold_a)
 	var r2 := r * r
-	var reach := r + MAX_DISPLACEMENT
+	# portee : l'ovale (lobes compris, jusqu'a LOBE_MAX fois r), boite alignee
+	# sur les axes du maillage ; la forme se lit sur la tole au neuf (grille et
+	# `rest`) : un coup sur un creux deja la le creuse a nouveau en entier
+	var e1 := t1 * (r * stretch * LOBE_MAX)
+	var e2 := t2 * (r * squash * LOBE_MAX)
+	# le long du choc, portee reduite : la paroi d'en face reste intacte
+	var e3 := n * (r * LOBE_MAX * 0.71)
+	var reach := Vector3(Vector3(e1.x, e2.x, e3.x).length(), Vector3(e1.y, e2.y, e3.y).length(),
+		Vector3(e1.z, e2.z, e3.z).length())
+	var far2 := r2 * LOBE_MAX * LOBE_MAX
+	var ball2 := far2 * stretch * stretch
 	var moved := 0
 	var changed := false
 	for s in surfaces.size():
@@ -201,8 +231,8 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 		var rest := tp.rest
 		var grid := tp.grid
 		# sommets candidats : cellules de la grille (positions au neuf) a portee
-		var lo := Vector3i(((p - Vector3.ONE * reach) / CELL).floor())
-		var hi := Vector3i(((p + Vector3.ONE * reach) / CELL).floor())
+		var lo := Vector3i(((p - reach) / CELL).floor())
+		var hi := Vector3i(((p + reach) / CELL).floor())
 		for cx in range(lo.x, hi.x + 1):
 			for cy in range(lo.y, hi.y + 1):
 				for cz in range(lo.z, hi.z + 1):
@@ -210,13 +240,26 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 					if cell == null:
 						continue
 					for i: int in cell:
-						var d2 := verts[i].distance_squared_to(p)
+						var dv := rest[i] - p
+						if dv.length_squared() >= ball2:
+							continue
+						var a := dv.dot(t1) / stretch
+						var b := dv.dot(t2) / squash
+						var c := dv.dot(n)
+						var q2 := a * a + b * b + 2.0 * c * c
+						if q2 >= far2:
+							continue
+						var th := atan2(b, a)
+						var lobe := 1.0 + 0.2 * sin(2.0 * th + ph.x) + 0.13 * sin(3.0 * th + ph.y) \
+							+ 0.07 * sin(5.0 * th + ph.z)
+						var d2 := q2 / (lobe * lobe)
 						if d2 >= r2:
 							continue
 						var u := 1.0 - d2 / r2
 						# froissement : profondeur irreguliere, fonction de la seule
-						# position (deux sommets confondus bougent pareil : pas de fente)
-						var crumple := 0.55 + 0.45 * _hash3(verts[i])
+						# position (deux sommets confondus bougent pareil : pas de
+						# fente) ; plis en travers du creux, tous les ~0,9 m
+						var crumple := (0.55 + 0.45 * _hash3(rest[i])) * (0.7 + 0.3 * absf(sin(dv.dot(fold) * 3.5 + ph.x)))
 						var v := verts[i] + push * (u * u * crumple)
 						# la tole plie, elle ne traverse pas le camion
 						var off := v - rest[i]

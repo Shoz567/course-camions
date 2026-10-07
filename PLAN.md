@@ -547,7 +547,7 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des
   remorques passe par `truck_body_hollow.gdshader` (même matière, vue des
   deux faces). Au cœur d'une cicatrice grave (gravité locale > 0,6 : choc
-  violent, ou chocs répétés au même endroit), la coque est découpée à bord
+  violent, ou chocs répétés au même endroit ; 0,74 depuis les chocs irréguliers), la coque est découpée à bord
   déchiqueté, lèvre de tôle nue puis bord noirci ; par le trou, l'intérieur
   vide de la coque (apprêt sombre). La paroi d'en face (au-delà de 1,2 m le
   long de la normale) n'est jamais percée par le même choc. Le tracteur reste
@@ -560,6 +560,18 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   de 6, 14, 25, 37 cm, chaque coup creuse plus que le précédent. Le trou de
   la coque se mesure dans le plan de la paroi : la tôle enfoncée se
   déchire au lieu de s'éloigner du point d'impact.
+- `[x]` **Chocs de forme irrégulière** (2026-10-07, « les dégâts sur les côtés
+  des remorques sont des ronds trop parfaits ; plutôt des trous moins
+  réguliers ou enfoncer la coque ») : creux (`BodyDamage`), cicatrices et
+  trous (`truck_body.gdshaderinc`, `scar_dist`) prennent une forme propre à
+  chaque choc, tirée de son point d'impact : ovale couché, bord lobé, plis en
+  travers du creux ; le trou a un bord échancré et se fend en étoile. La coque
+  d'une remorque s'enfonce 1,6 fois plus que la cabine
+  (`TRAILER_DENT_MULT`) et ne se perce qu'au-delà d'une gravité locale de
+  0,74 (au lieu de 0,6). Le creux se calcule sur la tôle au neuf : un
+  nouveau coup creuse toute la zone. Mesuré (`truck_body_damage_test`) :
+  creux de 9, 24, 43, 68 cm en quatre coups à 4 m/s sur la citerne ; un choc
+  de plus coûte 19 ms (15 ms avant, seuil 25).
 
 ---
 
