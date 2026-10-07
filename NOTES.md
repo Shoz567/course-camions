@@ -21,7 +21,8 @@
   - Deux réserves (2026-10-06) : la tête (100 PV) et la remorque attelée (ses propres PV). Les dégâts de la remorque ne touchent jamais la tête ; à 0 PV elle explose, et c'est l'explosion qui blesse la tête (-20 PV).
   - Chocs contre les murs : **-1 à -5 HP** selon la violence / vitesse de l'impact.
   - Percussion d'un baril explosif : **-15 HP**.
-  - Remorques larguées et carcasses sur la route : les percuter blesse la partie touchée (jusqu'à 40 PV) et les abîme.
+  - Remorques larguées (y compris la sienne) et carcasses sur la route : les percuter blesse la partie touchée (jusqu'à 40 PV) et les abîme.
+  - Chocs entre camions (2026-10-07) : même barème, les deux camions perdent des PV (rien en dessous de 4 m/s).
 - [x] **Mort & Respawn** (épave gelée 3 s, explosion, réapparition sur la ligne de course) :
   - À 0 HP : explosion, la carcasse calcinée reste sur la route (obstacle), puis réapparition après **3 secondes** sur un camion neuf, à côté d'elle.
 

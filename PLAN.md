@@ -377,7 +377,10 @@ camion explose, il reste au milieu du chemin », « que des bouts partent »)**
 - `[x]` **Obstacles qui blessent** : percuter une remorque larguée ou une
   carcasse (`Truck.hazard_impact`) coûte jusqu'à 40 PV à la partie touchée
   (40 × (v / 33 m/s)², de face à 100 km/h : ~28) ; l'obstacle s'abîme aussi.
-  Jamais sa propre remorque larguée.
+  Sa propre remorque larguée aussi, autant que les autres (2026-10-07).
+- `[x]` **Chocs entre camions** (`Truck.truck_impact`, 2026-10-07) : même
+  barème, les deux camions encaissent à la partie touchée (de face à 15 m/s
+  chacun : -29 PV par tête) ; rien sous 4 m/s (coude à coude, frottement).
 - `[x]` **Carcasse sur la route** : à 0 PV, la tête explose et sa carcasse
   calcinée reste en place (`TruckWreck`, 60 PV, obstacle), avec la remorque
   attelée et ses PV restants ; le joueur réapparaît 3 s plus tard sur un

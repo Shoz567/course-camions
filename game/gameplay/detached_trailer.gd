@@ -14,7 +14,8 @@ extends RigidBody3D
 ## deporte (Truck.cargo_hit) ; un nouveau choc compte apres hit_gap_ticks sans
 ## contact avec ce camion. Le camion qui l'a larguee la traverse pendant
 ## owner_pass_ticks (le temps de s'en eloigner), puis elle devient un obstacle
-## pour lui aussi - qui l'abime, sans etre penalise (2026-10-01, « je passe a
+## pour lui aussi - qui l'abime et s'y blesse comme les autres (TruckHealth,
+## 2026-10-07), sans etre ralenti (2026-10-01, « je passe a
 ## travers ma propre remorque ») ; jamais tant qu'il est dedans : le solveur
 ## les separerait d'un coup. Durees en ticks physiques (CLAUDE.md §7).
 ##

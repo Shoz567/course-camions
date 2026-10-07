@@ -21,11 +21,12 @@ extends Node
 ##   - murs : de wall_damage_min (frottement) a wall_damage_max (choc frontal
 ##     violent), selon la vitesse normale (Truck.wall_impact) ;
 ##   - obstacles de la route (remorque larguee, carcasse : Truck.hazard_impact)
-##     selon l'energie du choc : jusqu'a hazard_damage_max de plein fouet a
-##     hazard_full_speed_ms. Jamais sa propre remorque larguee (le
-##     proprietaire n'est pas penalise, DetachedTrailer) ;
+##     et autres camions (Truck.truck_impact : les deux s'abiment) selon
+##     l'energie du choc : jusqu'a hazard_damage_max de plein fouet a
+##     hazard_full_speed_ms, rien sous hazard_min_speed_ms (frottement, coude
+##     a coude). Sa propre remorque larguee aussi, autant que les autres
+##     (2026-10-07) ;
 ##   - barils explosifs : BARREL_DAMAGE a la tete, inflige par PadEffects.
-## Les chocs entre camions ne coutent rien.
 ## Durees en ticks physiques (CLAUDE.md §7).
 
 signal damaged(amount: float, source: StringName)
@@ -103,6 +104,7 @@ func _ready() -> void:
 	if _truck != null:
 		_truck.wall_impact.connect(_on_wall_impact)
 		_truck.hazard_impact.connect(_on_hazard_impact)
+		_truck.truck_impact.connect(_on_truck_impact)
 		_truck.trailer_reattached.connect(_on_trailer_reattached)
 		_sync_trailer_type()
 	var shape := BoxShape3D.new()
@@ -120,17 +122,23 @@ func _on_wall_impact(normal_speed_ms: float, on_trailer: bool) -> void:
 		damage(wall_damage_for(normal_speed_ms), &"mur")
 
 
-func _on_hazard_impact(obstacle: Node3D, approach_ms: float, on_trailer: bool, _point: Vector3,
+func _on_hazard_impact(_obstacle: Node3D, approach_ms: float, on_trailer: bool, _point: Vector3,
 		_normal: Vector3) -> void:
-	# sa propre remorque larguee : le proprietaire n'est pas penalise
-	var trailer := obstacle as DetachedTrailer
-	if trailer != null and trailer.dropped_by == _truck:
-		return
-	var amount := hazard_damage_for(approach_ms)
+	_hit(hazard_damage_for(approach_ms), on_trailer, &"obstacle")
+
+
+## Choc contre un autre camion : chacun encaisse a la partie touchee (l'autre
+## recoit le meme contact de son cote).
+func _on_truck_impact(_other: Truck, approach_ms: float, on_trailer: bool, _point: Vector3,
+		_normal: Vector3) -> void:
+	_hit(hazard_damage_for(approach_ms), on_trailer, &"camion")
+
+
+func _hit(amount: float, on_trailer: bool, source: StringName) -> void:
 	if on_trailer:
-		damage_trailer(amount, &"obstacle")
+		damage_trailer(amount, source)
 	else:
-		damage(amount, &"obstacle")
+		damage(amount, source)
 
 
 ## Retire `amount` PV a la tete (sans effet sur une epave). A 0 : destruction

@@ -20,6 +20,11 @@ extends PhysicsTest
 ##      camion, cache et sans collision, reapparait 3 s plus tard A COTE de la
 ##      carcasse (la place fournie est prise), qui est toujours la ;
 ##   E. un camion qui percute cette carcasse prend des degats, elle aussi.
+##   F. deux camions de face, 15 m/s chacun (2026-10-07 : « les chocs entre
+##      camions enlevent egalement des PV ») : les deux tetes perdent
+##      hazard_damage_for(approche), source « camion » ;
+##   G. un camion percute SA PROPRE remorque larguee (« autant qu'aux
+##      autres ») : sa tete perd des PV, comme en C.
 ## Vitesses posees au tick 0 (CLAUDE.md §10 b).
 
 const KILL_AT := 5
@@ -44,6 +49,12 @@ var _d_after: Array = []
 var _e_launched: bool = false
 var _e_hit: float = 0.0
 var _wreck_hp0: float = 0.0
+var _f1: Truck
+var _f2: Truck
+var _f_hits: Array = [[], []]
+var _g: Truck
+var _g_own: DetachedTrailer
+var _g_head: Array = []
 
 
 func _test_setup() -> void:
@@ -71,6 +82,21 @@ func _test_setup() -> void:
 	TruckHealth.of(_d).trailer_hp = 31.0
 	# E : lance plus tard sur la carcasse de D, depuis 40 m devant elle
 	_e = _spawn(Vector3(300.0, 0.0, 200.0), 0.0, 0.0)
+	# F : face a face, 70 m entre les centres
+	_f1 = _spawn(Vector3(400.0, 0.0, 0.0), 0.0, 15.0)
+	_f2 = _spawn(Vector3(400.0, 0.0, -70.0), 180.0, 15.0)
+	for k in 2:
+		var list: Array = _f_hits[k]
+		TruckHealth.of(_f1 if k == 0 else _f2).damaged.connect(func(amount: float, source: StringName) -> void:
+			list.append([amount, source]))
+	# G : sa propre remorque larguee, 40 m devant ; il la percute une fois
+	# devenue solide pour lui (owner_pass_ticks)
+	_g = _spawn(Vector3(500.0, 0.0, 0.0), 0.0, 0.0)
+	_g_own = DetachedTrailer.new()
+	_g_own.dropped_by = _g
+	_g_own.transform = Transform3D(Basis.IDENTITY, Vector3(500.0, TruckSpec.KINGPIN.y, -60.0))
+	add_child(_g_own)
+	TruckHealth.of(_g).damaged.connect(func(amount: float, source: StringName) -> void: _g_head.append([amount, source]))
 
 
 func _spawn(pos: Vector3, yaw_deg: float, speed: float) -> Truck:
@@ -94,6 +120,8 @@ func _wall(size: Vector3, pos: Vector3) -> void:
 
 func _test_tick(t: int) -> void:
 	var dh := TruckHealth.of(_d)
+	if t == _g_own.owner_pass_ticks + 5:
+		_g.linear_velocity = -_g.global_basis.z * 25.0
 	if t == 1:
 		_obstacle_hp0 = _obstacle.hp
 	if t == KILL_AT:
@@ -157,3 +185,12 @@ func _test_finish() -> void:
 		_d_wreck.hp if is_instance_valid(_d_wreck) else 0.0])
 	check("E la carcasse blesse le camion qui la percute", _e_launched and _e_hit >= 5.0, "%.0f" % _e_hit)
 	check("E la carcasse s'abime", not is_instance_valid(_d_wreck) or _d_wreck.hp < _wreck_hp0)
+
+	var f_ok := true
+	for k in 2:
+		var h: Array = _f_hits[k]
+		f_ok = f_ok and not h.is_empty() and h[0][1] == &"camion" and float(h[0][0]) >= 10.0
+	print("  INFO   F : %s / %s ; G : %s" % [_f_hits[0], _f_hits[1], _g_head])
+	check("F choc de face entre camions : les deux tetes perdent des PV", f_ok, str(_f_hits))
+	check("G sa propre remorque larguee le blesse aussi", is_instance_valid(_g_own) and _g_own.is_solid_for_owner() and not _g_head.is_empty()
+		and _g_head[0][1] == &"obstacle" and float(_g_head[0][0]) >= 10.0, str(_g_head))

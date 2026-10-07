@@ -32,8 +32,8 @@ extends RigidBody3D
 ##   impacts contre un mur (wall_impact) : signales avec la vitesse normale et
 ##       la forme touchee (tracteur ou remorque) ; les PV sont l'affaire du
 ##       gameplay (TruckHealth). Chocs contre un obstacle de la piste
-##       (hazard_impact) : idem. Epave (set_wrecked) : gelee, sans force,
-##       sans collision.
+##       (hazard_impact) ou un autre camion (truck_impact) : idem. Epave
+##       (set_wrecked) : gelee, sans force, sans collision.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
@@ -70,12 +70,16 @@ signal wall_impact(normal_speed_ms: float, on_trailer: bool)
 signal wall_impact_at(normal_speed_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 ## Debut d'un contact avec un autre corps mobile (camion, remorque larguee) :
 ## vitesse d'approche, partie touchee, point et normale (monde, tournee vers
-## le camion). Purement informatif : aucun degat de PV.
+## le camion). Purement visuel (TruckDamageFx) : les PV passent par
+## truck_impact et hazard_impact.
 signal body_impact(approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 ## Le meme debut de contact, quand l'autre corps est un obstacle de la piste
 ## (couche 5 : remorque larguee, epave) : c'est lui qui fait des degats
 ## (TruckHealth).
 signal hazard_impact(obstacle: Node3D, approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Le meme debut de contact, quand l'autre corps est un camion : les deux
+## camions s'abiment, chacun a la partie touchee (TruckHealth).
+signal truck_impact(other: Truck, approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 
 ## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
 ## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
@@ -533,7 +537,9 @@ func _note_body_contact(state: PhysicsDirectBodyState3D, i: int, obj: Object, at
 	var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
 	body_impact.emit(approach, shape_node == _trailer_shape, at, n)
 	var body := obj as CollisionObject3D
-	if body != null and body.collision_layer & HAZARD_BIT:
+	if obj is Truck:
+		truck_impact.emit(obj as Truck, approach, shape_node == _trailer_shape, at, n)
+	elif body != null and body.collision_layer & HAZARD_BIT:
 		hazard_impact.emit(body, approach, shape_node == _trailer_shape, at, n)
 
 
