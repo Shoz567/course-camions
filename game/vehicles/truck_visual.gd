@@ -442,7 +442,8 @@ func set_trailer_type(type: TrailerType) -> void:
 	if skin != null and is_inside_tree():
 		if not TruckDetails.has_flaps(skin):
 			_add_trailer_flaps(skin)
-		TruckMaterials.upgrade(skin, self, _ground_y)
+		# coque creuse : les chocs graves la percent, on voit l'interieur vide
+		TruckMaterials.upgrade(skin, self, _ground_y, true)
 		_sync_tyres()
 	# remorque d'origine (modele du camion ou boite) : cachee sous un habillage
 	for c in _trailer_pivot.get_children():

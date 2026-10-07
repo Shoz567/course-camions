@@ -28,6 +28,9 @@ extends RefCounted
 ## source, partagee par tous les camions (cache). Purement visuel.
 
 const BODY_SHADER := preload("res://vehicles/truck_body.gdshader")
+## Coque creuse des remorques : la meme matiere, percee au coeur des chocs
+## graves, interieur visible (upgrade(..., hollow)).
+const HOLLOW_SHADER := preload("res://vehicles/truck_body_hollow.gdshader")
 ## Saturation et luminosite gardees des peintures d'origine.
 const PAINT_SATURATION := 0.86
 const PAINT_VALUE := 0.94
@@ -49,9 +52,10 @@ static var _grime: NoiseTexture2D
 ## Matieres realistes pour les maillages sous `root` (surcharges de surface,
 ## livree comprise), et hauteur au-dessus du sol de chaque maillage, mesuree
 ## dans le repere de `frame` (le camion ; sol `ground_y`, par defaut le bas
-## des pneus). `root` doit etre dans l'arbre. Renvoie le nombre de surfaces
-## modifiees.
-static func upgrade(root: Node3D, frame: Node3D = null, ground_y: float = NAN) -> int:
+## des pneus). `root` doit etre dans l'arbre. `hollow` : coque creuse
+## (remorques) - les chocs graves la percent, on voit l'interieur vide.
+## Renvoie le nombre de surfaces modifiees.
+static func upgrade(root: Node3D, frame: Node3D = null, ground_y: float = NAN, hollow: bool = false) -> int:
 	var count := 0
 	var meshes := root.find_children("*", "MeshInstance3D", true, false)
 	if root is MeshInstance3D:
@@ -72,7 +76,7 @@ static func upgrade(root: Node3D, frame: Node3D = null, ground_y: float = NAN) -
 			var base := src as BaseMaterial3D
 			if base == null:
 				continue
-			var m := realistic(base)
+			var m := realistic(base, hollow)
 			if m != src:
 				mi.set_surface_override_material(s, m)
 				count += 1
@@ -92,7 +96,7 @@ static func _set_relief_frame(mi: MeshInstance3D, up: Vector3) -> void:
 	var kinds: Array[int] = []
 	for s in mi.mesh.get_surface_count():
 		var m := mi.get_active_material(s) as ShaderMaterial
-		if m != null and m.shader == BODY_SHADER:
+		if m != null and (m.shader == BODY_SHADER or m.shader == HOLLOW_SHADER):
 			var k := int(m.get_shader_parameter(&"relief"))
 			if k > 0:
 				kinds.append(k)
@@ -144,12 +148,18 @@ static func set_weather(grime_color: Color, wetness: float) -> void:
 
 
 ## Version realiste de `src` (elle-meme si rien ne s'applique, ou deja faite).
-static func realistic(src: BaseMaterial3D) -> Material:
+## `hollow` : coque creuse (HOLLOW_SHADER) pour les matieres de carrosserie.
+static func realistic(src: BaseMaterial3D, hollow: bool = false) -> Material:
 	if src.has_meta(&"realistic"):
 		return src
 	var kind := kind_of(src.resource_name)
+	var body := kind != &"" and kind != &"glass" and kind != &"lamp"
 	# un feu n'a pas le meme verre de jour et de nuit (TruckLights.night)
-	var key: Variant = src if kind != &"lamp" else [src, TruckLights.night]
+	var key: Variant = src
+	if kind == &"lamp":
+		key = [src, TruckLights.night]
+	elif hollow and body:
+		key = [src, &"hollow"]
 	if _cache.has(key):
 		return _cache[key]
 	var m: Material = src
@@ -162,6 +172,8 @@ static func realistic(src: BaseMaterial3D) -> Material:
 			m = b
 		_:
 			m = _body(src, kind)
+			if hollow:
+				(m as ShaderMaterial).shader = HOLLOW_SHADER
 	if m != src:
 		m.set_meta(&"realistic", kind)
 	_cache[key] = m
@@ -188,7 +200,7 @@ static func kind_of(material_name: String) -> StringName:
 		return &"chrome"
 	if n.begins_with("jante"):
 		return &"rim"
-	for p: String in ["aluminium", "laiton", "acier"]:
+	for p: String in ["aluminium", "laiton", "acier", "volet"]:
 		if n.begins_with(p):
 			return &"metal"
 	for p: String in ["pneu", "caoutchouc", "joint"]:
@@ -325,7 +337,8 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 ## [type, pas (m), profondeur (m)]. D'apres des photos : conteneur ISO
 ## (ondes trapezoidales de 28 cm, 3,6 cm de creux), pneus poids lourd
 ## (4 rainures en zigzag), citerne en viroles soudees de 1,6 m, betaillere
-## en lames d'alu nervurees, rideau de bache plisse.
+## en lames d'alu nervurees, rideau de bache plisse, rideaux roulants
+## des fourgons incendie (lames de 5 cm).
 static func _relief_of(material_name: String) -> Array:
 	var n := material_name.to_lower()
 	if n.begins_with("conteneur"):
@@ -338,6 +351,8 @@ static func _relief_of(material_name: String) -> Array:
 		return [RELIEF_SLATS, 0.07, 0.006]
 	if n.begins_with("bache"):
 		return [RELIEF_TARP, 0.42, 0.018]
+	if n.begins_with("volet_roulant"):
+		return [RELIEF_SLATS, 0.05, 0.005]
 	return [0, 0.28, 0.0]
 
 

@@ -522,7 +522,18 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   - `[x]` semi-grue refaite : tourelle profilée à ouïes, cabine de grutier
     vitrée, contrepoids en dalles, flèche à profil arrondi (bagues, tête à
     poulie, câble, moufle, crochet), vérin fût + tige, stabilisateurs à
-    vérins et patins ronds, caisson nervuré.
+    vérins et patins ronds, caisson nervuré ;
+  - `[x]` fourgon incendie : vrais rideaux roulants (lames de 5 cm en relief,
+    matière `Volet_Roulant`), barre basse à poignée, coffre d'enroulement.
+- `[x]` **Remorques creuses, percées par les chocs** (2026-10-07, « que les
+  remorques soient vides : dès qu'elle s'abîme, ça fait des trous dans la
+  coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des
+  remorques passe par `truck_body_hollow.gdshader` (même matière, vue des
+  deux faces). Au cœur d'une cicatrice grave (gravité locale > 0,6 : choc
+  violent, ou chocs répétés au même endroit), la coque est découpée à bord
+  déchiqueté, lèvre de tôle nue puis bord noirci ; par le trou, l'intérieur
+  vide de la coque (apprêt sombre). Distance vraie au choc : la paroi d'en
+  face n'est jamais percée par le même choc. Le tracteur reste plein.
 
 ---
 

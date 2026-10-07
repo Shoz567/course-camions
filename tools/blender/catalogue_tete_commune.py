@@ -800,16 +800,20 @@ def trailer_pompier(parts, m):
     parts.append(box("Caisse_Avant", (0.0, -7.55, 2.62), (3.1, 6.9, 3.76), rouge))
     parts.append(box("Caisse_Roues", (0.0, -12.55, 2.95), (3.1, 3.1, 3.1), rouge))
     parts.append(box("Caisse_Arriere", (0.0, -14.7, 2.62), (3.1, 1.2, 3.76), rouge))
-    # rideaux alu par compartiment, rainures horizontales
+    # rideaux roulants par compartiment : lames d'alu nervurees (relief de la
+    # matiere Volet_Roulant, truck_materials.gd), barre basse a poignee,
+    # coffre d'enroulement en haut
+    volet = material("Volet_Roulant", (0.74, 0.75, 0.77), 0.6, 0.35)
     bays = [(-4.3, -5.9), (-6.1, -7.7), (-7.9, -9.4), (-9.6, -10.9), (-11.15, -13.95)]
     for y0, y1 in bays:
         z0 = 1.65 if y0 < -11.0 else 1.0
+        yc = (y0 + y1) / 2
+        length = abs(y1 - y0)
         for side in (-1.0, 1.0):
-            parts.append(box("Rideau", (side * 1.565, (y0 + y1) / 2, (z0 + 4.2) / 2), (0.03, abs(y1 - y0), 4.2 - z0),
-                             m["alu"]))
-            for k in range(int((4.2 - z0) / 0.35)):
-                parts.append(box("Rideau_Rainure", (side * 1.585, (y0 + y1) / 2, z0 + 0.2 + k * 0.35),
-                                 (0.02, abs(y1 - y0) - 0.06, 0.03), m["noir"]))
+            parts.append(box("Rideau", (side * 1.565, yc, (z0 + 4.0) / 2), (0.03, length, 4.0 - z0), volet))
+            parts.append(box("Rideau_Coffre", (side * 1.57, yc, 4.1), (0.06, length + 0.04, 0.22), rouge))
+            parts.append(box("Rideau_Barre", (side * 1.59, yc, z0 + 0.05), (0.05, length - 0.02, 0.08), m["alu"]))
+            parts.append(box("Rideau_Poignee", (side * 1.625, yc, z0 + 0.13), (0.03, 0.32, 0.035), m["chrome"]))
     for side in (-1.0, 1.0):
         parts.append(box("Bande_Blanche", (side * 1.57, -7.5, 0.85), (0.03, 6.5, 0.14), blanc))
         parts.append(box("Bande_Reflechissante", (side * 1.57, -8.0, 4.35), (0.03, 15.2, 0.14), m["danger"]))

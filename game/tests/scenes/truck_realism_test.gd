@@ -14,7 +14,10 @@ extends PhysicsTest
 ##      arriere rouges au bout de la remorque, remplaces (pas ajoutes) quand
 ##      la remorque change ;
 ##   C. de jour : aucune lampe ajoutee, phare central d'origine ; les verres
-##      des phares a peine lumineux (bien moins que la nuit).
+##      des phares a peine lumineux (bien moins que la nuit) ;
+##   D. remorque creuse : sa carrosserie (caisse, chassis) passe par
+##      truck_body_hollow.gdshader (percee au coeur des chocs graves,
+##      interieur visible) ; celle du tracteur reste pleine.
 
 var _night: Truck
 var _day: Truck
@@ -144,6 +147,15 @@ func _test_finish() -> void:
 	check("A pneus sculptes : axe de roue et rayon de pneu", tyre_mat != null
 		and int(tyre_mat.get_shader_parameter(&"relief")) == TruckMaterials.RELIEF_TYRE
 		and tyre_axis.w > 0.35 and tyre_axis.w < 0.7, str(tyre_axis))
+	# remorque creuse (2026-10-07, « des qu'elle s'abime on voit a
+	# l'interieur ») : caisse et chassis de la remorque en coque percable,
+	# vue des deux faces ; pas le tracteur
+	check("D remorque creuse : sa caisse peut se trouer, l'interieur se voit", box_mat != null
+		and box_mat.shader == TruckMaterials.HOLLOW_SHADER and box_mat.shader.code.contains("cull_disabled"))
+	check("D tracteur : carrosserie pleine", p != null and p.shader == TruckMaterials.BODY_SHADER)
+	var frame := _material(skin, "Chassis") if skin != null else []
+	check("D chassis de la remorque aussi creux", frame.size() == 2
+		and (frame[1] as ShaderMaterial).shader == TruckMaterials.HOLLOW_SHADER)
 
 	var spots := _lamps(vn, "SpotLight3D")
 	var fwd := -_night.global_basis.z
