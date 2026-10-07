@@ -15,7 +15,10 @@ extends Node3D
 ##     remorque, plus haute) ; un mur, lui, descend jusqu'au sol ;
 ##   - la vitesse vers l'obstacle depasse BURST_SPEED_MS (~25 km/h de plein
 ##     cote, ou un mur pris a ~15 deg a 100 km/h).
-## Les roues de la remorque, purement visuelles, n'eclatent pas.
+## Remorque (un cote de son train de roues, Truck.TRAILER_LEFT / RIGHT) : un
+## choc de cote sur l'arriere de sa caisse (TRAILER_REACH_M autour du train de
+## roues), a toute hauteur (la caisse est au-dessus des roues), meme seuil de
+## vitesse ; elle se remet a neuf avec la remorque suivante.
 ## L'eclatement : detonation, bouffee de fumee, lambeaux de gomme. La roue
 ## creve reste a plat jusqu'a la reapparition du camion (pneus neufs).
 ## Deterministe : aucun tirage aleatoire (CLAUDE.md §7).
@@ -29,6 +32,9 @@ const SIDE_MIN := 0.45
 const AXLE_REACH_M := 1.7
 ## Au-dessus (repere du camion, m) : cabine ou remorque, pas une roue.
 const MAX_HIT_HEIGHT_M := 2.3
+## Etendue du train de roues de la remorque, de part et d'autre de son centre
+## (m) : ses essieux s'etalent sur 2,8 m au plus, plus le flanc des pneus.
+const TRAILER_REACH_M := 2.6
 
 static var _bang_stream: AudioStreamWAV
 static var _rubber: StandardMaterial3D
@@ -61,6 +67,25 @@ static func wheel_hit(truck_xf: Transform3D, point: Vector3, normal: Vector3, sp
 	return -1
 
 
+## Cote du train de roues de la remorque (Truck.TRAILER_LEFT, TRAILER_RIGHT)
+## dont les pneus eclatent sous ce choc sur sa caisse, ou -1. `box_xf` : pose
+## monde de la caisse (centre, articulation comprise), `box_size` sa taille ;
+## le reste comme wheel_hit. La hauteur ne compte pas : la caisse est tout
+## entiere au-dessus des roues.
+static func trailer_hit(box_xf: Transform3D, box_size: Vector3, point: Vector3, normal: Vector3,
+		speed_ms: float) -> int:
+	if speed_ms < BURST_SPEED_MS:
+		return -1
+	var n := (box_xf.basis.inverse() * normal).normalized()
+	if absf(n.x) < SIDE_MIN:
+		return -1
+	var p := box_xf.affine_inverse() * point
+	var bogie_z := box_size.z / 2.0 - Truck.TRAILER_BOGIE_FROM_REAR_M
+	if absf(p.z - bogie_z) > TRAILER_REACH_M:
+		return -1
+	return Truck.TRAILER_LEFT if n.x > 0.0 else Truck.TRAILER_RIGHT
+
+
 func _ready() -> void:
 	_truck = get_parent() as Truck
 	if _truck == null:
@@ -82,16 +107,25 @@ func _ready() -> void:
 		add_child(_bang)
 
 
-func _on_impact(speed: float, _on_trailer: bool, point: Vector3, normal: Vector3, max_height: float) -> void:
+func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3, max_height: float) -> void:
 	if _truck.is_wrecked():
 		return
-	var i := wheel_hit(_truck.global_transform, point, normal, speed, max_height)
+	var i := -1
+	if on_trailer:
+		var box_xf := _truck.global_transform \
+				* Truck.trailer_local_transform(_truck.get_trailer_angle(), _truck.trailer_box_center)
+		i = trailer_hit(box_xf, _truck.trailer_box_size, point, normal, speed)
+	else:
+		i = wheel_hit(_truck.global_transform, point, normal, speed, max_height)
 	if i >= 0:
 		_truck.burst_tire(i)
 
 
-## Centre de la roue `wheel` (monde) : sous son ancrage, au moyeu.
+## Centre de la roue `wheel` (monde) : sous son ancrage, au moyeu ; remorque :
+## pneu exterieur de son train de roues.
 func wheel_center(wheel: int) -> Vector3:
+	if wheel >= Truck.TRAILER_LEFT:
+		return _truck.global_transform * (_truck.trailer_wheel_local(wheel) + Vector3(0.0, 0.5, 0.0))
 	var p := _truck.get_probe(wheel)
 	return p.global_position - _truck.global_basis.y * p.hub_distance
 
@@ -105,7 +139,8 @@ func _burst_fx(wheel: int) -> void:
 	if not is_inside_tree():
 		return
 	var at := wheel_center(wheel)
-	var side := _truck.global_basis.x * signf(TruckSpec.ANCHORS[wheel].x)
+	var left := wheel == Truck.TRAILER_LEFT or (wheel < 4 and TruckSpec.ANCHORS[wheel].x < 0.0)
+	var side := _truck.global_basis.x * (-1.0 if left else 1.0)
 	var world := _truck.get_parent()
 	if world == null:
 		return

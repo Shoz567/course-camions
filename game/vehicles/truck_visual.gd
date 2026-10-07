@@ -32,6 +32,8 @@ extends Node3D
 ## - Pneu eclate (Truck.tire_burst) : le pneu de chaque groupe de roues associe
 ##   s'ecrase sous la jante, au sol (truck_body.gdshader, tyre_burst), et
 ##   montre sa carcasse dechiree ; la jante descend avec le rayon (physique).
+##   Pneus de la remorque (un cote du train de roues) : ceux de ce cote, sur
+##   chaque essieu de l'habillage, et la remorque penche de ce cote.
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
 
 ## Chemin du modele, relatif au dossier du projet Godot (game/). Vide = boites.
@@ -139,6 +141,8 @@ var _trailer_pitch: float = 0.0
 var _trailer_pitch_rate: float = 0.0
 var _trailer_ground_roll: float = 0.0
 var _trailer_ground_roll_rate: float = 0.0
+## Roulis de la remorque sur un pneu creve (rad, > 0 leve la droite).
+var _trailer_flat_roll: float = 0.0
 ## Rayon reutilise pour sonder le sol (couche world), sans allocation.
 var _ground_ray: RayCast3D
 
@@ -220,30 +224,72 @@ func _ready() -> void:
 
 ## Pneu de la roue physique `wheel` eclate : les pneus de ses groupes de roues
 ## s'ecrasent du rayon perdu (en fraction de leur rayon).
-func _on_tire_burst(wheel: int) -> void:
-	var drop := _truck.tuning.tire_burst_drop_m if _truck.tuning != null else 0.0
-	for k in _pivots.size():
-		if _pivots[k] != null and _probe_index(k) == wheel:
-			var r := _wheel_radius[k] if k < _wheel_radius.size() else TruckSpec.WHEEL_RADIUS
-			set_tyre_burst(_pivots[k], clampf(drop / r, 0.0, 0.45))
+func _on_tire_burst(_wheel: int) -> void:
+	_sync_tyres()
 
 
 func _on_tires_repaired() -> void:
-	for p in _pivots:
-		if p != null:
-			set_tyre_burst(p, 0.0)
+	_sync_tyres()
 
 
-## Ecrasement `amount` (fraction du rayon, 0 : pneu neuf) des pneus sous
-## `wheel_root` : les maillages en gomme sculptee (relief de pneu).
-static func set_tyre_burst(wheel_root: Node, amount: float) -> int:
+## Pneus affiches = pneus du camion (Truck.is_tire_burst) : groupes de roues
+## du tracteur, cotes du train de roues de la remorque.
+func _sync_tyres() -> void:
+	if _truck == null:
+		return
+	var drop := _truck.tuning.tire_burst_drop_m if _truck.tuning != null else 0.0
+	for k in _pivots.size():
+		if _pivots[k] != null:
+			var r := _wheel_radius[k] if k < _wheel_radius.size() else TruckSpec.WHEEL_RADIUS
+			var on := _truck.is_tire_burst(_probe_index(k))
+			set_tyre_burst(_pivots[k], clampf(drop / r, 0.0, 0.45) if on else 0.0)
+	var left := _truck.is_tire_burst(Truck.TRAILER_LEFT)
+	var right := _truck.is_tire_burst(Truck.TRAILER_RIGHT)
+	for i in _axles.size():
+		var amount := clampf(drop / _axle_radius[i], 0.0, 0.45) if left or right else 0.0
+		set_tyre_burst(_axles[i], amount, left or not right, right or not left, _trailer_pivot)
+	# le cote creve descend du rayon perdu (sur toute la voie du train)
+	var sag := atan2(drop, 2.0 * _bogie_half_track)
+	_trailer_flat_roll = (sag if left else 0.0) - (sag if right else 0.0)
+
+
+## Ecrasement `amount` (fraction du rayon, 0 : pneu neuf) des pneus de
+## `wheel_root` et de ses enfants : les maillages en gomme sculptee (relief de
+## pneu). Un seul cote (`left` ou `right`, x < 0 ou x > 0 dans le repere de
+## `frame`, par defaut `wheel_root`) : un pneu de l'autre cote reste neuf, un
+## maillage d'essieu entier (les deux pneus, remorque) ne s'ecrase que de ce
+## cote (tyre_side).
+static func set_tyre_burst(wheel_root: Node3D, amount: float, left: bool = true, right: bool = true,
+		frame: Node3D = null) -> int:
 	var n := 0
-	for c in wheel_root.find_children("*", "MeshInstance3D", true, false):
+	var both := left == right
+	if frame == null:
+		frame = wheel_root
+	var inv := Transform3D.IDENTITY if both else frame.global_transform.affine_inverse()
+	var meshes := wheel_root.find_children("*", "MeshInstance3D", true, false)
+	if wheel_root is MeshInstance3D:
+		meshes.append(wheel_root)
+	for c in meshes:
 		var mi := c as MeshInstance3D
 		var ax: Variant = mi.get_instance_shader_parameter(&"relief_axis")
-		if ax is Vector4 and (ax as Vector4).w > 0.0:
-			mi.set_instance_shader_parameter(&"tyre_burst", amount)
-			n += 1
+		if not (ax is Vector4 and (ax as Vector4).w > 0.0):
+			continue
+		var a := amount
+		var side := 0.0
+		if not both:
+			var want := -1.0 if left else 1.0
+			var local := inv * mi.global_transform
+			var x := (local * mi.get_aabb().get_center()).x
+			if absf(x) > 0.3:
+				# pneu seul, d'un cote
+				a = amount if signf(x) == want else 0.0
+			else:
+				# essieu entier : le cote voulu, le long de son axe de relief
+				var ax3 := Vector3((ax as Vector4).x, (ax as Vector4).y, (ax as Vector4).z)
+				side = want * signf((local.basis * ax3).x)
+		mi.set_instance_shader_parameter(&"tyre_burst", a)
+		mi.set_instance_shader_parameter(&"tyre_side", side)
+		n += 1
 	return n
 
 
@@ -397,6 +443,7 @@ func set_trailer_type(type: TrailerType) -> void:
 		if not TruckDetails.has_flaps(skin):
 			_add_trailer_flaps(skin)
 		TruckMaterials.upgrade(skin, self, _ground_y)
+		_sync_tyres()
 	# remorque d'origine (modele du camion ou boite) : cachee sous un habillage
 	for c in _trailer_pivot.get_children():
 		if c != skin and c is Node3D and String(c.name) != TRAILER_SKIN:
@@ -492,7 +539,7 @@ func _update_trailer_pose(delta: float, roll_dist: float) -> void:
 	var yaw := Basis(Vector3.UP, _truck.get_trailer_angle())
 	var lean_roll := deg_to_rad(_lean.y * lean_trailer_roll_ratio)
 	if _axles.is_empty() or not trailer_follows_ground or delta <= 0.0:
-		_trailer_pivot.basis = yaw * Basis(Vector3.BACK, lean_roll)
+		_trailer_pivot.basis = yaw * Basis(Vector3.BACK, lean_roll + _trailer_flat_roll)
 		return
 	# pose du camion APRES le pas physique qui suit (ce code passe avant lui) :
 	# sans cette prediction, la remorque a un tick de retard sur l'assiette du
@@ -519,7 +566,7 @@ func _update_trailer_pose(delta: float, roll_dist: float) -> void:
 	var max_pitch := deg_to_rad(trailer_max_pitch_deg)
 	var max_roll := deg_to_rad(trailer_max_ground_roll_deg)
 	target_pitch = clampf(target_pitch, -max_pitch, max_pitch)
-	target_roll = clampf(target_roll, -max_roll, max_roll)
+	target_roll = clampf(target_roll + _trailer_flat_roll, -max_roll, max_roll)
 	var w := TAU * trailer_ground_frequency_hz
 	var c := 2.0 * trailer_ground_damping_ratio * w
 	_trailer_pitch_rate += (w * w * (target_pitch - _trailer_pitch) - c * _trailer_pitch_rate) * delta

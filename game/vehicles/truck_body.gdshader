@@ -67,6 +67,10 @@ instance uniform vec4 relief_center = vec4(0.0);
 // (0 : neuf). Le bas du pneu, toujours vers le sol meme quand la roue tourne,
 // s'aplatit et ses flancs gonflent ; la gomme est dechiree.
 instance uniform float tyre_burst = 0.0;
+// cote creve d'un maillage d'essieu entier (remorque : les deux pneus dans un
+// maillage) : 0 tout le maillage, 1 / -1 seulement le cote x > 0 / x < 0 le
+// long de relief_axis
+instance uniform float tyre_side = 0.0;
 
 varying vec3 obj_pos;
 varying vec3 obj_n;
@@ -76,25 +80,26 @@ void vertex() {
 	obj_pos = VERTEX;
 	obj_n = NORMAL;
 	h_ground = dot(height_row.xyz, VERTEX) + height_row.w;
-	if (relief == 2 && tyre_burst > 0.0 && relief_axis.w > 0.0) {
-		vec3 ax = normalize(relief_axis.xyz);
+	vec3 ax = normalize(relief_axis.xyz + vec3(1e-6));
+	vec3 d = VERTEX - relief_center.xyz;
+	float burst = tyre_burst * (tyre_side == 0.0 ? 1.0 : step(0.0, dot(d, ax) * tyre_side));
+	if (relief == 2 && burst > 0.0 && relief_axis.w > 0.0) {
 		float rad = relief_axis.w;
-		vec3 d = VERTEX - relief_center.xyz;
 		vec3 rv = d - ax * dot(d, ax);
 		// le sol dans le repere du maillage (la roue tourne, lui non)
 		vec3 down = transpose(MODEL_NORMAL_MATRIX) * vec3(0.0, -1.0, 0.0);
 		down = normalize(down - ax * dot(down, ax) + vec3(0.0, 1e-6, 0.0));
 		float below = dot(rv, down);
-		float floor_d = rad * (1.0 - tyre_burst);
+		float floor_d = rad * (1.0 - burst);
 		// meplat pose au sol
 		float push = max(below - floor_d, 0.0);
 		VERTEX -= down * push;
 		// flancs : la gomme ecrasee gonfle de cote, pres du sol
-		float squash = smoothstep(floor_d - 0.5 * rad * tyre_burst, rad, below);
-		VERTEX += ax * dot(NORMAL, ax) * squash * tyre_burst * 0.5 * rad;
+		float squash = smoothstep(floor_d - 0.5 * rad * burst, rad, below);
+		VERTEX += ax * dot(NORMAL, ax) * squash * burst * 0.5 * rad;
 		NORMAL = normalize(mix(NORMAL, down, clamp(push / (0.1 * rad), 0.0, 1.0) * (1.0 - abs(dot(NORMAL, ax)))));
 		// le reste de la bande, degonfle : ondule legerement
-		VERTEX -= normalize(rv + vec3(1e-6)) * tyre_burst * 0.06 * rad
+		VERTEX -= normalize(rv + vec3(1e-6)) * burst * 0.06 * rad
 			* (0.5 + 0.5 * sin(dot(rv, cross(ax, down)) / rad * 9.0));
 	}
 }
@@ -245,12 +250,14 @@ void fragment() {
 	// pneu eclate : bande arrachee par lambeaux (carcasse textile, nappe d'acier
 	// a nu au fond), bord dechiquete sombre, plus de sculptures
 	float torn_h = 0.0;
-	if (relief == 2 && tyre_burst > 0.0) {
+	vec3 tyre_ax = normalize(relief_axis.xyz + vec3(1e-6));
+	float tyre_x = dot(obj_pos - relief_center.xyz, tyre_ax);
+	if (relief == 2 && tyre_burst > 0.0 && (tyre_side == 0.0 || tyre_x * tyre_side >= 0.0)) {
 		// lambeaux arraches en bandes autour de la roue : bruit lent le long de
 		// la circonference (direction du rayon, sans couture), rapide en travers
-		vec3 ax = normalize(relief_axis.xyz);
+		vec3 ax = tyre_ax;
 		vec3 d = obj_pos - relief_center.xyz;
-		float x = dot(d, ax);
+		float x = tyre_x;
 		vec3 rdir = normalize(d - ax * x + vec3(1e-6));
 		vec3 b1 = normalize(cross(ax, abs(ax.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
 		vec2 ring = vec2(dot(rdir, b1), dot(rdir, cross(ax, b1)));

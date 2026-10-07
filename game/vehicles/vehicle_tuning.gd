@@ -183,6 +183,15 @@ extends Resource
 ## Rayon perdu : la jante descend d'autant vers le sol, ce coin de la caisse
 ## aussi.
 @export_range(0.0, 0.5, 0.01, "suffix:m") var tire_burst_drop_m: float = 0.0
+## Pneu de remorque eclate (un cote de son train de roues) : la remorque
+## glisse et entraine l'arriere du tracteur. Adherence laterale des roues
+## arriere, en fraction de la normale, par cote creve (0 .. 1). Sa jante freine
+## comme celle du tracteur (tire_burst_drag_ms2), sous le train de roues.
+@export_range(0.0, 1.0, 0.01) var tire_burst_trailer_grip_factor: float = 0.0
+## Remorque sur un pneu creve : elle chasse plus loin en virage et se balance
+## plus longtemps (consigne de balayage x ce facteur, amortissement / ce
+## facteur).
+@export_range(1.0, 3.0, 0.01) var tire_burst_trailer_sway_mult: float = 0.0
 
 @export_group("Direction")
 ## Angle de braquage max, atteint a basse vitesse.
@@ -310,6 +319,10 @@ func validate() -> PackedStringArray:
 		errors.append("auto_countersteer_ratio = %s : doit etre < 1" % auto_countersteer_ratio)
 	if tire_burst_grip_factor >= 1.0:
 		errors.append("tire_burst_grip_factor = %s : doit etre < 1" % tire_burst_grip_factor)
+	if tire_burst_trailer_grip_factor >= 1.0:
+		errors.append("tire_burst_trailer_grip_factor = %s : doit etre < 1" % tire_burst_trailer_grip_factor)
+	if tire_burst_trailer_sway_mult < 1.0:
+		errors.append("tire_burst_trailer_sway_mult = %s : doit etre >= 1" % tire_burst_trailer_sway_mult)
 	if tire_burst_drop_m >= TruckSpec.WHEEL_RADIUS * 0.5:
 		errors.append("tire_burst_drop_m = %s : la jante passerait sous le sol" % tire_burst_drop_m)
 	if handbrake_engage_ticks < 1.0 or handbrake_release_ticks < 1.0:

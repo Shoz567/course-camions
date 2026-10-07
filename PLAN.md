@@ -486,6 +486,15 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   camion tire de 5° du côté crevé en 5 s, 13 % de vitesse en moins. Pneu
   écrasé sous la jante et déchiré (`truck_body.gdshader`, `tyre_burst`),
   détonation, fumée, lanières de gomme. Pneus neufs à la réapparition.
+  Remorque (« fais aussi éclater les pneus de la remorque ») : un choc de côté
+  sur l'arrière de la caisse, à ±2,6 m du train de roues, fait éclater les
+  pneus de ce côté (`TruckTires.trailer_hit`, `Truck.TRAILER_LEFT/RIGHT`).
+  Sa jante freine sous le train de roues, la remorque chasse et se balance
+  plus (×1,6), l'arrière du tracteur garde 80 % d'adhérence par côté crevé.
+  Mesuré : l'ensemble tire de 4,5° en 5 s, 13 % de vitesse en moins, la
+  remorque balaie 13° contre 8,5° en entrée de virage. Les pneus de ce côté
+  de chaque essieu s'écrasent (`tyre_side`), la remorque penche ; ils partent
+  avec la remorque larguée, la suivante arrive neuve.
 - `[x]` **Relief des matières** (2026-10-07, objectif « modèles plus lisses et
   réalistes, avec des détails en relief ») : `truck_body.gdshader` dessine
   un relief procédural par matière (`TruckMaterials._relief_of`), ses axes
