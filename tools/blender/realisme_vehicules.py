@@ -19,11 +19,13 @@ Ce qui faisait « maquette » et ce que le script y change :
      planes nettes, aretes adoucies). Pneus, jantes, textes, plaques : intacts ;
   2. tracteur : silhouette d'une cabine de route (coins avant arrondis, face
      avant et pare-brise inclines, toit bombe, flancs rentrants : reshape_cab)
-     et details - grille de calandre a barreaux verticaux, entourage noir et
-     optiques rondes dans les phares, antibrouillards dans le pare-chocs,
-     poignees de maintien chromees a cote des portes, pare-chaleur sur les
-     cheminees d'echappement, cornets sous les retroviseurs, garde-boue
-     arriere en plastique noir (plus en couleur carrosserie) ;
+     et details - calandre dans un entourage chrome (lames horizontales de
+     l'equipe), phares a deux reflecteurs chromes en cuvette avec ampoule et
+     feu de jour en bandeau, pare-soleil, prise d'air et antibrouillards dans
+     le pare-chocs, poignees de maintien chromees a cote des portes,
+     pare-chaleur sur les cheminees d'echappement, cornets sous les
+     retroviseurs, reservoirs alu sangles entre marchepieds et roues arriere,
+     garde-boue arriere en plastique noir (plus en couleur carrosserie) ;
   3. remorques : les garde-boue plats (planches au-dessus des roues) deviennent
      des garde-boue cintres qui epousent chaque roue ; pieces de coin sur la
      caisse d'un conteneur, barres de verrouillage sur ses portes.
@@ -280,7 +282,7 @@ def soften(objects):
 FAMILIES = [("Calandre", "Calandre_Grille", False), ("Phare", "Phare_Optique", True),
             ("Antibrouillard", "Antibrouillard", True), ("Poignee", "Poignee_Maintien", True),
             ("Pare_Chaleur", "Pare_Chaleur", True), ("Retro", "Retro_Angle_Mort", True),
-            ("Piece_Coin", "Pieces_Coin", False),
+            ("Reservoir", "Reservoir", True), ("Piece_Coin", "Pieces_Coin", False),
             ("Barre_Verrou", "Verrous", False), ("Poignee_Verrou", "Verrous", False)]
 
 
@@ -320,16 +322,30 @@ def detail_tractor(root):
     alu = material("Aluminium")
     added = []
 
-    # calandre : barreaux verticaux derriere les lames chromees
+    # calandre : lames chromees horizontales de l'equipe sur fond noir (les
+    # barreaux verticaux ajoutes avant en faisaient un gaufrier), dans un
+    # entourage chrome
+    # (les phares mordent sur ses coins bas : l'entourage passe au-dessus et
+    # entre eux)
     grille = find("Calandre")[0]
     lo, hi = wbox(grille)
-    n = 18
-    for k in range(n):
-        x = lo.x + (hi.x - lo.x) * (k + 0.5) / n
-        added.append(add_box(DETAIL + f"Calandre_Barreau_{k}", (0.022, 0.025, (hi.z - lo.z) * 0.92),
-                             Vector((x, lo.y - 0.006, (lo.z + hi.z) / 2.0)), dark, root))
+    c = (lo + hi) / 2.0
+    t = 0.045
+    lamps = [wbox(p) for p in find_base("Phare")]
+    z_side = max([lo.z] + [l_hi.z + t for l_lo, l_hi in lamps if l_hi.z > lo.z])
+    x_low = min([hi.x - lo.x] + [2.0 * abs(l_lo.x if l_lo.x > 0 else l_hi.x) - 2.0 * t for l_lo, l_hi in lamps])
+    for side in (-1, 1):
+        h = hi.z + t - z_side
+        added.append(add_box(DETAIL + "Calandre_Entourage", (t, 0.05, h),
+                             Vector((c.x + side * ((hi.x - lo.x) / 2 + t / 2), lo.y - 0.02, z_side + h / 2)), chrome,
+                             root))
+    added.append(add_box(DETAIL + "Calandre_Entourage", (hi.x - lo.x + 2 * t, 0.05, t),
+                         Vector((c.x, lo.y - 0.02, hi.z + t / 2)), chrome, root))
+    added.append(add_box(DETAIL + "Calandre_Entourage", (x_low, 0.05, t),
+                         Vector((c.x, lo.y - 0.02, lo.z - t / 2)), chrome, root))
 
-    # phares : entourage noir, deux optiques rondes
+    # phares : boitier noir, deux reflecteurs chromes en cuvette avec leur
+    # ampoule, feu de jour en bandeau au-dessus (plus de disques gris plats)
     for p in find_base("Phare"):
         lo, hi = wbox(p)
         c = (lo + hi) / 2.0
@@ -337,20 +353,34 @@ def detail_tractor(root):
         h = hi.z - lo.z
         t = 0.035
         for side in (-1, 1):
-            added.append(add_box(DETAIL + "Phare_Cadre", (t, 0.06, h + 2 * t),
-                                 Vector((c.x + side * (w / 2 + t / 2), lo.y - 0.01, c.z)), black, root))
-            added.append(add_box(DETAIL + "Phare_Cadre", (w + 2 * t, 0.06, t),
-                                 Vector((c.x, lo.y - 0.01, c.z + side * (h / 2 + t / 2))), black, root))
-        r = min(w / 4.4, h / 2.4)
+            added.append(add_box(DETAIL + "Phare_Cadre", (t, 0.07, h + 2 * t),
+                                 Vector((c.x + side * (w / 2 + t / 2), lo.y - 0.02, c.z)), black, root))
+            added.append(add_box(DETAIL + "Phare_Cadre", (w + 2 * t, 0.07, t),
+                                 Vector((c.x, lo.y - 0.02, c.z + side * (h / 2 + t / 2))), black, root))
+        r = min(w / 4.4, (h - 0.04) / 2.2)
+        zc = c.z - 0.02
         for side in (-1, 1):
-            added.append(add_cylinder(DETAIL + "Phare_Optique", r, 0.03,
-                                      Vector((c.x + side * w / 4.2, lo.y - 0.012, c.z)), lamp, root))
-            added.append(add_cylinder(DETAIL + "Phare_Bague", r * 1.18, 0.022,
-                                      Vector((c.x + side * w / 4.2, lo.y - 0.004, c.z)), chrome, root))
+            x = c.x + side * w / 4.2
+            added.append(add_reflector(DETAIL + "Phare_Reflecteur", r, r * 0.3, 0.05,
+                                       Vector((x, lo.y - 0.025, zc)), chrome, root))
+            added.append(add_cylinder(DETAIL + "Phare_Ampoule", r * 0.28, 0.03, Vector((x, lo.y - 0.012, zc)), lamp,
+                                      root, segments=12))
+        added.append(add_box(DETAIL + "Phare_Feu_Jour", (w * 0.92, 0.02, 0.022),
+                             Vector((c.x, lo.y - 0.03, hi.z - 0.016)), lamp, root))
 
-    # antibrouillards dans le pare-chocs
+    # pare-soleil au-dessus du pare-brise, couleur de la cabine
+    paint = material("Peinture_Cabine")
+    glass = find_base("Pare_Brise")[0]
+    lo, hi = wbox(glass)
+    added.append(add_box(DETAIL + "Pare_Soleil", ((hi.x - lo.x) * 1.02, 0.24, 0.04),
+                         Vector(((lo.x + hi.x) / 2.0, lo.y - 0.07, hi.z + 0.05)), paint, root,
+                         rot=(math.radians(-12.0), 0.0, 0.0)))
+
+    # antibrouillards dans le pare-chocs ; prise d'air basse
     bumper = find("Pare_Choc")[0]
     lo, hi = wbox(bumper)
+    added.append(add_box(DETAIL + "Prise_Air", ((hi.x - lo.x) * 0.58, 0.02, 0.075),
+                         Vector(((lo.x + hi.x) / 2.0, lo.y - 0.004, lo.z + 0.075)), dark, root))
     for side in (-1, 1):
         x = side * ((hi.x - lo.x) / 2.0 - 0.38)
         z = (lo.z + hi.z) / 2.0
@@ -399,7 +429,55 @@ def detail_tractor(root):
         c = (lo + hi) / 2.0
         added.append(add_box(DETAIL + "Retro_Angle_Mort", (hi.x - lo.x, hi.y - lo.y, 0.2),
                              Vector((c.x, c.y, lo.z - 0.16)), black, root))
+
+    # reservoirs entre les marchepieds et les roues arriere (le flanc etait
+    # vide) : alu brosse, deux sangles noires, bouchon chrome ; sous les
+    # cheminees
+    steps = find("Marchepied")
+    fenders = find("Garde_Boue_AR")
+    pipes = find_base("Echappement")
+    rails = find("Longeron")
+    if steps and fenders:
+        y0 = max(wbox(s)[1].y for s in steps) + 0.06
+        y1 = min(wbox(f)[0].y for f in fenders) - 0.05
+        z_top = min(wbox(p)[0].z for p in pipes) - 0.08 if pipes else 1.0
+        x_in = max(wbox(r)[1].x for r in rails) + 0.12 if rails else 0.75
+        x_out = max(wbox(s)[1].x for s in steps) - 0.12
+        r = min(0.3, (x_out - x_in) / 2.0, (z_top - 0.3) / 2.0)
+        length = y1 - y0
+        if length > 0.4 and r > 0.15:
+            for side in (-1, 1):
+                x = side * (x_in + r)
+                z = z_top - r
+                yc = (y0 + y1) / 2.0
+                added.append(add_cylinder(DETAIL + "Reservoir", r, length, Vector((x, yc, z)), alu, root,
+                                          segments=28))
+                for f in (0.22, 0.78):
+                    added.append(add_cylinder(DETAIL + "Reservoir_Sangle", r + 0.012, 0.05,
+                                              Vector((x, y0 + length * f, z)), black, root, segments=28))
+                added.append(add_cylinder(DETAIL + "Reservoir_Bouchon", 0.055, 0.04,
+                                          Vector((x, y0 + length * 0.5, z + r + 0.01)), chrome, root, axis="Z",
+                                          segments=14))
     return merge_details(added)
+
+
+def add_reflector(name, r_front, r_back, depth, loc, mat, parent, segments=20):
+    """Reflecteur de phare : cuvette conique ouverte vers l'avant (-Y), vue de
+    l'interieur (faces retournees), centree en `loc` (sa face avant)."""
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    # create_cone : radius1 en -Z, radius2 en +Z ; rotation X(+90) : +Z -> -Y
+    bmesh.ops.create_cone(bm, cap_ends=False, segments=segments, radius1=r_back, radius2=r_front, depth=depth)
+    bmesh.ops.create_circle(bm, cap_ends=True, segments=segments, radius=r_back,
+                            matrix=Matrix.Translation((0.0, 0.0, -depth / 2.0)))
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
+    bmesh.ops.transform(bm, matrix=Matrix.Translation((0.0, 0.0, -depth / 2.0)), verts=bm.verts)
+    bmesh.ops.transform(bm, matrix=Matrix.Rotation(math.pi / 2, 4, "X"), verts=bm.verts)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.reverse_faces(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    return _place(name, mesh, loc, mat, parent)
 
 
 # --- silhouette de la cabine ------------------------------------------------------
@@ -422,7 +500,7 @@ RIGID = ("Embleme", "Texte", "Logo", "T_", "Plaque", "Poignee")
 # Pare-chocs et ce qu'il porte : extremites ramenees de WRAP m (pare-chocs
 # enveloppant), sous le haut des pneus ; il reste devant les roues.
 WRAP = 0.1
-WRAP_PARTS = ("Pare_Choc", "Lame_Avant", "Clignotant", "Plaque_AV", "Detail_Antibrouillard")
+WRAP_PARTS = ("Pare_Choc", "Lame_Avant", "Clignotant", "Plaque_AV", "Detail_Antibrouillard", "Detail_Prise_Air")
 
 
 def smoothstep(a, b, x):

@@ -513,6 +513,16 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   (sommets dédoublés par l'export glTF, pièces trop lourdes), sont recousus
   et chanfreinés (7 mm), avec un plafond de triangles par pièce. Têtes
   ~125 k triangles, remorques 51 à 150 k ; 4 vues : 6,5 ms par image.
+- `[~]` **Modèles plus réalistes, passe 2** (2026-10-07, « tu peux refaire des
+  modèles 3D ou modifier ceux existants » ; objectif « ne t'arrête pas tant
+  que les modèles ne sont pas vraiment plus réalistes ») :
+  - `[x]` tracteur : calandre à lames dans un entourage chrome (plus de
+    gaufrier), phares à réflecteurs en cuvette et feu de jour, pare-soleil,
+    prise d'air, réservoirs alu sanglés entre marchepieds et roues arrière ;
+  - `[x]` semi-grue refaite : tourelle profilée à ouïes, cabine de grutier
+    vitrée, contrepoids en dalles, flèche à profil arrondi (bagues, tête à
+    poulie, câble, moufle, crochet), vérin fût + tige, stabilisateurs à
+    vérins et patins ronds, caisson nervuré.
 
 ---
 

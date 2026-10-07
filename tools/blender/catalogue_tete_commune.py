@@ -335,6 +335,41 @@ def prism(name, profile, y0, y1, mat):
     return finish(o, 0.03, 2)
 
 
+def prism_x(name, profile, x0, x1, mat):
+    """Profil de cote (y, z) extrude de x0 a x1 (tourelle, cabine)."""
+    me = bpy.data.meshes.new(GEN + name)
+    bm = bmesh.new()
+    a = [bm.verts.new((x0, y, z)) for y, z in profile]
+    b = [bm.verts.new((x1, y, z)) for y, z in profile]
+    n = len(profile)
+    bm.faces.new(a)
+    bm.faces.new(list(reversed(b)))
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((a[i], a[j], b[j], b[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(GEN + name, me)
+    bpy.context.scene.collection.objects.link(o)
+    me.materials.append(mat)
+    return finish(o, 0.03, 2)
+
+
+def torus(name, center, major, minor, axis, mat):
+    """Anneau (crochet, manilles) d'axe `axis`."""
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=16, minor_segments=8)
+    o = bpy.context.active_object
+    o.name = GEN + name
+    o.data.name = GEN + name
+    rot = {"X": Matrix.Rotation(math.pi / 2, 4, "Y"), "Y": Matrix.Rotation(math.pi / 2, 4, "X"),
+           "Z": Matrix.Identity(4)}[axis]
+    o.data.transform(rot)
+    o.data.transform(Matrix.Translation(center))
+    o.data.materials.append(mat)
+    return finish(o, 0.0)
+
+
 def lathe(name, profile, segs, mat, center, side, closed=False):
     """Piece de revolution autour de l'axe X : profil (decalage le long de
     l'axe, vers l'exterieur si side > 0 ; rayon). `closed` : le profil boucle
@@ -811,9 +846,12 @@ def trailer_pompier(parts, m):
 
 
 def trailer_grue(parts, m):
-    """Semi-grue : poutre-caisson centrale jaune sans plateau, grue a l'arriere
-    (tourelle, cabine, contrepoids), fleche telescopique couchee vers l'avant
-    sur son support, bequilles ; 4 essieux jumeles, jantes jaunes."""
+    """Semi-grue : poutre-caisson centrale jaune nervuree, passerelle, grue a
+    l'arriere (couronne, tourelle profilee a ouies, cabine de grutier vitree a
+    pare-brise incline, contrepoids en dalles), fleche telescopique a profil
+    arrondi couchee vers l'avant (bagues, tete a poulie, cable, moufle et
+    crochet, verin de relevage fut + tige), stabilisateurs a verins et patins
+    ronds ; 4 essieux jumeles, jantes jaunes."""
     jaune = material("Peinture_Cabine_Jaune", (0.95, 0.72, 0.03), 0.2, 0.4)
     kingpin_plate(parts, m, y_front=0.0, width=1.6, top=2.3)
     parts.append(box("Col_De_Cygne", (0.0, -1.3, 2.55), (2.5, 3.0, 0.5), jaune))
@@ -822,36 +860,101 @@ def trailer_grue(parts, m):
     for y in (-9.4, -15.0):
         parts.append(box("Stabilisateur_Bras", (0.0, y, 1.9), (4.4, 0.4, 0.34), m["danger"]))
         for side in (-1.0, 1.0):
-            parts.append(box("Stabilisateur_Verin", (side * 2.1, y, 1.1), (0.24, 0.24, 1.6), jaune))
-            parts.append(box("Stabilisateur_Patin", (side * 2.1, y, 0.3), (0.6, 0.6, 0.08), m["noir"]))
+            parts.append(box("Stabilisateur_Tete", (side * 2.1, y, 1.9), (0.42, 0.46, 0.42), jaune))
             for k in range(3):
                 parts.append(box("Zebra", (side * (1.4 + k * 0.25), y - 0.21, 1.9), (0.1, 0.01, 0.34),
                                  m["danger_noir"]))
-    # grue
+    # stabilisateurs : verin a fut jaune et tige chrome, patin rond
+    for y in (-9.4, -15.0):
+        for side in (-1.0, 1.0):
+            parts.append(tube("Stabilisateur_Fut", (side * 2.1, y, 1.75), (side * 2.1, y, 0.95), 0.15, jaune, 16))
+            parts.append(tube("Stabilisateur_Tige", (side * 2.1, y, 0.95), (side * 2.1, y, 0.36), 0.09,
+                              m["chrome"], 16))
+            parts.append(cyl("Stabilisateur_Patin_Rond", (side * 2.1, y, 0.3), 0.34, 0.08, "Z", m["noir"], 24))
+    # nervures du caisson, passerelle en tole larmee sur le dessus
+    for k in range(10):
+        y = -4.4 - k * 1.15
+        for side in (-1.0, 1.0):
+            parts.append(box("Caisson_Nervure", (side * 0.56, y, 1.95), (0.025, 0.08, 0.72), jaune))
+    parts.append(box("Passerelle", (0.0, -7.5, 2.365), (0.9, 6.2, 0.03), m["acier"]))
+
+    # grue : couronne, plateau tournant, tourelle profilee (moteur sous capot
+    # a ouies), cabine de grutier a cote de la fleche, contrepoids en dalles
     parts.append(cyl("Couronne", (0.0, -12.6, 2.52), 1.1, 0.35, "Z", m["noir"], 32))
-    parts.append(box("Tourelle", (0.0, -12.9, 3.2), (2.6, 3.0, 1.0), jaune))
-    parts.append(box("Contrepoids", (0.0, -14.85, 3.3), (2.7, 0.9, 1.2), m["noir"]))
+    parts.append(cyl("Couronne_Bague", (0.0, -12.6, 2.5), 1.16, 0.08, "Z", m["acier"], 32))
+    parts.append(box("Plateau_Tournant", (0.0, -12.85, 2.78), (2.6, 3.1, 0.16), jaune))
+    parts.append(prism_x("Tourelle", [(-11.4, 2.86), (-11.75, 3.55), (-13.95, 3.78), (-14.4, 3.45),
+                                      (-14.4, 2.86)], -0.3, 1.3, jaune))
+    for k in range(6):
+        parts.append(box("Tourelle_Ouie", (1.31, -12.6 - k * 0.2, 3.25), (0.02, 0.1, 0.45), m["noir"]))
+    for k in range(3):
+        parts.append(box("Contrepoids_Dalle", (0.0, -14.58 - k * 0.3, 3.3), (2.7, 0.26, 1.15), m["noir"]))
     for k in range(5):
-        parts.append(box("Contrepoids_Zebra", (-1.2 + k * 0.6, -15.31, 3.3), (0.25, 0.01, 1.2), m["danger"]))
-    parts.append(box("Cabine_Grue", (-0.85, -11.7, 3.55), (0.9, 1.4, 1.7), jaune))
-    parts.append(box("Cabine_Vitre", (-0.85, -10.99, 3.8), (0.8, 0.02, 0.9), m["vitre"]))
-    parts.append(box("Cabine_Vitre", (-1.31, -11.7, 3.8), (0.02, 1.2, 0.9), m["vitre"]))
-    # fleche telescopique couchee vers l'avant, sur son support
-    parts.append(box("Fleche_1", (0.35, -8.9, 4.2), (0.9, 7.6, 0.85), jaune))
-    parts.append(box("Fleche_2", (0.35, -3.3, 4.2), (0.72, 4.0, 0.68), jaune))
-    parts.append(box("Fleche_3", (0.35, -0.6, 4.2), (0.56, 1.6, 0.52), jaune))
+        parts.append(box("Contrepoids_Zebra", (-1.2 + k * 0.6, -15.24, 3.3), (0.25, 0.012, 1.15), m["danger"]))
+    # cabine : pare-brise incline, vitres sur trois faces, toit debordant
+    cab = [(-11.05, 2.86), (-11.05, 3.4), (-11.36, 4.34), (-12.38, 4.38), (-12.38, 2.86)]
+    parts.append(prism_x("Cabine_Grue", cab, -1.28, -0.42, jaune))
+    windshield = beam("Cabine_Pare_Brise", (0.0, -11.04, 3.48), (0.0, -11.32, 4.26), 0.74, 0.02, m["vitre"])
+    windshield.data.transform(Matrix.Translation((-0.85, 0.012, 0.0)))
+    parts.append(windshield)
+    for x in (-1.29, -0.41):
+        parts.append(box("Cabine_Vitre", (x, -11.85, 3.85), (0.02, 0.85, 0.75), m["vitre"]))
+        parts.append(box("Cabine_Montant", (x, -11.4, 3.85), (0.035, 0.05, 0.8), m["noir"]))
+    parts.append(box("Cabine_Vitre_AR", (-0.85, -12.39, 3.9), (0.7, 0.02, 0.6), m["vitre"]))
+    parts.append(box("Cabine_Toit", (-0.85, -11.8, 4.4), (0.96, 1.4, 0.05), jaune))
+    parts.append(tube("Cabine_Essuie_Glace", (-1.05, -11.06, 3.52), (-0.8, -11.22, 3.98), 0.012, m["noir"], 6))
+    for z in (3.1, 3.4, 3.7):
+        parts.append(tube("Echelle_Barreau", (-1.42, -12.55, z - 0.3), (-1.42, -12.95, z - 0.3), 0.02,
+                          m["alu"], 8))
+    for y in (-12.55, -12.95):
+        parts.append(tube("Echelle_Montant", (-1.42, y, 2.6), (-1.42, y, 3.6), 0.022, m["alu"], 8))
+    for x0, x1, y in ((-0.25, 1.25, -13.9),):
+        parts.append(tube("Garde_Corps", (x0, y, 4.15), (x1, y, 4.15), 0.025, m["danger"], 8))
+        for x in (x0, x1):
+            parts.append(tube("Garde_Corps_Poteau", (x, y, 3.78), (x, y, 4.15), 0.022, m["danger"], 8))
+
+    # fleche telescopique couchee vers l'avant : trois elements au profil
+    # arrondi en dessous (caisson de grue moderne), bagues de guidage noires,
+    # tete a poulies, cable et moufle
+    def boom(name, y0, y1, w, h):
+        cx, cz = 0.35, 4.2
+        c = w * 0.26
+        e = 0.035
+        prof = [(cx - w / 2 + e, cz + h / 2), (cx + w / 2 - e, cz + h / 2), (cx + w / 2, cz + h / 2 - e),
+                (cx + w / 2, cz - h / 2 + c), (cx + w / 2 - c, cz - h / 2), (cx - w / 2 + c, cz - h / 2),
+                (cx - w / 2, cz - h / 2 + c), (cx - w / 2, cz + h / 2 - e)]
+        return prism(name, prof, y0, y1, jaune)
+
+    parts.append(boom("Fleche_1", -5.1, -12.7, 0.9, 0.85))
+    parts.append(boom("Fleche_2", -1.3, -5.6, 0.74, 0.68))
+    parts.append(boom("Fleche_3", 0.0, -1.6, 0.58, 0.52))
+    for y, w, h in ((-5.08, 0.94, 0.89), (-1.28, 0.78, 0.72)):
+        parts.append(box("Fleche_Bague", (0.35, y, 4.2), (w, 0.1, h), m["noir"]))
     for k in range(4):
-        parts.append(box("Fleche_Zebra", (0.35, 0.1 - k * 0.3, 4.47), (0.58, 0.14, 0.01),
+        parts.append(box("Fleche_Zebra", (0.35, -0.1 - k * 0.3, 4.465), (0.5, 0.14, 0.01),
                          m["danger_noir"] if k % 2 else m["danger"]))
-    parts.append(box("Pied_Fleche", (0.35, -12.4, 3.95), (0.8, 0.9, 0.7), jaune))
-    parts.append(tube("Verin_Levage", (0.35, -11.2, 3.4), (0.35, -8.6, 3.8), 0.13, m["chrome"]))
+    for side in (-1.0, 1.0):
+        parts.append(box("Tete_Flasque", (0.35 + side * 0.25, 0.12, 4.1), (0.05, 0.4, 0.62), jaune))
+    parts.append(cyl("Tete_Poulie", (0.35, 0.18, 4.05), 0.22, 0.38, "X", m["noir"], 20))
+    parts.append(cyl("Tete_Axe", (0.35, 0.18, 4.05), 0.06, 0.6, "X", m["chrome"], 12))
+    for dx in (-0.06, 0.06):
+        parts.append(tube("Cable", (0.35 + dx, 0.32, 3.95), (0.35 + dx, 0.32, 3.62), 0.012, m["acier"], 6))
+    parts.append(cyl("Moufle", (0.35, 0.32, 3.45), 0.2, 0.3, "X", m["danger"], 20))
+    parts.append(box("Moufle_Flasque", (0.35, 0.32, 3.3), (0.32, 0.12, 0.2), m["danger"]))
+    parts.append(tube("Crochet", (0.35, 0.32, 3.2), (0.35, 0.32, 3.02), 0.045, m["chrome"], 10))
+    parts.append(torus("Crochet_Bec", (0.35, 0.39, 2.96), 0.08, 0.03, "X", m["chrome"]))
+    # pied de fleche : deux flasques et l'axe ; verin de relevage (fut jaune,
+    # tige chrome) ; support avant
+    for side in (-1.0, 1.0):
+        parts.append(box("Pied_Flasque", (0.35 + side * 0.48, -12.45, 3.95), (0.07, 0.9, 0.8), jaune))
+    parts.append(cyl("Pied_Axe", (0.35, -12.5, 4.15), 0.09, 1.1, "X", m["chrome"], 14))
+    parts.append(tube("Verin_Fut", (0.35, -11.6, 3.2), (0.35, -9.9, 3.5), 0.17, jaune, 16))
+    parts.append(tube("Verin_Tige", (0.35, -9.9, 3.5), (0.35, -8.6, 3.8), 0.1, m["chrome"], 16))
     for side in (-1.0, 1.0):
         parts.append(beam("Support_Fleche", (side * 0.6, -2.4, 2.8), (side * 0.35, -2.4, 3.78), 0.14, 0.14,
                           m["noir"]))
     parts.append(box("Support_Fleche_Selle", (0.35, -2.4, 3.8), (1.1, 0.3, 0.06), m["noir"]))
-    parts.append(box("Moufle", (0.35, 0.05, 3.45), (0.45, 0.35, 0.5), m["danger"]))
-    parts.append(tube("Crochet", (0.35, 0.05, 3.2), (0.35, 0.05, 2.95), 0.05, m["chrome"]))
-    beacon(parts, 0.9, -12.0, 4.5, m)
+    beacon(parts, -0.85, -11.9, 4.55, m)
     for y in (-10.2, -11.5, -12.8, -14.1):
         axle(parts, y, 0.5, 0.28, True, jaune, m, nuts=10, vents=4)
     fender(parts, -9.6, -14.7, 1.15, 0.66, m["noir"])
