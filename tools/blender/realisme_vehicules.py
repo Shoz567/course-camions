@@ -284,7 +284,7 @@ FAMILIES = [("Calandre", "Calandre_Grille", False), ("Phare", "Phare_Optique", T
             ("Pare_Chaleur", "Pare_Chaleur", True), ("Retro", "Retro_Angle_Mort", True),
             ("Reservoir", "Reservoir", True), ("Piece_Coin", "Pieces_Coin", False),
             ("Barre_Verrou", "Verrous", False), ("Poignee_Verrou", "Verrous", False),
-            ("Sangle", "Sangles", False), ("Verin", "Verins", False)]
+            ("Sangle", "Sangles", False), ("Verin", "Verins", False), ("Gond", "Verrous", False)]
 
 
 def merge_details(objects):
@@ -767,11 +767,57 @@ def detail_car_carrier(trailer):
     return added
 
 
+def detail_livestock_doors(trailer):
+    """Betaillere : portes arriere ferrees (la caisse de l'equipe n'a qu'un
+    panneau plat) - quatre barres de verrouillage chromees a poignee, gonds
+    sur les deux bords, butoirs en caoutchouc en bas."""
+    body = next((o for o in trailer.children_recursive if o.type == "MESH"
+                 and o.name.startswith("Remorque_Betaillere")), None)
+    if body is None:
+        return []
+    added = []
+    # la porte : grandes faces tournees vers l'arriere, a moins de 10 cm du
+    # plus en arriere (la boite englobante compte aussi le panneau au-dessus
+    # du toit, aussi en arriere mais petit)
+    blo, _bhi = wbox(body)
+    mw = body.matrix_world
+    nm = mw.to_3x3().inverted().transposed()
+    rear = []
+    for p in body.data.polygons:
+        n = (nm @ p.normal).normalized()
+        c = mw @ p.center
+        if n.y < -0.9 and c.y < blo.y + 0.1 and p.area * mw.to_scale().x * mw.to_scale().z > 1.0:
+            rear += [mw @ body.data.vertices[i].co for i in p.vertices]
+    if len(rear) < 4:
+        return []
+    lo = Vector((min(p.x for p in rear), blo.y, min(p.z for p in rear)))
+    hi = Vector((max(p.x for p in rear), blo.y, max(p.z for p in rear)))
+    chrome = material("Chrome")
+    steel = material("Chassis")
+    y = lo.y - 0.03
+    z0, z1 = lo.z + 0.35, hi.z - 0.45
+    for x in (-1.2, -0.4, 0.4, 1.2):
+        added.append(add_cylinder(DETAIL + "Barre_Verrou", 0.022, z1 - z0, Vector((x, y, (z0 + z1) / 2.0)), chrome,
+                                  trailer, axis="Z", segments=10))
+        added.append(add_box(DETAIL + "Poignee_Verrou", (0.05, 0.05, 0.32), Vector((x + 0.07, y - 0.03, z0 + 0.9)),
+                             steel, trailer, rot=(0.0, math.radians(70.0), 0.0)))
+        for z in (z0 + 0.05, z1 - 0.05):
+            added.append(add_box(DETAIL + "Barre_Verrou_Came", (0.07, 0.06, 0.09), Vector((x, y, z)), steel, trailer))
+    for side in (-1.0, 1.0):
+        for f in (0.12, 0.5, 0.88):
+            z = lo.z + (hi.z - lo.z) * f
+            added.append(add_box(DETAIL + "Gond", (0.1, 0.05, 0.16), Vector((side * (hi.x - 0.06), y, z)), steel,
+                                 trailer))
+    return added
+
+
 def detail_trailer(name, trailer):
     """Details d'une remorque. La caisse s'etend vers -Y depuis la sellette."""
     added = replace_plank_fenders(trailer)
     if name == "porte_voitures":
         added += detail_car_carrier(trailer)
+    if name == "betaillere":
+        added += detail_livestock_doors(trailer)
     caisse = [o for o in trailer.children_recursive if o.type == "MESH" and o.name.startswith("Conteneur")
               and not o.name.startswith("Conteneur_Porte")]
     if caisse:

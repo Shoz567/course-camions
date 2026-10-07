@@ -535,7 +535,10 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   - `[x]` matières : plus de « camouflage » sur les toits et les tôles d'alu -
     la poussière du dessus et le voile d'usure suivaient un bruit à plaques
     de 3 m (mat et brillant en nuages) ; film presque uniforme au grain fin ;
-    alu brossé à stries fines et serrées.
+    alu brossé à stries fines et serrées ;
+  - `[x]` bétaillère : portes arrière ferrées (quatre barres de verrouillage
+    chromées à poignée et cames, gonds sur les deux bords), posées sur les
+    grandes faces arrière (pas sur le panneau au-dessus du toit).
 - `[x]` **Remorques creuses, percées par les chocs** (2026-10-07, « que les
   remorques soient vides : dès qu'elle s'abîme, ça fait des trous dans la
   coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des
