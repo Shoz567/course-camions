@@ -185,6 +185,16 @@ func _check_race_decor() -> void:
 		and decor.screen_labels[0].text != decor.screen_labels[1].text, ad0)
 	check("8 faisceaux, qui balaient le ciel", decor.beams.size() == 8 and decor.beams[0].rotation != beam0,
 		"%d" % decor.beams.size())
+	# lampadaires (2026-10-07, « Night City trop sombre ») : au moins un tous
+	# les 50 m, projecteurs sans ombre vers le sol, mats au-dela des murs
+	var street := root.get_node_or_null("StreetLights") as Node3D
+	var spots := street.find_children("*", "SpotLight3D", false, false) if street != null else []
+	var lamps_ok := not spots.is_empty()
+	for n: Node in spots:
+		var sl := n as SpotLight3D
+		lamps_ok = lamps_ok and not sl.shadow_enabled and (-sl.global_basis.z).y < -0.8
+	check_above("lampadaires le long de la piste", spots.size(), int(_track.length() / 50.0))
+	check("lampadaires : projecteurs sans ombre, vers le sol", lamps_ok)
 	var stands := root.get_node_or_null("Grandstands") as Node3D
 	check("tribunes generees", stands != null)
 	if stands == null:

@@ -455,6 +455,26 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   pare-brise incliné, est retiré. Caisses de remorques gardées droites
   (conteneur, bétaillère, fourgon : des boîtes dans la réalité). Rendu
   inchangé (4 vues : 6,4 ms par image), aucun pneu traversé.
+- `[x]` **Cicatrices au lieu de traits blancs** (2026-10-07, « des sortes de
+  traits blancs [...] pas très réaliste, quitte à avoir des vraies
+  cicatrices ») : les décalques d'éraflures sont remplacés par des
+  cicatrices peintes dans la carrosserie (`BodyScars`, `truck_body.gdshader`,
+  8 par maillage, paramètres d'instance) — peinture ternie et rayée dans le
+  sens du frottement, éclats à bord déchiqueté laissant voir l'apprêt et la
+  tôle nue, traces noires, suie au centre des gros chocs. Un nouveau choc
+  agrandit la cicatrice voisine ; tout s'efface à la réapparition.
+- `[x]` **Cyber City lisible** (2026-10-07, « Night City est trop sombre, la
+  vision est compliquée ») : 88 lampadaires LED le long de la piste
+  (projecteurs sans ombre, mâts en MultiMesh, aucun au-dessus d'une autre
+  partie de la piste), lumière ambiante × 2, exposition 1,15 → 1,6, lune
+  0,45 → 0,85, bitume mouillé un peu moins noir. 4 vues : 6,3 ms par image
+  (inchangé).
+- `[x]` **Virages** (2026-10-07, « mieux tourner sans déraper ») :
+  adhérence latérale 0,9 → 0,99 g (haut de la tolérance de VEHICLE_SPEC §6),
+  pneus plus vifs (saturation à 5° au lieu de 6°), direction plus rapide
+  (5°/tick). Mesuré : 0,877 → 0,961 g, rayon mini à 50 km/h 21,6 → 19,7 m
+  (`make baseline`). Aller au-delà demande de changer la cible de
+  VEHICLE_SPEC (question posée à l'utilisateur).
 
 ---
 

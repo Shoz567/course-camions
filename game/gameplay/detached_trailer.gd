@@ -77,7 +77,7 @@ var _smoke: CPUParticles3D
 var _sparks: CPUParticles3D
 ## Etat visible : 0 neuve, 1 abimee (< 60 %), 2 en ruine (< 30 %).
 var damage_stage: int = 0
-var _marks: Array[Decal] = []
+var _marks: Array[Node3D] = []
 const MAX_MARKS := 10
 
 
@@ -229,13 +229,9 @@ func _on_truck_hit(truck: Truck, approach_ms: float, contact: Array) -> void:
 ## Trace de choc au point monde `at`, la carrosserie regardant vers `outward`.
 func _add_mark(at: Vector3, outward: Vector3, severity: float) -> void:
 	var parent: Node3D = _visual if _visual != null else self
-	var d := DamageFx.make_mark(severity)
-	var inv := parent.global_transform.affine_inverse()
-	DamageFx.place_mark(d, inv * at, inv.basis * outward)
-	parent.add_child(d)
-	_marks.append(d)
+	_marks.append(DamageFx.scar(parent, at, outward, severity))
 	if _marks.size() > MAX_MARKS:
-		var old: Decal = _marks.pop_front()
+		var old: Node3D = _marks.pop_front()
 		if is_instance_valid(old):
 			old.queue_free()
 

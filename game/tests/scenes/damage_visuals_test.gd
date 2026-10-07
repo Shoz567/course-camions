@@ -3,7 +3,7 @@ extends PhysicsTest
 ## Degats visibles et baril remasterise (lot 3, 2026-10-02) :
 ##   - fumee moteur selon les PV : rien au-dessus de 70, grise de 70 a 30,
 ##     noire sous 30, fumee d'epave a 0 ;
-##   - traces de choc localisees (decalques sur la carrosserie seulement) :
+##   - traces de choc localisees (cicatrices peintes dans la carrosserie) :
 ##     A choc frontal -> calandre (avant du tracteur, brulure) ; B frottement
 ##     de biais -> flanc droit (eraflures) ; D marche arriere dans un mur ->
 ##     arriere de la remorque (accrochee a son pivot), rien sur le tracteur ;
@@ -91,7 +91,8 @@ func _test_tick(t: int) -> void:
 		E_WORSE_AT + 5: _seen["e20"] = _smoke_state(_e)
 		E_KILL_AT: eh.damage(20.0, &"test")
 		E_KILL_AT + 5: _seen["e0"] = [_smoke_state(_e), _fx(_e).marks().size()]
-		E_KILL_AT + 190: _seen["e_new"] = [_smoke_state(_e), _fx(_e).marks().size(), eh.hp]
+		E_KILL_AT + 190: _seen["e_new"] = [_smoke_state(_e), _fx(_e).marks().size(), eh.hp,
+			BodyScars.scarred(_e.get_node("Visual") as Node3D)]
 		R1_AT: _r1.linear_velocity = Vector3(0.0, 0.0, -25.0)
 		R2_AT - 20:
 			if _trailer != null and is_instance_valid(_trailer):
@@ -114,15 +115,15 @@ func _smoke_state(t: Truck) -> Array:
 
 ## Trace la plus forte d'une liste : position et axe sortant, dans le repere
 ## de son parent (carrosserie ou pivot de remorque).
-func _strongest(marks: Array[Decal]) -> Dictionary:
-	var best: Decal = null
+func _strongest(marks: Array[Node3D]) -> Dictionary:
+	var best: Node3D = null
 	for d in marks:
 		if best == null or float(d.get_meta(&"severity")) > float(best.get_meta(&"severity")):
 			best = d
 	if best == null:
 		return {}
 	return {"pos": best.position, "out": best.transform.basis.y.normalized(),
-		"severity": float(best.get_meta(&"severity")), "parent": best.get_parent(), "mask": best.cull_mask}
+		"severity": float(best.get_meta(&"severity")), "parent": best.get_parent()}
 
 
 func _test_finish() -> void:
@@ -139,10 +140,18 @@ func _test_finish() -> void:
 	check("A choc frontal : trace sur la calandre (avant du tracteur), brulure", not ma.is_empty()
 		and ma["parent"] == visual_a.mark_parent(false) and ma["pos"].z < -2.5 and ma["out"].dot(Vector3.FORWARD) > 0.7
 		and ma["severity"] >= 0.9)
-	check("traces : sur le calque des carrosseries seulement (jamais la route)", not ma.is_empty()
-		and ma["mask"] == DamageFx.LAYER_BIT)
-	var body_mesh := visual_a.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
-	check("carrosserie sur le calque des traces", body_mesh.layers & DamageFx.LAYER_BIT != 0)
+	var scarred := BodyScars.scarred(visual_a)
+	check("traces : cicatrices peintes dans la carrosserie, aucun decalque (traits blancs)",
+		scarred > 0 and visual_a.find_children("*", "Decal", true, false).is_empty(), "%d maillages" % scarred)
+	var front := 0
+	for n in visual_a.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		for s: Array in BodyScars.of(mi):
+			var at := visual_a.mark_parent(false).global_transform.affine_inverse() * (mi.global_transform * (s[0] as Vector3))
+			var p: Variant = mi.get_instance_shader_parameter(&"scar0")
+			if at.z < -2.0 and float(s[2]) > 0.9 and p is Vector4 and (p as Vector4).w > 8.0:
+				front += 1
+	check("A : cicatrice violente a l'avant, transmise a la peinture (scar0)", front > 0, str(front))
 	var mb := _strongest(_fx(_b).marks())
 	check("B frottement : eraflures sur le flanc droit", not mb.is_empty() and mb["pos"].x > 1.0
 		and mb["out"].dot(Vector3.RIGHT) > 0.7 and mb["severity"] < 0.35)
@@ -157,7 +166,7 @@ func _test_finish() -> void:
 		str(_seen.get("e20", [])))
 	var e0: Array = _seen.get("e0", [[], 0])
 	check("E 0 PV : fumee d'epave, cabine noircie", e0[0] == [S.WRECK, true, true, false] and int(e0[1]) >= 4, str(e0))
-	check("E reapparu : neuf (ni fumee, ni traces, 100 PV)", _seen.get("e_new", []) == [[S.NONE, false, false, false], 0, 100.0],
+	check("E reapparu : neuf (ni fumee, ni traces, 100 PV)", _seen.get("e_new", []) == [[S.NONE, false, false, false], 0, 100.0, 0],
 		str(_seen.get("e_new", [])))
 
 	var r1: Array = _seen.get("after_r1", [])

@@ -166,6 +166,7 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 	var stretch := Vector2.ONE
 	var variation := 0.15
 	var grime := 1.0
+	var scars := 1.0
 	match kind:
 		&"paint":
 			col = Color.from_hsv(col.h, col.s * PAINT_SATURATION, col.v * PAINT_VALUE, col.a)
@@ -207,6 +208,7 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 			scale = 9.0
 			variation = 0.1
 			grime = 0.45
+			scars = 0.0
 		&"chassis":
 			col = col * 0.6
 			metal = 0.45
@@ -233,6 +235,7 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 	m.set_shader_parameter(&"bump_strength", bump)
 	m.set_shader_parameter(&"rough_variation", variation)
 	m.set_shader_parameter(&"grime", grime)
+	m.set_shader_parameter(&"scars", scars)
 	m.set_shader_parameter(&"grime_tex", _grime)
 	return m
 

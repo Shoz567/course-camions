@@ -24,7 +24,7 @@ void fragment() {
 	float rough;
 	float h;
 	float puddle;
-	asphalt_surface(p, road_width, 4.0, 0.07, wetness, TIME, col, rough, h, puddle);
+	asphalt_surface(p, road_width, 4.0, 0.1, wetness, TIME, col, rough, h, puddle);
 
 	float paint = 0.0;
 	// lignes de bord continues, a 0,8 m des murs

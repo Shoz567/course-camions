@@ -10,7 +10,8 @@ extends Node3D
 ##   - tribunes de part et d'autre de la ligne de depart : gradins, toit a
 ##     lisere neon, projecteurs, spectateurs qui sautent, font la ola et
 ##     prennent des photos (un MultiMesh) ;
-##   - faisceaux de projecteurs derriere les tribunes, qui balaient le ciel.
+##   - faisceaux de projecteurs derriere les tribunes, qui balaient le ciel ;
+##   - de nuit, lampadaires le long de la piste (_build_street_lights).
 ## Purement visuel : aucune collision (ni camion, ni camera), piles toujours
 ## au-dela des murs. En headless (tests), rien n'est genere, sauf si un test
 ## le force.
@@ -21,6 +22,8 @@ extends Node3D
 @export var overpasses: Array[Dictionary] = []
 @export var grandstands: bool = true
 @export var sky_beams: bool = true
+## Lampadaires le long de la piste (de nuit seulement).
+@export var street_lights: bool = true
 ## Hauteur libre sous un tablier, au-dessus du point le plus haut de la
 ## chaussee qu'il survole (un camion en plein saut passe largement dessous).
 @export var overpass_clearance: float = 20.0
@@ -87,6 +90,8 @@ func _generate(track: TrackBlockout) -> void:
 		_build_overpass(root, track, overpasses[k], k, piers, decks)
 	if grandstands:
 		_build_grandstands(root, track)
+	if night and street_lights:
+		_build_street_lights(root, track)
 	if sky_beams:
 		_build_beams(root, track)
 	# donnees gardees pour les tests (le rendu factice du headless ne relit pas
@@ -446,3 +451,88 @@ static func _quad_mesh(size: Vector2, mat: Material) -> MeshInstance3D:
 	mi.material_override = mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
+
+
+# --- eclairage public -------------------------------------------------------------
+
+## Lampadaires de nuit (2026-10-07 : « Night City est trop sombre, la vision
+## est compliquee ») : un tous les STREET_LIGHT_SPACING metres, en quinconce,
+## plantes sur le muret, crosse au-dessus de la chaussee et projecteur LED
+## dirige vers le sol (SpotLight3D sans ombre : la route, les camions et les
+## virages a venir sont eclaires par flaques). Aucun la ou une autre partie
+## de la piste passe (croisement, echangeur). Mats et crosses : MultiMesh.
+const STREET_LIGHT_SPACING := 34.0
+const STREET_LIGHT_HEIGHT := 9.5
+const STREET_LIGHT_ARM := 3.2
+const STREET_LIGHT_ENERGY := 14.0
+const STREET_LIGHT_RANGE := 28.0
+const STREET_LIGHT_ANGLE := 58.0
+const STREET_LIGHT_COLOR := Color(0.92, 0.94, 1.0)
+
+
+func _build_street_lights(root: Node3D, track: TrackBlockout) -> void:
+	var node := Node3D.new()
+	node.name = "StreetLights"
+	root.add_child(node)
+	var poles: Array[Transform3D] = []
+	var arms: Array[Transform3D] = []
+	var heads: Array[Transform3D] = []
+	var beyond := track.width / 2.0 + track.wall_thickness + track.wall_lean + 0.35
+	var count := floori(track.length() / STREET_LIGHT_SPACING)
+	for k in count:
+		var s := (k + 0.5) * STREET_LIGHT_SPACING
+		var i := track.index_at_s(s)
+		var side := 1.0 if k % 2 == 0 else -1.0
+		var p := track.sample_position(i)
+		var right := (track.sample_right(i) * Vector3(1, 0, 1)).normalized()
+		var fwd := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
+		var foot := p + right * side * beyond
+		# rien a cote d'une autre partie de la piste (croisement, echangeur)
+		var other := track.closest_sample(foot + right * side * 2.0)
+		var gap := absi(other - i)
+		if mini(gap, track.sample_count() - gap) > 20:
+			continue
+		var top := foot + Vector3.UP * STREET_LIGHT_HEIGHT
+		var basis := Basis.looking_at(-right * side, Vector3.UP)
+		poles.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.24, STREET_LIGHT_HEIGHT, 0.24)),
+			foot + Vector3.UP * STREET_LIGHT_HEIGHT / 2.0))
+		var arm_c := top - right * side * STREET_LIGHT_ARM / 2.0
+		arms.append(Transform3D(basis * Basis.IDENTITY.scaled(Vector3(0.14, 0.14, STREET_LIGHT_ARM)), arm_c))
+		var head_p := top - right * side * (STREET_LIGHT_ARM - 0.3) + Vector3.DOWN * 0.12
+		heads.append(Transform3D(basis * Basis.IDENTITY.scaled(Vector3(0.5, 0.12, 0.9)), head_p))
+		var light := SpotLight3D.new()
+		light.light_color = STREET_LIGHT_COLOR
+		light.light_energy = STREET_LIGHT_ENERGY
+		light.spot_range = STREET_LIGHT_RANGE
+		light.spot_angle = STREET_LIGHT_ANGLE
+		light.spot_angle_attenuation = 0.8
+		light.spot_attenuation = 0.6
+		light.shadow_enabled = false
+		light.light_volumetric_fog_energy = 0.25
+		# vers le sol, un peu vers le milieu de la chaussee
+		light.transform = Transform3D(Basis.looking_at(Vector3.DOWN * 3.0 - right * side, fwd), head_p + Vector3.DOWN * 0.2)
+		node.add_child(light)
+	var steel := StandardMaterial3D.new()
+	steel.albedo_color = Color(0.32, 0.33, 0.35)
+	steel.metallic = 0.6
+	steel.roughness = 0.45
+	_multimesh(node, "Poles", poles, steel)
+	_multimesh(node, "Arms", arms, steel)
+	_multimesh(node, "Heads", heads, _lamp())
+	node.set_meta(&"count", heads.size())
+
+
+static func _multimesh(parent: Node3D, label: String, xfs: Array[Transform3D], mat: Material) -> void:
+	var bm := BoxMesh.new()
+	bm.size = Vector3.ONE
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = bm
+	mm.instance_count = xfs.size()
+	for k in xfs.size():
+		mm.set_instance_transform(k, xfs[k])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = label
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	parent.add_child(mmi)

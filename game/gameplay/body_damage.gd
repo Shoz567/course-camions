@@ -91,7 +91,7 @@ static func prewarm(root: Node3D) -> void:
 
 
 ## Remet a neuf toutes les carrosseries sous `root` (copies abandonnees,
-## pieces arrachees remises).
+## cicatrices effacees, pieces arrachees remises).
 static func restore(root: Node3D) -> void:
 	if root == null:
 		return
@@ -106,6 +106,7 @@ static func restore(root: Node3D) -> void:
 		if mi.has_meta(META_DETACHED):
 			mi.remove_meta(META_DETACHED)
 			mi.visible = true
+	BodyScars.clear(root)
 
 
 ## Nombre de sommets deplaces depuis le neuf, sous `root` (tests).

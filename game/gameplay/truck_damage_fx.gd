@@ -3,11 +3,11 @@ extends Node3D
 
 ## Degats visibles du camion (enfant « DamageFx », purement visuel) :
 ##   - traces de choc localisees : a chaque impact (mur, camion, remorque
-##     larguee), un decalque (DamageFx.make_mark) au point touche - calandre
+##     larguee), une cicatrice peinte (DamageFx.scar) au point touche - calandre
 ##     sur un choc frontal, flanc sur un frottement, remorque sur un choc
 ##     arriere (il suit alors l'articulation, et part avec la remorque si elle
 ##     est larguee). Au plus MAX_MARKS sur le tracteur, MAX_TRAILER_MARKS sur
-##     la remorque : les plus anciennes s'effacent ;
+##     la remorque : les plus anciens reperes partent, les cicatrices restent ;
 ##   - carrosserie cabossee (BodyDamage, 2026-10-06) : la tole s'enfonce au
 ##     point touche, d'autant plus que le choc est violent ; au-dela de
 ##     PART_SPEED, les pieces exterieures proches s'arrachent (retros, phares,
@@ -40,8 +40,8 @@ const EXPLOSION_PARTS := 24
 var _truck: Truck
 var _health: TruckHealth
 var _visual: TruckVisual
-var _marks: Array[Decal] = []
-var _trailer_marks: Array[Decal] = []
+var _marks: Array[Node3D] = []
+var _trailer_marks: Array[Node3D] = []
 var _smoke: CPUParticles3D
 var _sparks: CPUParticles3D
 var _level: int = DamageFx.Smoke.NONE
@@ -109,18 +109,18 @@ func is_sparking() -> bool:
 
 
 ## Traces de choc posees (tracteur, ou remorque attachee).
-func marks(on_trailer: bool = false) -> Array[Decal]:
+func marks(on_trailer: bool = false) -> Array[Node3D]:
 	return _trailer_marks if on_trailer else _marks
 
 
 func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3) -> void:
-	add_mark(point, -normal, clampf((speed - 1.0) / 16.0, 0.1, 1.0), on_trailer)
+	add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.1, 1.0), on_trailer)
 	crush(point, normal, speed, on_trailer)
 
 
 func _on_body_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3) -> void:
 	if speed >= MIN_BODY_MARK_SPEED:
-		add_mark(point, -normal, clampf((speed - 1.0) / 16.0, 0.15, 1.0), on_trailer)
+		add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.15, 1.0), on_trailer)
 		crush(point, normal, speed, on_trailer)
 
 
@@ -170,19 +170,18 @@ func _on_body(point: Vector3, normal: Vector3, on_trailer: bool) -> Vector3:
 
 
 ## Pose une trace au point monde `point`, la carrosserie regardant vers
-## `outward` (monde). Sur la remorque : accrochee a son pivot.
-func add_mark(point: Vector3, outward: Vector3, severity: float, on_trailer: bool) -> Decal:
+## `outward` (monde) : cicatrice peinte et son repere (DamageFx.scar). Sur la
+## remorque : accrochee a son pivot. Au-dela de MAX_MARKS, les plus anciens
+## reperes partent ; les cicatrices restent jusqu'a la remise a neuf.
+func add_mark(point: Vector3, outward: Vector3, severity: float, on_trailer: bool) -> Node3D:
 	var parent: Node3D = self
 	if _visual != null:
 		parent = _visual.mark_parent(on_trailer)
-	var d := DamageFx.make_mark(severity)
-	var inv := parent.global_transform.affine_inverse()
-	DamageFx.place_mark(d, inv * point, inv.basis * outward)
-	parent.add_child(d)
+	var d := DamageFx.scar(parent, point, outward, severity)
 	var list := _trailer_marks if on_trailer else _marks
 	list.append(d)
-	if list.size() > (MAX_TRAILER_MARKS if on_trailer else MAX_MARKS):
-		var old: Decal = list.pop_front()
+	if list.size() > (MAX_MARKS if not on_trailer else MAX_TRAILER_MARKS):
+		var old: Node3D = list.pop_front()
 		if is_instance_valid(old):
 			old.queue_free()
 	return d
