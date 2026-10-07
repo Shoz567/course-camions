@@ -28,6 +28,9 @@ var _time: float = 0.0
 
 
 func _ready() -> void:
+	# toit sous la pluie : camions de la ville, sales et mouilles, phares eteints
+	TruckLights.night = false
+	TruckMaterials.set_weather(TruckMaterials.CITY_GRIME, 0.6)
 	_build_roof()
 	_build_turntable()
 	_build_lights()

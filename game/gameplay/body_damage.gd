@@ -33,7 +33,7 @@ const SKIP_PREFIXES: PackedStringArray = ["WheelPivot_", "Wheel_", "Gen_Essieu_"
 const LOOSE_PREFIXES: PackedStringArray = ["Retro_", "Phare", "Feu_", "Clignotant", "Klaxon", "Echappement",
 	"Pare_Choc", "Lame_Avant", "Garde_Boue", "Marchepied", "Calandre", "Embleme", "Poignee", "Plaque_",
 	"Diffuseur", "Rampe_Phares", "Essuie_Glace", "Flamme", "Support_Marche", "Logo", "Remorque_Feu",
-	"Remorque_Bavette", "Remorque_Poignee", "Protection_Laterale", "Aileron", "Derive_Aileron"]
+	"Remorque_Bavette", "Remorque_Poignee", "Protection_Laterale", "Aileron", "Derive_Aileron", "Bavette_"]
 const META_PRISTINE := &"dent_pristine"
 const META_OWNER := &"dent_owner"
 const META_DETACHED := &"dent_detached"

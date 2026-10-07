@@ -4,9 +4,10 @@ extends PhysicsTest
 ## realiste possible ») : matieres (TruckMaterials) et feux qui eclairent
 ## (TruckLights). SAUTE si les modeles sont absents (clone sans Git LFS).
 ##
-##   A. matieres : la peinture est vernie (clearcoat) avec un relief, les
-##      pneus en gomme noire mate, les vitres lisses ; les couleurs d'origine
-##      sont gardees ;
+##   A. matieres : la peinture est vernie, teinte d'origine un peu moins
+##      saturee ; pneus en gomme noire mate, vitres lisses ; plus de cones de
+##      flamme figes ; bavettes derriere les roues ; la salissure (truck_body.
+##      gdshader) part du bas des pneus ;
 ##   B. de nuit : deux projecteurs sous les phares, qui visent l'avant du
 ##      camion et un peu le sol ; le phare central est coupe ; deux feux
 ##      arriere rouges au bout de la remorque, remplaces (pas ajoutes) quand
@@ -69,15 +70,37 @@ func _test_finish() -> void:
 	var vd := _day.get_node("Visual") as TruckVisual
 
 	var paint := _material(vd, "Peinture_Cabine")
-	var p := paint[1] as BaseMaterial3D if paint.size() == 2 else null
-	check("A peinture vernie, avec relief, couleur d'origine", p != null and p.clearcoat_enabled
-		and p.normal_texture != null and p.albedo_color.is_equal_approx((paint[0] as BaseMaterial3D).albedo_color))
+	var p := paint[1] as ShaderMaterial if paint.size() == 2 else null
+	var src_col: Color = (paint[0] as BaseMaterial3D).albedo_color if paint.size() == 2 else Color.BLACK
+	var col: Color = p.get_shader_parameter(&"albedo") if p != null else Color.BLACK
+	check("A peinture vernie, teinte d'origine un peu moins saturee (pas un jouet)", p != null
+		and float(p.get_shader_parameter(&"clearcoat")) >= 0.9 and absf(col.h - src_col.h) < 0.01
+		and col.s < src_col.s and col.s > src_col.s * 0.7, "%s -> %s" % [src_col, col])
 	var tyre := _material(vd, "Pneu")
-	var r := tyre[1] as BaseMaterial3D if tyre.size() == 2 else null
-	check("A pneus en gomme noire mate", r != null and r.albedo_color.get_luminance() < 0.05 and r.roughness >= 0.9)
+	var r := tyre[1] as ShaderMaterial if tyre.size() == 2 else null
+	var tyre_col: Color = r.get_shader_parameter(&"albedo") if r != null else Color.WHITE
+	check("A pneus en gomme noire mate", r != null and tyre_col.get_luminance() < 0.06
+		and float(r.get_shader_parameter(&"roughness")) >= 0.85)
 	var glass := _material(vd, "Vitre")
 	var g := glass[1] as BaseMaterial3D if glass.size() == 2 else null
 	check("A vitres lisses", g != null and g.roughness <= 0.01)
+	check("A plus de cones de flamme figes sur les cheminees", vd.find_children("Flamme*", "MeshInstance3D", true,
+		false).is_empty())
+	var flaps := vn.find_children(TruckDetails.FLAP_PREFIX + "_*", "MeshInstance3D", true, false)
+	check("A bavettes derriere les roues du tracteur et de la remorque", flaps.size() >= 4, "%d" % flaps.size())
+	# salissure : la hauteur au-dessus du sol vaut ~0 au bas des pneus
+	var lowest := INF
+	for n in vd.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		var p_row: Variant = mi.get_instance_shader_parameter(&"height_row")
+		if not mi.is_visible_in_tree() or p_row == null:
+			continue
+		var row: Vector4 = p_row
+		var ab := mi.get_aabb()
+		for k in 8:
+			var c := ab.get_endpoint(k)
+			lowest = minf(lowest, row.x * c.x + row.y * c.y + row.z * c.z + row.w)
+	check_near("A salissure : hauteur au sol mesuree depuis le bas des pneus (m)", lowest, 0.0, 0.05)
 
 	var spots := _lamps(vn, "SpotLight3D")
 	var fwd := -_night.global_basis.z

@@ -126,6 +126,9 @@ var _axle_rest: Array[Transform3D] = []
 var _axle_radius: PackedFloat32Array = []
 var _axle_offset: PackedFloat32Array = []
 var _axle_spin: PackedFloat32Array = []
+## Sol sous les pneus, repere du camion (matieres : salissure selon la
+## hauteur).
+var _ground_y: float = 0.0
 var _bogie_z: float = 0.0
 var _bogie_half_track: float = 1.0
 ## Tangage et roulis pris au sol (rad) et leurs vitesses (ressort visuel).
@@ -354,9 +357,12 @@ func set_trailer_type(type: TrailerType) -> void:
 			skin.name = TRAILER_SKIN
 			for n in skin.find_children("*", "MeshInstance3D", true, false):
 				(n as MeshInstance3D).layers |= DamageFx.LAYER_BIT
-			TruckMaterials.upgrade(skin)
 			_trailer_pivot.add_child(skin)
 	_collect_axles(skin)
+	if skin != null and is_inside_tree():
+		if not TruckDetails.has_flaps(skin):
+			_add_trailer_flaps(skin)
+		TruckMaterials.upgrade(skin, self, _ground_y)
 	# remorque d'origine (modele du camion ou boite) : cachee sous un habillage
 	for c in _trailer_pivot.get_children():
 		if c != skin and c is Node3D and String(c.name) != TRAILER_SKIN:
@@ -405,6 +411,44 @@ func _collect_axles(skin: Node3D) -> void:
 		_bogie_z = z_sum / _axles.size()
 		# sonde sous les pneus exterieurs, pas sous l'essieu
 		_bogie_half_track = maxf(half - 0.3, 0.5)
+
+
+## Bavettes derriere les roues les plus en arriere du tracteur, de chaque cote.
+func _add_tractor_flaps(model: Node3D) -> void:
+	var ground := TruckMaterials.lowest_point(model, model)
+	for side: float in [-1.0, 1.0]:
+		var best := -1
+		for k in _pivots.size():
+			if _probe_of[k] >= 2 and signf(_pivots[k].position.x) == side \
+					and (best < 0 or _pivots[k].position.z > _pivots[best].position.z):
+				best = k
+		if best < 0:
+			continue
+		var hw := _arch_hw[best] if _arch_hw[best] > 0.05 else 0.3
+		TruckDetails.add_flap(model, _pivots[best].position, _wheel_radius[best], hw * 2.0 + 0.12, ground,
+			"Tracteur_%s" % ("G" if side < 0.0 else "D"))
+
+
+## Bavettes derriere le dernier essieu de la remorque, de chaque cote.
+func _add_trailer_flaps(skin: Node3D) -> void:
+	var last: Node3D = null
+	var last_z := -INF
+	var inv := skin.global_transform.affine_inverse()
+	for a in _axles:
+		var z := (inv * a.global_transform).origin.z
+		if z > last_z:
+			last_z = z
+			last = a
+	if last == null:
+		return
+	var hub := (inv * last.global_transform).origin
+	var box := _subtree_aabb(last, Transform3D.IDENTITY)
+	var half := box.size.x / 2.0
+	var r := maxf(box.size.y / 2.0, 0.3)
+	var ground := TruckMaterials.lowest_point(skin, skin)
+	for side: float in [-1.0, 1.0]:
+		TruckDetails.add_flap(skin, Vector3(side * (half - 0.32), hub.y, hub.z), r, 0.62, ground,
+			"Remorque_%s" % ("G" if side < 0.0 else "D"))
 
 
 ## Pose de la remorque affichee : lacet de la physique, roulis du penche, et
@@ -506,8 +550,9 @@ func _attach_external() -> void:
 	fit_report = model.get_meta(&"fit_report", {})
 	if not livery.is_empty():
 		apply_livery(model, livery)
-	# matieres realistes (vernis, chrome, gomme...) et phares qui eclairent
-	TruckMaterials.upgrade(model)
+	# pas de cones de flamme figes au bout des cheminees (jouet)
+	TruckDetails.strip_toy_parts(model)
+	# phares qui eclairent
 	if TruckLights.add_headlights(model) > 0 and get_parent() != null:
 		# les deux projecteurs remplacent le phare central du camion
 		var central := get_parent().get_node_or_null(^"Headlights") as Light3D
@@ -539,6 +584,12 @@ func _attach_external() -> void:
 		_wheel_radius.append(maxf((p.get_meta(&"tire", Vector2(0.5, 0.0)) as Vector2).x, 0.1))
 		_wheel_spin.append(0.0)
 	_steer_limit_deg = float(model.get_meta(&"visual_steer_max_deg", 90.0))
+	# bavettes derriere les roues arriere, puis matieres realistes (vernis,
+	# chrome, gomme, salissure de la route d'apres la hauteur au sol)
+	_ground_y = TruckMaterials.lowest_point(model, self)
+	if not TruckDetails.has_flaps(model, "Remorque"):
+		_add_tractor_flaps(model)
+	TruckMaterials.upgrade(model, self, _ground_y)
 	# les boites de blockout s'effacent, sans disparaitre (tests, repli)
 	for n in [&"Body", TRAILER_PIVOT, &"Wheel_FL", &"Wheel_FR", &"Wheel_RL", &"Wheel_RR"]:
 		var mock := get_node_or_null(NodePath(n)) as Node3D

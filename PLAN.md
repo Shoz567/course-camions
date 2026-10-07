@@ -421,6 +421,17 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
 - `[x]` Coût mesuré (RTX 5060 Ti, 1920 × 1080, qualité haute) : 4 vues
   5,7 → 5,9 ms par image ; 1 vue 2,2 → 3,5 ms (brouillard volumétrique et
   reflets). `make test` à 100 % (`truck_realism_test` ajouté).
+- `[x]` **Camions qui ne font plus jouet** (2026-10-07, « pas qu'ils
+  ressemblent à des jouets ») : carrosserie vieillie par la route
+  (`truck_body.gdshader`) — boue et poussière au ras du sol, coulures, voile
+  d'usure, poussière sur le dessus ; poussière claire à la plage, crasse
+  sombre et carrosseries mouillées sous la pluie (`TruckMaterials.
+  set_weather`). Peintures d'origine un peu désaturées, jantes en acier peint
+  satiné (plus de miroir), phares en verre sur réflecteur (plus de pavés
+  blancs). Cônes de flamme figés des cheminées retirés, bavettes derrière les
+  roues arrière du tracteur et de la remorque (`TruckDetails`, elles
+  s'arrachent dans un gros choc). Coût de rendu inchangé (4 vues : 5,6 à
+  5,8 ms par image).
 
 ---
 

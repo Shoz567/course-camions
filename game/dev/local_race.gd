@@ -162,6 +162,12 @@ func _ready() -> void:
 	_apply_graphics()
 	# de nuit, les phares des camions eclairent la route
 	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
+	# camions sales de la route : poussiere claire au bord de mer, crasse
+	# sombre et carrosseries mouillees sous la pluie
+	if TruckLights.night:
+		TruckMaterials.set_weather(TruckMaterials.CITY_GRIME, 0.85)
+	else:
+		TruckMaterials.set_weather(TruckMaterials.BEACH_GRIME, 0.0)
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
 	music = RaceMusic.new()
