@@ -283,7 +283,8 @@ FAMILIES = [("Calandre", "Calandre_Grille", False), ("Phare", "Phare_Optique", T
             ("Antibrouillard", "Antibrouillard", True), ("Poignee", "Poignee_Maintien", True),
             ("Pare_Chaleur", "Pare_Chaleur", True), ("Retro", "Retro_Angle_Mort", True),
             ("Reservoir", "Reservoir", True), ("Piece_Coin", "Pieces_Coin", False),
-            ("Barre_Verrou", "Verrous", False), ("Poignee_Verrou", "Verrous", False)]
+            ("Barre_Verrou", "Verrous", False), ("Poignee_Verrou", "Verrous", False),
+            ("Sangle", "Sangles", False), ("Verin", "Verins", False)]
 
 
 def merge_details(objects):
@@ -682,9 +683,95 @@ def replace_plank_fenders(trailer):
     return added
 
 
+def car_wheels(car):
+    """Roues d'une voiture chargee (un maillage) : faces en matiere Pneu,
+    groupees par cote et par essieu. Liste de (centre, rayon, demi-largeur)."""
+    slots = [i for i, s in enumerate(car.material_slots) if s.material and s.material.name.startswith("Pneu")]
+    if not slots:
+        return []
+    mw = car.matrix_world
+    pts = [mw @ car.data.vertices[v].co for p in car.data.polygons if p.material_index in slots for v in p.vertices]
+    if not pts:
+        return []
+    cy = sum(p.y for p in pts) / len(pts)
+    groups = {}
+    for p in pts:
+        groups.setdefault((p.x > 0.0, p.y > cy), []).append(p)
+    out = []
+    for g in groups.values():
+        lo = Vector((min(p.x for p in g), min(p.y for p in g), min(p.z for p in g)))
+        hi = Vector((max(p.x for p in g), max(p.y for p in g), max(p.z for p in g)))
+        out.append(((lo + hi) / 2.0, (hi.z - lo.z) / 2.0, (hi.x - lo.x) / 2.0))
+    return out
+
+
+def strap_material():
+    mat = bpy.data.materials.get("Tissu_Sangle_Jaune")
+    if mat is None:
+        mat = bpy.data.materials.new("Tissu_Sangle_Jaune")
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        bsdf.inputs["Base Color"].default_value = (0.95, 0.62, 0.02, 1.0)
+        bsdf.inputs["Roughness"].default_value = 0.8
+        mat.diffuse_color = (0.95, 0.62, 0.02, 1.0)
+    return mat
+
+
+def detail_car_carrier(trailer):
+    """Porte-voitures : sangle d'arrimage jaune sur chaque roue des voitures
+    (par-dessus le pneu, tendue jusqu'au plancher, cliquet) ; verin de levage
+    hydraulique (fut, tige chrome) contre chaque poteau du cadre."""
+    added = []
+    strap = strap_material()
+    steel = material("Chassis")
+    chrome = material("Chrome")
+    for car in [o for o in trailer.children_recursive if o.type == "MESH" and o.name.startswith("Voiture_Chargee")]:
+        for c, r, hw in car_wheels(car):
+            x = c.x + (0.02 if c.x > 0 else -0.02)
+            added.append(add_arc_fender(DETAIL + "Sangle", c, r + 0.004, 0.05, x, strap, trailer, a0=35.0,
+                                        a1=145.0, thick=0.006, seg=12))
+            deck = c.z - r + 0.01
+            for sign in (-1.0, 1.0):
+                a = math.radians(35.0 if sign > 0 else 145.0)
+                top = Vector((x, c.y + math.cos(a) * r, c.z + math.sin(a) * r))
+                foot = Vector((x, c.y + sign * (r + 0.22), deck))
+                mid = (top + foot) / 2.0
+                d = top - foot
+                added.append(add_box(DETAIL + "Sangle", (0.05, d.length, 0.006), mid, strap, trailer,
+                                     rot=(math.atan2(d.z, d.y), 0.0, 0.0)))
+            added.append(add_box(DETAIL + "Sangle_Cliquet", (0.07, 0.12, 0.05),
+                                 Vector((x, c.y + r + 0.22, deck + 0.025)), steel, trailer))
+    frame = next((o for o in trailer.children_recursive if o.name.startswith("Remorque_Porte_Voitures")), None)
+    if frame is not None:
+        bm = bmesh.new()
+        bm.from_mesh(frame.data)
+        mw = frame.matrix_world
+        posts = []
+        for part in loose_parts(bm):
+            pts = [mw @ v.co for f in part for v in f.verts]
+            lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+            hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+            d = hi - lo
+            if d.z > 1.2 and d.x < 0.25 and d.y < 0.25:
+                posts.append((lo, hi))
+        bm.free()
+        for lo, hi in posts:
+            c = (lo + hi) / 2.0
+            x = c.x - math.copysign(0.13, c.x)
+            z0, z1 = lo.z + 0.15, hi.z - 0.1
+            zm = z0 + (z1 - z0) * 0.55
+            added.append(add_cylinder(DETAIL + "Verin_Fut", 0.055, zm - z0, Vector((x, c.y, (z0 + zm) / 2.0)), steel,
+                                      trailer, axis="Z", segments=14))
+            added.append(add_cylinder(DETAIL + "Verin_Tige", 0.03, z1 - zm, Vector((x, c.y, (zm + z1) / 2.0)), chrome,
+                                      trailer, axis="Z", segments=10))
+    return added
+
+
 def detail_trailer(name, trailer):
     """Details d'une remorque. La caisse s'etend vers -Y depuis la sellette."""
     added = replace_plank_fenders(trailer)
+    if name == "porte_voitures":
+        added += detail_car_carrier(trailer)
     caisse = [o for o in trailer.children_recursive if o.type == "MESH" and o.name.startswith("Conteneur")
               and not o.name.startswith("Conteneur_Porte")]
     if caisse:

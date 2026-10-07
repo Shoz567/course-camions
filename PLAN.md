@@ -528,7 +528,10 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   - `[x]` porte-engins : chariots élévateurs générés (celui du fichier était
     un jouet en boîtes) - contrepoids arrondi, protège-conducteur tubulaire à
     toit à lames, mât à deux montants (vérin, chaînes), dosseret, fourches,
-    bandages pleins, siège, volant, bouteille de gaz, phares, gyrophare.
+    bandages pleins, siège, volant, bouteille de gaz, phares, gyrophare ;
+  - `[x]` porte-voitures : sangle d'arrimage jaune sur chaque roue des
+    voitures (par-dessus le pneu, tendue au plancher, cliquet), vérin de
+    levage (fût, tige chrome) contre chaque poteau du cadre.
 - `[x]` **Remorques creuses, percées par les chocs** (2026-10-07, « que les
   remorques soient vides : dès qu'elle s'abîme, ça fait des trous dans la
   coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des
