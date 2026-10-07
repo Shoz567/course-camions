@@ -1102,6 +1102,138 @@ def swing_violations(objs):
                 bad[o.name] = (n + 1, round(min(y0, p.y), 2), round(max(y1, p.y), 2), round(min(z0, p.z), 2))
     return bad
 
+# ---------------------------------------------------------------- realisme
+# Ce que montrent les photos de vraies semi-remorques europeennes (fiches
+# constructeurs, reglements ECE) et qui manquait encore (2026-10-07, « ajoute
+# des details surtout sur les remorques ») :
+#   - protection laterale anti-encastrement (ECE R73) : deux lisses alu entre
+#     les bequilles et le premier essieu, sur pattes ;
+#   - reservoirs d'air comprime sous le chassis, sangles et purges ;
+#   - extincteur dans son berceau, cales de roue jaunes dans leur support ;
+#   - a l'arriere : plaques de signalisation jaunes bordees de rouge
+#     (ECE R70), disque de vitesse « 80 », autocollant « ANGLES MORTS »
+#     (obligatoire en France sur les poids lourds).
+
+def text_mesh(name, body, center, size, mat, depth=0.002):
+    """Texte en relief (police integree de Blender), face vers l'arriere (-Y),
+    centre en `center`."""
+    curve = bpy.data.curves.new(GEN + name, type="FONT")
+    curve.body = body
+    curve.size = size
+    curve.extrude = depth
+    curve.align_x = "CENTER"
+    curve.align_y = "CENTER"
+    tmp = bpy.data.objects.new(GEN + name + "_Courbe", curve)
+    bpy.context.scene.collection.objects.link(tmp)
+    bpy.context.view_layer.update()
+    mesh = bpy.data.meshes.new_from_object(tmp.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    bpy.data.objects.remove(tmp)
+    bpy.data.curves.remove(curve)
+    o = bpy.data.objects.new(GEN + name, mesh)
+    bpy.context.scene.collection.objects.link(o)
+    o.data.transform(Matrix.Rotation(math.pi / 2, 4, "X"))
+    o.data.transform(Matrix.Translation(center))
+    o.data.materials.clear()
+    o.data.materials.append(mat)
+    return finish(o, 0.0)
+
+
+def side_guard(parts, y0, y1, x, z_top, x_inner, m, rails=(0.58, 0.88)):
+    """Protection laterale (ECE R73) : deux lisses alu, pattes jusqu'au chassis."""
+    side = 1.0 if x >= 0 else -1.0
+    for z in rails:
+        parts.append(box("Protection_Laterale", (x, (y0 + y1) / 2, z), (0.035, abs(y1 - y0), 0.1), m["alu"]))
+    for k in range(3):
+        y = y0 + (y1 - y0) * k / 2.0
+        parts.append(box("Protection_Patte", (x - side * 0.03, y, (rails[0] + z_top) / 2),
+                         (0.05, 0.06, z_top - rails[0] + 0.06), m["noir"]))
+        parts.append(box("Protection_Bras", ((x + x_inner) / 2, y, z_top - 0.04),
+                         (abs(x - x_inner), 0.06, 0.06), m["noir"]))
+
+
+def air_tanks(parts, y, z, xs, m, length=1.1, r=0.16):
+    """Reservoirs d'air comprime couches sous le chassis, sangles, purges."""
+    for x in xs:
+        parts.append(cyl("Reservoir_Air", (x, y, z), r, length, "Y", m["noir"], 18))
+        for dy in (-length * 0.33, length * 0.33):
+            parts.append(cyl("Reservoir_Sangle", (x, y + dy, z), r + 0.012, 0.045, "Y", m["acier"], 18))
+        parts.append(cyl("Reservoir_Purge", (x, y, z - r - 0.025), 0.018, 0.05, "Z", m["chrome"], 8))
+
+
+def extinguisher(parts, x, y, z, m):
+    """Extincteur couche dans son berceau a sangles."""
+    rouge = material("Extincteur_Rouge", (0.7, 0.03, 0.02), 0.1, 0.35)
+    parts.append(cyl("Extincteur", (x, y, z), 0.085, 0.5, "Y", rouge, 16))
+    parts.append(cyl("Extincteur_Tete", (x, y + 0.29, z), 0.035, 0.08, "Y", m["noir"], 10))
+    for dy in (-0.15, 0.15):
+        parts.append(cyl("Extincteur_Sangle", (x, y + dy, z), 0.095, 0.04, "Y", m["noir"], 16))
+    parts.append(box("Extincteur_Berceau", (x, y, z + 0.11), (0.2, 0.42, 0.03), m["noir"]))
+
+
+def wheel_chocks(parts, x, y, z, m):
+    """Deux cales de roue jaunes dans leur support."""
+    parts.append(box("Cales_Support", (x, y, z), (0.08, 0.62, 0.3), m["noir"]))
+    side = 1.0 if x >= 0 else -1.0
+    for dy in (-0.15, 0.15):
+        parts.append(box("Cale", (x + side * 0.12, y + dy, z - 0.02), (0.16, 0.26, 0.2), m["danger"],
+                         rot_x=math.radians(28.0 if dy > 0 else -28.0)))
+
+
+def rear_marking(parts, y, z, m, half=0.6):
+    """Panneau arriere : plaques ECE R70 (jaune, bord rouge), disque 80,
+    autocollant ANGLES MORTS."""
+    noir = material("Texte_Noir", (0.02, 0.02, 0.02), 0.0, 0.5)
+    blanc = material("Texte_Blanc", (0.9, 0.9, 0.9))
+    parts.append(box("Panneau_Arriere", (0.0, y + 0.03, z), (2 * half + 0.62, 0.04, 0.26), m["noir"]))
+    for side in (-1.0, 1.0):
+        x = side * half
+        parts.append(box("Plaque_ECE70_Bord", (x, y, z), (0.57, 0.02, 0.21), m["bande_rouge"]))
+        parts.append(box("Plaque_ECE70", (x, y - 0.012, z), (0.5, 0.01, 0.14), m["bande_jaune"]))
+    parts.append(cyl("Disque_Vitesse", (-0.15, y - 0.004, z), 0.1, 0.012, "Y", m["bande_rouge"], 24))
+    parts.append(cyl("Disque_Vitesse_Fond", (-0.15, y - 0.012, z), 0.08, 0.01, "Y", blanc, 24))
+    parts.append(text_mesh("Disque_Vitesse_80", "80", (-0.15, y - 0.019, z), 0.1, noir))
+    parts.append(box("Autocollant_Angles_Morts", (0.15, y - 0.004, z), (0.2, 0.012, 0.15), blanc))
+    parts.append(text_mesh("Angles_Morts", "ANGLES\nMORTS", (0.15, y - 0.012, z), 0.045, noir))
+
+
+# Par remorque : barre arriere (y, z), protection laterale (y0, y1, x, haut
+# du chassis, x du longeron), reservoirs (y, z, x), extincteur et cales (x, y, z).
+REALISM = {
+    "remorque": dict(bar=(-15.45, 0.62), guard=(-5.6, -10.6, 1.25, 1.55, 0.58),
+                     tanks=(-8.6, 1.36, (-0.25, 0.25)), ext=(0.78, -5.65, 1.42), chocks=(-0.78, -10.35, 1.33)),
+    "citerne": dict(bar=(-15.75, 0.66), tanks=(-6.25, 1.18, (-0.3, 0.3)), ext=(-0.92, -5.3, 1.2),
+                    chocks=(-0.8, -11.05, 1.1)),
+    "betaillere": dict(bar=(-15.85, 0.6), tanks=(-6.0, 1.33, (-0.25, 0.25)), ext=(1.2, -15.2, 1.45),
+                       chocks=(-1.2, -15.25, 1.45)),
+    "porte_voitures": dict(bar=(-16.0, 0.5), ext=(-0.8, -12.4, 0.66)),
+    "chasse_neige": dict(bar=(-15.9, 0.6), guard=(-5.4, -11.4, 1.3, 1.6, 0.58), tanks=(-7.6, 1.42, (-0.25, 0.25)),
+                         ext=(1.0, -5.75, 1.42), chocks=(1.0, -11.15, 1.35)),
+    "pompier": dict(bar=(-15.6, 0.62)),
+    "grue": dict(bar=(-15.55, 0.6), guard=(-5.2, -9.0, 1.25, 1.55, 0.55), tanks=(-8.3, 1.4, (-0.8, 0.8)),
+                 ext=(-0.85, -6.0, 1.75), chocks=(-0.85, -7.3, 1.7)),
+    "chariot_elevateur": dict(bar=(-15.75, 0.55)),
+}
+
+
+def realism_details(parts, vehicle, m):
+    spec = REALISM.get(vehicle)
+    if spec is None:
+        return
+    y, z = spec["bar"]
+    rear_marking(parts, y + 0.12, z + 0.43, m)
+    if "guard" in spec:
+        y0, y1, x, top, inner = spec["guard"]
+        for side in (-1.0, 1.0):
+            side_guard(parts, y0, y1, side * x, top, side * inner, m)
+    if "tanks" in spec:
+        ty, tz, xs = spec["tanks"]
+        air_tanks(parts, ty, tz, xs, m)
+    if "ext" in spec:
+        extinguisher(parts, *spec["ext"], m)
+    if "chocks" in spec:
+        wheel_chocks(parts, *spec["chocks"], m)
+
+
 TRAILERS = {
     "remorque": trailer_conteneur,
     "citerne": trailer_citerne,
@@ -1150,6 +1282,7 @@ def build_trailer(vehicle):
     else:
         rear_y, top_z, chassis_z = TRAILERS[vehicle](parts, m)
         lifts = []
+    realism_details(parts, vehicle, m)
     team = [o for o in trailer.children_recursive if o.type == "MESH" and not o.name.startswith(GEN)]
     for o in team:
         trim_swing_zone(o)

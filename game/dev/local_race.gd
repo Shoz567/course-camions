@@ -40,14 +40,14 @@ const MENU_SCENE := "res://ui/main_menu.tscn"
 const COUNTDOWN_TICKS := 180      # 3 s
 const GO_TICKS := 60              # "GO !" reste 1 s
 const MODELS: PackedStringArray = [
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Jaune.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Vert.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Vert.glb",
 	# J5 et J6 : pas de modele a eux (aucun .glb dans le depot) ; ils
 	# reprennent un modele existant, repeint par leur livree (LIVERIES)
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
 ]
 const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT",
 	"J5 VIOLET NÉO-TOKYO", "J6 ORANGE CARBO"]

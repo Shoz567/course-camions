@@ -32,7 +32,7 @@ extends Node3D
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
 
 ## Chemin du modele, relatif au dossier du projet Godot (game/). Vide = boites.
-@export var external_model: String = "../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb"
+@export var external_model: String = "../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb"
 ## Noeuds retires du modele. Aucun : la semi-remorque fait partie de l'identite
 ## du jeu (VEHICLE_SPEC §2 bis).
 @export var strip_prefixes: PackedStringArray = []

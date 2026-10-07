@@ -432,6 +432,20 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   roues arrière du tracteur et de la remorque (`TruckDetails`, elles
   s'arrachent dans un gros choc). Coût de rendu inchangé (4 vues : 5,6 à
   5,8 ms par image).
+- `[x]` **Têtes et remorques détaillées** (2026-10-07, « rends la tête et les
+  remorques plus réalistes », « ajoute des détails surtout sur les remorques,
+  inspire-toi d'images en ligne ») : `tools/blender/realisme_vehicules.py`
+  (`make vehicules`) écrit des versions `Realiste/` à côté des modèles de
+  l'équipe, jamais modifiés. Tête : pare-soleil, calandre à grille, phares à
+  doubles optiques cerclées, antibrouillards, poignées de maintien,
+  pare-chaleur des cheminées, cornets de rétroviseur, garde-boue arrière
+  noirs. Remorques : garde-boue cintrés au-dessus de chaque roue (plus de
+  planches plates) ; d'après des photos de semi-remorques européennes et les
+  règlements ECE (catalogue) : protection latérale R73, réservoirs d'air,
+  extincteur, cales de roue, panneau arrière avec plaques R70, disque « 80 »,
+  autocollant « ANGLES MORTS ». Détails fusionnés par famille (draw calls) et
+  arrachables (`BodyDamage`, préfixe `Detail_`). 4 vues : 5,8 → 6,4 ms par
+  image ; un choc sur la carrosserie : 10 → 13 ms.
 
 ---
 

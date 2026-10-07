@@ -260,6 +260,29 @@ Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
 En jeu, seule la remorque de ces véhicules sert : c'est la remorque au choix
 du sas READY (VEHICLE_SPEC §5 bis), chargée par `TruckVisual.set_trailer_type`.
 
+### 4 quater. Versions réalistes (`Realiste/`)
+
+`tools/blender/realisme_vehicules.py` (`make vehicules`, après le catalogue)
+lit les têtes `Camion_*.glb` et les véhicules du catalogue **sans jamais les
+modifier**, et écrit à côté, dans un dossier `Realiste/`, les versions que le
+jeu charge (`TruckVisual.external_model`, `TrailerType.model`) :
+
+- arêtes encore vives chanfreinées (2 segments) et lissage par angle ;
+- tête : pare-soleil, grille de calandre, entourage et optiques des phares,
+  antibrouillards, poignées de maintien, pare-chaleur des cheminées, cornets
+  de rétroviseur, garde-boue arrière noirs ;
+- remorques : garde-boue plats remplacés par des garde-boue cintrés au-dessus
+  de chaque roue ; pièces de coin et verrous sur le conteneur.
+
+Les ajouts portent le préfixe `Detail_` (ils s'arrachent dans un gros choc,
+`BodyDamage`) et sont fusionnés par famille : une pièce par phare, par
+antibrouillard… (un appel de dessin chacun, par camion et par vue).
+
+Le catalogue (`catalogue_tete_commune.py`) ajoute de son côté, d'après des
+photos de semi-remorques européennes et les règlements ECE : protection
+latérale (R73), réservoirs d'air, extincteur, cales de roue, panneau arrière
+avec plaques R70, disque « 80 » et autocollant « ANGLES MORTS ».
+
 ### Style
 
 Formes franches et lisibles de loin — en écran partagé à 4, chaque camion

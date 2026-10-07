@@ -6,7 +6,8 @@ extends PhysicsTest
 ##
 ##   A. matieres : la peinture est vernie, teinte d'origine un peu moins
 ##      saturee ; pneus en gomme noire mate, vitres lisses ; plus de cones de
-##      flamme figes ; bavettes derriere les roues ; la salissure (truck_body.
+##      flamme figes ; bavettes derriere les roues ; modeles detailles
+##      (Realiste/) ; la salissure (truck_body.
 ##      gdshader) part du bas des pneus ;
 ##   B. de nuit : deux projecteurs sous les phares, qui visent l'avant du
 ##      camion et un peu le sol ; le phare central est coupe ; deux feux
@@ -101,6 +102,14 @@ func _test_finish() -> void:
 			var c := ab.get_endpoint(k)
 			lowest = minf(lowest, row.x * c.x + row.y * c.y + row.z * c.z + row.w)
 	check_near("A salissure : hauteur au sol mesuree depuis le bas des pneus (m)", lowest, 0.0, 0.05)
+	# modeles detailles (tools/blender/realisme_vehicules.py) : pare-soleil,
+	# optiques, antibrouillards... sur la tete ; garde-boue cintres sur la remorque
+	check("A tete detaillee (Realiste/, pieces Detail_)", vd.external_model.contains("/Realiste/")
+		and vd.find_children("Detail_Pare_Soleil*", "MeshInstance3D", true, false).size() == 1
+		and vd.find_children("Detail_Antibrouillard*", "MeshInstance3D", true, false).size() == 2)
+	var skin := vn.get_trailer_skin()
+	check("A remorque detaillee : garde-boue cintres", skin != null
+		and not skin.find_children("Detail_Garde_Boue_Cintre*", "MeshInstance3D", true, false).is_empty())
 
 	var spots := _lamps(vn, "SpotLight3D")
 	var fwd := -_night.global_basis.z
