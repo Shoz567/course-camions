@@ -531,7 +531,11 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
     bandages pleins, siège, volant, bouteille de gaz, phares, gyrophare ;
   - `[x]` porte-voitures : sangle d'arrimage jaune sur chaque roue des
     voitures (par-dessus le pneu, tendue au plancher, cliquet), vérin de
-    levage (fût, tige chrome) contre chaque poteau du cadre.
+    levage (fût, tige chrome) contre chaque poteau du cadre ;
+  - `[x]` matières : plus de « camouflage » sur les toits et les tôles d'alu -
+    la poussière du dessus et le voile d'usure suivaient un bruit à plaques
+    de 3 m (mat et brillant en nuages) ; film presque uniforme au grain fin ;
+    alu brossé à stries fines et serrées.
 - `[x]` **Remorques creuses, percées par les chocs** (2026-10-07, « que les
   remorques soient vides : dès qu'elle s'abîme, ça fait des trous dans la
   coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des

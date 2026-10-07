@@ -325,9 +325,12 @@ void fragment() {
 	float vertical = 1.0 - abs(n_world.y);
 	float streak = smoothstep(0.6, 0.9, tri(grime_tex, obj_pos * vec3(3.5, 0.3, 3.5), obj_n, 0.35, vec2(1.0)))
 		* vertical * 0.12;
-	float top = smoothstep(0.6, 0.95, n_world.y) * smoothstep(0.35, 0.75, patches) * 0.35;
+	// poussiere sur le dessus et voile d'usure : un film presque uniforme au
+	// grain fin. Sur les grandes plaques (3 m), mat et brillant alternaient en
+	// nuages : un camouflage sur les toits et les toles d'alu.
+	float top = smoothstep(0.6, 0.95, n_world.y) * (0.16 + 0.06 * smoothstep(0.3, 0.8, fine));
 	// voile d'usure general, leger : rien n'est neuf
-	float age = 0.08 + 0.1 * smoothstep(0.4, 0.8, patches);
+	float age = 0.09 + 0.03 * smoothstep(0.4, 0.8, fine);
 	float dirt = clamp((low * (0.8 + 0.25 * fine) + streak + top + age + max(rel.y, 0.0) * 0.25) * grime, 0.0, 1.0);
 	float wet = truck_wetness;
 	vec3 grime_col = mix(truck_grime_color, truck_grime_color * 0.35, wet) * (0.9 + 0.2 * fine);

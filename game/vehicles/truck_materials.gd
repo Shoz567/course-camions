@@ -264,12 +264,15 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 			bump = 0.00002
 			grime = 1.0
 		&"metal":
+			# alu brosse : stries fines et serrees ; une variation de rugosite
+			# large (0,3 sur un bruit de 70 cm) faisait des nuages clairs et
+			# sombres (le ciel reflete), un camouflage plus qu'un metal
 			metal = maxf(metal, 0.85)
 			rough = maxf(rough, 0.32)
 			bump = 0.00003
-			scale = 1.5
-			stretch = Vector2(1.0, 12.0)
-			variation = 0.3
+			scale = 5.0
+			stretch = Vector2(1.0, 14.0)
+			variation = 0.08
 		&"rubber":
 			col = Color(0.045, 0.045, 0.048)
 			metal = 0.0
