@@ -519,6 +519,9 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   - `[x]` tracteur : calandre à lames dans un entourage chrome (plus de
     gaufrier), phares à réflecteurs en cuvette et feu de jour, pare-soleil,
     prise d'air, réservoirs alu sanglés entre marchepieds et roues arrière ;
+    arrière (vu dès qu'on largue la remorque) : lunette cerclée de noir,
+    flexibles d'air spiralés rouge et bleu sur leur potence, sellette avec
+    gorge d'attelage, rampes et poignée de verrouillage ;
   - `[x]` semi-grue refaite : tourelle profilée à ouïes, cabine de grutier
     vitrée, contrepoids en dalles, flèche à profil arrondi (bagues, tête à
     poulie, câble, moufle, crochet), vérin fût + tige, stabilisateurs à

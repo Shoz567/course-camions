@@ -431,6 +431,36 @@ def detail_tractor(root):
         added.append(add_box(DETAIL + "Retro_Angle_Mort", (hi.x - lo.x, hi.y - lo.y, 0.2),
                              Vector((c.x, c.y, lo.z - 0.16)), black, root))
 
+    # arriere de la cabine (vu des qu'on largue la remorque) : lunette arriere
+    # cerclee de noir ; sellette avec sa gorge d'attelage, ses rampes et sa
+    # poignee de verrouillage ; flexibles d'air spirales rouge et bleu
+    cab = find_base("Cabine")[0]
+    clo, chi = wbox(cab)
+    glass_mat = material("Vitre")
+    added.append(add_box(DETAIL + "Lunette_Cadre", (1.0, 0.03, 0.55), Vector((0.0, chi.y + 0.01, chi.z - 0.75)), black,
+                         root))
+    added.append(add_box(DETAIL + "Lunette", (0.9, 0.03, 0.45), Vector((0.0, chi.y + 0.02, chi.z - 0.75)), glass_mat,
+                         root))
+    plate = find_base("Sellette")
+    if plate:
+        slo, shi = wbox(plate[0])
+        sc = (slo + shi) / 2.0
+        added.append(add_box(DETAIL + "Sellette_Gorge", (0.2, (shi.y - sc.y) * 0.95, 0.012),
+                             Vector((0.0, (sc.y + shi.y) / 2.0, shi.z + 0.004)), black, root))
+        for side in (-1, 1):
+            added.append(add_box(DETAIL + "Sellette_Rampe", (0.28, 0.32, 0.04),
+                                 Vector((side * 0.3, shi.y + 0.1, shi.z - 0.06)), dark, root,
+                                 rot=(math.radians(-25.0), 0.0, 0.0)))
+        added.append(add_cylinder(DETAIL + "Sellette_Poignee", 0.018, 0.32, Vector((slo.x - 0.12, sc.y, shi.z - 0.05)),
+                                  chrome, root, axis="X", segments=8))
+    for side, mat in ((-1, hose_material("Flexible_Rouge", (0.7, 0.03, 0.02))),
+                      (1, hose_material("Flexible_Bleu", (0.03, 0.15, 0.7)))):
+        a = Vector((side * 0.18, chi.y + 0.12, chi.z - 1.55))
+        b = Vector((side * 0.18, chi.y + 0.95, chi.z - 2.05))
+        added.append(add_coil(DETAIL + "Flexible", a, b, 0.07, 9, 0.012, mat, root))
+    added.append(add_cylinder(DETAIL + "Flexible_Potence", 0.03, 0.7, Vector((0.0, chi.y + 0.08, chi.z - 1.65)), alu, root,
+                              axis="Z", segments=10))
+
     # reservoirs entre les marchepieds et les roues arriere (le flanc etait
     # vide) : alu brosse, deux sangles noires, bouchon chrome ; sous les
     # cheminees
@@ -460,6 +490,52 @@ def detail_tractor(root):
                                           Vector((x, y0 + length * 0.5, z + r + 0.01)), chrome, root, axis="Z",
                                           segments=14))
     return merge_details(added)
+
+
+def hose_material(name, color):
+    """Materiau d'un flexible (cree s'il manque au modele)."""
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        bsdf.inputs["Base Color"].default_value = (*color, 1.0)
+        bsdf.inputs["Roughness"].default_value = 0.45
+        mat.diffuse_color = (*color, 1.0)
+    return mat
+
+
+def add_coil(name, a, b, radius, turns, thick, mat, parent, seg_per_turn=14, ring=6):
+    """Flexible spirale de `a` a `b` (monde) : helice de rayon `radius`,
+    `turns` spires, tube d'epaisseur `thick`."""
+    axis = b - a
+    length = axis.length
+    w = axis.normalized()
+    u = w.orthogonal().normalized()
+    v = w.cross(u)
+    n = turns * seg_per_turn
+    centers = []
+    for k in range(n + 1):
+        t = k / n
+        ang = 2.0 * math.pi * turns * t
+        centers.append(a + w * (length * t) + (u * math.cos(ang) + v * math.sin(ang)) * radius)
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    rings = []
+    for k, c in enumerate(centers):
+        d = (centers[min(k + 1, n)] - centers[max(k - 1, 0)]).normalized()
+        p = d.orthogonal().normalized()
+        q = d.cross(p)
+        rings.append([bm.verts.new(c + (p * math.cos(2 * math.pi * j / ring) + q * math.sin(2 * math.pi * j / ring))
+                                   * thick) for j in range(ring)])
+    for k in range(n):
+        for j in range(ring):
+            jj = (j + 1) % ring
+            bm.faces.new((rings[k][j], rings[k][jj], rings[k + 1][jj], rings[k + 1][j]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
+    return _place(name, mesh, Vector((0.0, 0.0, 0.0)), mat, parent)
 
 
 def add_reflector(name, r_front, r_back, depth, loc, mat, parent, segments=20):
