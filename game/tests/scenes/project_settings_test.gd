@@ -69,11 +69,24 @@ func _check_lighting() -> void:
 	GraphicsSettings.apply_environment(day, GraphicsSettings.Quality.HIGH, 1)
 	check("volumetrique : haute a 1-2 vues, coupe a 4 vues et en moyenne ; jamais a la plage",
 		fog == [true, true, false, false, true] and not day.volumetric_fog_enabled, str(fog))
+	# eclairage global (SDFGI) sur les deux circuits : qualite haute jusqu'a
+	# 2 vues seulement
+	var gi := []
+	for e: Environment in [env, day]:
+		for c: Array in [[GraphicsSettings.Quality.HIGH, 1], [GraphicsSettings.Quality.HIGH, 2],
+				[GraphicsSettings.Quality.HIGH, 3], [GraphicsSettings.Quality.MEDIUM, 1],
+				[GraphicsSettings.Quality.HIGH, 1]]:
+			GraphicsSettings.apply_environment(e, c[0], c[1])
+			gi.append(e.sdfgi_enabled)
+	check("eclairage global : haute a 1-2 vues, coupe a 3 vues et en moyenne, sur les deux circuits",
+		gi == [true, true, false, false, true, true, true, false, false, true], str(gi))
 	var vp := SubViewport.new()
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.HIGH)
-	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED
+	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_SMAA
+	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.MEDIUM)
+	var medium := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.LOW)
-	check("vues de l'ecran partage : MSAA 2x (haute), FXAA (basse)", high
+	check("vues de l'ecran partage : MSAA 2x + SMAA (haute), MSAA 2x (moyenne), FXAA (basse)", high and medium
 		and vp.msaa_3d == Viewport.MSAA_DISABLED and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_FXAA)
 	vp.free()
 	check("qualite haute par defaut", GameState.graphics_quality == GraphicsSettings.Quality.HIGH)

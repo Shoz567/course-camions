@@ -268,6 +268,14 @@ Coût GPU mesuré le 2026-09-30 sur la machine de développement (Radeon 780M,
 `baseline.json`) : 1 joueur 8 ms sans effet, 11 à 15 ms avec tout ; 4 joueurs
 10 ms → 14 ms (SSR + SSAO) → 16 ms (tout) ; 6 joueurs 12 ms → 15 ms (SSAO) →
 19 ms (tout), d'où ces seuils pour tenir 60 images par seconde.
+**Éclairage global** (2026-10-08, demande utilisateur : graphismes et effets
+visuels plutôt qu'un port Unreal) : les deux environnements activent **SDFGI**
+(4 cascades, cellule 0,5 m, lumière du ciel ; énergie 0,7 à la plage pour ne
+pas bleuir la route). Les néons de Cyber City colorent calandres, jantes et
+conteneurs ; le dessous des remorques s'assombrit. Coût mesuré sur la Radeon
+780M : 1 vue ~165 → ~135 images/s, 2 vues 117 → 81, 4 vues 96 → 54, d'où :
+qualité haute seulement, **jusqu'à 2 vues**. Anticrénelage en qualité haute :
+MSAA 2x + **SMAA** (le TAA a été essayé puis écarté : il efface la pluie).
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).
