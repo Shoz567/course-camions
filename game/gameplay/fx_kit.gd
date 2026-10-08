@@ -15,6 +15,8 @@ extends RefCounted
 ##   - etincelles (fx/spark_particles.gdshader + fx/spark.gdshader) : traits
 ##     etires sur leur vitesse, qui refroidissent et rebondissent sur la
 ##     route (plan sous l'emetteur) ;
+##   - trainees d'eau (meme moteur, fx/water_streak.gdshader) : gouttes
+##     arrachees a la route mouillee, traits fins et translucides ;
 ##   - eclats de tole froissee : plaques irregulieres pliees (SHARD_VARIANTS
 ##     maillages generes une fois, deterministes).
 
@@ -22,6 +24,7 @@ const SMOKE_SHADER := preload("res://gameplay/fx/smoke.gdshader")
 const FLAME_SHADER := preload("res://gameplay/fx/flame.gdshader")
 const SPARK_SHADER := preload("res://gameplay/fx/spark.gdshader")
 const SPARK_PARTICLES := preload("res://gameplay/fx/spark_particles.gdshader")
+const WATER_SHADER := preload("res://gameplay/fx/water_streak.gdshader")
 const SHARD_VARIANTS := 6
 ## Epaisseur d'un eclat, en part de sa largeur (maillage unitaire).
 const SHARD_THICKNESS := 0.08
@@ -36,6 +39,7 @@ static var _smoke_mat: ShaderMaterial
 static var _smoke_mat_night := false
 static var _flame_mat: ShaderMaterial
 static var _spark_mat: ShaderMaterial
+static var _water_mat: ShaderMaterial
 static var _shards: Array[ArrayMesh] = []
 
 
@@ -230,6 +234,26 @@ static func make_sparks(amount: int = 40, lifetime: float = 0.6, params: Diction
 		_spark_mat = ShaderMaterial.new()
 		_spark_mat.shader = SPARK_SHADER
 	p.draw_pass_1 = _quad(_spark_mat, 1.0)
+	return p
+
+
+## Trainees d'eau (eteintes) : le moteur des etincelles, sans couleur de
+## braise (blanc, heat 1 : extinction en fin de vie), dessine en gouttes
+## translucides. `params` comme make_sparks.
+static func make_water(amount: int = 100, lifetime: float = 0.5, params: Dictionary = {}) -> GPUParticles3D:
+	var p := _emitter("Water", amount, lifetime)
+	var pm := ShaderMaterial.new()
+	pm.shader = SPARK_PARTICLES
+	for c: String in ["hot_color", "warm_color", "cold_color"]:
+		pm.set_shader_parameter(c, Vector3.ONE)
+	pm.set_shader_parameter("heat", 1.0)
+	for k: String in params:
+		pm.set_shader_parameter(k, params[k])
+	p.process_material = pm
+	if _water_mat == null:
+		_water_mat = ShaderMaterial.new()
+		_water_mat.shader = WATER_SHADER
+	p.draw_pass_1 = _quad(_water_mat, 1.0)
 	return p
 
 

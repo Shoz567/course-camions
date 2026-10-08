@@ -62,8 +62,8 @@ func _test_finish() -> void:
 		same = same and _scene.get_node(n).get("track") == track
 	check("tours, reset et plaques suivent ce circuit", same)
 	check("2 joueurs, ecran partage", _players.size() == 2 and _scene.get("split") != null)
-	check("plage : poussiere de sable derriere les roues, brume de chaleur",
-		_spray == TruckWheelFx.Spray.DUST and _haze > 0.0, "spray=%d haze=%.1f" % [_spray, _haze])
+	check("plage : poussiere de sable et fumee de pneus, brume de chaleur",
+		_spray == TruckWheelFx.Spray.DUST and TruckWheelFx.tire_smoke(_spray) and _haze > 0.0, "spray=%d haze=%.1f" % [_spray, _haze])
 	check("course lancee (GO passe)", _scene.get("state") == 1, "etat %s" % _scene.get("state"))
 	var d0 := (_players[0].truck as Truck).global_position.distance_to(_starts[0])
 	var d1 := (_players[1].truck as Truck).global_position.distance_to(_starts[1])

@@ -9,13 +9,18 @@ extends Node3D
 ##   - traces de gomme : au-dela de SKID_SLIDE_MS, chaque roue arriere pose
 ##     des segments sombres sur la route, en coordonnees monde (un MultiMesh
 ##     par camion, anneau de MAX_SEGMENTS : les plus anciennes s'effacent) ;
-##   - fumee de pneus : au-dela de SMOKE_SLIDE_MS, d'autant plus epaisse que
-##     le pneu glisse ;
+##   - au-dela de SMOKE_SLIDE_MS, d'autant plus fort que le pneu glisse :
+##     fumee de pneus a Playa del Sol seulement (route seche et sable),
+##     legere ; sur la route mouillee de Cyber City, pas de fumee mais une
+##     nappe de gouttes que le pneu chasse du cote ou il glisse ;
 ##   - projections derriere les roues motrices et le train de la remorque,
 ##     au-dela de SPRAY_FROM_KMH, selon le circuit (`spray`, pose par la
-##     course) : poussiere de sable a Playa del Sol, gerbes d'eau sous la
-##     pluie de Cyber City.
-## Bouffees dessinees comme la fumee des degats (FxKit.smoke_material).
+##     course) : poussiere de sable a Playa del Sol, trainees d'eau (gouttes
+##     en traits fins) sous la pluie de Cyber City.
+## (2026-10-08, « la fumee des roues empeche la visibilite » : fumee
+## allegee, retiree de Cyber City ; l'eau ne fait plus de bouffees.)
+## Bouffees dessinees comme la fumee des degats (FxKit.smoke_material),
+## gouttes comme la pluie (FxKit.make_water).
 ## Rien sur une roue en l'air, ni sur un pneu eclate (la jante crache deja
 ## ses etincelles, TruckTires). Aucun tirage aleatoire cote jeu.
 
@@ -40,9 +45,16 @@ const MARK_STEP_M := 0.35
 const MARK_BREAK_M := 3.0
 ## Hauteur des traces au-dessus de la route (pas de scintillement).
 const MARK_LIFT_M := 0.025
+## Hauteur des emetteurs au-dessus du contact (nappe, projections) : le
+## sol de leurs gouttes.
+const WAKE_LIFT_M := 0.15
+const SPRAY_LIFT_M := 0.25
 
 var _truck: Truck
 var _slide := PackedFloat32Array([0.0, 0.0])
+## Glissement signe (> 0 : vers la droite du camion), pour la nappe d'eau.
+var _side := PackedFloat32Array([0.0, 0.0])
+var _wake_sign := PackedFloat32Array([0.0, 0.0])
 var _marking := PackedByteArray([0, 0])
 var _last := PackedVector3Array([Vector3.ZERO, Vector3.ZERO])
 var _visual := false
@@ -50,6 +62,8 @@ var _mm: MultiMesh
 var _next := 0
 var _count := 0
 var _smoke: Array[GPUParticles3D] = []
+## Nappe d'eau des roues arriere qui glissent (Cyber City).
+var _wake: Array[GPUParticles3D] = []
 ## Projections : roues arriere du tracteur, puis train de la remorque
 ## (gauche, droite).
 var _spray: Array[GPUParticles3D] = []
@@ -64,9 +78,14 @@ func _ready() -> void:
 	_visual = true
 	_build_marks()
 	for k in WHEELS.size():
-		var s := _make_smoke()
-		add_child(s)
-		_smoke.append(s)
+		if tire_smoke(spray):
+			var s := _make_smoke()
+			add_child(s)
+			_smoke.append(s)
+		elif spray == Spray.WATER:
+			var w := _make_wake()
+			add_child(w)
+			_wake.append(w)
 	if spray != Spray.NONE:
 		for k in 4:
 			var p := _make_spray(spray)
@@ -90,7 +109,15 @@ func mark_count() -> int:
 	return _count
 
 
-## Intensite de la fumee pour ce glissement (m/s) : 0 .. 1.
+## Vrai si les pneus qui glissent fument sur ce circuit : sur le sable
+## seulement ; la route mouillee de Cyber City ne fume pas (nappe d'eau), le
+## garage non plus.
+static func tire_smoke(kind: int) -> bool:
+	return kind == Spray.DUST
+
+
+## Intensite de la fumee (ou de la nappe d'eau) pour ce glissement (m/s) :
+## 0 .. 1.
 static func smoke_for(slide_ms: float) -> float:
 	return clampf((slide_ms - SMOKE_SLIDE_MS) / (SMOKE_FULL_MS - SMOKE_SLIDE_MS), 0.0, 1.0)
 
@@ -105,12 +132,14 @@ func _physics_process(_delta: float) -> void:
 	for k in WHEELS.size():
 		var w := WHEELS[k]
 		var probe := _truck.get_probe(w)
-		var s := 0.0
+		var side := 0.0
 		if on_ground and probe.in_contact and not _truck.is_tire_burst(w):
 			var p := probe.contact_point
 			var v := _truck.linear_velocity + _truck.angular_velocity.cross(p - com)
-			s = absf(v.dot(right))
+			side = v.dot(right)
+		var s := absf(side)
 		_slide[k] = s
+		_side[k] = side
 		var mark := s >= SKID_SLIDE_MS
 		if mark:
 			var at := probe.contact_point + probe.contact_normal * MARK_LIFT_M
@@ -153,6 +182,21 @@ func _update_fx(xf: Transform3D) -> void:
 			fx.amount_ratio = lerpf(0.3, 1.0, f)
 		if fx.emitting != on:
 			fx.emitting = on
+	for k in _wake.size():
+		var w := WHEELS[k]
+		var f := smoke_for(_slide[k])
+		var fx := _wake[k]
+		var on := f > 0.0
+		if on:
+			fx.position = inv * _truck.get_probe(w).contact_point + Vector3(0.0, WAKE_LIFT_M, 0.0)
+			fx.amount_ratio = lerpf(0.35, 1.0, f)
+			# l'eau part du cote ou le pneu glisse (axe X du camion)
+			var sgn := signf(_side[k])
+			if sgn != _wake_sign[k]:
+				_wake_sign[k] = sgn
+				FxKit.spark_param(fx, &"direction", Vector3(sgn, 0.6, 0.3))
+		if fx.emitting != on:
+			fx.emitting = on
 	if _spray.is_empty():
 		return
 	var kmh := _truck.linear_velocity.length() * 3.6
@@ -165,12 +209,12 @@ func _update_fx(xf: Transform3D) -> void:
 			var probe := _truck.get_probe(WHEELS[k])
 			on = on and probe.in_contact and not _truck.is_tire_burst(WHEELS[k])
 			if on:
-				fx.position = inv * probe.contact_point + Vector3(0.0, 0.25, 0.4)
+				fx.position = inv * probe.contact_point + Vector3(0.0, SPRAY_LIFT_M, 0.4)
 		else:
 			var wheel := Truck.TRAILER_LEFT if k == 2 else Truck.TRAILER_RIGHT
 			on = on and trailer_down and not _truck.is_tire_burst(wheel)
 			if on:
-				fx.position = _truck.trailer_wheel_local(wheel) + Vector3(0.0, 0.25, 0.6)
+				fx.position = _truck.trailer_wheel_local(wheel) + Vector3(0.0, SPRAY_LIFT_M, 0.6)
 		if on:
 			fx.amount_ratio = lerpf(0.25, 1.0, r)
 		if fx.emitting != on:
@@ -258,32 +302,50 @@ static func _particles(name: String, amount: int, lifetime: float, color: Color,
 	return p
 
 
-## Fumee de pneu : bouffees blanc-gris qui gonflent et montent doucement.
+## Fumee de pneu (Playa del Sol) : bouffees blanc-gris, legeres et basses,
+## vite dissipees (2026-10-08 : avant, 140 bouffees de 2,2 s qui gonflaient
+## x4 et bouchaient la vue du camion suivant).
 static func _make_smoke() -> GPUParticles3D:
-	var p := _particles("TireSmoke", 140, 2.2, Color(0.86, 0.86, 0.88, 0.4), 1.8, 4.0)
+	var p := _particles("TireSmoke", 60, 1.3, Color(0.86, 0.86, 0.88, 0.2), 1.3, 2.4)
 	var pm := p.process_material as ParticleProcessMaterial
 	pm.direction = Vector3(0.0, 1.0, 0.0)
 	pm.spread = 70.0
-	pm.initial_velocity_min = 0.6
-	pm.initial_velocity_max = 2.2
-	pm.gravity = Vector3(0.0, 0.5, 0.0)
+	pm.initial_velocity_min = 0.4
+	pm.initial_velocity_max = 1.4
+	pm.gravity = Vector3(0.0, 0.2, 0.0)
 	return p
 
 
+## Nappe d'eau (Cyber City) : gouttes chassees par le pneu qui glisse, vers
+## le cote du glissement (`direction`, posee a chaque changement de sens),
+## qui retombent sur la route en moins d'une demi-seconde.
+static func _make_wake() -> GPUParticles3D:
+	return FxKit.make_water(120, 0.5, {
+		"direction": Vector3(1.0, 0.6, 0.3), "spread": 0.45, "speed_min": 2.5, "speed_max": 6.0,
+		"inherit": 0.75, "box_extents": Vector3(0.2, 0.03, 0.3), "gravity": 9.8, "drag": 1.2,
+		"bounce": 0.0, "floor_below": WAKE_LIFT_M, "life_min": 0.4, "stretch": 0.035,
+		"max_len": 0.55, "width": 0.015, "streak_follow": 1.0})
+
+
 ## Projections : sable (nuage qui traine et retombe lentement) ou eau
-## (bruine fine qui suit un peu le camion puis se dissipe).
+## (trainees de gouttes que les pneus arrachent a la route mouillee, en
+## arriere et vers le haut, qui retombent derriere le camion).
 static func _make_spray(kind: int) -> GPUParticles3D:
-	var water := kind == Spray.WATER
-	var p: GPUParticles3D
-	if water:
-		p = _particles("WaterSpray", 110, 0.9, Color(0.75, 0.79, 0.88, 0.3), 1.3, 3.6)
-	else:
-		p = _particles("Dust", 90, 2.0, Color(0.82, 0.72, 0.56, 0.4), 1.8, 4.5)
+	if kind == Spray.WATER:
+		var w := FxKit.make_water(140, 0.55, {
+			"direction": Vector3(0.0, 0.45, 1.0), "spread": 0.3, "speed_min": 3.0, "speed_max": 7.0,
+			"inherit": 0.55, "box_extents": Vector3(0.18, 0.04, 0.1), "gravity": 9.8, "drag": 1.5,
+			"bounce": 0.0, "floor_below": SPRAY_LIFT_M, "life_min": 0.4, "stretch": 0.03,
+			"max_len": 0.7, "width": 0.016, "streak_follow": 1.0})
+		w.name = "WaterSpray"
+		return w
+	# sable : moins dense qu'avant (meme demande de visibilite)
+	var p := _particles("Dust", 60, 1.6, Color(0.82, 0.72, 0.56, 0.28), 1.6, 3.2)
 	var pm := p.process_material as ParticleProcessMaterial
 	pm.direction = Vector3(0.0, 0.7, 1.0)
 	pm.spread = 30.0
 	pm.initial_velocity_min = 2.5
 	pm.initial_velocity_max = 6.0
-	pm.inherit_velocity_ratio = 0.45 if water else 0.15
-	pm.gravity = Vector3(0.0, -2.5 if water else -0.3, 0.0)
+	pm.inherit_velocity_ratio = 0.15
+	pm.gravity = Vector3(0.0, -0.3, 0.0)
 	return p

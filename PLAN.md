@@ -286,9 +286,10 @@ vignettage. Calculé après les transparents (la pluie reste). Coût mesuré :
 latéral des roues arrière au point de contact ; au-delà de 3,5 m/s, **traces
 de gomme** posées sur la route (MultiMesh en coordonnées monde, 720 segments
 par camion, les plus anciens s'effacent) ; au-delà de 5 m/s, **fumée de
-pneus**, plus épaisse avec le glissement. Au-delà de 40 km/h, **projections**
-derrière les roues motrices et le train de la remorque : **gerbes d'eau** sous
-la pluie de Cyber City, **poussière de sable** à Playa del Sol. Mesuré
+pneus**, plus épaisse avec le glissement (Playa del Sol seulement, voir
+Particules). Au-delà de 40 km/h, **projections** derrière les roues motrices
+et le train de la remorque : **traînées d'eau** sous la pluie de Cyber City,
+**poussière de sable** à Playa del Sol. Mesuré
 (`truck_drift_test`) : aucune trace en ligne droite ni en virage sans frein à
 main (glissement 1,6 m/s), traces sur 50 des 60 ticks du drift (18,9 m/s).
 **Météo de Playa del Sol** (Cyber City a déjà sa pluie, sa route mouillée et
@@ -332,7 +333,14 @@ débris, pluie, étincelles) : briques communes `FxKit`, toutes sur GPU.
   Éclaboussures sur la route devant la caméra. Chaque vue ne voit que sa
   pluie (calques 13 à 18).
 - **Roues** : la fumée de pneus et les projections prennent le même rendu
-  de bouffées.
+  de bouffées. Puis (« la fumée des roues empêche la visibilité ») : fumée
+  de pneus **à Playa del Sol seulement**, allégée (60 bouffées de 1,3 s au
+  lieu de 140 de 2,2 s, deux fois plus transparentes, qui gonflent ×2,4 au
+  lieu de ×4) ; poussière de sable allégée aussi. Cyber City n'a plus de
+  bouffées : **traînées d'eau** (`fx/water_streak.gdshader`, moteur des
+  étincelles) derrière les roues au-delà de 40 km/h, et nappe de gouttes
+  chassée du côté où le pneu glisse en dérapage
+  (`TruckWheelFx.tire_smoke`).
 - **Pièges notés** : un émetteur GPU déplacé d'un coup étale sa première
   émission sur tout le trajet (un « peigne » de traits parallèles), d'où
   les gerbes de choc créées sur place. Les shaders additifs coupent le

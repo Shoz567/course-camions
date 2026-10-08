@@ -66,8 +66,8 @@ func _test_finish() -> void:
 	check("2 joueurs, 2 vues", players.size() == 2 and players[0].viewport != null and players[1].viewport != null)
 	var v1 := _p1.get_node("Visual") as TruckVisual
 	var v2 := _p2.get_node("Visual") as TruckVisual
-	check("Cyber City sous la pluie : gerbes d'eau, pas de brume de chaleur",
-		_spray == TruckWheelFx.Spray.WATER and _haze == 0.0, "spray=%d haze=%.1f" % [_spray, _haze])
+	check("Cyber City sous la pluie : trainees d'eau, pas de fumee de pneus ni de brume de chaleur",
+		_spray == TruckWheelFx.Spray.WATER and not TruckWheelFx.tire_smoke(_spray) and _haze == 0.0, "spray=%d haze=%.1f" % [_spray, _haze])
 	check("J1 bleu, J2 rouge", v1.external_model.ends_with("Camion_Bleu.glb") and v2.external_model.ends_with("Camion_Rouge.glb"),
 		"%s / %s" % [v1.external_model.get_file(), v2.external_model.get_file()])
 	var track: TrackBlockout = _scene.get("track")

@@ -119,7 +119,7 @@ func _test_finish() -> void:
 	check("aucune trace de gomme en ligne droite (lancement)", _marks_launch == PackedInt32Array([0, 0, 0]),
 		str(_marks_launch))
 	check_above("B : le drift laisse des traces (ticks sur %d)" % DRIFT, _marks_drift[1], DRIFT / 3)
-	check("B : la fumee de pneus monte pendant le drift",
+	check("B : la fumee de pneus (ou la nappe d'eau) monte pendant le drift",
 		TruckWheelFx.smoke_for(_max_rear_slide[1]) > 0.0, "glissement max %.1f m/s" % _max_rear_slide[1])
 	print("  INFO   glissement arriere max (m/s) : A %.1f  B %.1f  C %.1f ; ticks marques A %d  B %d  C %d"
 		% [_max_rear_slide[0], _max_rear_slide[1], _max_rear_slide[2], _marks_drift[0], _marks_drift[1], _marks_drift[2]])
