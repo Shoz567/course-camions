@@ -164,6 +164,8 @@ func _ready() -> void:
 	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
 	# projections des roues : gerbes d'eau sous la pluie, sable a la plage
 	TruckWheelFx.spray = TruckWheelFx.Spray.WATER if TruckLights.night else TruckWheelFx.Spray.DUST
+	# brume de chaleur sur la route de jour (post-traitement des cameras)
+	ScreenFx.haze = 0.0 if TruckLights.night else 1.0
 	# camions sales de la route : poussiere claire au bord de mer, crasse
 	# sombre et carrosseries mouillees sous la pluie
 	if TruckLights.night:
@@ -290,6 +292,9 @@ func _add_player(i: int) -> Player:
 	# nuit pluvieuse : la pluie tombe autour de chaque camera
 	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
 		view_parent.add_child(RainFx.make(cam.get_camera()))
+	# vent de sable au bord de mer, autour de chaque camion suivi
+	elif track.theme_id == TrackTheme.Id.PLAYA_DEL_SOL and DisplayServer.get_name() != "headless":
+		view_parent.add_child(SandFx.make(t))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)

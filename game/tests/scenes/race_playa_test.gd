@@ -10,6 +10,9 @@ var _scene: Node3D
 var _players: Array = []
 var _starts: Array[Vector3] = []
 var _default_scene: String = ""
+# meteo de la course (statiques poses par LocalRace a son entree)
+var _spray: int = -1
+var _haze: float = -1.0
 
 
 func _test_setup() -> void:
@@ -22,6 +25,8 @@ func _test_setup() -> void:
 	_scene.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	add_child(_scene)
 	GameState.selected_track = 0
+	_spray = TruckWheelFx.spray
+	_haze = ScreenFx.haze
 	_players = _scene.get("players")
 	for p: Object in _players:
 		_starts.append((p.get("truck") as Truck).global_position)
@@ -57,6 +62,8 @@ func _test_finish() -> void:
 		same = same and _scene.get_node(n).get("track") == track
 	check("tours, reset et plaques suivent ce circuit", same)
 	check("2 joueurs, ecran partage", _players.size() == 2 and _scene.get("split") != null)
+	check("plage : poussiere de sable derriere les roues, brume de chaleur",
+		_spray == TruckWheelFx.Spray.DUST and _haze > 0.0, "spray=%d haze=%.1f" % [_spray, _haze])
 	check("course lancee (GO passe)", _scene.get("state") == 1, "etat %s" % _scene.get("state"))
 	var d0 := (_players[0].truck as Truck).global_position.distance_to(_starts[0])
 	var d1 := (_players[1].truck as Truck).global_position.distance_to(_starts[1])

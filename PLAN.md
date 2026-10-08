@@ -291,6 +291,12 @@ derrière les roues motrices et le train de la remorque : **gerbes d'eau** sous
 la pluie de Cyber City, **poussière de sable** à Playa del Sol. Mesuré
 (`truck_drift_test`) : aucune trace en ligne droite ni en virage sans frein à
 main (glissement 1,6 m/s), traces sur 50 des 60 ticks du drift (18,9 m/s).
+**Météo de Playa del Sol** (Cyber City a déjà sa pluie, sa route mouillée et
+maintenant ses gerbes d'eau) : **vent de sable** (`SandFx`, un émetteur par
+joueur, autour de son camion) — grains qui filent au ras de la piste et voiles
+de poussière pâles ; **brume de chaleur** dans le post-traitement
+(`ScreenFx.haze`) : l'air ondule juste sous l'horizon, seulement au-delà de
+45 m (profondeur de l'image), jamais sur le camion ni sur un portique proche.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).

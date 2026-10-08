@@ -10,6 +10,8 @@ extends CompositorEffect
 ##     boost ; le centre (le camion) reste net ;
 ##   - aberration chromatique legere sur les bords, qui augmente avec le flou ;
 ##   - vignettage.
+##   - brume de chaleur (`haze`, circuit de jour) : l'air ondule au-dessus de
+##     la route juste sous l'horizon (temps reel : purement visuel).
 ## Deux passes de calcul : copie de l'image, puis effet qui lit la copie.
 ## Purement visuel ; jamais cree en headless (aucun RenderingDevice).
 
@@ -42,12 +44,17 @@ const _EFFECT := """#version 450
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler2D src;
 layout(rgba16f, set = 0, binding = 1) uniform restrict writeonly image2D dst;
+layout(set = 0, binding = 2) uniform sampler2D depth;
 layout(push_constant, std430) uniform Params {
 	vec2 size;
 	vec2 center;
 	float blur;
 	float aberration;
 	float vignette;
+	float haze;
+	float time;
+	float znear;
+	float zfar;
 	float pad;
 } p;
 const int TAPS = 10;
@@ -55,6 +62,17 @@ void main() {
 	ivec2 px = ivec2(gl_GlobalInvocationID.xy);
 	if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
 	vec2 uv = (vec2(px) + 0.5) / p.size;
+	// brume de chaleur : l'air ondule au-dessus de la route, juste sous l'horizon
+	if (p.haze > 0.0) {
+		// seulement au loin (profondeur inversee : 1 au plan proche, 0 au fond)
+		float dz = textureLod(depth, uv, 0.0).r;
+		float z = p.znear * p.zfar / (dz * (p.zfar - p.znear) + p.znear);
+		float band = p.haze * smoothstep(45.0, 90.0, z)
+				* (1.0 - smoothstep(0.0, 0.07, abs(uv.y - p.center.y - 0.035)));
+		float wave = sin(uv.y * 820.0 + p.time * 5.0) + 0.6 * sin(uv.y * 350.0 - p.time * 3.1 + uv.x * 23.0);
+		uv.x += wave * 0.0007 * band;
+		uv.y += sin(uv.x * 140.0 + p.time * 2.3) * 0.0004 * band;
+	}
 	vec2 d = uv - p.center;
 	float aspect = p.size.x / p.size.y;
 	float r = length(d * vec2(aspect, 1.0));
@@ -85,6 +103,9 @@ void main() {
 }
 """
 
+## Brume de chaleur du circuit en cours (LocalRace : Playa del Sol), 0 .. 1.
+static var haze: float = 0.0
+
 ## Reglages courants (ecrits par la camera, lus au rendu).
 var blur: float = 0.0
 var aberration: float = ABERRATION
@@ -96,6 +117,7 @@ var _copy_pipeline: RID
 var _fx_shader: RID
 var _fx_pipeline: RID
 var _sampler: RID
+var _nearest: RID
 
 
 ## Flou pour cette vitesse (km/h, avant) et ce boost : 0 .. 1.
@@ -121,7 +143,7 @@ func _init() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and _rd != null:
-		for rid: RID in [_copy_shader, _fx_shader, _sampler]:
+		for rid: RID in [_copy_shader, _fx_shader, _sampler, _nearest]:
 			if rid.is_valid():
 				_rd.free_rid(rid)
 
@@ -150,6 +172,10 @@ func _build() -> void:
 	ss.repeat_u = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	ss.repeat_v = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
 	_sampler = _rd.sampler_create(ss)
+	var sn := RDSamplerState.new()
+	sn.repeat_u = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
+	sn.repeat_v = RenderingDevice.SAMPLER_REPEAT_MODE_CLAMP_TO_EDGE
+	_nearest = _rd.sampler_create(sn)
 
 
 func _image(binding: int, tex: RID) -> RDUniform:
@@ -175,8 +201,10 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 			RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT,
 			RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_STORAGE_BIT,
 			RenderingDevice.TEXTURE_SAMPLES_1, size, 1, 1, true, false)
+	var proj := render_data.get_render_scene_data().get_cam_projection()
 	var groups := Vector3i(ceili(size.x / 8.0), ceili(size.y / 8.0), 1)
-	var push := PackedFloat32Array([size.x, size.y, 0.5, VANISH_Y, blur, aberration, vignette, 0.0])
+	var push := PackedFloat32Array([size.x, size.y, 0.5, VANISH_Y, blur, aberration, vignette,
+		haze, fmod(Time.get_ticks_msec() * 0.001, 600.0), proj.get_z_near(), proj.get_z_far(), 0.0])
 	var push_bytes := push.to_byte_array()
 	for view in buffers.get_view_count():
 		var color := buffers.get_color_layer(view)
@@ -192,7 +220,12 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 		sampled.binding = 0
 		sampled.add_id(_sampler)
 		sampled.add_id(copy)
-		var fx_set := UniformSetCacheRD.get_cache(_fx_shader, 0, [sampled, _image(1, color)])
+		var depth := RDUniform.new()
+		depth.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+		depth.binding = 2
+		depth.add_id(_nearest)
+		depth.add_id(buffers.get_depth_layer(view))
+		var fx_set := UniformSetCacheRD.get_cache(_fx_shader, 0, [sampled, _image(1, color), depth])
 		list = _rd.compute_list_begin()
 		_rd.compute_list_bind_compute_pipeline(list, _fx_pipeline)
 		_rd.compute_list_bind_uniform_set(list, fx_set, 0)
