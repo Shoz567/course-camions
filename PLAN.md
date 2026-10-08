@@ -304,7 +304,11 @@ camion ni sur un portique proche.
 reste du projet) : le bitume (`asphalt.gdshaderinc`) passe de gravillons ronds
 espacés (un motif de pois, de près) à un **granulat** : mosaïque de cailloux
 anguleux de 4 et 2 cm, teintes variées, quelques quartz clairs, liant noir
-dans les joints, effacée au loin vers sa moyenne.
+dans les joints, effacée au loin vers sa moyenne. Le béton des tribunes, ponts et
+piliers (`concrete.gdshader`, auparavant un gris uni) : banches de 2,4 x
+1,2 m avec joints et trous de tiges, teinte par panneau et par plaques,
+pores, coulures sur les faces verticales ; trempé et brillant la nuit à
+Cyber City.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).
