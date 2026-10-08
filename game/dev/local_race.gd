@@ -292,9 +292,6 @@ func _add_player(i: int) -> Player:
 	# nuit pluvieuse : la pluie tombe autour de chaque camera
 	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
 		view_parent.add_child(RainFx.make(cam.get_camera()))
-	# vent de sable au bord de mer, autour de chaque camion suivi
-	elif track.theme_id == TrackTheme.Id.PLAYA_DEL_SOL and DisplayServer.get_name() != "headless":
-		view_parent.add_child(SandFx.make(t))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)
