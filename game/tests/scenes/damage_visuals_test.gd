@@ -86,13 +86,22 @@ func _test_tick(t: int) -> void:
 	var eh := TruckHealth.of(_e)
 	match t:
 		E_HURT_AT: eh.damage(50.0, &"test")
-		E_HURT_AT + 5: _seen["e50"] = _smoke_state(_e)
+		E_HURT_AT + 5:
+			_seen["e50"] = _smoke_state(_e)
+			_seen["fire"] = [_burning(_e)]
 		E_WORSE_AT: eh.damage(30.0, &"test")
-		E_WORSE_AT + 5: _seen["e20"] = _smoke_state(_e)
-		E_KILL_AT: eh.damage(20.0, &"test")
-		E_KILL_AT + 5: _seen["e0"] = [_smoke_state(_e), _fx(_e).marks().size()]
+		E_WORSE_AT + 5:
+			_seen["e20"] = _smoke_state(_e)
+			(_seen["fire"] as Array).append(_burning(_e))
+		E_WORSE_AT + 10: eh.damage(8.0, &"test")
+		E_WORSE_AT + 15: (_seen["fire"] as Array).append(_burning(_e))
+		E_KILL_AT: eh.damage(12.0, &"test")
+		E_KILL_AT + 5:
+			_seen["e0"] = [_smoke_state(_e), _fx(_e).marks().size()]
+			(_seen["fire"] as Array).append(_burning(_e))
 		E_KILL_AT + 190: _seen["e_new"] = [_smoke_state(_e), _fx(_e).marks().size(), eh.hp,
 			BodyScars.scarred(_e.get_node("Visual") as Node3D)]
+		E_KILL_AT + 191: (_seen["fire"] as Array).append(_burning(_e))
 		R1_AT: _r1.linear_velocity = Vector3(0.0, 0.0, -25.0)
 		R2_AT - 20:
 			if _trailer != null and is_instance_valid(_trailer):
@@ -103,14 +112,21 @@ func _test_tick(t: int) -> void:
 		455:
 			if _trailer != null and is_instance_valid(_trailer):
 				_seen["after_r2"] = [_trailer.hp, _trailer.damage_stage, _trailer.mark_count(), _trailer.is_smoking(),
-					(_trailer.get_node("Sparks") as CPUParticles3D).emitting]
+					(_trailer.get_node("Sparks") as GPUParticles3D).emitting]
+
+
+## Le moteur de `t` brule-t-il (feu sous TruckDamageFx.FIRE_HP) ?
+func _burning(t: Truck) -> bool:
+	var fx := _fx(t)
+	fx.refresh()
+	return fx.is_burning()
 
 
 func _smoke_state(t: Truck) -> Array:
 	var fx := _fx(t)
 	fx.refresh()
-	var smoke := fx.get_node("Smoke") as CPUParticles3D
-	return [fx.smoke_level(), fx.is_smoking(), fx.is_sparking(), smoke.color.get_luminance() > 0.5]
+	var smoke := fx.get_node("Smoke") as GPUParticles3D
+	return [fx.smoke_level(), fx.is_smoking(), fx.is_sparking(), DamageFx.smoke_color(smoke).get_luminance() > 0.5]
 
 
 ## Trace la plus forte d'une liste : position et axe sortant, dans le repere
@@ -168,6 +184,21 @@ func _test_finish() -> void:
 	check("E 0 PV : fumee d'epave, cabine noircie", e0[0] == [S.WRECK, true, true, false] and int(e0[1]) >= 4, str(e0))
 	check("E reapparu : neuf (ni fumee, ni traces, 100 PV)", _seen.get("e_new", []) == [[S.NONE, false, false, false], 0, 100.0, 0],
 		str(_seen.get("e_new", [])))
+	# feu moteur (2026-10-08, particules) : sous FIRE_HP et sur l'epave, eteint
+	# sur le camion neuf
+	check("feu moteur : 50 / 20 PV non, 12 PV oui, epave oui, reapparu non",
+		_seen.get("fire", []) == [false, false, true, true, false], str(_seen.get("fire", [])))
+	check("feu : seuil FIRE_HP", not TruckDamageFx.fire_for(TruckDamageFx.FIRE_HP, false)
+		and TruckDamageFx.fire_for(TruckDamageFx.FIRE_HP - 0.1, false) and TruckDamageFx.fire_for(80.0, true))
+	# eclats de tole froissee : plaques pliees de 1 x 1, minces, fermees
+	var shard_ok := true
+	for k in FxKit.SHARD_VARIANTS:
+		var m := FxKit.shard_mesh(k)
+		var box := m.get_aabb()
+		shard_ok = shard_ok and m.get_surface_count() == 1 and box.size.x > 0.95 and box.size.x < 1.05 \
+			and box.size.z > 0.95 and box.size.z < 1.05 and box.size.y < 0.6 and box.size.y >= FxKit.SHARD_THICKNESS
+	check("eclats : %d plaques froissees de 1 x 1 m, minces" % FxKit.SHARD_VARIANTS, shard_ok
+		and FxKit.shard_mesh(0) != FxKit.shard_mesh(1))
 
 	var r1: Array = _seen.get("after_r1", [])
 	var r2: Array = _seen.get("after_r2", [])

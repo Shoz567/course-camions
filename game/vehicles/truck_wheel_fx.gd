@@ -15,6 +15,7 @@ extends Node3D
 ##     au-dela de SPRAY_FROM_KMH, selon le circuit (`spray`, pose par la
 ##     course) : poussiere de sable a Playa del Sol, gerbes d'eau sous la
 ##     pluie de Cyber City.
+## Bouffees dessinees comme la fumee des degats (FxKit.smoke_material).
 ## Rien sur une roue en l'air, ni sur un pneu eclate (la jante crache deja
 ## ses etincelles, TruckTires). Aucun tirage aleatoire cote jeu.
 
@@ -54,7 +55,6 @@ var _smoke: Array[GPUParticles3D] = []
 var _spray: Array[GPUParticles3D] = []
 
 static var _mark_mat: StandardMaterial3D
-static var _puff_tex: GradientTexture2D
 
 
 func _ready() -> void:
@@ -217,22 +217,6 @@ func _build_marks() -> void:
 	mi.global_transform = Transform3D.IDENTITY
 
 
-static func _puff() -> GradientTexture2D:
-	if _puff_tex == null:
-		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75, 1.0])
-		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.72), Color(1, 1, 1, 0.33),
-			Color(1, 1, 1, 0.08), Color(1, 1, 1, 0)])
-		_puff_tex = GradientTexture2D.new()
-		_puff_tex.gradient = g
-		_puff_tex.fill = GradientTexture2D.FILL_RADIAL
-		_puff_tex.fill_from = Vector2(0.5, 0.5)
-		_puff_tex.fill_to = Vector2(1.0, 0.5)
-		_puff_tex.width = 64
-		_puff_tex.height = 64
-	return _puff_tex
-
-
 static func _particles(name: String, amount: int, lifetime: float, color: Color,
 		size: float, grow: float) -> GPUParticles3D:
 	var p := GPUParticles3D.new()
@@ -264,16 +248,12 @@ static func _particles(name: String, amount: int, lifetime: float, color: Color,
 	rt.gradient = ramp
 	pm.color_ramp = rt
 	p.process_material = pm
+	# bouffees des degats (FxKit, 2026-10-08) : contour ronge propre a chacune
+	# (graine INSTANCE_CUSTOM.z), eclairees, fondues contre la route
+	pm.anim_offset_max = 1.0
 	var quad := QuadMesh.new()
 	quad.size = Vector2(size, size)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_texture = _puff()
-	mat.vertex_color_use_as_albedo = true
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mat.roughness = 1.0
-	mat.disable_receive_shadows = true
-	quad.material = mat
+	quad.material = FxKit.smoke_material()
 	p.draw_pass_1 = quad
 	return p
 
@@ -296,7 +276,7 @@ static func _make_spray(kind: int) -> GPUParticles3D:
 	var water := kind == Spray.WATER
 	var p: GPUParticles3D
 	if water:
-		p = _particles("WaterSpray", 110, 0.9, Color(0.75, 0.79, 0.88, 0.42), 1.3, 3.6)
+		p = _particles("WaterSpray", 110, 0.9, Color(0.75, 0.79, 0.88, 0.3), 1.3, 3.6)
 	else:
 		p = _particles("Dust", 90, 2.0, Color(0.82, 0.72, 0.56, 0.4), 1.8, 4.5)
 	var pm := p.process_material as ParticleProcessMaterial

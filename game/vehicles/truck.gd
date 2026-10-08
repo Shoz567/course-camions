@@ -229,6 +229,8 @@ var trailer_box_center: Vector3 = TruckSpec.TRAILER_CENTER
 ## Mur touche au dernier pas physique (lu dans _integrate_forces) : normale
 ## moyenne, horizontale, tournee vers le camion. ZERO = aucun mur.
 var _wall_normal: Vector3 = Vector3.ZERO
+## Point (monde) d'un des contacts avec ce mur : etincelles du frottement.
+var _wall_at: Vector3 = Vector3.ZERO
 ## Ticks de frottement continu contre un mur, ticks sans contact depuis.
 var _wall_ticks: int = 0
 var _wall_gap: int = 0
@@ -538,6 +540,16 @@ func get_wall_contact_ticks() -> int:
 	return _wall_ticks
 
 
+## Mur touche au dernier pas physique : normale (vers le camion, ZERO si
+## aucun) et point de contact (monde).
+func get_wall_normal() -> Vector3:
+	return _wall_normal
+
+
+func get_wall_point() -> Vector3:
+	return _wall_at
+
+
 ## Epave (0 PV) : gelee sur place, plus aucune force ni commande, jusqu'a ce
 ## que le gameplay la relance (set_wrecked(false) puis reset_to). Elle ne
 ## touche plus rien : la carcasse laissee sur la route est un obstacle a part
@@ -662,6 +674,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			n = -n
 		n = n.normalized()
 		n_sum += n
+		_wall_at = at
 		var into := 0.0
 		for v in _vel_hist:
 			into = maxf(into, -v.dot(n))

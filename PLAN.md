@@ -309,6 +309,37 @@ piliers (`concrete.gdshader`, auparavant un gris uni) : banches de 2,4 x
 1,2 m avec joints et trous de tiges, teinte par panneau et par plaques,
 pores, coulures sur les faces verticales ; trempé et brillant la nuit à
 Cyber City.
+**Particules** (2026-10-08, demande utilisateur : fumée des camions abîmés,
+débris, pluie, étincelles) : briques communes `FxKit`, toutes sur GPU.
+- **Fumée** (`fx/smoke.gdshader`) : bouffées qui tournent, contour rongé
+  par un bruit propre à chacune, éclairées comme des boules, fondues
+  contre le décor. De jour, panache noir épais ; de nuit, plus clair, il
+  renvoie la lueur de la ville. La turbulence du moteur a été écartée :
+  elle fige les bouffées sur place.
+- **Feu moteur** sous 15 PV, avec une lueur qui vacille ; l'épave brûle
+  ~10 s.
+- **Étincelles** (`fx/spark_particles.gdshader`) : traits étirés sur la
+  vitesse, qui refroidissent et rebondissent sur la route (un plan sous
+  l'émetteur). Sources : jantes nues, moteur à l'agonie, frottement contre
+  un mur (nouveau), gerbe à chaque choc franc (nouveau), avec de la
+  poussière de béton si le choc est violent.
+- **Explosion** : la sphère orange devient boule de feu, fumée noire,
+  braises et souffle au sol ; les barils explosifs l'utilisent aussi.
+- **Débris** : plaques de tôle froissée au lieu de boîtes ; les pièces
+  soufflées par une explosion fument, les deux premières brûlent.
+- **Pluie** (`rain.gdshader`) : les gouttes s'étirent selon leur vitesse
+  relative à la caméra et s'allument dans les phares et les lampadaires.
+  Éclaboussures sur la route devant la caméra. Chaque vue ne voit que sa
+  pluie (calques 13 à 18).
+- **Roues** : la fumée de pneus et les projections prennent le même rendu
+  de bouffées.
+- **Pièges notés** : un émetteur GPU déplacé d'un coup étale sa première
+  émission sur tout le trajet (un « peigne » de traits parallèles), d'où
+  les gerbes de choc créées sur place. Les shaders additifs coupent le
+  brouillard, qui s'y ajoutait en grands carrés.
+- **Coût** : temps GPU inchangé à 4 vues (3 à 4 ms, mesure avant/après).
+  L'à-coup de ~140 ms quand un camion explose existait déjà avant ces
+  particules.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).

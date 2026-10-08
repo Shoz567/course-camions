@@ -289,9 +289,11 @@ func _add_player(i: int) -> Player:
 	view_parent.add_child(cam)
 	cam.snap()
 	p.camera = cam
-	# nuit pluvieuse : la pluie tombe autour de chaque camera
+	# nuit pluvieuse : la pluie tombe autour de chaque camera, et chaque vue
+	# ne voit que la sienne
+	cam.get_camera().cull_mask = RainFx.cull_mask_for(cam.get_camera().cull_mask, i)
 	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
-		view_parent.add_child(RainFx.make(cam.get_camera()))
+		view_parent.add_child(RainFx.make(cam.get_camera(), i))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)

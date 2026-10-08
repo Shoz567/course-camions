@@ -13,8 +13,12 @@ extends DetachedTrailer
 
 const WRECK_HP := 60.0
 const WRECK_MASS := TruckSpec.MASS_KG
+## Le feu de la carcasse s'eteint apres ce nombre d'images (visuel).
+const FIRE_FRAMES := 600
 
 var _cab: CollisionShape3D
+var _fire: GPUParticles3D
+var _burn_frames: int = 0
 
 
 func _init() -> void:
@@ -59,3 +63,15 @@ func _ready() -> void:
 	# une carcasse fume des le debut
 	DamageFx.set_smoke(_smoke, DamageFx.Smoke.WRECK)
 	damage_stage = 1
+	# le moteur brule encore un moment (purement visuel)
+	_fire = FxKit.make_fire(40, 0.7, 1.3)
+	_fire.position = TruckSpec.CAB_CENTER + Vector3(0.0, -0.6, -1.2)
+	_fire.amount_ratio = FxKit.density()
+	_fire.emitting = true
+	add_child(_fire)
+
+
+func _process(_delta: float) -> void:
+	_burn_frames += 1
+	if _burn_frames == FIRE_FRAMES and _fire != null:
+		_fire.emitting = false

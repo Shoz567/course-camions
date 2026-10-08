@@ -66,7 +66,7 @@ var _wear: PackedFloat32Array = PackedFloat32Array([0, 0, 0, 0, 0, 0])
 ## Jante qui frotte la route ce tick, par roue (etat logique, meme sans rendu).
 var _sparking: PackedByteArray = PackedByteArray([0, 0, 0, 0, 0, 0])
 ## Gerbes d'etincelles par roue (null : sans rendu, ou pas encore creee).
-var _spark_fx: Array[CPUParticles3D] = [null, null, null, null, null, null]
+var _spark_fx: Array[GPUParticles3D] = [null, null, null, null, null, null]
 
 
 ## Roue (ordre FL, FR, RL, RR) dont le pneu eclate sous ce choc, ou -1.
@@ -136,8 +136,8 @@ func _ready() -> void:
 			_spark_fx[w] = _make_rim_sparks()
 			if w >= Truck.TRAILER_LEFT:
 				# tout le train de roues frotte (jusqu'a 2,8 m d'essieux)
-				_spark_fx[w].emission_box_extents.z = 1.3
-				_spark_fx[w].amount = 96
+				FxKit.spark_param(_spark_fx[w], &"box_extents", Vector3(0.1, 0.02, 1.3))
+				_spark_fx[w].amount = 160
 			add_child(_spark_fx[w])
 
 
@@ -209,10 +209,11 @@ func _physics_process(_delta: float) -> void:
 			# vite et plus loin avec la vitesse
 			fx.position = _contact_local(w)
 			var back := _truck.global_basis.inverse() * -_truck.linear_velocity.normalized()
-			fx.direction = (back + Vector3.UP * 0.35).normalized()
+			FxKit.spark_param(fx, &"direction", (back + Vector3.UP * 0.35).normalized())
 			var k := clampf(speed / 25.0, 0.0, 1.0)
-			fx.initial_velocity_min = lerpf(2.0, 6.0, k)
-			fx.initial_velocity_max = lerpf(5.0, 13.0, k)
+			FxKit.spark_param(fx, &"speed_min", lerpf(2.0, 6.0, k))
+			FxKit.spark_param(fx, &"speed_max", lerpf(5.0, 13.0, k))
+			fx.amount_ratio = lerpf(0.4, 1.0, k) * FxKit.density()
 		if fx.emitting != on:
 			fx.emitting = on
 
@@ -227,27 +228,16 @@ func _contact_local(wheel: int) -> Vector3:
 	return at + Vector3(signf(TruckSpec.ANCHORS[wheel].x) * 0.15, 0.05, 0.0)
 
 
-## Gerbe d'etincelles continue (eteinte) : traits jaune-orange alignes sur
-## leur vitesse, qui fusent vers l'arriere et retombent vite.
-static func _make_rim_sparks() -> CPUParticles3D:
-	var p := DamageFx.make_sparks()
+## Gerbe d'etincelles continue (eteinte) : traits jaune-orange etires sur
+## leur vitesse, qui fusent vers l'arriere en gerbe de coq, ricochent sur la
+## route (le sol est sous l'emetteur, au ras de la jante) et refroidissent.
+static func _make_rim_sparks() -> GPUParticles3D:
+	var p := FxKit.make_sparks(110, 0.55, {
+		"spread": 0.45, "inherit": 0.3, "box_extents": Vector3(0.1, 0.02, 0.12),
+		"gravity": 16.0, "drag": 0.9, "bounce": 0.4, "floor_below": 0.05, "life_min": 0.35,
+		"stretch": 0.035, "max_len": 0.5, "width": 0.014, "heat": 6.0})
 	p.name = "RimSparks"
-	p.amount = 64
-	p.lifetime = 0.3
-	p.explosiveness = 0.0
-	p.randomness = 0.8
-	p.spread = 30.0
-	p.gravity = Vector3(0.0, -16.0, 0.0)
-	p.scale_amount_min = 0.5
-	p.scale_amount_max = 1.0
-	p.particle_flag_align_y = true
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	p.emission_box_extents = Vector3(0.1, 0.02, 0.12)
-	# trait fin le long de Y (aligne sur la vitesse)
-	var streak := BoxMesh.new()
-	streak.size = Vector3(0.025, 0.2, 0.025)
-	streak.material = (p.mesh as BoxMesh).material
-	p.mesh = streak
+	p.randomness = 0.5
 	return p
 
 
@@ -300,21 +290,21 @@ func _burst_fx(wheel: int) -> void:
 		Debris.shard(world, at + (b.y * cos(a) + b.z * sin(a)) * r + side * 0.1 + along, size, _rubber,
 			_truck.linear_velocity * 0.9 + dir * lerpf(5.0, 10.0, h2))
 	# bouffee de poussiere et de caoutchouc
-	var puff := DamageFx.make_smoke()
+	var puff := FxKit.make_smoke(16, 1.3, 1.4)
 	puff.name = "TirePuff"
-	puff.one_shot = true
-	puff.explosiveness = 0.9
-	puff.amount = 14
-	puff.lifetime = 1.1
-	puff.color = Color(0.55, 0.53, 0.5, 0.75)
-	puff.direction = side + Vector3.UP * 0.4
-	puff.spread = 45.0
-	puff.initial_velocity_min = 3.0
-	puff.initial_velocity_max = 6.0
-	world.add_child(puff)
-	puff.global_position = at
-	puff.emitting = true
-	puff.finished.connect(puff.queue_free)
+	var pm := puff.process_material as ParticleProcessMaterial
+	pm.color = Color(0.55, 0.53, 0.5, 0.75)
+	pm.direction = side + Vector3.UP * 0.4
+	pm.spread = 45.0
+	pm.initial_velocity_min = 3.0
+	pm.initial_velocity_max = 6.0
+	pm.inherit_velocity_ratio = 0.7
+	FxKit.fire_once(world, puff, at, 0.9)
+	# la jante mord la route : eclat d'etincelles
+	FxKit.fire_once(world, FxKit.make_sparks(40, 0.6, {
+		"direction": side + Vector3.UP * 0.5, "spread": 1.0, "speed_min": 4.0, "speed_max": 10.0,
+		"inherit": 0.85, "box_extents": Vector3(0.2, 0.05, 0.3), "floor_below": 0.6,
+		"life_min": 0.3, "stretch": 0.03, "max_len": 0.4, "width": 0.016, "heat": 6.0}), at)
 	if _bang != null:
 		_bang.global_position = at
 		_bang.play()
