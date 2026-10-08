@@ -89,4 +89,10 @@ func _check_lighting() -> void:
 	check("vues de l'ecran partage : MSAA 2x + SMAA (haute), MSAA 2x (moyenne), FXAA (basse)", high and medium
 		and vp.msaa_3d == Viewport.MSAA_DISABLED and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_FXAA)
 	vp.free()
+	# post-traitement (ScreenFx) : flou de vitesse nul en ville, plein a fond,
+	# le boost en ajoute ; jamais au-dela de 1
+	var b := [ScreenFx.blur_for(50.0, false), ScreenFx.blur_for(110.0, false),
+		ScreenFx.blur_for(170.0, false), ScreenFx.blur_for(170.0, true), ScreenFx.blur_for(300.0, true)]
+	check("flou de vitesse : 0 a 50 km/h, croissant, boost en plus, borne a 1",
+		b[0] == 0.0 and b[1] > 0.0 and b[2] > b[1] and b[3] > b[2] and b[4] <= 1.0, str(b))
 	check("qualite haute par defaut", GameState.graphics_quality == GraphicsSettings.Quality.HIGH)

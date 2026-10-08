@@ -22,6 +22,8 @@ extends Node3D
 ## - Champ de vision un peu plus large a haute vitesse.
 ## - Deux vues (toggle_view) : poursuite (3e personne) et cabine (1re personne,
 ##   oeil derriere le pare-brise, orientation legerement amortie).
+## - Post-traitement de la vue (ScreenFx, hors qualite basse) : flou radial
+##   selon la vitesse et le boost, aberration sur les bords, vignettage.
 
 enum View { CHASE, COCKPIT }
 
@@ -69,6 +71,7 @@ var _focus: Vector3
 var _yaw: float = 0.0
 var _initialized: bool = false
 var _last_target: Vector3
+var _fx: ScreenFx
 ## Au-dela de ce deplacement du camion entre deux images, c'est une
 ## teleportation (reset) : la camera se recale au lieu de traverser la piste.
 const TELEPORT_DISTANCE := 15.0
@@ -91,6 +94,12 @@ func _ready() -> void:
 	_camera.current = true
 	_camera.position = Vector3(0.0, 0.0, distance)
 	_arm.add_child(_camera)
+	if DisplayServer.get_name() != "headless" \
+			and GameState.graphics_quality != GraphicsSettings.Quality.LOW:
+		_fx = ScreenFx.new()
+		var comp := Compositor.new()
+		comp.compositor_effects = [_fx]
+		_camera.compositor = comp
 
 
 func get_camera() -> Camera3D:
@@ -122,6 +131,8 @@ func _process(delta: float) -> void:
 	if xf.origin.distance_to(_last_target) > TELEPORT_DISTANCE:
 		_initialized = false
 	_last_target = xf.origin
+	if _fx != null:
+		_fx.drive(absf(target.linear_velocity.dot(-xf.basis.z)) * 3.6, target.is_boosting())
 	if view == View.COCKPIT:
 		_process_cockpit(xf, delta)
 		return

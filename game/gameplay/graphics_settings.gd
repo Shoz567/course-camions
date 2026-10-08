@@ -19,6 +19,10 @@ extends RefCounted
 ##            indirect proche au-dela de SSIL_MAX_VIEWS
 ##   MOYENNE  SSAO seul, MSAA 2x
 ##   BASSE    aucun effet, anticrenelage FXAA (le moins couteux)
+##
+## Le post-traitement de chaque camera (ScreenFx : flou de vitesse,
+## aberration, vignettage ; ~0,3 ms par vue) est pose par ChaseCamera en
+## qualite haute et moyenne.
 
 enum Quality { HIGH, MEDIUM, LOW }
 

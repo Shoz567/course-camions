@@ -276,6 +276,12 @@ conteneurs ; le dessous des remorques s'assombrit. Coût mesuré sur la Radeon
 780M : 1 vue ~165 → ~135 images/s, 2 vues 117 → 81, 4 vues 96 → 54, d'où :
 qualité haute seulement, **jusqu'à 2 vues**. Anticrénelage en qualité haute :
 MSAA 2x + **SMAA** (le TAA a été essayé puis écarté : il efface la pluie).
+**Post-traitement par vue** (`ScreenFx`, effet du compositeur posé sur la
+caméra de chaque joueur, qualité haute et moyenne) : flou radial de vitesse
+au-delà de 60 km/h, plein à 170, plus fort au boost ; le camion, sous le
+centre de l'image, reste net ; aberration chromatique légère sur les bords,
+vignettage. Calculé après les transparents (la pluie reste). Coût mesuré :
+~0,25 ms GPU par vue.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).
