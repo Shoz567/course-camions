@@ -19,8 +19,15 @@ extends Node3D
 ## choc de cote sur l'arriere de sa caisse (TRAILER_REACH_M autour du train de
 ## roues), a toute hauteur (la caisse est au-dessus des roues), meme seuil de
 ## vitesse ; elle se remet a neuf avec la remorque suivante.
+## Un pneu encaisse avant de ceder (2026-10-08 : « les pneus eclatent trop
+## facilement, il faut plusieurs coups ») : chaque choc qui le vise l'use de
+## 1 (au seuil) a MAX_HIT_WEAR (choc violent), il eclate a HITS_TO_BURST -
+## trois coups, deux au moins. L'usure repart a zero avec des pneus neufs
+## (reapparition ; remorque larguee pour les siens).
 ## L'eclatement : detonation, bouffee de fumee, lambeaux de gomme. La roue
-## creve reste a plat jusqu'a la reapparition du camion (pneus neufs).
+## creve reste sur sa jante jusqu'a la reapparition du camion (pneus neufs) ;
+## tant qu'elle roule au sol, la jante frotte la route et crache des
+## etincelles (rim_sparking).
 ## Deterministe : aucun tirage aleatoire (CLAUDE.md §7).
 
 ## Vitesse vers l'obstacle (m/s) a partir de laquelle le pneu touche eclate.
@@ -35,12 +42,27 @@ const MAX_HIT_HEIGHT_M := 2.3
 ## Etendue du train de roues de la remorque, de part et d'autre de son centre
 ## (m) : ses essieux s'etalent sur 2,8 m au plus, plus le flanc des pneus.
 const TRAILER_REACH_M := 2.6
+## Usure a laquelle un pneu eclate (coups « au seuil »).
+const HITS_TO_BURST := 3.0
+## Usure d'un seul choc, au plus : il en faut toujours deux.
+const MAX_HIT_WEAR := 1.5
+## Vitesse (m/s) a partir de laquelle une jante au sol crache des etincelles.
+const SPARK_SPEED_MS := 2.0
+## Rayon de la jante, en fraction du rayon du pneu (modeles du tracteur et
+## catalogue des remorques : fut a 0,6 r).
+const RIM_RATIO := 0.6
 
 static var _bang_stream: AudioStreamWAV
 static var _rubber: StandardMaterial3D
 
 var _truck: Truck
 var _bang: AudioStreamPlayer3D
+## Usure de chaque pneu (ordre de Truck : FL, FR, RL, RR, remorque G, D).
+var _wear: PackedFloat32Array = PackedFloat32Array([0, 0, 0, 0, 0, 0])
+## Jante qui frotte la route ce tick, par roue (etat logique, meme sans rendu).
+var _sparking: PackedByteArray = PackedByteArray([0, 0, 0, 0, 0, 0])
+## Gerbes d'etincelles par roue (null : sans rendu, ou pas encore creee).
+var _spark_fx: Array[CPUParticles3D] = [null, null, null, null, null, null]
 
 
 ## Roue (ordre FL, FR, RL, RR) dont le pneu eclate sous ce choc, ou -1.
@@ -93,9 +115,10 @@ func _ready() -> void:
 	_truck.wall_impact_at.connect(_on_impact.bind(INF))
 	_truck.body_impact.connect(_on_impact.bind(MAX_HIT_HEIGHT_M))
 	_truck.tire_burst.connect(_on_tire_burst)
+	_truck.trailer_detached.connect(_on_trailer_detached)
 	var health := TruckHealth.of(_truck)
 	if health != null:
-		health.respawned.connect(_truck.repair_tires)
+		health.respawned.connect(_on_respawned)
 	if DisplayServer.get_name() != "headless":
 		if _bang_stream == null:
 			_bang_stream = _build_bang_stream()
@@ -105,6 +128,13 @@ func _ready() -> void:
 		_bang.unit_size = 18.0
 		_bang.max_distance = 160.0
 		add_child(_bang)
+		for w in _spark_fx.size():
+			_spark_fx[w] = _make_rim_sparks()
+			if w >= Truck.TRAILER_LEFT:
+				# tout le train de roues frotte (jusqu'a 2,8 m d'essieux)
+				_spark_fx[w].emission_box_extents.z = 1.3
+				_spark_fx[w].amount = 96
+			add_child(_spark_fx[w])
 
 
 func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3, max_height: float) -> void:
@@ -118,7 +148,103 @@ func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3,
 	else:
 		i = wheel_hit(_truck.global_transform, point, normal, speed, max_height)
 	if i >= 0:
-		_truck.burst_tire(i)
+		take_hit(i, speed)
+
+
+## Un choc a `speed_ms` sur le pneu `wheel` : il s'use, et eclate s'il a
+## assez encaisse. Vrai s'il vient d'eclater.
+func take_hit(wheel: int, speed_ms: float) -> bool:
+	if wheel < 0 or wheel >= _wear.size() or _truck.is_tire_burst(wheel):
+		return false
+	_wear[wheel] += clampf(speed_ms / BURST_SPEED_MS, 1.0, MAX_HIT_WEAR)
+	if _wear[wheel] < HITS_TO_BURST - 1e-4:
+		return false
+	return _truck.burst_tire(wheel)
+
+
+## Usure du pneu `wheel` (0 : neuf ; HITS_TO_BURST : eclate).
+func wear(wheel: int) -> float:
+	return _wear[wheel]
+
+
+## Vrai si la jante de la roue `wheel` frotte la route (pneu eclate, au sol, en
+## mouvement) : etincelles.
+func rim_sparking(wheel: int) -> bool:
+	return _sparking[wheel] != 0
+
+
+func _on_respawned() -> void:
+	_wear.fill(0.0)
+	_truck.repair_tires()
+
+
+func _on_trailer_detached() -> void:
+	_wear[Truck.TRAILER_LEFT] = 0.0
+	_wear[Truck.TRAILER_RIGHT] = 0.0
+
+
+## Etincelles des jantes : apres les forces du camion (enfant : meme tick).
+func _physics_process(_delta: float) -> void:
+	if _truck == null:
+		return
+	var speed := _truck.linear_velocity.length()
+	for w in _wear.size():
+		var on := false
+		if _truck.is_tire_burst(w) and speed >= SPARK_SPEED_MS and not _truck.is_wrecked():
+			if w < 4:
+				on = _truck.get_probe(w).in_contact
+			else:
+				on = not _truck.is_trailer_detached() and _truck.wheels_on_ground() >= 2
+		_sparking[w] = 1 if on else 0
+		var fx := _spark_fx[w]
+		if fx == null:
+			continue
+		if on:
+			# au ras du sol sous la jante, dans le repere du camion (le noeud
+			# suit le camion interpole) ; la gerbe part vers l'arriere, plus
+			# vite et plus loin avec la vitesse
+			fx.position = _contact_local(w)
+			var back := _truck.global_basis.inverse() * -_truck.linear_velocity.normalized()
+			fx.direction = (back + Vector3.UP * 0.35).normalized()
+			var k := clampf(speed / 25.0, 0.0, 1.0)
+			fx.initial_velocity_min = lerpf(2.0, 6.0, k)
+			fx.initial_velocity_max = lerpf(5.0, 13.0, k)
+		if fx.emitting != on:
+			fx.emitting = on
+
+
+## Point de contact jante / route de la roue `wheel`, repere du camion.
+func _contact_local(wheel: int) -> Vector3:
+	if wheel >= Truck.TRAILER_LEFT:
+		return _truck.trailer_wheel_local(wheel) + Vector3(0.0, 0.05, 0.0)
+	var p := _truck.get_probe(wheel)
+	var at := _truck.global_transform.affine_inverse() * p.contact_point
+	# cote exterieur de la roue, la ou la jante se voit
+	return at + Vector3(signf(TruckSpec.ANCHORS[wheel].x) * 0.15, 0.05, 0.0)
+
+
+## Gerbe d'etincelles continue (eteinte) : traits jaune-orange alignes sur
+## leur vitesse, qui fusent vers l'arriere et retombent vite.
+static func _make_rim_sparks() -> CPUParticles3D:
+	var p := DamageFx.make_sparks()
+	p.name = "RimSparks"
+	p.amount = 64
+	p.lifetime = 0.3
+	p.explosiveness = 0.0
+	p.randomness = 0.8
+	p.spread = 30.0
+	p.gravity = Vector3(0.0, -16.0, 0.0)
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.0
+	p.particle_flag_align_y = true
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(0.1, 0.02, 0.12)
+	# trait fin le long de Y (aligne sur la vitesse)
+	var streak := BoxMesh.new()
+	streak.size = Vector3(0.025, 0.2, 0.025)
+	streak.material = (p.mesh as BoxMesh).material
+	p.mesh = streak
+	return p
 
 
 ## Centre de la roue `wheel` (monde) : sous son ancrage, au moyeu ; remorque :

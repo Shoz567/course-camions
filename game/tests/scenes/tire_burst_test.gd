@@ -3,14 +3,21 @@ extends PhysicsTest
 ## Pneus qui eclatent (2026-10-07 : « quand un pneu est touche, il eclate, on
 ## perd en adherence, en maniabilite »). Truck.burst_tire, TruckTires.
 ##
-##   A. qui eclate (TruckTires.wheel_hit) : un choc de cote a hauteur de roue,
-##      assez fort, eclate le pneu de ce cote et de cet essieu ; pas un choc
+##   A. qui est touche (TruckTires.wheel_hit) : un choc de cote a hauteur de
+##      roue, assez fort, vise le pneu de ce cote et de cet essieu ; pas un choc
 ##      frontal, ni un frottement lent, ni le milieu du chassis, ni la cabine ;
 ##   B. un camion lance de cote (12 m/s) dans le flanc avant gauche d'un
-##      camion arrete : son pneu avant gauche eclate, aucun autre ; le
-##      camion qui percute (de face) garde les siens ;
+##      camion arrete : son pneu avant gauche est touche, aucun autre - mais
+##      un seul coup ne le fait pas eclater (2026-10-08 : « il faut plusieurs
+##      coups ») ; le camion qui percute (de face) garde les siens intacts ;
 ##   C. un mur pris en biais a 80 km/h (25 deg) par l'avant gauche : ce pneu
-##      eclate ; un camion pousse de cote a 5 m/s : rien n'eclate ;
+##      est touche ; un camion pousse de cote a 5 m/s : rien ;
+##   H. plusieurs coups (TruckTires.take_hit) : trois coups au seuil eclatent
+##      le pneu, au troisieme seulement ; deux coups violents suffisent, un
+##      seul jamais ; la reapparition remet l'usure a zero ;
+##   I. jante qui frotte (2026-10-08 : « des etincelles entre la jante et le
+##      sol ») : pneu eclate en roulant, oui (tracteur et remorque) ; camion
+##      arrete, ou pneu neuf, non ;
 ##   D. effets, a cote d'un camion temoin identique : coin avant gauche
 ##      affaisse a l'arret ; en ligne droite sans braquer, le camion tire du
 ##      cote creve ; plein braquage du cote oppose : il tourne moins (pneu
@@ -19,8 +26,8 @@ extends PhysicsTest
 ##   F. visuel (modele charge) : le pneu de la roue arriere gauche s'ecrase,
 ##      ceux des autres roues non ;
 ##   G. remorque (2026-10-07 : « fais aussi eclater les pneus de la remorque ») :
-##      qui eclate (TruckTires.trailer_hit) ; un camion lance de cote dans
-##      l'arriere gauche d'une remorque : ses pneus gauches eclatent, pas ceux
+##      qui est touche (TruckTires.trailer_hit) ; un camion lance de cote dans
+##      l'arriere gauche d'une remorque : ses pneus gauches sont touches, pas ceux
 ##      du tracteur ; en ligne droite, l'ensemble tire du cote creve et perd de
 ##      la vitesse ; en virage, la remorque chasse plus loin ; les pneus creves
 ##      partent avec la remorque larguee, la suivante arrive neuve ; a
@@ -40,6 +47,8 @@ var _turn_ok: Truck
 var _turn_flat: Truck
 var _respawn: Truck
 var _respawned: bool = false
+var _multi: Truck
+var _multi_hard: Truck
 var _model: Truck
 var _t_hit: Truck
 var _t_rammer: Truck
@@ -89,6 +98,10 @@ func _test_setup() -> void:
 	_respawn.burst_tire(1)
 	_respawn.burst_tire(3)
 	_respawn.burst_tire(Truck.TRAILER_LEFT)
+	_tires(_respawn).take_hit(0, 10.0)
+	# H : deux camions arretes, coups portes a la main
+	_multi = _spawn(Vector3(-100.0, 0.0, 0.0), 0.0, 0.0)
+	_multi_hard = _spawn(Vector3(-130.0, 0.0, 0.0), 0.0, 0.0)
 	TruckHealth.of(_respawn).respawned.connect(func() -> void: _respawned = true)
 	# F, G : modele charge (remorque Conteneur), pneu arriere gauche et pneus
 	# gauches de la remorque creves
@@ -161,12 +174,35 @@ func _test_finish() -> void:
 	check("A milieu du chassis : rien", TruckTires.wheel_hit(xf, Vector3(-1.4, 1.2, 0.0), Vector3.RIGHT, 15.0) == -1)
 	check("A cabine, en hauteur : rien", TruckTires.wheel_hit(xf, Vector3(-1.4, 3.2, fl.z), Vector3.RIGHT, 15.0) == -1)
 
-	check("B camion pris de cote : pneu avant gauche eclate, et lui seul",
-		_hit.is_tire_burst(0) and _hit.burst_tire_count() == 1, _bursts(_hit))
-	check("B le camion qui percute de face garde ses pneus", _rammer.burst_tire_count() == 0, _bursts(_rammer))
-	check("C mur pris en biais par l'avant gauche : ce pneu eclate", _wall_truck.is_tire_burst(0),
-		_bursts(_wall_truck))
-	check("C poussee lente de cote : rien n'eclate", _push_target.burst_tire_count() == 0, _bursts(_push_target))
+	check("B camion pris de cote : pneu avant gauche touche, et lui seul",
+		_tires(_hit).wear(0) > 0.0 and _worn(_hit) == 1, _wears(_hit))
+	check("B un seul coup : il n'eclate pas encore", _hit.burst_tire_count() == 0, _bursts(_hit))
+	check("B le camion qui percute de face garde ses pneus intacts",
+		_rammer.burst_tire_count() == 0 and _worn(_rammer) == 0, _wears(_rammer))
+	check("C mur pris en biais par l'avant gauche : ce pneu est touche", _tires(_wall_truck).wear(0) > 0.0,
+		_wears(_wall_truck))
+	check("C poussee lente de cote : rien", _worn(_push_target) == 0 and _push_target.burst_tire_count() == 0,
+		_wears(_push_target))
+
+	# H : trois coups au seuil, deux coups violents
+	var steps := ""
+	var tm := _tires(_multi)
+	for k in 3:
+		tm.take_hit(0, TruckTires.BURST_SPEED_MS)
+		steps += "1" if _multi.is_tire_burst(0) else "0"
+	check("H trois coups au seuil : eclate au troisieme seulement", steps == "001", steps)
+	var th := _tires(_multi_hard)
+	var first := th.take_hit(Truck.TRAILER_RIGHT, 40.0)
+	var second := th.take_hit(Truck.TRAILER_RIGHT, 40.0)
+	check("H choc violent : jamais au premier coup, au deuxieme oui", not first and second,
+		"%s, %s" % [first, second])
+	check("H reapparition : usure remise a zero", _respawned and _worn(_respawn) == 0, _wears(_respawn))
+
+	# I : etincelles de la jante
+	check("I pneu eclate en roulant : la jante frotte", _tires(_line_flat).rim_sparking(0))
+	check("I remorque creve en roulant : sa jante frotte", _tires(_t_line).rim_sparking(Truck.TRAILER_LEFT))
+	check("I pas d'etincelles a l'arret ni sur un pneu neuf", not _tires(_rest_flat).rim_sparking(0)
+		and not _tires(_line_flat).rim_sparking(1) and not _tires(_line_ok).rim_sparking(0))
 
 	var drop := (_rest_ok.global_transform * fl).y - (_rest_flat.global_transform * fl).y
 	check_near("D coin avant gauche affaisse (m)", drop, _rest_flat.tuning.tire_burst_drop_m, 0.08)
@@ -246,8 +282,8 @@ func _check_trailer() -> void:
 	check("G frottement lent : rien",
 		TruckTires.trailer_hit(box_xf, size, Vector3(-1.5, 3.0, bz), Vector3.RIGHT, 4.0) == -1)
 
-	check("G remorque prise de cote : ses pneus gauches eclatent, pas le tracteur",
-		_t_hit.is_tire_burst(Truck.TRAILER_LEFT) and _t_hit.burst_tire_count() == 1, _bursts(_t_hit))
+	check("G remorque prise de cote : ses pneus gauches touches, pas le tracteur",
+		_tires(_t_hit).wear(Truck.TRAILER_LEFT) > 0.0 and _worn(_t_hit) == 1, _wears(_t_hit))
 	check("G le camion qui percute garde ses pneus", _t_rammer.burst_tire_count() == 0, _bursts(_t_rammer))
 
 	var pull := rad_to_deg(angle_difference(float(_yaw0[_t_line]), _t_line.rotation.y))
@@ -266,6 +302,26 @@ func _check_trailer() -> void:
 	_rest_ok.reattach_trailer(true)
 	check("G remorque larguee : ses pneus creves partent avec elle", gone and refused
 		and _rest_ok.burst_tire_count() == 0, _bursts(_rest_ok))
+
+
+func _tires(t: Truck) -> TruckTires:
+	return t.get_node("Tires") as TruckTires
+
+
+## Pneus touches (usure > 0), tracteur et remorque.
+func _worn(t: Truck) -> int:
+	var n := 0
+	for i in 6:
+		if _tires(t).wear(i) > 0.0:
+			n += 1
+	return n
+
+
+func _wears(t: Truck) -> String:
+	var s := ""
+	for i in 6:
+		s += "%.1f " % _tires(t).wear(i)
+	return s
 
 
 func _bursts(t: Truck) -> String:

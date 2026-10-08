@@ -30,8 +30,9 @@ extends Node3D
 ##   compris, et braquage visuel borne : les roues ne traversent plus la
 ##   carrosserie (truck_wheel_arch_test).
 ## - Pneu eclate (Truck.tire_burst) : le pneu de chaque groupe de roues associe
-##   s'ecrase sous la jante, au sol (truck_body.gdshader, tyre_burst), et
-##   montre sa carcasse dechiree ; la jante descend avec le rayon (physique).
+##   part en lambeaux, la jante a nu pose sur la route (truck_body.gdshader,
+##   tyre_burst = FLAT_TYRE) ; la roue descend jusque-la (la physique ne
+##   descend que de tire_burst_drop_m, l'image fait le reste).
 ##   Pneus de la remorque (un cote du train de roues) : ceux de ce cote, sur
 ##   chaque essieu de l'habillage, et la remorque penche de ce cote.
 ## Les ecarts restants sont documentes (docs/ART_PIPELINE.md §4 bis).
@@ -131,6 +132,12 @@ var _axle_rest: Array[Transform3D] = []
 var _axle_radius: PackedFloat32Array = []
 var _axle_offset: PackedFloat32Array = []
 var _axle_spin: PackedFloat32Array = []
+## Pneu eclate, a l'image : ecrase jusqu'a la jante (fraction du rayon :
+## plancher juste sous le fut, RIM_RATIO du shader) ; descente visuelle des
+## roues du tracteur au-dela de la physique, et de chaque essieu de remorque.
+const FLAT_TYRE := 1.0 - TruckTires.RIM_RATIO * 1.03
+var _flat_sink: PackedFloat32Array = []
+var _axle_sink: PackedFloat32Array = []
 ## Sol sous les pneus, repere du camion (matieres : salissure selon la
 ## hauteur).
 var _ground_y: float = 0.0
@@ -238,18 +245,29 @@ func _sync_tyres() -> void:
 	if _truck == null:
 		return
 	var drop := _truck.tuning.tire_burst_drop_m if _truck.tuning != null else 0.0
+	_flat_sink.resize(_pivots.size())
 	for k in _pivots.size():
+		_flat_sink[k] = 0.0
 		if _pivots[k] != null:
 			var r := _wheel_radius[k] if k < _wheel_radius.size() else TruckSpec.WHEEL_RADIUS
 			var on := _truck.is_tire_burst(_probe_index(k))
-			set_tyre_burst(_pivots[k], clampf(drop / r, 0.0, 0.45) if on else 0.0)
+			set_tyre_burst(_pivots[k], FLAT_TYRE if on else 0.0)
+			# la physique ne descend que de tire_burst_drop_m ; le reste, a
+			# l'image : la jante pose sur la route
+			if on:
+				_flat_sink[k] = maxf(r * FLAT_TYRE - drop, 0.0)
 	var left := _truck.is_tire_burst(Truck.TRAILER_LEFT)
 	var right := _truck.is_tire_burst(Truck.TRAILER_RIGHT)
+	_axle_sink.resize(_axles.size())
+	var sink := 0.0
 	for i in _axles.size():
-		var amount := clampf(drop / _axle_radius[i], 0.0, 0.45) if left or right else 0.0
+		var amount := FLAT_TYRE if left or right else 0.0
 		set_tyre_burst(_axles[i], amount, left or not right, right or not left, _trailer_pivot)
-	# le cote creve descend du rayon perdu (sur toute la voie du train)
-	var sag := atan2(drop, 2.0 * _bogie_half_track)
+		# un cote a plat : l'essieu descend de moitie, la remorque penche (la
+		# jante du cote creve sur la route, le pneu neuf d'en face aussi)
+		_axle_sink[i] = _axle_radius[i] * amount * (1.0 if left and right else 0.5)
+		sink = maxf(sink, _axle_radius[i] * amount)
+	var sag := atan2(sink, 2.0 * _bogie_half_track)
 	_trailer_flat_roll = (sag if left else 0.0) - (sag if right else 0.0)
 
 
@@ -339,6 +357,8 @@ func _physics_process(delta: float) -> void:
 				# roues arriere : sous la remorque, qui pivote et penche au-dessus
 				up = minf(up, REAR_WHEEL_MAX_UP)
 		xf.origin.y += up
+		if i < _flat_sink.size():
+			xf.origin.y -= _flat_sink[i]
 		if _steers[i]:
 			xf.basis = steer * xf.basis
 		p.transform = xf
@@ -586,10 +606,11 @@ func _update_trailer_pose(delta: float, roll_dist: float) -> void:
 		var rest := _axle_rest[i]
 		var target := 0.0
 		if grounded:
-			var bottom := txf * (kp + b * (skin_xf * (rest.origin + Vector3(0.0, -_axle_radius[i] + _axle_offset[i], 0.0))))
+			var flat := _axle_sink[i] if i < _axle_sink.size() else 0.0
+			var bottom := txf * (kp + b * (skin_xf * (rest.origin + Vector3(0.0, -_axle_radius[i] + flat + _axle_offset[i], 0.0))))
 			var h := _ground_height(bottom)
 			if not is_nan(h):
-				target = clampf(_axle_offset[i] + h - bottom.y, -trailer_axle_droop_m, trailer_axle_bump_m)
+				target = clampf(_axle_offset[i] + h - bottom.y, -trailer_axle_droop_m - flat, trailer_axle_bump_m)
 		# le sol pousse : l'essieu remonte tout de suite ; il redescend en douceur
 		_axle_offset[i] = target if target > _axle_offset[i] else lerpf(_axle_offset[i], target, 0.5)
 		_axle_spin[i] = fposmod(_axle_spin[i] - roll_dist / _axle_radius[i], TAU)

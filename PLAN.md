@@ -572,6 +572,19 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   nouveau coup creuse toute la zone. Mesuré (`truck_body_damage_test`) :
   creux de 9, 24, 43, 68 cm en quatre coups à 4 m/s sur la citerne ; un choc
   de plus coûte 19 ms (15 ms avant, seuil 25).
+- `[x]` **Pneus plus résistants, jante à nu qui crache des étincelles**
+  (2026-10-08, « les pneus éclatent trop facilement, il faut plusieurs coups ;
+  quand il explose, qu'on voie vraiment la jante ; des étincelles entre la
+  jante et le sol quand on roule ») : chaque choc qui vise un pneu l'use de 1
+  (au seuil) à 1,5 (choc violent), il éclate à 3 : trois coups, deux au
+  moins (`TruckTires.take_hit`) ; usure remise à zéro à la réapparition
+  (remorque larguée : la sienne). Pneu éclaté : la gomme arrachée rentre
+  dans la jante, quelques lambeaux tiennent encore (carcasse effilochée sur
+  leur bord), la jante à nu pose sur la route (descente visuelle au-delà de
+  `tire_burst_drop_m`, la physique ne change pas). Au sol et au-dessus de
+  2 m/s, gerbe d'étincelles sous la jante, vers l'arrière, plus vive avec
+  la vitesse ; sur la remorque, tout le train de roues
+  (`tire_burst_test` H, I).
 
 ---
 
