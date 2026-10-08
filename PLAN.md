@@ -272,9 +272,9 @@ Coût GPU mesuré le 2026-09-30 sur la machine de développement (Radeon 780M,
 visuels plutôt qu'un port Unreal) : les deux environnements activent **SDFGI**
 (4 cascades, cellule 0,5 m, lumière du ciel ; énergie 0,7 à la plage pour ne
 pas bleuir la route). Les néons de Cyber City colorent calandres, jantes et
-conteneurs ; le dessous des remorques s'assombrit. Coût mesuré sur la Radeon
-780M : 1 vue ~165 → ~135 images/s, 2 vues 117 → 81, 4 vues 96 → 54, d'où :
-qualité haute seulement, **jusqu'à 2 vues**. Anticrénelage en qualité haute :
+conteneurs ; le dessous des remorques s'assombrit. Coût mesuré sur la RTX
+5060 Ti (poste de l'utilisateur, 2026-10-08) : 1 vue ~165 → ~135 images/s,
+2 vues 117 → 81, 4 vues 96 → 54, d'où : qualité haute seulement, **jusqu'à 2 vues**. Anticrénelage en qualité haute :
 MSAA 2x + **SMAA** (le TAA a été essayé puis écarté : il efface la pluie).
 **Post-traitement par vue** (`ScreenFx`, effet du compositeur posé sur la
 caméra de chaque joueur, qualité haute et moyenne) : flou radial de vitesse

@@ -35,7 +35,7 @@ const SSR_MAX_VIEWS := 4
 ## calcule une fois par vue).
 const VOLUMETRIC_MAX_VIEWS := 2
 ## Au-dela, l'eclairage global est coupe meme en qualite haute (calcule une
-## fois par vue : 117 -> 81 images/s a 2 vues, 96 -> 54 a 4 sur Radeon 780M).
+## fois par vue : 117 -> 81 images/s a 2 vues, 96 -> 54 a 4 sur RTX 5060 Ti).
 const SDFGI_MAX_VIEWS := 2
 
 
