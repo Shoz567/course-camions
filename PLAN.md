@@ -578,9 +578,10 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   jante et le sol quand on roule ») : chaque choc qui vise un pneu l'use de 1
   (au seuil) à 1,5 (choc violent), il éclate à 3 : trois coups, deux au
   moins (`TruckTires.take_hit`) ; usure remise à zéro à la réapparition
-  (remorque larguée : la sienne). Pneu éclaté : la gomme arrachée rentre
-  dans la jante, quelques lambeaux tiennent encore (carcasse effilochée sur
-  leur bord), la jante à nu pose sur la route (descente visuelle au-delà de
+  (remorque larguée : la sienne). Pneu éclaté : la gomme explose en dix
+  morceaux projetés tout autour du pneu (« pas de débris de pneu sur les
+  roues, elle part en morceaux »), plus rien ne reste sur la roue, la
+  jante à nu pose sur la route (descente visuelle au-delà de
   `tire_burst_drop_m`, la physique ne change pas). Au sol et au-dessus de
   2 m/s, gerbe d'étincelles sous la jante, vers l'arrière, plus vive avec
   la vitesse ; sur la remorque, tout le train de roues

@@ -82,16 +82,6 @@ varying float h_ground;
 // catalogue des remorques ; TruckTires.RIM_RATIO).
 const float RIM_RATIO = 0.6;
 
-// Pneu eclate : 1 la ou un lambeau de gomme tient encore, 0 la ou elle est
-// arrachee (jante a nu). Fixe sur la roue (il tourne avec elle) ; rdir :
-// direction radiale (unitaire), ax : axe de la roue.
-float tyre_flap(vec3 rdir, vec3 ax) {
-	vec3 b1 = normalize(cross(ax, abs(ax.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
-	vec2 ring = vec2(dot(rdir, b1), dot(rdir, cross(ax, b1)));
-	float n = textureLod(grime_tex, ring * 0.22 + vec2(0.37, 0.11), 0.0).r;
-	return smoothstep(0.52, 0.6, n);
-}
-
 void vertex() {
 	obj_pos = VERTEX;
 	obj_n = NORMAL;
@@ -100,33 +90,12 @@ void vertex() {
 	vec3 d = VERTEX - relief_center.xyz;
 	float burst = tyre_burst * (tyre_side == 0.0 ? 1.0 : step(0.0, dot(d, ax) * tyre_side));
 	if (relief == 2 && burst > 0.0 && relief_axis.w > 0.0) {
-		float rad = relief_axis.w;
-		vec3 rv = d - ax * dot(d, ax);
-		// pneu dechiquete (2026-10-08 : « qu'on voie vraiment la jante ») : la
-		// gomme arrachee rentre dans le fut de la jante (cachee), seuls
-		// quelques lambeaux tiennent encore, a mi-hauteur
-		float rho = length(rv);
-		vec3 rdir = rv / max(rho, 1e-5);
-		float flap = tyre_flap(rdir, ax);
-		float inner = rad * RIM_RATIO * 0.94;
-		float target = inner + max(rho - inner, 0.0) * flap * 0.6;
-		VERTEX -= rdir * max(rho - target, 0.0);
-		rv = VERTEX - relief_center.xyz;
-		rv -= ax * dot(rv, ax);
-		// le sol dans le repere du maillage (la roue tourne, lui non)
-		vec3 down = transpose(MODEL_NORMAL_MATRIX) * vec3(0.0, -1.0, 0.0);
-		down = normalize(down - ax * dot(down, ax) + vec3(0.0, 1e-6, 0.0));
-		float below = dot(rv, down);
-		float floor_d = rad * (1.0 - burst);
-		// lambeau sous la jante : ecrase a plat contre la route
-		float push = max(below - floor_d, 0.0);
-		VERTEX -= down * push;
-		// ... et deborde un peu de cote
-		float squash = smoothstep(floor_d - 0.15 * rad, floor_d, below) * flap;
-		VERTEX += ax * dot(NORMAL, ax) * squash * 0.08 * rad;
-		NORMAL = normalize(mix(NORMAL, down, clamp(push / (0.1 * rad), 0.0, 1.0) * (1.0 - abs(dot(NORMAL, ax)))));
-		// lambeaux : flasques, ils ondulent
-		VERTEX -= rdir * flap * 0.04 * rad * (0.5 + 0.5 * sin(dot(rv, cross(ax, down)) / rad * 9.0));
+		// pneu explose (2026-10-08 : « qu'on voie vraiment la jante », « pas
+		// de debris de pneu sur les roues, la gomme explose ») : la gomme est
+		// partie en morceaux (TruckTires), plus rien sur la roue - le maillage
+		// du pneu se reduit a un point (aucun triangle dessine) ; la jante a
+		// nu pose sur la route (TruckVisual, FLAT_TYRE)
+		VERTEX = relief_center.xyz;
 	}
 }
 
@@ -361,26 +330,6 @@ void fragment() {
 	vec2 rel = relief_at(obj_pos, normalize(obj_n), up_m);
 	col *= 1.0 - 0.1 * max(rel.y, 0.0);
 	col = mix(col, col * 1.08, max(-rel.y, 0.0));
-	// pneu eclate : il ne reste que des lambeaux (le reste est rentre dans la
-	// jante, vertex()) - gomme noire mate, sculptures rapees, et sur leur bord
-	// dechire la carcasse textile qui s'effiloche
-	float torn_h = 0.0;
-	vec3 tyre_ax = normalize(relief_axis.xyz + vec3(1e-6));
-	float tyre_x = dot(obj_pos - relief_center.xyz, tyre_ax);
-	if (relief == 2 && tyre_burst > 0.0 && (tyre_side == 0.0 || tyre_x * tyre_side >= 0.0)) {
-		vec3 ax = tyre_ax;
-		vec3 d = obj_pos - relief_center.xyz;
-		vec3 rdir = normalize(d - ax * tyre_x + vec3(1e-6));
-		float flap = tyre_flap(rdir, ax);
-		// bord du lambeau, effiloche (bruit fin en travers)
-		float fray = texture(detail_tex, vec2(dot(rdir, normalize(cross(ax, vec3(0.3, 0.9, 0.1)))) * 3.0, tyre_x * 6.0)).r;
-		float cords = (1.0 - smoothstep(0.25, 0.75, flap + (fray - 0.5) * 0.4)) * smoothstep(0.0, 0.05, flap);
-		col = col * 0.75;
-		col = mix(col, vec3(0.2, 0.17, 0.13), cords * 0.85);
-		rough = mix(rough, 0.97, 0.6);
-		rel.x *= 0.35;
-		torn_h = -cords * 0.004;
-	}
 
 	// salissure : basse, en plaques ; coulures ; poussiere sur le dessus
 	float patches = tri(grime_tex, obj_pos, obj_n, 0.35, vec2(1.0));
@@ -498,7 +447,7 @@ void fragment() {
 	CLEARCOAT = coat;
 	CLEARCOAT_ROUGHNESS = clearcoat_roughness;
 	EMISSION = emission * emission_energy;
-	float h = detail * bump_strength * (1.0 - dirt * 0.5) + fine * 0.0006 * dirt + scar_h + rel.x + torn_h;
+	float h = detail * bump_strength * (1.0 - dirt * 0.5) + fine * 0.0006 * dirt + scar_h + rel.x;
 #ifdef HOLLOW
 	// interieur de la coque (faces arriere, vues par un trou) : appret sombre,
 	// sans salissure, sans relief, sans vernis

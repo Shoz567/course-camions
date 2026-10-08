@@ -30,7 +30,7 @@ extends Node3D
 ##   compris, et braquage visuel borne : les roues ne traversent plus la
 ##   carrosserie (truck_wheel_arch_test).
 ## - Pneu eclate (Truck.tire_burst) : le pneu de chaque groupe de roues associe
-##   part en lambeaux, la jante a nu pose sur la route (truck_body.gdshader,
+##   explose (plus de gomme sur la roue), la jante a nu pose sur la route (truck_body.gdshader,
 ##   tyre_burst = FLAT_TYRE) ; la roue descend jusque-la (la physique ne
 ##   descend que de tire_burst_drop_m, l'image fait le reste).
 ##   Pneus de la remorque (un cote du train de roues) : ceux de ce cote, sur

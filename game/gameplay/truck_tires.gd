@@ -24,7 +24,7 @@ extends Node3D
 ## 1 (au seuil) a MAX_HIT_WEAR (choc violent), il eclate a HITS_TO_BURST -
 ## trois coups, deux au moins. L'usure repart a zero avec des pneus neufs
 ## (reapparition ; remorque larguee pour les siens).
-## L'eclatement : detonation, bouffee de fumee, lambeaux de gomme. La roue
+## L'eclatement : detonation, bouffee de fumee, la gomme part en morceaux. La roue
 ## creve reste sur sa jante jusqu'a la reapparition du camion (pneus neufs) ;
 ## tant qu'elle roule au sol, la jante frotte la route et crache des
 ## etincelles (rim_sparking).
@@ -51,6 +51,10 @@ const SPARK_SPEED_MS := 2.0
 ## Rayon de la jante, en fraction du rayon du pneu (modeles du tracteur et
 ## catalogue des remorques : fut a 0,6 r).
 const RIM_RATIO := 0.6
+## Morceaux de gomme projetes par un pneu qui explose, et rayon (m) ou ils
+## partent (bande de roulement d'un pneu du tracteur ; remorque : 70 %).
+const BURST_PIECES := 10
+const TIRE_PIECE_RADIUS_M := 0.7
 
 static var _bang_stream: AudioStreamWAV
 static var _rubber: StandardMaterial3D
@@ -270,16 +274,31 @@ func _burst_fx(wheel: int) -> void:
 	var world := _truck.get_parent()
 	if world == null:
 		return
-	# lanieres de gomme, projetees vers l'exterieur (deterministe)
+	# la gomme explose (2026-10-08 : « elle part en morceaux », plus rien ne
+	# reste sur la roue) : morceaux de bande de roulement tout autour du
+	# pneu, chacun chasse dans le sens de son rayon et vers l'exterieur, plus
+	# des lanieres de flanc (deterministe)
 	if _rubber == null:
 		_rubber = StandardMaterial3D.new()
 		_rubber.albedo_color = Color(0.035, 0.035, 0.037)
 		_rubber.roughness = 0.9
-	for k in 4:
-		var h := fposmod(sin(float(k * 7 + wheel) * 12.9898 + float(Engine.get_physics_frames()) * 0.731) * 43758.55, 1.0)
-		var dir := (side + _truck.global_basis.z * (h - 0.5) * 1.6 + Vector3.UP * (0.5 + h)).normalized()
-		var size := Vector3(lerpf(0.1, 0.2, h), 0.025, lerpf(0.25, 0.6, 1.0 - h))
-		Debris.shard(world, at + dir * 0.5, size, _rubber, _truck.linear_velocity * 0.9 + dir * lerpf(3.0, 6.0, h))
+	var b := _truck.global_basis
+	var r := TIRE_PIECE_RADIUS_M if wheel < 4 else TIRE_PIECE_RADIUS_M * 0.7
+	var salt := float(Engine.get_physics_frames()) * 0.731
+	for k in BURST_PIECES:
+		var h := fposmod(sin(float(k * 7 + wheel) * 12.9898 + salt) * 43758.55, 1.0)
+		var h2 := fposmod(sin(float(k * 3 + wheel) * 78.233 + salt) * 24634.63, 1.0)
+		var a := (float(k) + h * 0.6) / float(BURST_PIECES) * TAU
+		var radial := b.y * cos(a) + b.z * sin(a)
+		# le sol renvoie les morceaux du bas : vers le haut
+		if radial.dot(Vector3.UP) < -0.3:
+			radial = (radial * 0.3 + Vector3.UP).normalized()
+		var dir := (radial + side * lerpf(0.4, 1.1, h2) + Vector3.UP * 0.3).normalized()
+		var size := Vector3(lerpf(0.12, 0.3, h), lerpf(0.04, 0.07, h2), lerpf(0.2, 0.45, 1.0 - h))
+		# remorque : les pneus de ce cote, sur tout le train de roues
+		var along := b.z * (h2 - 0.5) * 2.6 if wheel >= Truck.TRAILER_LEFT else Vector3.ZERO
+		Debris.shard(world, at + (b.y * cos(a) + b.z * sin(a)) * r + side * 0.1 + along, size, _rubber,
+			_truck.linear_velocity * 0.9 + dir * lerpf(5.0, 10.0, h2))
 	# bouffee de poussiere et de caoutchouc
 	var puff := DamageFx.make_smoke()
 	puff.name = "TirePuff"
