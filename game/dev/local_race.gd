@@ -162,6 +162,8 @@ func _ready() -> void:
 	_apply_graphics()
 	# de nuit, les phares des camions eclairent la route
 	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
+	# projections des roues : gerbes d'eau sous la pluie, sable a la plage
+	TruckWheelFx.spray = TruckWheelFx.Spray.WATER if TruckLights.night else TruckWheelFx.Spray.DUST
 	# camions sales de la route : poussiere claire au bord de mer, crasse
 	# sombre et carrosseries mouillees sous la pluie
 	if TruckLights.night:

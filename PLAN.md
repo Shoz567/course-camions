@@ -282,6 +282,15 @@ au-delà de 60 km/h, plein à 170, plus fort au boost ; le camion, sous le
 centre de l'image, reste net ; aberration chromatique légère sur les bords,
 vignettage. Calculé après les transparents (la pluie reste). Coût mesuré :
 ~0,25 ms GPU par vue.
+**Effets de roues** (`TruckWheelFx`, nœud « WheelFx » du camion) : glissement
+latéral des roues arrière au point de contact ; au-delà de 3,5 m/s, **traces
+de gomme** posées sur la route (MultiMesh en coordonnées monde, 720 segments
+par camion, les plus anciens s'effacent) ; au-delà de 5 m/s, **fumée de
+pneus**, plus épaisse avec le glissement. Au-delà de 40 km/h, **projections**
+derrière les roues motrices et le train de la remorque : **gerbes d'eau** sous
+la pluie de Cyber City, **poussière de sable** à Playa del Sol. Mesuré
+(`truck_drift_test`) : aucune trace en ligne droite ni en virage sans frein à
+main (glissement 1,6 m/s), traces sur 50 des 60 ticks du drift (18,9 m/s).
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).
