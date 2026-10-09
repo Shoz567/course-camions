@@ -20,8 +20,8 @@ extends RefCounted
 ##   MOYENNE  SSAO seul, MSAA 2x
 ##   BASSE    aucun effet, anticrenelage FXAA (le moins couteux)
 ##
-## Le post-traitement de chaque camera (ScreenFx : flou de vitesse,
-## aberration, vignettage ; ~0,3 ms par vue) est pose par ChaseCamera en
+## Le post-traitement de chaque camera (ScreenFx : aberration, vignettage,
+## brume de chaleur ; ~0,3 ms par vue) est pose par ChaseCamera en
 ## qualite haute et moyenne.
 
 enum Quality { HIGH, MEDIUM, LOW }
@@ -37,6 +37,22 @@ const VOLUMETRIC_MAX_VIEWS := 2
 ## Au-dela, l'eclairage global est coupe meme en qualite haute (calcule une
 ## fois par vue : 117 -> 81 images/s a 2 vues, 96 -> 54 a 4 sur RTX 5060 Ti).
 const SDFGI_MAX_VIEWS := 2
+## Au-dela, l'ombre du soleil passe de 4 a 2 cascades (apply_sun).
+const SHADOW_FULL_MAX_VIEWS := 2
+
+
+## Qualite proposee au lancement d'apres la carte graphique (2026-10-09,
+## « gros problemes de performance sur les petites configurations ») : haute
+## sur une carte dediee, moyenne sur une puce integree (le rendu complet - GI,
+## reflets, brouillard volumetrique - y coute plusieurs fois une image a
+## 60 Hz), basse en rendu logiciel. Le joueur la change dans les parametres.
+static func default_quality(adapter: int = RenderingServer.get_video_adapter_type()) -> int:
+	match adapter:
+		RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU:
+			return Quality.MEDIUM
+		RenderingDevice.DEVICE_TYPE_CPU:
+			return Quality.LOW
+	return Quality.HIGH
 
 
 ## Regle les effets de `env` pour la qualite et le nombre de vues 3D a
@@ -56,6 +72,17 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 	if env.has_meta(&"volumetric") or env.volumetric_fog_enabled:
 		env.set_meta(&"volumetric", true)
 		env.volumetric_fog_enabled = high and views <= VOLUMETRIC_MAX_VIEWS
+
+
+## Ombre du soleil (ou de la lune) : 4 cascades jusqu'a SHADOW_FULL_MAX_VIEWS
+## vues, 2 au-dela - chaque vue est alors petite (960 x 540 a 4), la
+## difference ne se voit pas, et chaque cascade redessine toute la scene dans
+## chaque vue (2026-10-09, performance : -26 % d'appels de dessin a 4 vues).
+static func apply_sun(light: DirectionalLight3D, views: int) -> void:
+	if light == null:
+		return
+	light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS \
+		if views <= SHADOW_FULL_MAX_VIEWS else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 
 
 ## Anticrenelage d'une vue (fenetre principale ou SubViewport de l'ecran

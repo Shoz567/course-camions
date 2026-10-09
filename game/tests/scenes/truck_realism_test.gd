@@ -174,6 +174,42 @@ func _test_finish() -> void:
 			vented += 1 if (j as MeshInstance3D).mesh.get_surface_count() == 2 else 0
 	check("A roues de la tete : jantes embouties a ajours (une par groupe de roues)", vented == 4,
 		"%d jantes a ajours" % vented)
+	# silhouettes d'ombre (2026-10-09, performance) : la carrosserie et la
+	# remorque projettent leur ombre par un maillage fusionne ; leurs pieces
+	# n'en projettent plus, les pneus gardent la leur (ils eclatent). Une
+	# piece arrachee rend leur ombre aux pieces de sa partie.
+	var body := vd.get_node_or_null(NodePath("%s/Body" % TruckVisual.MODEL_ROOT)) as Node3D
+	var proxy := body.get_node_or_null(NodePath(ShadowProxy.NODE_NAME)) as MultiMeshInstance3D if body != null else null
+	var lit := 0
+	var dark := 0
+	# le verre ne fait pas partie de la silhouette : il garde son reglage
+	var panes := 0
+	for n in body.find_children("*", "MeshInstance3D", true, false) if body != null else []:
+		if (n as MeshInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			dark += 1
+		elif not ShadowProxy._opaque((n as MeshInstance3D).mesh):
+			panes += 1
+		else:
+			lit += 1
+	var tyres_lit := true
+	for pivot in vd.find_children("WheelPivot_*", "Node3D", true, false):
+		for n in pivot.find_children("Pneu*", "MeshInstance3D", true, false):
+			tyres_lit = tyres_lit and (n as MeshInstance3D).cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var skin_proxy := skin != null and skin.get_node_or_null(NodePath(ShadowProxy.NODE_NAME)) != null
+	check("A ombres : silhouette de la carrosserie et de la remorque, pneus a part", proxy != null
+		and proxy.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY and dark > 50 and lit == 0
+		and tyres_lit and skin_proxy, "couvertes %d, a part %d, verre %d, pneus %s, remorque %s" % [dark, lit, panes, tyres_lit, skin_proxy])
+	if proxy != null:
+		var part: MeshInstance3D = null
+		for n in body.find_children("Retro_*", "MeshInstance3D", true, false):
+			part = n as MeshInstance3D
+			break
+		ShadowProxy.release(part)
+		var back := 0
+		for n in body.find_children("*", "MeshInstance3D", true, false):
+			back += 1 if (n as MeshInstance3D).cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF else 0
+		check("A piece arrachee : la silhouette s'efface, chaque piece retrouve son ombre",
+			not proxy.visible and back == dark + panes, "%d / %d" % [back, dark + panes])
 	# remorque creuse (2026-10-07, « des qu'elle s'abime on voit a
 	# l'interieur ») : caisse et chassis de la remorque en coque percable,
 	# vue des deux faces ; pas le tracteur

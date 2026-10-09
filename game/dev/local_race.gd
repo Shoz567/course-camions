@@ -227,6 +227,8 @@ func _apply_graphics() -> void:
 	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world != null:
 		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, views)
+	for n in find_children("*", "DirectionalLight3D", false, false):
+		GraphicsSettings.apply_sun(n as DirectionalLight3D, views)
 	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
 
 

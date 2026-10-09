@@ -5,24 +5,18 @@ extends CompositorEffect
 ## pose sur la camera de chaque joueur (ChaseCamera), donc calcule vue par vue
 ## en ecran partage. Apres les transparents (la pluie et les particules sont
 ## dedans), avant le tonemapping :
-##   - flou radial de vitesse : l'image file vers les bords depuis le point de
-##     fuite, de plus en plus fort au-dela de BLUR_FROM_KMH, plus encore au
-##     boost ; le centre (le camion) reste net ;
-##   - aberration chromatique legere sur les bords, qui augmente avec le flou ;
+##   - aberration chromatique legere sur les bords (le camion, au centre,
+##     reste net) ;
 ##   - vignettage.
 ##   - brume de chaleur (`haze`, circuit de jour) : l'air ondule au-dessus de
 ##     la route juste sous l'horizon (temps reel : purement visuel).
+## (Le flou radial de vitesse a ete retire le 2026-10-09 a la demande de
+## l'utilisateur.)
 ## Deux passes de calcul : copie de l'image, puis effet qui lit la copie.
 ## Purement visuel ; jamais cree en headless (aucun RenderingDevice).
 
-## Flou : nul sous BLUR_FROM_KMH, plein a BLUR_FULL_KMH ; part du boost.
-const BLUR_FROM_KMH := 60.0
-const BLUR_FULL_KMH := 170.0
-const BLUR_SPEED := 0.75
-const BLUR_BOOST := 0.35
-## Aberration au repos, et ce que le flou y ajoute.
+## Aberration sur les bords.
 const ABERRATION := 0.0005
-const ABERRATION_BLUR := 0.003
 const VIGNETTE := 0.32
 ## Hauteur du point de fuite a l'ecran (camera de poursuite inclinee de
 ## 13 deg vers le bas : l'horizon est au-dessus du centre).
@@ -48,7 +42,7 @@ layout(set = 0, binding = 2) uniform sampler2D depth;
 layout(push_constant, std430) uniform Params {
 	vec2 size;
 	vec2 center;
-	float blur;
+	float pad0;
 	float aberration;
 	float vignette;
 	float haze;
@@ -57,7 +51,6 @@ layout(push_constant, std430) uniform Params {
 	float zfar;
 	float pad;
 } p;
-const int TAPS = 10;
 void main() {
 	ivec2 px = ivec2(gl_GlobalInvocationID.xy);
 	if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
@@ -76,27 +69,12 @@ void main() {
 	vec2 d = uv - p.center;
 	float aspect = p.size.x / p.size.y;
 	float r = length(d * vec2(aspect, 1.0));
-	// le flou file depuis le point de fuite (center) et epargne le camion,
-	// sous le centre de l'image : ellipse haute autour de (0.5, 0.62)
+	// le camion, sous le centre de l'image, reste net : ellipse haute autour
+	// de (0.5, 0.62)
 	vec2 k = (uv - vec2(0.5, 0.62)) * vec2(aspect, 0.75);
 	float keep = smoothstep(0.2, 0.75, length(k));
-	float m = p.blur * keep * 0.09;
 	vec2 ca = d * p.aberration * keep * (0.5 + r);
-	// decalage de depart par pixel (bruit entrelace) : pas de copies en escalier
-	float jit = fract(52.9829189 * fract(dot(vec2(px), vec2(0.06711056, 0.00583715))));
-	int taps = m > 0.0005 ? TAPS : 1;
-	vec3 acc = vec3(0.0);
-	float wsum = 0.0;
-	for (int i = 0; i < taps; i++) {
-		float t = taps > 1 ? (float(i) + jit) / float(taps) : 0.0;
-		vec2 s = uv - d * m * t;
-		float w = 1.0 - 0.6 * t;
-		acc.r += textureLod(src, s + ca, 0.0).r * w;
-		acc.g += textureLod(src, s, 0.0).g * w;
-		acc.b += textureLod(src, s - ca, 0.0).b * w;
-		wsum += w;
-	}
-	vec3 col = acc / wsum;
+	vec3 col = vec3(textureLod(src, uv + ca, 0.0).r, textureLod(src, uv, 0.0).g, textureLod(src, uv - ca, 0.0).b);
 	float rv = length((uv - 0.5) * vec2(aspect, 1.0));
 	col *= 1.0 - p.vignette * smoothstep(0.35, 1.05, rv);
 	imageStore(dst, px, vec4(col, textureLod(src, uv, 0.0).a));
@@ -106,8 +84,7 @@ void main() {
 ## Brume de chaleur du circuit en cours (LocalRace : Playa del Sol), 0 .. 1.
 static var haze: float = 0.0
 
-## Reglages courants (ecrits par la camera, lus au rendu).
-var blur: float = 0.0
+## Reglages courants (lus au rendu).
 var aberration: float = ABERRATION
 var vignette: float = VIGNETTE
 
@@ -118,18 +95,6 @@ var _fx_shader: RID
 var _fx_pipeline: RID
 var _sampler: RID
 var _nearest: RID
-
-
-## Flou pour cette vitesse (km/h, avant) et ce boost : 0 .. 1.
-static func blur_for(speed_kmh: float, boosting: bool) -> float:
-	var s := clampf((speed_kmh - BLUR_FROM_KMH) / (BLUR_FULL_KMH - BLUR_FROM_KMH), 0.0, 1.0)
-	return clampf(s * s * BLUR_SPEED + (BLUR_BOOST if boosting else 0.0), 0.0, 1.0)
-
-
-## Met a jour l'effet pour la vitesse et le boost du camion suivi.
-func drive(speed_kmh: float, boosting: bool) -> void:
-	blur = blur_for(speed_kmh, boosting)
-	aberration = ABERRATION + ABERRATION_BLUR * blur
 
 
 func _init() -> void:
@@ -203,7 +168,7 @@ func _render_callback(callback_type: int, render_data: RenderData) -> void:
 			RenderingDevice.TEXTURE_SAMPLES_1, size, 1, 1, true, false)
 	var proj := render_data.get_render_scene_data().get_cam_projection()
 	var groups := Vector3i(ceili(size.x / 8.0), ceili(size.y / 8.0), 1)
-	var push := PackedFloat32Array([size.x, size.y, 0.5, VANISH_Y, blur, aberration, vignette,
+	var push := PackedFloat32Array([size.x, size.y, 0.5, VANISH_Y, 0.0, aberration, vignette,
 		haze, fmod(Time.get_ticks_msec() * 0.001, 600.0), proj.get_z_near(), proj.get_z_far(), 0.0])
 	var push_bytes := push.to_byte_array()
 	for view in buffers.get_view_count():

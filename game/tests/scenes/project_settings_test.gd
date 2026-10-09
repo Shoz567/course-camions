@@ -89,12 +89,12 @@ func _check_lighting() -> void:
 	check("vues de l'ecran partage : MSAA 2x + SMAA (haute), MSAA 2x (moyenne), FXAA (basse)", high and medium
 		and vp.msaa_3d == Viewport.MSAA_DISABLED and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_FXAA)
 	vp.free()
-	# post-traitement (ScreenFx) : flou de vitesse nul en ville, plein a fond,
-	# le boost en ajoute ; jamais au-dela de 1
-	var b := [ScreenFx.blur_for(50.0, false), ScreenFx.blur_for(110.0, false),
-		ScreenFx.blur_for(170.0, false), ScreenFx.blur_for(170.0, true), ScreenFx.blur_for(300.0, true)]
-	check("flou de vitesse : 0 a 50 km/h, croissant, boost en plus, borne a 1",
-		b[0] == 0.0 and b[1] > 0.0 and b[2] > b[1] and b[3] > b[2] and b[4] <= 1.0, str(b))
+	# post-traitement (ScreenFx) : plus de flou de vitesse (2026-10-09, a la
+	# demande de l'utilisateur)
+	var fx_methods := (load("res://gameplay/screen_fx.gd") as Script).get_script_method_list().map(
+		func(m: Dictionary) -> String: return m["name"])
+	check("post-traitement : plus de flou de vitesse",
+		not fx_methods.has("drive") and not fx_methods.has("blur_for"), str(fx_methods))
 	# pluie (2026-10-08, particules) : chaque vue ne voit que la sienne
 	var masks := []
 	for i in RainFx.MAX_VIEWS:
@@ -105,4 +105,20 @@ func _check_lighting() -> void:
 			own = own and (int(masks[i]) & RainFx.view_bit(k) != 0) == (i == k)
 	check("pluie : chaque camera voit sa pluie et pas celle des autres vues, le reste intact",
 		own and int(masks[0]) & 0xFFF == 0xFFF, str(masks))
-	check("qualite haute par defaut", GameState.graphics_quality == GraphicsSettings.Quality.HIGH)
+	# qualite au lancement selon la carte graphique (2026-10-09, performance) :
+	# haute sur carte dediee (et sans carte : tests), moyenne sur puce
+	# integree, basse en rendu logiciel
+	var dq := [GraphicsSettings.default_quality(RenderingDevice.DEVICE_TYPE_DISCRETE_GPU),
+		GraphicsSettings.default_quality(RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU),
+		GraphicsSettings.default_quality(RenderingDevice.DEVICE_TYPE_CPU)]
+	check("qualite par defaut : haute (carte dediee), moyenne (integree), basse (logiciel)",
+		dq == [GraphicsSettings.Quality.HIGH, GraphicsSettings.Quality.MEDIUM, GraphicsSettings.Quality.LOW]
+		and GameState.graphics_quality == GraphicsSettings.Quality.HIGH, str(dq))
+	# ombre du soleil : 4 cascades jusqu'a 2 vues, 2 au-dela
+	var sun := DirectionalLight3D.new()
+	var modes := []
+	for v in [1, 2, 3, 4]:
+		GraphicsSettings.apply_sun(sun, v)
+		modes.append(sun.directional_shadow_mode)
+	sun.free()
+	check("ombre du soleil : 4 cascades a 1-2 vues, 2 a 3-4 vues", modes == [2, 2, 1, 1], str(modes))

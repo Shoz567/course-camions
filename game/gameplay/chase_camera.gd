@@ -22,8 +22,8 @@ extends Node3D
 ## - Champ de vision un peu plus large a haute vitesse.
 ## - Deux vues (toggle_view) : poursuite (3e personne) et cabine (1re personne,
 ##   oeil derriere le pare-brise, orientation legerement amortie).
-## - Post-traitement de la vue (ScreenFx, hors qualite basse) : flou radial
-##   selon la vitesse et le boost, aberration sur les bords, vignettage.
+## - Post-traitement de la vue (ScreenFx, hors qualite basse) : aberration
+##   sur les bords, vignettage (plus de flou de vitesse depuis le 2026-10-09).
 
 enum View { CHASE, COCKPIT }
 
@@ -131,8 +131,6 @@ func _process(delta: float) -> void:
 	if xf.origin.distance_to(_last_target) > TELEPORT_DISTANCE:
 		_initialized = false
 	_last_target = xf.origin
-	if _fx != null:
-		_fx.drive(absf(target.linear_velocity.dot(-xf.basis.z)) * 3.6, target.is_boosting())
 	if view == View.COCKPIT:
 		_process_cockpit(xf, delta)
 		return
