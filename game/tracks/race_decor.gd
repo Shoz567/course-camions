@@ -313,16 +313,11 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
 	mm.use_custom_data = true
-	var person := CylinderMesh.new()
-	person.top_radius = 0.5
-	person.bottom_radius = 0.45
-	person.height = 1.0
-	person.radial_segments = 8
-	person.rings = 8
+	var person := _person_mesh()
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://tracks/materials/crowd.gdshader")
 	mat.set_shader_parameter("glow", 0.08 if night else 0.0)
-	person.material = mat
+	person.surface_set_material(0, mat)
 	mm.mesh = person
 	mm.instance_count = xfs.size()
 	for k in xfs.size():
@@ -335,6 +330,40 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 	crowd.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	stands.add_child(crowd)
 	stands.set_meta(&"spectators", xfs.size())
+
+
+## Spectateur : tronc de cone de 1 m (rayon 0,45 en bas, 0,5 en haut), 8
+## pans. Des anneaux la seulement ou crowd.gdshader change la forme (la tete
+## se resserre entre 0,22 et 0,30) : 56 triangles au lieu de ~160 pour un
+## CylinderMesh a 8 anneaux - 3 000 spectateurs, ~490 k triangles par vue
+## avant (2026-10-09, performance). Le dessous, jamais vu (assis), n'est pas
+## ferme.
+static func _person_mesh() -> ArrayMesh:
+	const SEG := 8
+	var ys: Array[float] = [-0.5, 0.22, 0.3, 0.5]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in ys.size() - 1:
+		for i in SEG:
+			var a0 := TAU * i / SEG
+			var a1 := TAU * (i + 1) / SEG
+			var quad: Array[Vector3] = []
+			for c: Array in [[a0, ys[k]], [a1, ys[k]], [a1, ys[k + 1]], [a0, ys[k + 1]]]:
+				var r := lerpf(0.45, 0.5, float(c[1]) + 0.5)
+				quad.append(Vector3(cos(c[0]) * r, c[1], sin(c[0]) * r))
+			for v in [quad[0], quad[1], quad[2], quad[0], quad[2], quad[3]]:
+				st.set_normal(Vector3((v as Vector3).x, 0.0, (v as Vector3).z).normalized())
+				st.add_vertex(v)
+	# dessus (le crane)
+	for i in SEG:
+		var a0 := TAU * i / SEG
+		var a1 := TAU * (i + 1) / SEG
+		for v in [Vector3(0.0, 0.5, 0.0), Vector3(cos(a0) * 0.5, 0.5, sin(a0) * 0.5),
+				Vector3(cos(a1) * 0.5, 0.5, sin(a1) * 0.5)]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(v)
+	st.index()
+	return st.commit()
 
 
 # --- faisceaux ---------------------------------------------------------------------

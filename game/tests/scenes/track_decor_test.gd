@@ -211,6 +211,12 @@ func _check_race_decor() -> void:
 	check("tribunes : la foule est un seul MultiMesh, sans ombre portee", crowd != null
 		and crowd.multimesh.instance_count == int(stands.get_meta(&"spectators", 0))
 		and crowd.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	# spectateur allege (2026-10-09, performance) : ~160 triangles avant
+	var person := crowd.multimesh.mesh if crowd != null else null
+	var tris := 0
+	if person != null:
+		tris = (person.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+	check("tribunes : un spectateur en 56 triangles au plus", tris > 0 and tris <= 56, "%d" % tris)
 	check("tribunes illuminees : projecteurs sans ombres",
 		stands.find_children("*", "OmniLight3D", true, false).size() == 8
 		and stands.find_children("*", "OmniLight3D", true, false).all(func(l: Node) -> bool: return not (l as OmniLight3D).shadow_enabled))

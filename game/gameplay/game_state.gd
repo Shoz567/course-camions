@@ -37,8 +37,9 @@ const TRACKS: Array[Dictionary] = [
 ## Circuit choisi dans le menu (garde entre deux courses).
 var selected_track: int = 0
 
-## Qualite graphique choisie dans les parametres (GraphicsSettings.Quality).
-var graphics_quality: int = GraphicsSettings.Quality.HIGH
+## Qualite graphique choisie dans les parametres (GraphicsSettings.Quality) ;
+## au lancement, celle que propose la carte graphique (default_quality).
+var graphics_quality: int = GraphicsSettings.default_quality()
 
 ## Categorie choisie dans le menu (garde entre deux courses).
 var speed_class: int = SpeedClass.NORMAL

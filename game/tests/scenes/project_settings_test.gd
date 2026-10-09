@@ -105,4 +105,20 @@ func _check_lighting() -> void:
 			own = own and (int(masks[i]) & RainFx.view_bit(k) != 0) == (i == k)
 	check("pluie : chaque camera voit sa pluie et pas celle des autres vues, le reste intact",
 		own and int(masks[0]) & 0xFFF == 0xFFF, str(masks))
-	check("qualite haute par defaut", GameState.graphics_quality == GraphicsSettings.Quality.HIGH)
+	# qualite au lancement selon la carte graphique (2026-10-09, performance) :
+	# haute sur carte dediee (et sans carte : tests), moyenne sur puce
+	# integree, basse en rendu logiciel
+	var dq := [GraphicsSettings.default_quality(RenderingDevice.DEVICE_TYPE_DISCRETE_GPU),
+		GraphicsSettings.default_quality(RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU),
+		GraphicsSettings.default_quality(RenderingDevice.DEVICE_TYPE_CPU)]
+	check("qualite par defaut : haute (carte dediee), moyenne (integree), basse (logiciel)",
+		dq == [GraphicsSettings.Quality.HIGH, GraphicsSettings.Quality.MEDIUM, GraphicsSettings.Quality.LOW]
+		and GameState.graphics_quality == GraphicsSettings.Quality.HIGH, str(dq))
+	# ombre du soleil : 4 cascades jusqu'a 2 vues, 2 au-dela
+	var sun := DirectionalLight3D.new()
+	var modes := []
+	for v in [1, 2, 3, 4]:
+		GraphicsSettings.apply_sun(sun, v)
+		modes.append(sun.directional_shadow_mode)
+	sun.free()
+	check("ombre du soleil : 4 cascades a 1-2 vues, 2 a 3-4 vues", modes == [2, 2, 1, 1], str(modes))

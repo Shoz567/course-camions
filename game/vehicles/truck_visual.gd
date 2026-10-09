@@ -78,6 +78,11 @@ const AXLE_PREFIX := "Gen_Essieu_"
 ## Chemin absolu -> PackedScene du modele ajuste (null si absent ou illisible).
 ## Une ressource, pas un noeud orphelin : rien ne fuit a la sortie.
 static var _templates: Dictionary = {}
+## Silhouettes d'ombre (ShadowProxy) : sous-arbres qui bougent seuls (roues,
+## essieux de remorque) et pieces retirees apres coup (cones de flamme).
+const SHADOW_MOVING: PackedStringArray = ["WheelPivot_", "Roue", AXLE_PREFIX]
+const SHADOW_SKIP: PackedStringArray = ["Flamme"]
+const WHEEL_SHADOW_SKIP: PackedStringArray = ["Pneu"]
 
 var model_loaded: bool = false
 ## Ecarts mesures au chargement : echelle appliquee, dimensions obtenues.
@@ -765,6 +770,7 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	if doc.append_from_file(path, state) != OK:
 		push_warning("TruckVisual : %s illisible, camion en boites" % path)
 		return null
+	_generate_lods(state)
 	var raw := doc.generate_scene(state) as Node3D
 	# on va deplacer des noeuds : plus de proprietaire le temps de l'ajustement
 	for n in raw.find_children("*", "", true, false):
@@ -773,6 +779,20 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	raw.free()
 	if fitted == null:
 		return null
+	# silhouettes d'ombre (ShadowProxy) : carrosserie, et remorque d'origine
+	# (cachee avec elle quand une remorque du catalogue la remplace)
+	var body_node := fitted.get_node_or_null(^"Body") as Node3D
+	if body_node != null:
+		ShadowProxy.build(body_node, SHADOW_MOVING, SHADOW_SKIP)
+	var own_trailer := fitted.get_node_or_null(NodePath(TRAILER_PIVOT)) as Node3D
+	if own_trailer != null and own_trailer.get_child_count() > 0:
+		ShadowProxy.build(own_trailer.get_child(0) as Node3D, SHADOW_MOVING, SHADOW_SKIP)
+	# roues : jante, moyeu, ecrous ; le pneu garde son ombre (il disparait
+	# quand il eclate)
+	for pivot in fitted.find_children("WheelPivot_*", "Node3D", false, false):
+		if pivot.get_child_count() > 0:
+			ShadowProxy.build(pivot.get_child(0) as Node3D, PackedStringArray(), WHEEL_SHADOW_SKIP)
+	_set_visibility_ranges(fitted)
 	for n in fitted.find_children("*", "", true, false):
 		n.owner = fitted
 	var packed := PackedScene.new()
@@ -781,6 +801,53 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	_templates[path] = packed
 	return packed
 
+
+## Niveaux de detail (2026-10-09, « gros problemes de performance sur les
+## petites configurations ») : le modele est charge a l'execution, sans
+## l'import de l'editeur, donc sans LOD - 125 a 150 k triangles par camion
+## dessines en entier a 50 m comme a 2 m, ombres comprises. Ils sont generes
+## ici, une fois par fichier ; le moteur choisit le niveau selon la taille a
+## l'ecran (un pixel d'ecart au plus : rien ne se voit). Une piece cabossee
+## (BodyDamage) repart d'un maillage neuf, sans LOD.
+static func _generate_lods(state: GLTFState) -> void:
+	for gm: GLTFMesh in state.get_meshes():
+		var im := gm.mesh
+		if im != null and im.get_surface_count() > 0:
+			im.generate_lods(60.0, 25.0, [])
+
+
+## Distance d'affichage de chaque piece (2026-10-09, performance) : au-dela,
+## elle tient dans moins d'un pixel et demi (FOV 62 deg, 1080 lignes) - un
+## ecrou, une poignee, un feu de gabarit ne sont plus envoyes au rendu ni aux
+## ombres quand ils sont invisibles de toute facon. L'interieur de la cabine
+## (sieges, volant, tableau de bord : derriere le pare-brise fume) au-dela de
+## INTERIOR_RANGE. Rien ne change pour une piece de plus d'un metre.
+const PIXEL_ANGLE := 0.0015
+const INTERIOR_RANGE := 30.0
+const INTERIOR_MATERIALS: PackedStringArray = ["Plastique_Interieur", "Tissu_Siege"]
+
+
+static func _set_visibility_ranges(root: Node3D) -> void:
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var xf := _transform_to(mi, root)
+		var size := (xf.basis * mi.mesh.get_aabb().size).abs()
+		var span := maxf(maxf(size.x, size.y), size.z)
+		var far := span / PIXEL_ANGLE
+		var inside := mi.mesh.get_surface_count() > 0
+		for s in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(s)
+			var mat_name := String(m.resource_name) if m != null else ""
+			var interior := false
+			for p in INTERIOR_MATERIALS:
+				interior = interior or mat_name.begins_with(p)
+			inside = inside and interior
+		if inside:
+			far = minf(far, INTERIOR_RANGE)
+		if far < 400.0:
+			mi.visibility_range_end = far
 
 ## Remorque d'un vehicule du catalogue (Assets_Visuels/Armes_et_camions) : le
 ## noeud `Remorque` du .glb, dans le repere de la sellette. Les modeles du
@@ -797,6 +864,7 @@ static func _trailer_template(path: String) -> PackedScene:
 	if doc.append_from_file(path, state) != OK:
 		push_warning("TruckVisual : %s illisible, remorque d'origine" % path)
 		return null
+	_generate_lods(state)
 	var raw := doc.generate_scene(state) as Node3D
 	for n in raw.find_children("*", "", true, false):
 		n.owner = null
@@ -809,6 +877,8 @@ static func _trailer_template(path: String) -> PackedScene:
 	trailer.get_parent().remove_child(trailer)
 	raw.free()
 	trailer.transform = xf
+	ShadowProxy.build(trailer, SHADOW_MOVING, SHADOW_SKIP)
+	_set_visibility_ranges(trailer)
 	for n in trailer.find_children("*", "", true, false):
 		n.owner = trailer
 	var packed := PackedScene.new()

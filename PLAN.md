@@ -739,8 +739,37 @@ Lire `docs/NETCODE.md` avant de commencer.
 | 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages à faire) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires | track-designer |
-| 7.6 | Profilage et optimisation | godot-qa |
+| 7.6 | Profilage et optimisation (`[~]` passe du 2026-10-09 ci-dessous) | godot-qa |
 | 7.7 | Export Windows/Linux, test sur machine vierge | godot-qa |
+
+**Optimisation, passe 1** (2026-10-09, « gros problèmes de performance sur
+les petites configurations ; optimise sans forcément diminuer la qualité ») :
+mesure d'abord (course réelle, camions lancés à 90 km/h, 600 images,
+RTX 5060 Ti en 1080p). Les scripts et la physique ne coûtent que 0,3 à
+1,5 ms par image : tout le poids était dans le rendu.
+- **Niveaux de détail des camions** : les modèles, chargés à l'exécution
+  sans l'import de l'éditeur, n'en avaient aucun (125 à 150 k triangles
+  dessinés en entier à 50 m, ombres comprises). Générés au chargement
+  (`TruckVisual._generate_lods`, +0,5 s une fois par modèle).
+- **Silhouettes d'ombre** (`ShadowProxy`) : 8 600 des 12 000 appels de
+  dessin à 4 joueurs étaient les ~140 pièces de chaque camion redessinées
+  dans les 4 cascades d'ombre de chaque vue. Carrosserie, remorque et
+  jantes projettent leur ombre par un maillage fusionné ; une pièce arrachée
+  rend leur ombre aux pièces de sa partie. Image identique (vérifiée).
+- **Distance d'affichage par pièce** : au-delà d'un pixel et demi, une
+  pièce n'est plus envoyée au rendu ; intérieur de cabine au-delà de 30 m.
+- **Foule** : 3 000 spectateurs à ~160 triangles (493 k, plus que tout le
+  décor) ; un tronc de cône à anneaux là où le shader façonne la tête :
+  56 triangles, même silhouette.
+- **Éclairage global à demi-résolution** (−0,3 ms, invisible) ; **ombre du
+  soleil en 2 cascades à partir de 3 vues** (vues de 960 × 540 : −26 %
+  d'appels de dessin à 4 vues).
+- **Qualité au lancement selon la carte graphique** : haute sur carte
+  dédiée, moyenne sur puce intégrée, basse en rendu logiciel
+  (`GraphicsSettings.default_quality`, modifiable dans les paramètres).
+- Mesuré à 4 joueurs (Cyber City) : appels de dessin 11 740 → 3 769,
+  triangles 11,9 M → 2,8 M, CPU de rendu 4,6 → 3,0 ms, GPU 7,2 → 6,1 ms,
+  125 → 152 images/s ; à 1 joueur 191 → 206 images/s.
 
 ---
 

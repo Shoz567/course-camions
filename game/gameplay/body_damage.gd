@@ -583,6 +583,8 @@ static func detach_parts(root: Node3D, world: Node, point: Vector3, radius: floa
 		var d := Debris.from_part(world, mi, velocity + (out + Vector3.UP * 0.6).normalized() * kick)
 		if count < trails:
 			d.add_trail(count < 2)
+		# son ombre partait avec la silhouette de sa partie (ShadowProxy)
+		ShadowProxy.release(mi)
 		mi.visible = false
 		mi.set_meta(META_DETACHED, true)
 		count += 1
