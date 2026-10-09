@@ -23,6 +23,10 @@ extends RefCounted
 ## Le post-traitement de chaque camera (ScreenFx : aberration, vignettage,
 ## brume de chaleur ; ~0,3 ms par vue) est pose par ChaseCamera en
 ## qualite haute et moyenne.
+##
+## Independamment de la qualite, DynamicResolution baisse la resolution de la
+## 3D (FSR 1) quand le GPU ne tient plus 60 images/s ; les cases de l'ecran
+## partage passees ici sont suivies (groupe DynamicResolution.GROUP).
 
 enum Quality { HIGH, MEDIUM, LOW }
 
@@ -90,6 +94,9 @@ static func apply_sun(light: DirectionalLight3D, views: int) -> void:
 static func apply_viewport(vp: Viewport, quality: int) -> void:
 	if vp == null:
 		return
+	# case de l'ecran partage : suivie par la resolution dynamique
+	if vp is SubViewport:
+		vp.add_to_group(DynamicResolution.GROUP)
 	if quality == Quality.LOW:
 		vp.msaa_3d = Viewport.MSAA_DISABLED
 		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA

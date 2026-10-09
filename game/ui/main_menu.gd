@@ -55,6 +55,8 @@ var volume_slider: HSlider
 var quality_option: OptionButton
 ## Compteur d'images par seconde (GameState.show_fps).
 var fps_check: CheckButton
+## Resolution dynamique de la 3D (GameState.dynamic_resolution).
+var dynres_check: CheckButton
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -245,6 +247,13 @@ func set_show_fps(on: bool) -> void:
 	GameState.show_fps = on
 	if fps_check != null:
 		fps_check.set_pressed_no_signal(on)
+
+
+## Resolution dynamique, gardee dans GameState (DynamicResolution).
+func set_dynamic_resolution(on: bool) -> void:
+	GameState.dynamic_resolution = on
+	if dynres_check != null:
+		dynres_check.set_pressed_no_signal(on)
 
 
 ## Qualite graphique (GraphicsSettings.Quality), gardee dans GameState pour les
@@ -604,6 +613,15 @@ func _build_settings() -> Control:
 	fps_check.button_pressed = GameState.show_fps
 	fps_check.toggled.connect(set_show_fps)
 	opts.add_child(fps_check)
+
+	dynres_check = CheckButton.new()
+	dynres_check.name = "DynResCheck"
+	dynres_check.text = "Résolution dynamique"
+	dynres_check.tooltip_text = "Baisse la résolution de la 3D seulement quand la carte graphique\nne tient plus 60 images/s (mise à l'échelle FSR). Effets intacts."
+	dynres_check.add_theme_font_size_override("font_size", 19)
+	dynres_check.button_pressed = GameState.dynamic_resolution
+	dynres_check.toggled.connect(set_dynamic_resolution)
+	opts.add_child(dynres_check)
 
 	var back := Button.new()
 	back.name = "Back"
