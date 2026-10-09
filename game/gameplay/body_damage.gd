@@ -47,6 +47,10 @@ static var _tessellated: Dictionary = {}
 static var _topologies: Dictionary = {}
 ## Cote des cellules de la grille de recherche (repere du maillage).
 const CELL := 0.75
+## Sommets candidats (creux) et sommets deplaces (normales) par tache d'un
+## creux (DentJob) : en dessous, un seul lot, calcule sur place.
+const JOB_VERTICES := 3000
+const JOB_NORMALS := 500
 ## Deplacement maximal d'un sommet depuis le neuf : la tole plie, elle ne
 ## traverse pas le camion.
 const MAX_DISPLACEMENT := 0.8
@@ -220,64 +224,91 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 	var reach := Vector3(Vector3(e1.x, e2.x, e3.x).length(), Vector3(e1.y, e2.y, e3.y).length(),
 		Vector3(e1.z, e2.z, e3.z).length())
 	var far2 := r2 * LOBE_MAX * LOBE_MAX
-	var ball2 := far2 * stretch * stretch
-	var moved := 0
-	var changed := false
+	# une cellule entiere hors de l'ovale est sautee : son centre en est trop
+	# loin, meme a une demi-diagonale pres (etiree au plus de sqrt(2) dans le
+	# repere de l'ovale, dont la plus forte compression est le long du choc)
+	var far := sqrt(far2)
+	var cell_reach := CELL * 0.5 * sqrt(3.0) * sqrt(2.0)
+	var half_cell := Vector3.ONE * (CELL * 0.5)
+	var lo := Vector3i(((p - reach) / CELL).floor())
+	var hi := Vector3i(((p + reach) / CELL).floor())
+	# sommets candidats : cellules de la grille (positions au neuf) a portee,
+	# toutes surfaces confondues
+	var job := DentJob.new()
+	var cell_surf := PackedInt32Array()
+	var cells: Array[PackedInt32Array] = []
+	var total := 0
 	for s in surfaces.size():
 		var tp: Topo = topo[s]
 		var arrays: Array = surfaces[s]
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		var hit := PackedInt32Array()
-		var rest := tp.rest
+		job.rest.append(tp.rest)
+		job.grain.append(tp.grain)
+		job.verts.append(arrays[Mesh.ARRAY_VERTEX])
+		job.idx.append(tp.idx)
+		job.tri_start.append(tp.tri_start)
+		job.tri_ids.append(tp.tri_ids)
+		var normals = arrays[Mesh.ARRAY_NORMAL]
+		job.nrm.append(normals if normals != null else PackedVector3Array())
 		var grid := tp.grid
-		# sommets candidats : cellules de la grille (positions au neuf) a portee
-		var lo := Vector3i(((p - reach) / CELL).floor())
-		var hi := Vector3i(((p + reach) / CELL).floor())
 		for cx in range(lo.x, hi.x + 1):
 			for cy in range(lo.y, hi.y + 1):
 				for cz in range(lo.z, hi.z + 1):
-					var cell = grid.get(Vector3i(cx, cy, cz))
-					if cell == null:
+					var key := Vector3i(cx, cy, cz)
+					if not grid.has(key):
 						continue
-					for i: int in cell:
-						var dv := rest[i] - p
-						if dv.length_squared() >= ball2:
-							continue
-						var a := dv.dot(t1) / stretch
-						var b := dv.dot(t2) / squash
-						var c := dv.dot(n)
-						var q2 := a * a + b * b + 2.0 * c * c
-						if q2 >= far2:
-							continue
-						var th := atan2(b, a)
-						var lobe := 1.0 + 0.2 * sin(2.0 * th + ph.x) + 0.13 * sin(3.0 * th + ph.y) \
-							+ 0.07 * sin(5.0 * th + ph.z)
-						var d2 := q2 / (lobe * lobe)
-						if d2 >= r2:
-							continue
-						var u := 1.0 - d2 / r2
-						# froissement : profondeur irreguliere, fonction de la seule
-						# position (deux sommets confondus bougent pareil : pas de
-						# fente) ; plis en travers du creux, tous les ~0,9 m
-						var crumple := (0.55 + 0.45 * _hash3(rest[i])) * (0.7 + 0.3 * absf(sin(dv.dot(fold) * 3.5 + ph.x)))
-						var v := verts[i] + push * (u * u * crumple)
-						# la tole plie, elle ne traverse pas le camion
-						var off := v - rest[i]
-						if off.length_squared() > MAX_DISPLACEMENT * MAX_DISPLACEMENT:
-							v = rest[i] + off.normalized() * MAX_DISPLACEMENT
-						# un sommet a peine effleure (bord du creux) ne change pas l'eclairage
-						if v.distance_squared_to(verts[i]) < 1e-6:
-							continue
-						verts[i] = v
-						hit.append(i)
-		if hit.is_empty():
-			continue
-		arrays[Mesh.ARRAY_VERTEX] = verts
-		_renormal(arrays, tp, hit)
-		moved += hit.size()
-		changed = true
-	if changed:
-		_commit(mi, surfaces)
+					var dc := Vector3(key) * CELL + half_cell - p
+					var ca := dc.dot(t1) / stretch
+					var cb := dc.dot(t2) / squash
+					var cn := dc.dot(n)
+					if sqrt(ca * ca + cb * cb + 2.0 * cn * cn) - cell_reach >= far:
+						continue
+					var cell: PackedInt32Array = grid[key]
+					cell_surf.append(s)
+					cells.append(cell)
+					total += cell.size()
+	if total == 0:
+		return 0
+	# lots de taille voisine, cellules voisines ensemble
+	var lots := clampi(total / JOB_VERTICES, 1, maxi(OS.get_processor_count() - 1, 1))
+	var lot_surf := PackedInt32Array()
+	var lot_cells: Array[PackedInt32Array] = []
+	var filled := 0
+	for c in cells.size():
+		lot_surf.append(cell_surf[c])
+		lot_cells.append(cells[c])
+		filled += cells[c].size()
+		if filled * lots >= total * (job.lot_cells.size() + 1) and job.lot_cells.size() < lots - 1:
+			job.lot_surf.append(lot_surf)
+			job.lot_cells.append(lot_cells)
+			lot_surf = PackedInt32Array()
+			lot_cells = []
+	job.lot_surf.append(lot_surf)
+	job.lot_cells.append(lot_cells)
+	job.resize_out(job.lot_cells.size())
+	job.p = p
+	job.push = push
+	job.t1 = t1
+	job.t2 = t2
+	job.n = n
+	job.fold = fold
+	job.ph = ph
+	job.stretch = stretch
+	job.squash = squash
+	job.r2 = r2
+	job.far2 = far2
+	job.run(job.dent_lot)
+	var moved := job.apply(job.verts)
+	if moved == 0:
+		return 0
+	job.split_moved(clampi(moved / JOB_NORMALS, 1, maxi(OS.get_processor_count() - 1, 1)))
+	job.run(job.normal_lot)
+	job.apply(job.nrm)
+	for s in surfaces.size():
+		var arrays: Array = surfaces[s]
+		arrays[Mesh.ARRAY_VERTEX] = job.verts[s]
+		if not job.nrm[s].is_empty():
+			arrays[Mesh.ARRAY_NORMAL] = job.nrm[s]
+	_commit(mi, surfaces)
 	return moved
 
 
@@ -320,41 +351,223 @@ static func _commit(mi: MeshInstance3D, surfaces: Array) -> void:
 	mi.mesh = out
 
 
-## Normales recalculees autour des sommets `hit` : faces qui touchent un
-## sommet deplace, puis sommets de ces faces, chacun depuis TOUTES ses faces
-## (table de voisinage : seule la zone touchee est parcourue).
-static func _renormal(arrays: Array, tp: Topo, hit: PackedInt32Array) -> void:
-	var normals = arrays[Mesh.ARRAY_NORMAL]
-	if normals == null or (normals as PackedVector3Array).is_empty():
-		return
-	var nrm := normals as PackedVector3Array
-	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var idx := tp.idx
-	var start := tp.tri_start
-	var tris := tp.tri_ids
-	var seen := PackedByteArray()
-	seen.resize(verts.size())
-	var touched := PackedInt32Array()
-	for i in hit:
-		for k in range(start[i], start[i + 1]):
-			var t := tris[k] * 3
-			for j in 3:
-				var w := idx[t + j]
-				if seen[w] == 0:
+## Un creux reparti sur les coeurs (WorkerThreadPool, 2026-10-09) : la citerne
+## compte 74 000 sommets, un choc a 15 m/s en deplace 6 000 et en eclaire 7 000
+## de nouveau ; sur un seul coeur, 45 ms (a-coup en pleine course). Deux
+## passes, chacune en un seul envoi au pool, lots de cellules de toutes les
+## surfaces :
+##   - dent_lot : sommets deplaces par le creux ;
+##   - normal_lot : normales recalculees autour d'eux : faces qui touchent un
+##     sommet deplace, puis sommets de ces faces, chacun depuis TOUTES ses
+##     faces (table de voisinage : seule la zone touchee est parcourue).
+## Chaque tache rend ses resultats (surface, indice, valeur) ; le thread
+## principal les reporte. Les taches ne font que lire les tableaux partages.
+## Un sommet ne depend que de sa position et de ses faces : le resultat ne
+## depend pas du decoupage (un sommet au bord de deux lots est calcule deux
+## fois, a l'identique).
+class DentJob:
+	## Par surface : tableaux lus par les taches.
+	var rest: Array[PackedVector3Array] = []
+	var grain: Array[PackedFloat32Array] = []
+	var verts: Array[PackedVector3Array] = []
+	var nrm: Array[PackedVector3Array] = []
+	var idx: Array[PackedInt32Array] = []
+	var tri_start: Array[PackedInt32Array] = []
+	var tri_ids: Array[PackedInt32Array] = []
+	## Par lot : cellules (indices de sommets) et leur surface, regroupees par
+	## surface ; resultats de la derniere passe.
+	var lot_surf: Array[PackedInt32Array] = []
+	var lot_cells: Array[Array] = []
+	var out_surf: Array[PackedInt32Array] = []
+	var out_ids: Array[PackedInt32Array] = []
+	var out_pos: Array[PackedVector3Array] = []
+	var mutex := Mutex.new()
+	var p: Vector3
+	var push: Vector3
+	var t1: Vector3
+	var t2: Vector3
+	var n: Vector3
+	var fold: Vector3
+	var ph: Vector3
+	var stretch: float
+	var squash: float
+	var r2: float
+	var far2: float
+
+	## `task` sur chaque lot : sur place s'il n'y en a qu'un, sinon en parallele.
+	func run(task: Callable) -> void:
+		if out_ids.size() == 1:
+			task.call(0)
+			return
+		var group := WorkerThreadPool.add_group_task(task, out_ids.size(), -1, true, "BodyDamage")
+		WorkerThreadPool.wait_for_group_task_completion(group)
+
+	func resize_out(count: int) -> void:
+		out_surf.resize(count)
+		out_ids.resize(count)
+		out_pos.resize(count)
+
+	## Sommets deplaces (resultats de dent_lot) redecoupes en `count` lots
+	## egaux pour normal_lot : les lots du creux, egaux en candidats, ne le
+	## sont pas en sommets deplaces. L'ordre (cellules voisines ensemble) est
+	## garde.
+	func split_moved(count: int) -> void:
+		var all_s := PackedInt32Array()
+		var all_i := PackedInt32Array()
+		for k in out_ids.size():
+			all_s.append_array(out_surf[k])
+			all_i.append_array(out_ids[k])
+		resize_out(count)
+		var size := all_i.size()
+		for k in count:
+			var from := size * k / count
+			var to := size * (k + 1) / count
+			out_surf[k] = all_s.slice(from, to)
+			out_ids[k] = all_i.slice(from, to)
+			out_pos[k] = PackedVector3Array()
+
+	## Reporte les resultats de la derniere passe dans `into` (un tableau par
+	## surface). Renvoie le nombre de valeurs reportees.
+	func apply(into: Array[PackedVector3Array]) -> int:
+		var count := 0
+		var s := -1
+		var dst := PackedVector3Array()
+		for k in out_ids.size():
+			var surf := out_surf[k]
+			var ids := out_ids[k]
+			var values := out_pos[k]
+			for m in ids.size():
+				if surf[m] != s:
+					if s >= 0:
+						into[s] = dst
+					s = surf[m]
+					dst = into[s]
+				dst[ids[m]] = values[m]
+			count += ids.size()
+		if s >= 0:
+			into[s] = dst
+		return count
+
+	func _store(k: int, surf: PackedInt32Array, ids: PackedInt32Array, values: PackedVector3Array) -> void:
+		mutex.lock()
+		out_surf[k] = surf
+		out_ids[k] = ids
+		out_pos[k] = values
+		mutex.unlock()
+
+	## Sommets du lot k deplaces par le creux (positions apres le choc).
+	func dent_lot(k: int) -> void:
+		var p_l := p
+		var t1_l := t1
+		var t2_l := t2
+		var n_l := n
+		var fold_l := fold
+		var ph_l := ph
+		var push_l := push
+		var stretch_l := stretch
+		var squash_l := squash
+		var r2_l := r2
+		var far2_l := far2
+		var surfs := lot_surf[k]
+		var cells: Array = lot_cells[k]
+		var out_s := PackedInt32Array()
+		var ids := PackedInt32Array()
+		var values := PackedVector3Array()
+		var s := -1
+		var rest_l := PackedVector3Array()
+		var grain_l := PackedFloat32Array()
+		var verts_l := PackedVector3Array()
+		for c in cells.size():
+			if surfs[c] != s:
+				s = surfs[c]
+				rest_l = rest[s]
+				grain_l = grain[s]
+				verts_l = verts[s]
+			var cell: PackedInt32Array = cells[c]
+			for i in cell:
+				var ri := rest_l[i]
+				var dv := ri - p_l
+				var a := dv.dot(t1_l) / stretch_l
+				var b := dv.dot(t2_l) / squash_l
+				var cc := dv.dot(n_l)
+				var q2 := a * a + b * b + 2.0 * cc * cc
+				if q2 >= far2_l:
+					continue
+				var th := atan2(b, a)
+				var lobe := 1.0 + 0.2 * sin(2.0 * th + ph_l.x) + 0.13 * sin(3.0 * th + ph_l.y) \
+					+ 0.07 * sin(5.0 * th + ph_l.z)
+				var d2 := q2 / (lobe * lobe)
+				if d2 >= r2_l:
+					continue
+				var u := 1.0 - d2 / r2_l
+				# froissement : profondeur irreguliere, fonction de la seule
+				# position (deux sommets confondus bougent pareil : pas de
+				# fente) ; plis en travers du creux, tous les ~0,9 m
+				var crumple := (0.55 + 0.45 * grain_l[i]) * (0.7 + 0.3 * absf(sin(dv.dot(fold_l) * 3.5 + ph_l.x)))
+				var was := verts_l[i]
+				var v := was + push_l * (u * u * crumple)
+				# la tole plie, elle ne traverse pas le camion
+				var off := v - ri
+				if off.length_squared() > MAX_DISPLACEMENT * MAX_DISPLACEMENT:
+					v = ri + off.normalized() * MAX_DISPLACEMENT
+				# un sommet a peine effleure (bord du creux) ne change pas l'eclairage
+				if v.distance_squared_to(was) < 1e-6:
+					continue
+				out_s.append(s)
+				ids.append(i)
+				values.append(v)
+		_store(k, out_s, ids, values)
+
+	## Normales des sommets autour de ceux que le lot k a deplaces (resultats
+	## de dent_lot, deja reportes dans verts).
+	func normal_lot(k: int) -> void:
+		mutex.lock()
+		var moved_s: PackedInt32Array = out_surf[k]
+		var moved: PackedInt32Array = out_ids[k]
+		mutex.unlock()
+		var out_s := PackedInt32Array()
+		var ids := PackedInt32Array()
+		var values := PackedVector3Array()
+		var s := -1
+		var verts_l := PackedVector3Array()
+		var nrm_l := PackedVector3Array()
+		var idx_l := PackedInt32Array()
+		var start := PackedInt32Array()
+		var tris := PackedInt32Array()
+		var seen := PackedByteArray()
+		for m in moved.size():
+			if moved_s[m] != s:
+				s = moved_s[m]
+				verts_l = verts[s]
+				nrm_l = nrm[s]
+				idx_l = idx[s]
+				start = tri_start[s]
+				tris = tri_ids[s]
+				seen = PackedByteArray()
+				seen.resize(verts_l.size())
+			if nrm_l.is_empty():
+				continue
+			var i := moved[m]
+			for kk in range(start[i], start[i + 1]):
+				var t := tris[kk] * 3
+				for j in 3:
+					var w := idx_l[t + j]
+					if seen[w] != 0:
+						continue
 					seen[w] = 1
-					touched.append(w)
-	for i in touched:
-		var acc := Vector3.ZERO
-		for k in range(start[i], start[i + 1]):
-			var t := tris[k] * 3
-			var a := verts[idx[t]]
-			acc += (verts[idx[t + 1]] - a).cross(verts[idx[t + 2]] - a)
-		if acc.length_squared() < 1e-12:
-			continue
-		var n := acc.normalized()
-		# sens des normales du modele, quel que soit l'ordre des sommets
-		nrm[i] = -n if n.dot(nrm[i]) < 0.0 else n
-	arrays[Mesh.ARRAY_NORMAL] = nrm
+					var acc := Vector3.ZERO
+					for f in range(start[w], start[w + 1]):
+						var tw := tris[f] * 3
+						var a := verts_l[idx_l[tw]]
+						acc += (verts_l[idx_l[tw + 1]] - a).cross(verts_l[idx_l[tw + 2]] - a)
+					if acc.length_squared() < 1e-12:
+						continue
+					var nw := acc.normalized()
+					# sens des normales du modele, quel que soit l'ordre des sommets
+					out_s.append(s)
+					ids.append(w)
+					values.append(-nw if nw.dot(nrm_l[w]) < 0.0 else nw)
+		_store(k, out_s, ids, values)
 
 
 ## Donnees de voisinage d'une surface subdivisee, au neuf (partagees).
@@ -362,7 +575,10 @@ class Topo:
 	var rest: PackedVector3Array
 	var idx: PackedInt32Array
 	## cellule (Vector3i, cote CELL) -> indices des sommets qui y sont au neuf
+	## (PackedInt32Array)
 	var grid: Dictionary = {}
+	## froissement propre a chaque sommet, d'apres sa position au neuf (_hash3)
+	var grain: PackedFloat32Array
 	## faces de chaque sommet : tri_ids[tri_start[i] .. tri_start[i + 1]]
 	var tri_start: PackedInt32Array
 	var tri_ids: PackedInt32Array
@@ -385,12 +601,18 @@ static func _topology(base: Mesh) -> Array:
 			for i in n:
 				tp.idx[i] = i
 		var cells: Dictionary = {}
+		var grain := PackedFloat32Array()
+		grain.resize(n)
 		for i in n:
 			var key := Vector3i((tp.rest[i] / CELL).floor())
 			if not cells.has(key):
 				cells[key] = []
 			cells[key].append(i)
+			grain[i] = _hash3(tp.rest[i])
+		for key: Vector3i in cells:
+			cells[key] = PackedInt32Array(cells[key])
 		tp.grid = cells
+		tp.grain = grain
 		var count := PackedInt32Array()
 		count.resize(n + 1)
 		for k in tp.idx.size():
