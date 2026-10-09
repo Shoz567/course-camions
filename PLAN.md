@@ -278,11 +278,11 @@ conteneurs ; le dessous des remorques s'assombrit. Coût mesuré sur la RTX
 MSAA 2x + **SMAA** (le TAA a été essayé puis écarté : il efface la pluie).
 **Post-traitement par vue** (`ScreenFx`, effet du compositeur posé sur la
 caméra de chaque joueur, qualité haute et moyenne) : aberration chromatique
-légère sur les bords (le camion, au centre, reste net), vignettage. Le flou
-radial de vitesse a été retiré le 2026-10-09 (« retire le flou de
-mouvement »). **Compteur d'images par seconde** (2026-10-09) : case des
-paramètres, affiché en haut à droite au menu et en course (`GameState`). Calculé après les transparents (la pluie reste). Coût mesuré :
-~0,25 ms GPU par vue.
+légère sur les bords (le camion, au centre, reste net), vignettage. Calculé après les transparents (la pluie reste). Coût mesuré :
+~0,25 ms GPU par vue. Le flou radial de vitesse a été retiré le 2026-10-09
+(« retire le flou de mouvement »).
+**Compteur d'images par seconde** (2026-10-09) : case des paramètres,
+affiché en haut à droite au menu et en course (`GameState`).
 **Effets de roues** (`TruckWheelFx`, nœud « WheelFx » du camion) : glissement
 latéral des roues arrière au point de contact ; au-delà de 3,5 m/s, **traces
 de gomme** posées sur la route (MultiMesh en coordonnées monde, 720 segments
