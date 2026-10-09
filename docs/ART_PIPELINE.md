@@ -137,6 +137,29 @@ visibles : cabine plus large (3,5 m) et plus haute (4,4 m) que sa collision, et
 roues visuelles à l'empattement du modèle (≈ 3,0 m) au lieu de 3,8 m.
 `truck_visual_test` vérifie l'ajustement ; il se saute sans le modèle.
 
+**Passages de roue** (2026-10-06, « en drift, à l'atterrissage, en virage, les
+roues traversent ») : le modèle laissait ~10 cm sous ses garde-boue, alors que
+la roue visuelle suit tout le débattement (mesuré : +36 cm à l'atterrissage,
++24 cm en drift) et que la carrosserie penche vers elle (5,5°, ~14 cm). Le
+support de marchepied était même dans la roue avant au repos. `TruckVisual`
+corrige, toujours sans toucher à la physique :
+
+- garde-boue et emblèmes relevés de 12 cm, marchepieds reculés de 20 cm ;
+- roues de la tête réduites de 8 %, bas du pneu au sol (elles restent plus
+  grandes que la spec) : jeu sous les passages porté de 12 / 14 cm à 20 / 36 cm
+  (avant / arrière) ;
+- **butée visuelle** : jeu mesuré roue par roue sur la géométrie au chargement ;
+  à chaque tick, la roue ne monte pas au-delà, penche de la carrosserie compris
+  aux deux bords du pneu ;
+- braquage visuel borné à ce que les passages de roue avant laissent passer
+  (mesuré : 45°, au-delà du braquage max, après le recul des marchepieds) ;
+- roues **arrière** : montée visuelle bornée à 8 cm (`REAR_WHEEL_MAX_UP`), car
+  la remorque pivote et penche juste au-dessus d'elles (§4 ter, zone balayée).
+
+`truck_wheel_arch_test` le vérifie : chute de 4 m, braquage à fond, drift,
+contre-braquage, freinage ; aucun sommet de carrosserie dans un pneu. Sans ces
+corrections : 247 sommets traversés (cabine, garde-boue, joint de porte, siège).
+
 **À corriger à la source** (blender-modeler / camarades) : avant en −Z, échelle
 appliquée, empattement 3,8 m, voie 2,1 m, roues de 0,55 m, objets `Body` +
 `Wheel_FL/FR/RL/RR` pivotés au moyeu (§4), caisse de remorque de 13,0 × 3,0 m
@@ -165,6 +188,53 @@ d'essieux ni de roues avec une autre (décision du 2026-10-06).
 | Grue | semi-grue : tourelle, cabine, contrepoids, flèche télescopique couchée | poutre-caisson jaune, stabilisateurs | 4 essieux jumelés, jantes jaunes |
 | Porte-engins | deux chariots élévateurs arrimés, panneau convoi | surbaissé : col de cygne, plancher bas en bois, rampes | 3 essieux, petites roues jumelées grises |
 
+**Zone balayée au-dessus du tracteur** (2026-10-06) : en virage, la remorque
+pivote jusqu'à ±35° et penche jusqu'à ±6° juste au-dessus des roues arrière
+du tracteur. Rien ne doit y entrer : le script le vérifie à chaque remorque
+(`swing_violations`, faces échantillonnées et pas seulement les sommets, roues
+en position haute) et refuse la remorque sinon. En pratique, tout ce qui est
+bas commence derrière y ≈ −3,9 m (Blender) : béquilles, longerons, jupes,
+tubes, plancher bas. Les caisses de l'équipe y sont adaptées par le script :
+petites pièces en cause retirées entières, cadre du porte-voitures coupé net
+(son plancher bas commence derrière les roues du tracteur), ventre de la
+citerne remonté à l'avant en pente douce (une cuve ne se coupe pas).
+`truck_trailer_wheels_test` le vérifie en jeu, les 8 remorques à 35°. Avant :
+165 sommets de la citerne dans une roue du tracteur en drift.
+
+**Qualité, au niveau de la tête** (2026-10-06, « des qualités graphiques
+beaucoup moins élevées que la tête ») :
+
+- toutes les pièces générées sont **chanfreinées et lissées** (arêtes vives
+  au-delà de 35°), comme la tête ; aucune texture, des matériaux réglés comme
+  ceux de la tête (chrome, aluminium, peinture semi-brillante, pneu mat, feux
+  émissifs) ;
+- **roues de révolution** : pneu profilé (talons, flancs bombés, épaulements
+  arrondis, deux rainures), jante à fût et voile emboutie, moyeu, écrous
+  hexagonaux, tambours ; nombre d'écrous et d'ajours propre à chaque remorque ;
+- **détails de vraie semi-remorque** : marquage de contour rétroréfléchissant
+  (flancs et arrière), feux de gabarit latéraux, blocs de feux arrière avec
+  catadioptres triangulaires, pare-cycliste zébré, têtes d'accouplement et
+  flexibles d'air spiralés rouge et bleu, roue de secours, coffre à outils,
+  dévidoirs du pompier, damier des véhicules de secours ;
+- **palette canonique** (`CANON` dans le script) : un même nom de matériau a
+  les mêmes réglages dans toutes les remorques, pièces générées comme caisses
+  de l'équipe (avant : deux `Danger_Jaune`, un jaune de grue différent de celui
+  des chariots…). Peintures de cabine semi-brillantes (métal 0,35, rugosité
+  0,25), de caisse satinées (0 / 0,35), comme la tête. L'inox de la citerne
+  n'est plus 100 % métallique : de nuit (Cyber City), il ne reflétait que le
+  ciel et virait au noir ;
+- 18 000 à 39 000 triangles par remorque (la tête : 25 600), sauf porte-engins
+  (77 000) et porte-voitures (113 000) à cause de leur chargement.
+
+**Remorque vivante** (2026-10-06, « les roues de la remorque passent dans le
+sol, la remorque est trop rigide ») : chaque essieu est un objet à part
+(`Gen_Essieu_N`, origine au centre de l'essieu). En jeu, `TruckVisual` pose la
+remorque affichée sur le sol sous son train de roues (tangage autour de la
+sellette, roulis), donne à chaque essieu sa suspension et fait tourner les
+roues (remorque et tête). Purement visuel : la caisse de collision reste
+articulée en lacet seulement (VEHICLE_SPEC §5 bis). `truck_trailer_ground_test`
+le vérifie sur un relief de 6° : enfoncement max 3,7 cm (1,26 m sans).
+
 Tout ce qui est généré porte le préfixe `Gen_` ; le script est idempotent
 (deux exécutions donnent des fichiers identiques à l'octet). À relancer si la
 tête change :
@@ -189,9 +259,38 @@ Les camions de course `Camion_*.glb` n'ont pas encore de sockets.
 
 En jeu, seule la remorque de ces véhicules sert : c'est la remorque au choix
 du sas READY (VEHICLE_SPEC §5 bis), chargée par `TruckVisual.set_trailer_type`.
-Triangles par remorque : 1 800 (saleuse) à 12 600 (citerne), roues générées en
-bas poly. **Restent au-dessus du budget** : le porte-engins (53 000, les deux
-chariots élévateurs) et le porte-voitures (97 000, les cinq voitures).
+
+### 4 quater. Versions réalistes (`Realiste/`)
+
+`tools/blender/realisme_vehicules.py` (`make vehicules`, après le catalogue)
+lit les têtes `Camion_*.glb` et les véhicules du catalogue **sans jamais les
+modifier**, et écrit à côté, dans un dossier `Realiste/`, les versions que le
+jeu charge (`TruckVisual.external_model`, `TrailerType.model`) :
+
+- arêtes encore vives chanfreinées (2 segments) et lissage par angle, puis
+  normales pondérées par l'aire des faces (les grandes faces restent planes,
+  la lumière roule sur les chanfreins). Les sommets dédoublés par l'export
+  glTF le long des arêtes vives sont d'abord recousus. Pièces fusionnées
+  (châssis de remorque…) : chanfrein simple de 7 mm entre grandes faces ; une
+  pièce ne dépasse jamais deux fois ses triangles (une petite pièce peut en
+  gagner 3 000) ;
+- tête : silhouette d'une cabine routière (coins avant arrondis, face avant
+  et pare-brise inclinés, toit bombé, flancs rentrants, pare-chocs
+  enveloppant) par un champ de déformation doux après subdivision des grandes
+  faces ; grille de calandre, entourage et optiques des phares,
+  antibrouillards, poignées de maintien, pare-chaleur des cheminées, cornets
+  de rétroviseur, garde-boue arrière noirs ;
+- remorques : garde-boue plats remplacés par des garde-boue cintrés au-dessus
+  de chaque roue ; pièces de coin et verrous sur le conteneur.
+
+Les ajouts portent le préfixe `Detail_` (ils s'arrachent dans un gros choc,
+`BodyDamage`) et sont fusionnés par famille : une pièce par phare, par
+antibrouillard… (un appel de dessin chacun, par camion et par vue).
+
+Le catalogue (`catalogue_tete_commune.py`) ajoute de son côté, d'après des
+photos de semi-remorques européennes et les règlements ECE : protection
+latérale (R73), réservoirs d'air, extincteur, cales de roue, panneau arrière
+avec plaques R70, disque « 80 » et autocollant « ANGLES MORTS ».
 
 ### Style
 

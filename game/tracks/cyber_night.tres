@@ -1,49 +1,61 @@
-[gd_resource type="Environment" load_steps=3 format=3]
+[gd_resource type="Environment" load_steps=4 format=3]
 
-[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_top_color = Color(0.012, 0.012, 0.06, 1)
-sky_horizon_color = Color(0.36, 0.07, 0.42, 1)
-sky_curve = 0.09
-sky_energy_multiplier = 1.2
-ground_bottom_color = Color(0.008, 0.008, 0.025, 1)
-ground_horizon_color = Color(0.22, 0.05, 0.3, 1)
-ground_curve = 0.04
-sun_angle_max = 2.5
-sun_curve = 0.05
-use_debanding = true
+[ext_resource type="Shader" path="res://tracks/materials/sky_night.gdshader" id="1"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("1")
+shader_parameter/zenith_color = Color(0.004, 0.004, 0.014, 1)
+shader_parameter/glow_color = Color(0.2, 0.06, 0.26, 1)
+shader_parameter/glow_warm = Color(0.28, 0.12, 0.07, 1)
+shader_parameter/ground_color = Color(0.006, 0.006, 0.02, 1)
+shader_parameter/cloud_coverage = 0.7
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
+radiance_size = 2
 
 [resource]
 background_mode = 2
 sky = SubResource("sky")
-ambient_light_source = 2
+ambient_light_source = 3
 ambient_light_color = Color(0.3, 0.26, 0.55, 1)
-ambient_light_energy = 0.55
-tonemap_mode = 3
-tonemap_exposure = 1.05
+ambient_light_sky_contribution = 0.6
+ambient_light_energy = 1.4
+tonemap_mode = 4
+tonemap_exposure = 1.6
+tonemap_white = 10.0
 ssr_enabled = true
-ssr_max_steps = 48
-ssr_fade_in = 0.15
+ssr_max_steps = 64
+ssr_fade_in = 0.1
 ssr_fade_out = 2.0
-ssr_depth_tolerance = 0.6
+ssr_depth_tolerance = 0.4
 ssao_enabled = true
-ssao_radius = 2.2
-ssao_intensity = 2.6
+ssao_radius = 2.0
+ssao_intensity = 2.4
 ssao_power = 1.6
 ssao_light_affect = 0.3
 ssil_enabled = true
 ssil_radius = 8.0
 ssil_intensity = 1.6
 glow_enabled = true
-glow_intensity = 0.9
-glow_strength = 1.05
-glow_bloom = 0.04
+glow_intensity = 0.8
+glow_strength = 1.0
+glow_bloom = 0.05
 glow_blend_mode = 2
-glow_hdr_threshold = 0.85
+glow_hdr_threshold = 0.9
 fog_enabled = true
-fog_light_color = Color(0.1, 0.34, 0.55, 1)
-fog_light_energy = 0.7
-fog_density = 0.0016
-fog_sky_affect = 0.3
+fog_light_color = Color(0.1, 0.12, 0.24, 1)
+fog_light_energy = 0.8
+fog_density = 0.0018
+fog_aerial_perspective = 0.35
+fog_sky_affect = 0.25
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.004
+volumetric_fog_albedo = Color(0.8, 0.8, 0.85, 1)
+volumetric_fog_anisotropy = 0.55
+volumetric_fog_length = 80.0
+volumetric_fog_ambient_inject = 0.0
+volumetric_fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_contrast = 1.05
+adjustment_saturation = 1.1

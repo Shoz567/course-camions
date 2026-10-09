@@ -14,7 +14,8 @@ extends RigidBody3D
 ## deporte (Truck.cargo_hit) ; un nouveau choc compte apres hit_gap_ticks sans
 ## contact avec ce camion. Le camion qui l'a larguee la traverse pendant
 ## owner_pass_ticks (le temps de s'en eloigner), puis elle devient un obstacle
-## pour lui aussi - qui l'abime, sans etre penalise (2026-10-01, « je passe a
+## pour lui aussi - qui l'abime et s'y blesse comme les autres (TruckHealth,
+## 2026-10-07), sans etre ralenti (2026-10-01, « je passe a
 ## travers ma propre remorque ») ; jamais tant qu'il est dedans : le solveur
 ## les separerait d'un coup. Durees en ticks physiques (CLAUDE.md §7).
 ##
@@ -56,6 +57,9 @@ var box_center: Vector3 = TruckSpec.TRAILER_CENTER
 var dropped_by: Truck
 var age_ticks: int = 0
 var hp: float = 50.0
+## PV au moment ou elle arrive sur la route (< 0 : max_hp). Une remorque deja
+## abimee sur le camion le reste une fois larguee.
+var initial_hp: float = -1.0
 var _visual: Node3D
 var _shape: CollisionShape3D
 var _owner_query: PhysicsShapeQueryParameters3D
@@ -73,7 +77,7 @@ var _smoke: CPUParticles3D
 var _sparks: CPUParticles3D
 ## Etat visible : 0 neuve, 1 abimee (< 60 %), 2 en ruine (< 30 %).
 var damage_stage: int = 0
-var _marks: Array[Decal] = []
+var _marks: Array[Node3D] = []
 const MAX_MARKS := 10
 
 
@@ -131,7 +135,7 @@ func set_visual(v: Node3D) -> void:
 
 func _ready() -> void:
 	mass = trailer_mass
-	hp = max_hp
+	hp = max_hp if initial_hp < 0.0 else clampf(initial_hp, 1.0, max_hp)
 	var center := _shape.position
 	_smoke = DamageFx.make_smoke()
 	_smoke.position = center + Vector3(0.0, 2.0, 0.0)
@@ -189,6 +193,8 @@ func _physics_process(_delta: float) -> void:
 	_pending_at.clear()
 	if hp <= 0.0:
 		ExplosionFx.spawn(get_parent(), _shape.global_position, 9.0)
+		BodyDamage.shards(get_parent(), _shape.global_position, Vector3.UP, 14, linear_velocity, 14.0,
+			BodyDamage.nearest_material(_visual, _shape.global_position), get_instance_id())
 		destroyed.emit()
 		queue_free()
 
@@ -211,19 +217,21 @@ func _on_truck_hit(truck: Truck, approach_ms: float, contact: Array) -> void:
 		if n.dot(truck.global_position - at) < 0.0:
 			n = -n
 		_add_mark(at, n, clampf(amount / 25.0, 0.2, 1.0))
+		# la tole s'enfonce, des eclats volent (purement visuel)
+		var severity := clampf(approach_ms / full_damage_speed_ms, 0.0, 1.0)
+		BodyDamage.dent(_visual, at, -n * lerpf(0.12, 0.7, severity), lerpf(0.9, 2.4, severity))
+		if severity > 0.35:
+			BodyDamage.shards(get_parent(), at, n, roundi(severity * 6.0), linear_velocity, 6.0 + 8.0 * severity,
+				BodyDamage.nearest_material(_visual, at), age_ticks)
 	_update_damage_stage()
 
 
 ## Trace de choc au point monde `at`, la carrosserie regardant vers `outward`.
 func _add_mark(at: Vector3, outward: Vector3, severity: float) -> void:
 	var parent: Node3D = _visual if _visual != null else self
-	var d := DamageFx.make_mark(severity)
-	var inv := parent.global_transform.affine_inverse()
-	DamageFx.place_mark(d, inv * at, inv.basis * outward)
-	parent.add_child(d)
-	_marks.append(d)
+	_marks.append(DamageFx.scar(parent, at, outward, severity))
 	if _marks.size() > MAX_MARKS:
-		var old: Decal = _marks.pop_front()
+		var old: Node3D = _marks.pop_front()
 		if is_instance_valid(old):
 			old.queue_free()
 

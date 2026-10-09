@@ -2,122 +2,40 @@ class_name DamageFx
 extends RefCounted
 
 ## Briques visuelles des degats (purement visuelles, aucune physique) :
-##   - traces de choc : decalques (Decal) projetes sur la carrosserie au point
-##     d'impact - eraflures claires pour un frottement, brulure noire et
-##     eraflures pour un choc violent. Ils ne marquent que les carrosseries
-##     (calque de rendu RENDER_LAYER, pose par TruckVisual), jamais la route ;
+##   - traces de choc : cicatrices peintes dans la carrosserie (BodyScars,
+##     truck_body.gdshader) au point d'impact - eraflures et vernis terni
+##     pour un frottement, peinture arrachee, tole nue rayee et pliee pour un
+##     choc plus fort, suie au centre d'un choc violent. Chaque trace garde
+##     un repere (DamageMark, Node3D sans rendu) : position, axe sortant et
+##     gravite ; elles remplacent les decalques d'eraflures (2026-10-07 :
+##     « des traits blancs, pas tres realiste ») ;
 ##   - fumee (particules CPU, monde) : grise legere ou noire epaisse ;
 ##   - etincelles (particules CPU) qui crepitent.
-## Textures generees une fois, en memoire (aucun fichier, CLAUDE.md §8),
-## de facon deterministe.
+## Textures generees une fois, en memoire (aucun fichier, CLAUDE.md §8).
 
-## Calque de rendu des carrosseries (camions, remorques larguees).
+## Calque de rendu des carrosseries (camions, remorques larguees, debris).
 const RENDER_LAYER := 11
 const LAYER_BIT := 1 << (RENDER_LAYER - 1)
+## Rayon d'une cicatrice (m) : eraflure legere .. choc violent.
+const SCAR_RADIUS := Vector2(0.55, 1.5)
 
 enum Smoke { NONE, LIGHT, HEAVY, WRECK }
 
-static var _scorch: ImageTexture
-static var _scratch: ImageTexture
 static var _puff: GradientTexture2D
 
 
-## Bruit de valeur deterministe (0 .. 1) sur une grille de cellules.
-static func _noise(x: float, y: float, seed_value: int) -> float:
-	var xi := floori(x)
-	var yi := floori(y)
-	var fx := x - xi
-	var fy := y - yi
-	fx = fx * fx * (3.0 - 2.0 * fx)
-	fy = fy * fy * (3.0 - 2.0 * fy)
-	var a := _hash(xi, yi, seed_value)
-	var b := _hash(xi + 1, yi, seed_value)
-	var c := _hash(xi, yi + 1, seed_value)
-	var d := _hash(xi + 1, yi + 1, seed_value)
-	return lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fy)
-
-
-static func _hash(x: int, y: int, seed_value: int) -> float:
-	var h := (x * 374761393 + y * 668265263 + seed_value * 2147483647) & 0x7fffffff
-	h = ((h ^ (h >> 13)) * 1274126177) & 0x7fffffff
-	return float(h & 0xffff) / 65535.0
-
-
-## Brulure : tache noire et brune a bord dechiquete, avec quelques eraflures.
-static func scorch_texture() -> Texture2D:
-	if _scorch == null:
-		var size := 128
-		var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-		for y in size:
-			for x in size:
-				var u := (x + 0.5) / size * 2.0 - 1.0
-				var v := (y + 0.5) / size * 2.0 - 1.0
-				var n := _noise(x / 9.0, y / 9.0, 3) * 0.65 + _noise(x / 3.0, y / 3.0, 5) * 0.35
-				var d := sqrt(u * u + v * v) + (n - 0.5) * 0.55
-				var a := clampf((1.0 - d) * 2.2, 0.0, 1.0) * 0.95
-				var col := Color(0.02, 0.018, 0.015).lerp(Color(0.16, 0.09, 0.04), n * (1.0 - a * 0.6))
-				img.set_pixel(x, y, Color(col.r, col.g, col.b, a))
-		_draw_scratches(img, 7, 11)
-		_scorch = ImageTexture.create_from_image(img)
-	return _scorch
-
-
-## Eraflures : traits clairs (metal mis a nu) et sombres, surtout dans la
-## longueur (axe X du decalque).
-static func scratch_texture() -> Texture2D:
-	if _scratch == null:
-		var img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
-		img.fill(Color(0, 0, 0, 0))
-		_draw_scratches(img, 16, 23)
-		_scratch = ImageTexture.create_from_image(img)
-	return _scratch
-
-
-static func _draw_scratches(img: Image, count: int, seed_value: int) -> void:
-	var size := img.get_width()
-	for k in count:
-		var y0 := 16.0 + _hash(k, 1, seed_value) * (size - 32.0)
-		var slope := (_hash(k, 2, seed_value) - 0.5) * 0.35
-		var x0 := _hash(k, 3, seed_value) * size * 0.4
-		var x1 := x0 + size * (0.35 + 0.5 * _hash(k, 4, seed_value))
-		var bright := _hash(k, 5, seed_value) > 0.3
-		var col := Color(0.82, 0.82, 0.86) if bright else Color(0.05, 0.05, 0.05)
-		var x := x0
-		while x < minf(x1, size - 1.0):
-			var y := y0 + (x - x0) * slope
-			var fade := sin(PI * (x - x0) / (x1 - x0))
-			for w in 2:
-				var py := clampi(roundi(y) + w, 0, size - 1)
-				var px := clampi(roundi(x), 0, size - 1)
-				var old := img.get_pixel(px, py)
-				var a := maxf(old.a, 0.9 * fade * (1.0 if w == 0 else 0.45))
-				img.set_pixel(px, py, Color(col.r, col.g, col.b, a))
-			x += 1.0
-
-
-## Trace de choc de gravite `severity` (0 .. 1) : eraflures en dessous de
-## 0,35, brulure au-dela ; plus grande quand c'est plus violent.
-static func make_mark(severity: float) -> Decal:
-	var s := clampf(severity, 0.0, 1.0)
-	var d := Decal.new()
+## Repere d'une trace de choc de gravite `severity` (0 .. 1).
+static func make_mark(severity: float) -> Node3D:
+	var d := Node3D.new()
 	d.name = "DamageMark"
-	var size := lerpf(1.3, 3.4, s)
-	d.size = Vector3(size * 1.4, 1.4, size)
-	d.texture_albedo = scorch_texture() if s >= 0.35 else scratch_texture()
-	d.modulate = Color(1.0, 1.0, 1.0, lerpf(0.8, 1.0, s))
-	d.albedo_mix = 1.0
-	d.cull_mask = LAYER_BIT
-	d.upper_fade = 0.25
-	d.lower_fade = 0.25
-	d.normal_fade = 0.25
-	d.set_meta(&"severity", s)
+	d.set_meta(&"severity", clampf(severity, 0.0, 1.0))
 	return d
 
 
-## Pose le decalque au point local `at`, projete vers la carrosserie : son axe
-## +Y suit la normale sortante `outward` (vers l'exterieur du camion), son axe
-## X (la longueur des eraflures) reste horizontal.
-static func place_mark(d: Decal, at: Vector3, outward: Vector3) -> void:
+## Pose le repere au point local `at` : son axe +Y suit la normale sortante
+## `outward` (vers l'exterieur du camion), son axe X (le sens du frottement)
+## reste horizontal.
+static func place_mark(d: Node3D, at: Vector3, outward: Vector3) -> void:
 	var y := outward.normalized()
 	var x := Vector3.UP.cross(y)
 	if x.length_squared() < 1e-3:
@@ -125,6 +43,18 @@ static func place_mark(d: Decal, at: Vector3, outward: Vector3) -> void:
 	x = x.normalized()
 	var z := x.cross(y).normalized()
 	d.transform = Transform3D(Basis(x, y, z), at)
+
+
+## Trace de choc complete : repere `d` pose sous `parent` au point monde
+## `point`, et cicatrice peinte sur les carrosseries de `parent` autour.
+static func scar(parent: Node3D, point: Vector3, outward: Vector3, severity: float) -> Node3D:
+	var d := make_mark(severity)
+	var inv := parent.global_transform.affine_inverse()
+	place_mark(d, inv * point, inv.basis * outward)
+	parent.add_child(d)
+	var s := clampf(severity, 0.0, 1.0)
+	BodyScars.add(parent, point, lerpf(SCAR_RADIUS.x, SCAR_RADIUS.y, s), lerpf(0.3, 1.0, s))
+	return d
 
 
 static func _puff_texture() -> Texture2D:

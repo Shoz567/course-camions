@@ -113,9 +113,14 @@ func _check_theme() -> void:
 	check("glissieres : plus de neon de ville", left.material_override != preload("res://tracks/materials/neon_cyan.tres"))
 	check("3 arches", _track.arch_count() == 3, "%d" % _track.arch_count())
 	var env := load("res://tracks/playa_sun.tres") as Environment
-	var sky := env.sky.sky_material as ProceduralSkyMaterial
-	check("plein soleil : ciel bleu clair", sky.sky_top_color.b > 0.6 and sky.sky_top_color.b > sky.sky_top_color.r * 2.0
-		and sky.sky_horizon_color.get_luminance() > 0.6, str(sky.sky_top_color))
+	# ciel realiste (sky_day.gdshader, 2026-10-07) : zenith bleu profond,
+	# horizon clair, cumulus de beau temps
+	var sky := env.sky.sky_material as ShaderMaterial
+	var top: Color = sky.get_shader_parameter("zenith_color") if sky != null else Color.BLACK
+	var horizon: Color = sky.get_shader_parameter("horizon_color") if sky != null else Color.BLACK
+	var clouds: float = sky.get_shader_parameter("cloud_coverage") if sky != null else 1.0
+	check("plein soleil : ciel bleu clair, peu nuageux", top.b > 0.6 and top.b > top.r * 2.0
+		and horizon.get_luminance() > 0.6 and clouds < 0.6, str(top))
 	var race := (load("res://dev/race_playa.tscn") as PackedScene).instantiate()
 	var sun := race.get_node_or_null("Sun") as DirectionalLight3D
 	check("course : soleil chaud, avec ombres", sun != null and sun.shadow_enabled and sun.light_energy >= 1.0

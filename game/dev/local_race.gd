@@ -40,14 +40,14 @@ const MENU_SCENE := "res://ui/main_menu.tscn"
 const COUNTDOWN_TICKS := 180      # 3 s
 const GO_TICKS := 60              # "GO !" reste 1 s
 const MODELS: PackedStringArray = [
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Jaune.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Vert.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Vert.glb",
 	# J5 et J6 : pas de modele a eux (aucun .glb dans le depot) ; ils
 	# reprennent un modele existant, repeint par leur livree (LIVERIES)
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Bleu.glb",
-	"../Assets_Visuels/Camion/Camions_Course_Export/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
 ]
 const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT",
 	"J5 VIOLET NÉO-TOKYO", "J6 ORANGE CARBO"]
@@ -160,6 +160,14 @@ func _ready() -> void:
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
 	_apply_graphics()
+	# de nuit, les phares des camions eclairent la route
+	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
+	# camions sales de la route : poussiere claire au bord de mer, crasse
+	# sombre et carrosseries mouillees sous la pluie
+	if TruckLights.night:
+		TruckMaterials.set_weather(TruckMaterials.CITY_GRIME, 0.85)
+	else:
+		TruckMaterials.set_weather(TruckMaterials.BEACH_GRIME, 0.0)
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
 	music = RaceMusic.new()
@@ -277,6 +285,9 @@ func _add_player(i: int) -> Player:
 	view_parent.add_child(cam)
 	cam.snap()
 	p.camera = cam
+	# nuit pluvieuse : la pluie tombe autour de chaque camera
+	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
+		view_parent.add_child(RainFx.make(cam.get_camera()))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)
@@ -411,6 +422,9 @@ func _physics_process(_delta: float) -> void:
 				MenuSound.play_confirm()
 			_square_was[i] = f.boost
 		if all_ready():
+			# carrosseries deformables preparees maintenant, pas au premier choc
+			for p in players:
+				BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
 			state = State.COUNTDOWN
 			_state_tick = tick
 			_last_countdown_sec = -1

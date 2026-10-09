@@ -1,50 +1,57 @@
-[gd_resource type="Environment" load_steps=3 format=3]
+[gd_resource type="Environment" load_steps=4 format=3]
 
-[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
-sky_top_color = Color(0.08, 0.36, 0.88, 1)
-sky_horizon_color = Color(0.62, 0.84, 0.97, 1)
-sky_curve = 0.12
-sky_energy_multiplier = 1.15
-ground_bottom_color = Color(0.02, 0.22, 0.5, 1)
-ground_horizon_color = Color(0.5, 0.76, 0.93, 1)
-ground_curve = 0.03
-sun_angle_max = 12.0
-sun_curve = 0.12
-use_debanding = true
+[ext_resource type="Shader" path="res://tracks/materials/sky_day.gdshader" id="1"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("1")
+shader_parameter/zenith_color = Color(0.09, 0.3, 0.78, 1)
+shader_parameter/horizon_color = Color(0.62, 0.8, 0.96, 1)
+shader_parameter/sea_color = Color(0.02, 0.16, 0.34, 1)
+shader_parameter/cloud_coverage = 0.42
+shader_parameter/cloud_scale = 0.55
+shader_parameter/sun_size_deg = 0.55
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
+radiance_size = 2
 
 [resource]
 background_mode = 2
 sky = SubResource("sky")
 ambient_light_source = 3
 ambient_light_color = Color(1, 0.95, 0.85, 1)
-ambient_light_sky_contribution = 0.75
-ambient_light_energy = 0.4
-tonemap_mode = 2
-tonemap_exposure = 1.0
+ambient_light_sky_contribution = 0.85
+ambient_light_energy = 0.55
+tonemap_mode = 4
+tonemap_exposure = 1.05
+tonemap_white = 12.0
 ssr_enabled = true
 ssr_max_steps = 48
 ssr_fade_in = 0.15
 ssr_fade_out = 2.0
 ssr_depth_tolerance = 0.6
 ssao_enabled = true
-ssao_radius = 2.0
-ssao_intensity = 2.0
-ssao_power = 1.5
-ssao_light_affect = 0.15
+ssao_radius = 1.6
+ssao_intensity = 2.2
+ssao_power = 1.6
+ssao_detail = 0.7
+ssao_light_affect = 0.2
 ssil_enabled = true
 ssil_radius = 6.0
 ssil_intensity = 1.0
 glow_enabled = true
-glow_intensity = 0.35
+glow_intensity = 0.3
 glow_strength = 0.9
-glow_bloom = 0.02
+glow_bloom = 0.03
 glow_blend_mode = 2
-glow_hdr_threshold = 1.1
+glow_hdr_threshold = 1.4
 fog_enabled = true
-fog_light_color = Color(0.72, 0.87, 0.97, 1)
+fog_light_color = Color(0.68, 0.8, 0.94, 1)
 fog_light_energy = 1.0
-fog_density = 0.00018
+fog_sun_scatter = 0.25
+fog_density = 0.00035
+fog_aerial_perspective = 0.6
 fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_contrast = 1.06
+adjustment_saturation = 1.08

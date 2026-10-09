@@ -12,11 +12,12 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike
+.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike vehicules
 
 help:
 	@echo "Cibles disponibles :"
 	@echo "  make assets     - regenere tous les assets 3D (Blender headless)"
+	@echo "  make vehicules  - catalogue des remorques + versions realistes (Realiste/)"
 	@echo "  make import     - importe les assets dans Godot"
 	@echo "  make test       - suite rapide : 1 run par test (< 60 s)"
 	@echo "  make test-full  - suite complete : 5 runs par test physique"
@@ -29,6 +30,13 @@ help:
 
 assets:
 	$(BLENDER) -b -P tools/blender/build_all.py
+
+# Catalogue de vehicules (remorques generees) puis versions realistes des
+# tetes et des remorques (Assets_Visuels/.../Realiste/, chargees par le jeu).
+# Les modeles de l'equipe restent la source : jamais modifies par le second.
+vehicules:
+	$(BLENDER) -b -P tools/blender/catalogue_tete_commune.py
+	$(BLENDER) -b -P tools/blender/realisme_vehicules.py
 
 import:
 	$(GODOT) --headless --path $(PROJECT) --import

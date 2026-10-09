@@ -31,12 +31,21 @@ extends RigidBody3D
 ##   remorque larguee percutee (cargo_hit) : ralenti et deporte en lacet.
 ##   impacts contre un mur (wall_impact) : signales avec la vitesse normale et
 ##       la forme touchee (tracteur ou remorque) ; les PV sont l'affaire du
-##       gameplay (TruckHealth). Epave (set_wrecked) : gelee, sans force.
+##       gameplay (TruckHealth). Chocs contre un obstacle de la piste
+##       (hazard_impact) ou un autre camion (truck_impact) : idem. Epave
+##       (set_wrecked) : gelee, sans force, sans collision.
+##   pneu eclate (burst_tire, decide par le gameplay : TruckTires) : la roue
+##       perd de l'adherence laterale, sa jante freine (le camion tire de
+##       ce cote), et le coin de la caisse descend du rayon perdu. Pneu de
+##       remorque (un cote de son train de roues) : sa jante freine sous la
+##       remorque, qui chasse et se balance plus, et l'arriere du tracteur
+##       adhere moins.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
 ##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit(),
-##   detach_trailer(), reattach_trailer(), set_wrecked(), set_trailer_type()
+##   detach_trailer(), reattach_trailer(), set_wrecked(), set_trailer_type(),
+##   burst_tire(), repair_tires()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -68,13 +77,38 @@ signal wall_impact(normal_speed_ms: float, on_trailer: bool)
 signal wall_impact_at(normal_speed_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 ## Debut d'un contact avec un autre corps mobile (camion, remorque larguee) :
 ## vitesse d'approche, partie touchee, point et normale (monde, tournee vers
-## le camion). Purement informatif : aucun degat de PV.
+## le camion). Purement visuel (TruckDamageFx) : les PV passent par
+## truck_impact et hazard_impact.
 signal body_impact(approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Le meme debut de contact, quand l'autre corps est un obstacle de la piste
+## (couche 5 : remorque larguee, epave) : c'est lui qui fait des degats
+## (TruckHealth).
+signal hazard_impact(obstacle: Node3D, approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Le meme debut de contact, quand l'autre corps est un camion : les deux
+## camions s'abiment, chacun a la partie touchee (TruckHealth).
+signal truck_impact(other: Truck, approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Le pneu de la roue `wheel` (ordre FL, FR, RL, RR, puis TRAILER_LEFT,
+## TRAILER_RIGHT) vient d'eclater ; des pneus remis a neuf (repair_tires, ou
+## remorque detachee : is_tire_burst dit lesquels restent creves).
+signal tire_burst(wheel: int)
+signal tires_repaired
 
 ## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
 ## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
 const TRAILER_BLOCK_MASK := (1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)) \
 		| (1 << (5 - 1))
+## Couche 5 `hazard` (VEHICLE_SPEC §7) : obstacles poses sur la piste.
+const HAZARD_BIT := 1 << (5 - 1)
+## Pneus de la remorque (burst_tire) : un cote entier de son train de roues,
+## apres les quatre roues du tracteur.
+const TRAILER_LEFT := 4
+const TRAILER_RIGHT := 5
+## Train de roues de la remorque (roues visuelles : aucun rayon) : centre a
+## cette distance de l'arriere de la caisse, pneus exterieurs a cette
+## demi-voie. Mesure sur les huit remorques du catalogue : centre a 2,2 ..
+## 3,5 m de l'arriere (moyenne 2,9), essieux etales sur 2,8 m au plus.
+const TRAILER_BOGIE_FROM_REAR_M := 2.9
+const TRAILER_WHEEL_HALF_TRACK_M := 1.1
 
 ## En dessous de cette vitesse (m/s), le frein devient marche arriere et le gaz
 ## en marche arriere devient frein.
@@ -99,6 +133,8 @@ const STOP_SPEED_MS := 0.5
 @export var debug_landing_cushion: bool = true
 @export var debug_boost: bool = true
 @export var debug_wall_unstick: bool = true
+## Pneu eclate : adherence, freinage de la jante, roue affaissee.
+@export var debug_tire_burst: bool = true
 ## Traces DebugDraw du camion (actifs seulement si DebugDraw.enabled).
 @export var debug_draw: bool = true
 
@@ -180,6 +216,9 @@ var _slow_ticks: int = 0
 var _slow_decel: float = 0.0
 ## Perte d'adherence laterale temporaire (flaque savonnette)
 var _slip_ticks: int = 0
+## Pneus eclates (1 : eclate), ordre FL, FR, RL, RR, puis la remorque a gauche
+## et a droite (TRAILER_LEFT, TRAILER_RIGHT).
+var _burst: PackedByteArray = PackedByteArray([0, 0, 0, 0, 0, 0])
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 ## Remorque choisie (null : celle du modele, caisse de TruckSpec) et sa caisse.
@@ -209,6 +248,7 @@ var _body_contacts: Dictionary = {}
 var _contact_step: int = 0
 ## Epave (0 PV, TruckHealth) : gelee, aucune force, aucune commande.
 var _wrecked: bool = false
+var _layers_before_wreck: Vector2i = Vector2i.ZERO
 
 var _reset_pending: bool = false
 ## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
@@ -362,6 +402,11 @@ func detach_trailer() -> Transform3D:
 	_set_trailer_angle(0.0)
 	if _trailer_shape != null:
 		_trailer_shape.disabled = true
+	# ses pneus creves partent avec elle : la suivante arrive neuve
+	if trailer_burst_count() > 0:
+		_burst[TRAILER_LEFT] = 0
+		_burst[TRAILER_RIGHT] = 0
+		tires_repaired.emit()
 	trailer_detached.emit()
 	return xf
 
@@ -430,14 +475,81 @@ func cargo_hit(crate_position: Vector3) -> void:
 	_cargo_hit_from = crate_position
 
 
+## Le pneu de la roue `wheel` eclate (VehicleTuning, groupe « Pneu eclate ») :
+##   - roue du tracteur (0..3) : moins d'adherence a cette roue, la jante
+##     freine et le coin de la caisse descend ;
+##   - un cote du train de roues de la remorque (TRAILER_LEFT, TRAILER_RIGHT,
+##     remorque attelee) : sa jante freine de ce cote, la remorque chasse et
+##     se balance plus, l'arriere du tracteur adhere moins.
+## Jusqu'a repair_tires (ceux de la remorque : jusqu'a la remorque suivante).
+## Faux s'il etait deja eclate.
+func burst_tire(wheel: int) -> bool:
+	if wheel < 0 or wheel >= _burst.size() or _burst[wheel] != 0:
+		return false
+	if wheel >= TRAILER_LEFT and (_trailer_detached or _trailer_shape == null):
+		return false
+	_burst[wheel] = 1
+	_apply_tire_drop()
+	tire_burst.emit(wheel)
+	return true
+
+
+## Pneus neufs partout (camion qui reapparait).
+func repair_tires() -> void:
+	if _burst.count(1) == 0:
+		return
+	_burst.fill(0)
+	_apply_tire_drop()
+	tires_repaired.emit()
+
+
+func is_tire_burst(wheel: int) -> bool:
+	return _burst[wheel] != 0
+
+
+## Pneus eclates, tracteur et remorque.
+func burst_tire_count() -> int:
+	return _burst.count(1)
+
+
+## Cotes creves du train de roues de la remorque (0 a 2).
+func trailer_burst_count() -> int:
+	return _burst[TRAILER_LEFT] + _burst[TRAILER_RIGHT]
+
+
+## Bas du pneu exterieur du train de roues de la remorque, cote `wheel`
+## (TRAILER_LEFT ou TRAILER_RIGHT), au sol, dans le repere du camion
+## (articulation comprise).
+func trailer_wheel_local(wheel: int) -> Vector3:
+	var side := -1.0 if wheel == TRAILER_LEFT else 1.0
+	var c := trailer_box_center
+	return trailer_local_transform(_trailer_angle, c) \
+			* Vector3(side * TRAILER_WHEEL_HALF_TRACK_M, -c.y, trailer_box_size.z / 2.0 - TRAILER_BOGIE_FROM_REAR_M)
+
+
+func _apply_tire_drop() -> void:
+	for i in _probes.size():
+		var on := _burst[i] != 0 and debug_tire_burst and tuning != null
+		_probes[i].radius_loss = tuning.tire_burst_drop_m if on else 0.0
+
+
 ## Ticks de frottement continu contre un mur (0 = libre).
 func get_wall_contact_ticks() -> int:
 	return _wall_ticks
 
 
 ## Epave (0 PV) : gelee sur place, plus aucune force ni commande, jusqu'a ce
-## que le gameplay la relance (set_wrecked(false) puis reset_to).
+## que le gameplay la relance (set_wrecked(false) puis reset_to). Elle ne
+## touche plus rien : la carcasse laissee sur la route est un obstacle a part
+## (TruckWreck), le camion attend seulement sa reapparition.
 func set_wrecked(on: bool) -> void:
+	if on and not _wrecked:
+		_layers_before_wreck = Vector2i(collision_layer, collision_mask)
+		collision_layer = 0
+		collision_mask = 0
+	elif not on and _wrecked:
+		collision_layer = _layers_before_wreck.x
+		collision_mask = _layers_before_wreck.y
 	_wrecked = on
 	freeze = on
 	_boost_ticks = 0
@@ -514,6 +626,11 @@ func _note_body_contact(state: PhysicsDirectBodyState3D, i: int, obj: Object, at
 		approach = maxf(approach, (other - v).dot(n))
 	var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
 	body_impact.emit(approach, shape_node == _trailer_shape, at, n)
+	var body := obj as CollisionObject3D
+	if obj is Truck:
+		truck_impact.emit(obj as Truck, approach, shape_node == _trailer_shape, at, n)
+	elif body != null and body.collision_layer & HAZARD_BIT:
+		hazard_impact.emit(body, approach, shape_node == _trailer_shape, at, n)
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -617,6 +734,10 @@ func _physics_process(_delta: float) -> void:
 	var hb_step := 1.0 / (t.handbrake_engage_ticks if hb_target > _handbrake_blend else t.handbrake_release_ticks)
 	_handbrake_blend = move_toward(_handbrake_blend, hb_target, hb_step)
 	var rear_grip := lerpf(1.0, t.handbrake_rear_grip_factor, _handbrake_blend)
+	# pneu de remorque creve : elle glisse et entraine l'arriere du tracteur
+	var trailer_flats := trailer_burst_count()
+	if trailer_flats > 0 and debug_tire_burst:
+		rear_grip *= pow(t.tire_burst_trailer_grip_factor, trailer_flats)
 
 	# 1.5 direction : l'angle max diminue avec la vitesse, borne par l'angle
 	# qui fait tourner a la limite d'adherence (tout le stick reste utile), sans
@@ -765,7 +886,9 @@ func _physics_process(_delta: float) -> void:
 		var fs := 0.0
 		if debug_suspension:
 			var v_up := _point_velocity(anchor, com).dot(up)
-			fs = maxf(_k * (_free_length[i] - p.hub_distance) - damp * v_up, 0.0)
+			var bump := maxf(t.bump_stop_start_m - p.hub_distance, 0.0)
+			fs = maxf(_k * (_free_length[i] - p.hub_distance + bump * t.bump_stop_stiffness_ratio)
+				- damp * v_up, 0.0)
 			apply_force(n * fs, anchor - origin)
 		p.load_n = fs
 
@@ -791,6 +914,8 @@ func _physics_process(_delta: float) -> void:
 			var mu := t.lateral_grip_g * p.surface_grip * (rear_grip if rear else 1.0)
 			if _slip_ticks > 0:
 				mu *= 0.12 if rear else 0.22
+			if _burst[i] != 0 and debug_tire_burst:
+				mu *= t.tire_burst_grip_factor
 			f_lat = -mu * fs * clampf(v_lat / v_ref, -1.0, 1.0)
 
 		# 1.4 longitudinal : 4 roues motrices, forces proportionnelles a la masse.
@@ -802,11 +927,23 @@ func _physics_process(_delta: float) -> void:
 				# a main s'efface avec l'accelerateur (2026-10-01, « le derapage
 				# freine trop »)
 				decel += _handbrake_blend * t.handbrake_decel_ms2 * (1.0 - _input.throttle)
+			# pneu eclate : la jante roule sur la gomme a plat et freine sa roue
+			# (le camion tire de ce cote)
+			if _burst[i] != 0 and debug_tire_burst:
+				decel += t.tire_burst_drag_ms2
 			var sat := clampf(v_long / t.grip_saturation_speed_ms, -1.0, 1.0)
 			f_long -= decel * m_wheel * sat
 
 		_tire_force[i] = s_dir * f_lat + f_dir * f_long
 		apply_force(_tire_force[i], p.contact_point - origin)
+
+	# pneu de remorque eclate : sa jante freine sous le train de roues, de son
+	# cote (l'ensemble tire de ce cote)
+	if trailer_flats > 0 and debug_tire_burst and debug_drive and _grounded > 0:
+		var sat := clampf(v_fwd / t.grip_saturation_speed_ms, -1.0, 1.0)
+		for w in range(TRAILER_LEFT, TRAILER_RIGHT + 1):
+			if _burst[w] != 0:
+				apply_force(-fwd * t.tire_burst_drag_ms2 * m_wheel * sat, xf.basis * trailer_wheel_local(w))
 
 	# 1.4 trainee aerodynamique, explicite (linear_damp = 0, SPIKE A10).
 	if debug_drag:
@@ -825,6 +962,8 @@ func _physics_process(_delta: float) -> void:
 		if debug_anti_roll:
 			_apply_anti_roll(up, fwd)
 	else:
+		# gravite de vol : le complement au-dela de la gravite du projet
+		apply_central_force(Vector3.DOWN * _gravity * (t.air_gravity_factor - 1.0) * mass)
 		_update_landing_estimate()
 		if debug_air_control:
 			_apply_air_control(up, steer_in)
@@ -1043,9 +1182,12 @@ func _update_trailer(up: Vector3, com: Vector3, v_fwd: float, right: Vector3) ->
 		var slip := atan2(linear_velocity.dot(right), v_fwd)   # > 0 : vitesse a droite du cap
 		target = deg_to_rad(t.trailer_sweep_deg_per_g) * _lat_accel / TruckSpec.GRAVITY 				+ t.trailer_drift_sweep_ratio * slip
 		target = clampf(target, -max_a, max_a)
+	# pneu creve : elle chasse plus loin et se balance plus longtemps
+	var sway := t.tire_burst_trailer_sway_mult if trailer_burst_count() > 0 and debug_tire_burst else 1.0
+	target = clampf(target * sway, -max_a, max_a)
 	var wn := TAU * t.trailer_frequency_hz
 	var rel := _trailer_yaw_rate - w
-	_trailer_yaw_rate += (-wn * wn * (_trailer_angle - target) - 2.0 * t.trailer_damping_ratio * wn * rel) * dt
+	_trailer_yaw_rate += (-wn * wn * (_trailer_angle - target) - 2.0 * t.trailer_damping_ratio / sway * wn * rel) * dt
 	rel = _trailer_yaw_rate - w
 	var angle := _trailer_angle + rel * dt
 	if absf(angle) > max_a:
@@ -1210,7 +1352,7 @@ func _update_landing_estimate() -> void:
 	# surestimait le temps restant : l'alignement sur le sol demarrait trop tard,
 	# et un camion secoue en vol touchait le sol a 26 deg, chassis compris.
 	var v_down := -linear_velocity.y
-	var g := _gravity
+	var g := _gravity * tuning.air_gravity_factor
 	# racine positive de g t^2 / 2 + v_down t - d = 0
 	_ticks_to_impact = (-v_down + sqrt(v_down * v_down + 2.0 * g * _ground_d)) / g \
 		* Engine.physics_ticks_per_second

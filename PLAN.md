@@ -289,7 +289,7 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 | 4.5.1 | Vitesse tracteur solo (x1.2 sans remorque) et passage de la course à **4 tours** | gameplay-engineer | `[x]` |
 | 4.5.2 | Obstacles dynamiques : suppression du freinage sur les panneaux (*yeet* conservé sans pénalité) et flaques savonnettes (glissade incontrôlée sans perte de vitesse brute) | track-designer | `[x]` |
 | 4.5.3 | Barils explosifs sur la piste : physique, détonation, projection (*yeet* léger) ; **remasterisation visuelle** (taille x2, balise stroboscopique/lumineuse haute visibilité) | track-designer | `[x]` lot 3 ; `damage_visuals_test`, `track_hazards_test` |
-| 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP cabine uniquement), barils explosifs (-15 HP), remorque bouclier, mort et respawn après 3 s (PV discrets/internes avant dégradations) | gameplay-engineer | `[x]` `TruckHealth` (nœud « Health » du camion), signal `Truck.wall_impact` par forme touchée ; `truck_health_test` |
+| 4.5.4 | Système de PV (100 HP) : dégâts chocs murs (-1 à -5 HP), barils explosifs (-15 HP), mort et respawn après 3 s ; lot 4 : PV séparés tête / remorque (plus de bouclier), carcasse laissée sur la route | gameplay-engineer | `[x]` `TruckHealth` (nœud « Health » du camion), signal `Truck.wall_impact` par forme touchée ; `truck_health_test`, `truck_damage_split_test` |
 | 4.5.5 | Remorques larguées persistantes (50 HP) : restent sur piste sans disparition, nouvelle remorque réapparue sur le tracteur, interdiction de largage les 5 premières secondes | gameplay-engineer | `[x]` dégâts selon l'énergie du choc, explosion à 0 PV ; `trailer_hp_test`, `truck_cargo_test` (dégradation visuelle de la remorque : 4.5.6) |
 | 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive (tracteur & remorque) | visual-artist | `[x]` lot 3 : `DamageFx`, `TruckDamageFx`, `DetachedTrailer` ; `damage_visuals_test` |
 | 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[x]` dans la course (`LocalRace`, état LOBBY) ; `race_ready_test` |
@@ -358,6 +358,234 @@ Réalisation du lot 3 :
 - **Remorque larguée** : trace à chaque choc qui l'abîme ; sous 60 % de ses
   PV, flancs noircis et fumée grise ; sous 30 %, toit noirci, fumée
   anthracite et étincelles ; à 0, explosion.
+
+**Lot 4 (2026-10-06, demandes utilisateur : « augmenter la gravité », « bien
+distinguer les dégâts faits à la tête du camion et à la remorque », « quand le
+camion explose, il reste au milieu du chemin », « que des bouts partent »)**
+- `[x]` **Gravité de vol** : en l'air, le camion tombe à 1,6 g
+  (`VehicleTuning.air_gravity_factor`) ; au sol, rien ne change (adhérence,
+  freinage, `baseline.json` intacts). Saut de plaque : même hauteur (4,7 m),
+  1,4 s de vol au lieu de 1,8 s (`PadEffects.jump_up_speed_ms` 8 → 9,5 m/s,
+  réception amortie jusqu'à 4,5 m/s au lieu de 3). Butée de suspension
+  (`bump_stop_*`) : une chute de 6 m ne pose plus le châssis au sol.
+- `[x]` **PV séparés** (`TruckHealth`) : la tête (100 PV) et la remorque
+  attelée (PV de la remorque choisie, `TrailerType.dropped_hp`). Ce que la
+  remorque encaisse ne touche jamais la tête (fin de la règle « bouclier ») ;
+  à 0 PV elle explose et disparaît, l'explosion coûte 20 PV à la tête, et une
+  nouvelle remorque arrive après la recharge du cargo. HUD : « REM » et sa
+  jauge sous les PV de la tête.
+- `[x]` **Obstacles qui blessent** : percuter une remorque larguée ou une
+  carcasse (`Truck.hazard_impact`) coûte jusqu'à 40 PV à la partie touchée
+  (40 × (v / 33 m/s)², de face à 100 km/h : ~28) ; l'obstacle s'abîme aussi.
+  Sa propre remorque larguée aussi, autant que les autres (2026-10-07).
+- `[x]` **Chocs entre camions** (`Truck.truck_impact`, 2026-10-07) : même
+  barème, les deux camions encaissent à la partie touchée (de face à 15 m/s
+  chacun : -29 PV par tête) ; rien sous 4 m/s (coude à coude, frottement).
+- `[x]` **Carcasse sur la route** : à 0 PV, la tête explose et sa carcasse
+  calcinée reste en place (`TruckWreck`, 60 PV, obstacle), avec la remorque
+  attelée et ses PV restants ; le joueur réapparaît 3 s plus tard sur un
+  camion neuf, à côté de ce qui encombre la route.
+- `[x]` **Carrosserie déformable** (`BodyDamage`, `Debris`) : la tôle
+  s'enfonce au point touché (jusqu'à 45 cm), maillages subdivisés au premier
+  choc pour que les grands panneaux plient, sans fente ; au-delà de 9 m/s, les
+  pièces extérieures proches s'arrachent (rétros, phares, pare-chocs...) et
+  des éclats de tôle volent ; à l'explosion, tout ce qui dépasse part.
+  Préparation au sas READY (~0,5 s par modèle, une fois) ; un choc coûte
+  ~10 ms.
+- `[x]` `make test` à 100 % (`truck_damage_split_test`,
+  `truck_body_damage_test` ajoutés).
+
+**Rendu réaliste (2026-10-07, demande utilisateur : « améliore les graphismes,
+je veux qu'il soit le plus réaliste possible »)** — tout est procédural
+(shaders, bruits) : aucun asset tiers, aucun nouveau fichier lourd.
+- `[x]` **Bitume** (`asphalt.gdshaderinc`, partagé par les deux chaussées) :
+  gravillons effacés au loin (pas de scintillement), ornières de gomme dans
+  chaque voie, taches d'huile, rustines, fissures colmatées, salissures le
+  long des murs, marquages usés, micro-relief. Cyber City : chaussée
+  détrempée, flaques miroir dans les ornières, gouttes qui ricochent.
+- `[x]` **Ciels** (`sky_day.gdshader`, `sky_night.gdshader`) : plage —
+  atmosphère, halo et disque solaire, cumulus éclairés par le soleil ; ville —
+  plafond nuageux éclairé par la ville, étoiles dans les trouées. Rendu AgX,
+  ombres douces du soleil (`light_angular_distance`), filtrage anisotrope 16x.
+- `[x]` **Mer** : eau sombre qui reflète le ciel (Fresnel), houle et clapot
+  sur quatre trains d'ondes, moutons au large, écume au rivage.
+- `[x]` **Camions** (`TruckMaterials`) : peinture vernie, chrome, métal
+  brossé, gomme, plastiques grenés, verre fumé, d'après les noms de matériaux
+  des modèles ; textures de bruit en triplanaire. **Phares qui éclairent**
+  (`TruckLights`) la nuit : deux projecteurs et deux feux arrière par camion,
+  halo dans la bruine (brouillard volumétrique, qualité haute, ≤ 2 vues).
+- `[x]` **Pluie** (`RainFx`) autour de chaque caméra à Cyber City ;
+  glissières en béton taché / acier rayé et mouillé ; sol de la ville et toit
+  du showroom en dalles de béton mouillées ; spectateurs en silhouettes
+  (tête, buste, jambes) aux couleurs de vêtements ternes.
+- `[x]` Coût mesuré (RTX 5060 Ti, 1920 × 1080, qualité haute) : 4 vues
+  5,7 → 5,9 ms par image ; 1 vue 2,2 → 3,5 ms (brouillard volumétrique et
+  reflets). `make test` à 100 % (`truck_realism_test` ajouté).
+- `[x]` **Camions qui ne font plus jouet** (2026-10-07, « pas qu'ils
+  ressemblent à des jouets ») : carrosserie vieillie par la route
+  (`truck_body.gdshader`) — boue et poussière au ras du sol, coulures, voile
+  d'usure, poussière sur le dessus ; poussière claire à la plage, crasse
+  sombre et carrosseries mouillées sous la pluie (`TruckMaterials.
+  set_weather`). Peintures d'origine un peu désaturées, jantes en acier peint
+  satiné (plus de miroir), phares en verre sur réflecteur (plus de pavés
+  blancs). Cônes de flamme figés des cheminées retirés, bavettes derrière les
+  roues arrière du tracteur et de la remorque (`TruckDetails`, elles
+  s'arrachent dans un gros choc). Coût de rendu inchangé (4 vues : 5,6 à
+  5,8 ms par image).
+- `[x]` **Têtes et remorques détaillées** (2026-10-07, « rends la tête et les
+  remorques plus réalistes », « ajoute des détails surtout sur les remorques,
+  inspire-toi d'images en ligne ») : `tools/blender/realisme_vehicules.py`
+  (`make vehicules`) écrit des versions `Realiste/` à côté des modèles de
+  l'équipe, jamais modifiés. Tête : calandre à grille, phares à
+  doubles optiques cerclées, antibrouillards, poignées de maintien,
+  pare-chaleur des cheminées, cornets de rétroviseur, garde-boue arrière
+  noirs. Remorques : garde-boue cintrés au-dessus de chaque roue (plus de
+  planches plates) ; d'après des photos de semi-remorques européennes et les
+  règlements ECE (catalogue) : protection latérale R73, réservoirs d'air,
+  extincteur, cales de roue, panneau arrière avec plaques R70, disque « 80 »,
+  autocollant « ANGLES MORTS ». Détails fusionnés par famille (draw calls) et
+  arrachables (`BodyDamage`, préfixe `Detail_`). 4 vues : 5,8 → 6,4 ms par
+  image ; un choc sur la carrosserie : 10 → 13 ms.
+- `[x]` **Silhouette de cabine** (2026-10-07, « c'est toujours beaucoup trop
+  carré ») : la tête est remodelée par un champ de déformation doux
+  (`reshape_cab`) — coins avant arrondis de 28 cm au-dessus des roues, face
+  avant et pare-brise inclinés (46 cm de recul en haut du pare-brise en jeu),
+  toit bombé, flancs rentrants de 7 %, pare-chocs enveloppant ; autocollants
+  et logos déplacés d'un bloc. Le pare-soleil, devenu une casquette sur un
+  pare-brise incliné, est retiré. Caisses de remorques gardées droites
+  (conteneur, bétaillère, fourgon : des boîtes dans la réalité). Rendu
+  inchangé (4 vues : 6,4 ms par image), aucun pneu traversé.
+- `[x]` **Cicatrices au lieu de traits blancs** (2026-10-07, « des sortes de
+  traits blancs [...] pas très réaliste, quitte à avoir des vraies
+  cicatrices ») : les décalques d'éraflures sont remplacés par des
+  cicatrices peintes dans la carrosserie (`BodyScars`, `truck_body.gdshader`,
+  8 par maillage, paramètres d'instance) — peinture ternie et rayée dans le
+  sens du frottement, éclats à bord déchiqueté laissant voir l'apprêt et la
+  tôle nue, traces noires, suie au centre des gros chocs. Un nouveau choc
+  agrandit la cicatrice voisine ; tout s'efface à la réapparition.
+- `[x]` **Cyber City lisible** (2026-10-07, « Night City est trop sombre, la
+  vision est compliquée ») : 88 lampadaires LED le long de la piste
+  (projecteurs sans ombre, mâts en MultiMesh, aucun au-dessus d'une autre
+  partie de la piste), lumière ambiante × 2, exposition 1,15 → 1,6, lune
+  0,45 → 0,85, bitume mouillé un peu moins noir. 4 vues : 6,3 ms par image
+  (inchangé).
+- `[x]` **Virages** (2026-10-07, « mieux tourner sans déraper ») :
+  adhérence latérale 0,9 → 0,99 g (haut de la tolérance de VEHICLE_SPEC §6),
+  pneus plus vifs (saturation à 5° au lieu de 6°), direction plus rapide
+  (5°/tick). Mesuré : 0,877 → 0,961 g, rayon mini à 50 km/h 21,6 → 19,7 m
+  (`make baseline`). Puis cible relevée à ~1,15 g (accord de l'utilisateur,
+  2026-10-07) : adhérence 1,19 g, mesuré 1,145 g, rayon mini 16,4 m.
+- `[x]` **Pneus qui éclatent** (2026-10-07, « quand un pneu est touché, il
+  éclate, on perd en adhérence, en maniabilité ») : un choc de côté à hauteur
+  de roue, à plus de 7 m/s vers l'obstacle (mur, camion, remorque larguée,
+  épave), fait éclater le pneu de ce côté et de cet essieu
+  (`TruckTires.wheel_hit`) ; un choc frontal ou un frottement, non. La roue
+  garde 45 % de son adhérence latérale, sa jante freine (3 m/s²) et le coin
+  descend de 18 cm (`VehicleTuning`, groupe « Pneu éclaté », `debug_tire_burst`).
+  Mesuré (`tire_burst_test`) : plein braquage 30 % de virage en moins, le
+  camion tire de 5° du côté crevé en 5 s, 13 % de vitesse en moins. Pneu
+  écrasé sous la jante et déchiré (`truck_body.gdshader`, `tyre_burst`),
+  détonation, fumée, lanières de gomme. Pneus neufs à la réapparition.
+  Remorque (« fais aussi éclater les pneus de la remorque ») : un choc de côté
+  sur l'arrière de la caisse, à ±2,6 m du train de roues, fait éclater les
+  pneus de ce côté (`TruckTires.trailer_hit`, `Truck.TRAILER_LEFT/RIGHT`).
+  Sa jante freine sous le train de roues, la remorque chasse et se balance
+  plus (×1,6), l'arrière du tracteur garde 80 % d'adhérence par côté crevé.
+  Mesuré : l'ensemble tire de 4,5° en 5 s, 13 % de vitesse en moins, la
+  remorque balaie 13° contre 8,5° en entrée de virage. Les pneus de ce côté
+  de chaque essieu s'écrasent (`tyre_side`), la remorque penche ; ils partent
+  avec la remorque larguée, la suivante arrive neuve.
+- `[x]` **Relief des matières** (2026-10-07, objectif « modèles plus lisses et
+  réalistes, avec des détails en relief ») : `truck_body.gdshader` dessine
+  un relief procédural par matière (`TruckMaterials._relief_of`), ses axes
+  mesurés par maillage (`_set_relief_frame`) — tôle ondulée trapézoïdale des
+  conteneurs ISO (ondes de 28 cm, 3,6 cm de creux, toit en ondes larges,
+  portes comprises), sculptures des pneus (4 rainures en zigzag, lamelles en
+  quinconce, flancs nervurés), cordons de soudure des viroles de citerne,
+  lames nervurées de la bétaillère, plis de bâche ; la crasse se loge dans
+  les creux, le relief s'efface au loin (pas de scintillement). Matières
+  jusque-là oubliées : caisse du conteneur, inox poli de la citerne, bâche,
+  bandes réfléchissantes, extincteurs, tuyaux. 4 vues : 6,3 → 6,5 ms par
+  image.
+- `[x]` **Pièces plus lisses** : normales pondérées par l'aire après chaque
+  chanfrein (plus de dégradé qui « gonfle » les faces planes) ; les châssis
+  et caisses fusionnés des remorques, jusque-là laissés à arêtes vives
+  (sommets dédoublés par l'export glTF, pièces trop lourdes), sont recousus
+  et chanfreinés (7 mm), avec un plafond de triangles par pièce. Têtes
+  ~125 k triangles, remorques 51 à 150 k ; 4 vues : 6,5 ms par image.
+- `[~]` **Modèles plus réalistes, passe 2** (2026-10-07, « tu peux refaire des
+  modèles 3D ou modifier ceux existants » ; objectif « ne t'arrête pas tant
+  que les modèles ne sont pas vraiment plus réalistes ») :
+  - `[x]` tracteur : calandre à lames dans un entourage chrome (plus de
+    gaufrier), phares à réflecteurs en cuvette et feu de jour, pare-soleil,
+    prise d'air, réservoirs alu sanglés entre marchepieds et roues arrière ;
+    arrière (vu dès qu'on largue la remorque) : lunette cerclée de noir,
+    flexibles d'air spiralés rouge et bleu sur leur potence, sellette avec
+    gorge d'attelage, rampes et poignée de verrouillage ;
+  - `[x]` semi-grue refaite : tourelle profilée à ouïes, cabine de grutier
+    vitrée, contrepoids en dalles, flèche à profil arrondi (bagues, tête à
+    poulie, câble, moufle, crochet), vérin fût + tige, stabilisateurs à
+    vérins et patins ronds, caisson nervuré ;
+  - `[x]` fourgon incendie : vrais rideaux roulants (lames de 5 cm en relief,
+    matière `Volet_Roulant`), barre basse à poignée, coffre d'enroulement ;
+  - `[x]` porte-engins : chariots élévateurs générés (celui du fichier était
+    un jouet en boîtes) - contrepoids arrondi, protège-conducteur tubulaire à
+    toit à lames, mât à deux montants (vérin, chaînes), dosseret, fourches,
+    bandages pleins, siège, volant, bouteille de gaz, phares, gyrophare ;
+  - `[x]` porte-voitures : sangle d'arrimage jaune sur chaque roue des
+    voitures (par-dessus le pneu, tendue au plancher, cliquet), vérin de
+    levage (fût, tige chrome) contre chaque poteau du cadre ;
+  - `[x]` matières : plus de « camouflage » sur les toits et les tôles d'alu -
+    la poussière du dessus et le voile d'usure suivaient un bruit à plaques
+    de 3 m (mat et brillant en nuages) ; film presque uniforme au grain fin ;
+    alu brossé à stries fines et serrées ;
+  - `[x]` bétaillère : portes arrière ferrées (quatre barres de verrouillage
+    chromées à poignée et cames, gonds sur les deux bords), posées sur les
+    grandes faces arrière (pas sur le panneau au-dessus du toit).
+- `[x]` **Remorques creuses, percées par les chocs** (2026-10-07, « que les
+  remorques soient vides : dès qu'elle s'abîme, ça fait des trous dans la
+  coque pour qu'on puisse voir à l'intérieur ») : la carrosserie des
+  remorques passe par `truck_body_hollow.gdshader` (même matière, vue des
+  deux faces). Au cœur d'une cicatrice grave (gravité locale > 0,6 : choc
+  violent, ou chocs répétés au même endroit ; 0,74 depuis les chocs irréguliers), la coque est découpée à bord
+  déchiqueté, lèvre de tôle nue puis bord noirci ; par le trou, l'intérieur
+  vide de la coque (apprêt sombre). La paroi d'en face (au-delà de 1,2 m le
+  long de la normale) n'est jamais percée par le même choc. Le tracteur reste
+  plein.
+- `[x]` **Tôle fatiguée** (2026-10-07, « plus on tape sur une paroi d'une
+  remorque ou du camion, plus elle se déforme, en s'enfonçant ») : chaque coup
+  près d'un creux déjà là l'enfonce 50 % de plus par coup reçu (jusqu'à ×3)
+  et un peu plus large (`BodyDamage`, `META_HITS`). Mesuré
+  (`truck_body_damage_test` F, quatre coups à 4 m/s au même endroit) : creux
+  de 6, 14, 25, 37 cm, chaque coup creuse plus que le précédent. Le trou de
+  la coque se mesure dans le plan de la paroi : la tôle enfoncée se
+  déchire au lieu de s'éloigner du point d'impact.
+- `[x]` **Chocs de forme irrégulière** (2026-10-07, « les dégâts sur les côtés
+  des remorques sont des ronds trop parfaits ; plutôt des trous moins
+  réguliers ou enfoncer la coque ») : creux (`BodyDamage`), cicatrices et
+  trous (`truck_body.gdshaderinc`, `scar_dist`) prennent une forme propre à
+  chaque choc, tirée de son point d'impact : ovale couché, bord lobé, plis en
+  travers du creux ; le trou a un bord échancré et se fend en étoile. La coque
+  d'une remorque s'enfonce 1,6 fois plus que la cabine
+  (`TRAILER_DENT_MULT`) et ne se perce qu'au-delà d'une gravité locale de
+  0,74 (au lieu de 0,6). Le creux se calcule sur la tôle au neuf : un
+  nouveau coup creuse toute la zone. Mesuré (`truck_body_damage_test`) :
+  creux de 9, 24, 43, 68 cm en quatre coups à 4 m/s sur la citerne ; un choc
+  de plus coûte 19 ms (15 ms avant, seuil 25).
+- `[x]` **Pneus plus résistants, jante à nu qui crache des étincelles**
+  (2026-10-08, « les pneus éclatent trop facilement, il faut plusieurs coups ;
+  quand il explose, qu'on voie vraiment la jante ; des étincelles entre la
+  jante et le sol quand on roule ») : chaque choc qui vise un pneu l'use de 1
+  (au seuil) à 1,5 (choc violent), il éclate à 3 : trois coups, deux au
+  moins (`TruckTires.take_hit`) ; usure remise à zéro à la réapparition
+  (remorque larguée : la sienne). Pneu éclaté : la gomme explose en dix
+  morceaux projetés tout autour du pneu (« pas de débris de pneu sur les
+  roues, elle part en morceaux »), plus rien ne reste sur la roue, la
+  jante à nu pose sur la route (descente visuelle au-delà de
+  `tire_burst_drop_m`, la physique ne change pas). Au sol et au-dessus de
+  2 m/s, gerbe d'étincelles sous la jante, vers l'arrière, plus vive avec
+  la vitesse ; sur la remorque, tout le train de roues
+  (`tire_burst_test` H, I).
 
 ---
 

@@ -19,6 +19,13 @@ extends Resource
 @export_range(0.0, 5.0, 0.01, "suffix:Hz") var suspension_frequency_hz: float = 0.0
 ## Taux d'amortissement (1 = critique). Spike V1 : 0,45.
 @export_range(0.0, 2.0, 0.01) var suspension_damping_ratio: float = 0.0
+## Butee de fin de course (caoutchouc) : sous cette distance ancrage -> moyeu,
+## le ressort se raidit. Au repos (0,54 m) et en roulant, elle ne touche rien ;
+## elle arrete une chute lourde avant que le chassis ne touche (gravite de vol,
+## 2026-10-06).
+@export_range(0.0, 0.7, 0.01, "suffix:m") var bump_stop_start_m: float = 0.0
+## Raideur ajoutee dans la butee, en multiple de la raideur du ressort.
+@export_range(0.0, 50.0, 0.1) var bump_stop_stiffness_ratio: float = 0.0
 
 @export_group("Inertie")
 ## Moments d'inertie imposes (kg.m2), axes locaux. Sans eux, Godot les deduit
@@ -165,6 +172,27 @@ extends Resource
 ## biais a 150 km/h se couche moins (10,9 deg contre 13,2 a 0,2).
 @export_range(0.0, 1.0, 0.01) var chassis_friction: float = 0.0
 
+@export_group("Pneu eclate")
+## Pneu eclate (Truck.burst_tire, 2026-10-07 : « quand un pneu est touche, il
+## eclate, on perd en adherence, en maniabilite ») : adherence laterale de
+## cette roue, en fraction de l'adherence normale (0 .. 1).
+@export_range(0.0, 1.0, 0.01) var tire_burst_grip_factor: float = 0.0
+## Freinage de la jante qui roule sur la gomme a plat, a cette roue seule :
+## le camion tire du cote creve et perd un peu de vitesse max.
+@export_range(0.0, 10.0, 0.01, "suffix:m/s²") var tire_burst_drag_ms2: float = 0.0
+## Rayon perdu : la jante descend d'autant vers le sol, ce coin de la caisse
+## aussi.
+@export_range(0.0, 0.5, 0.01, "suffix:m") var tire_burst_drop_m: float = 0.0
+## Pneu de remorque eclate (un cote de son train de roues) : la remorque
+## glisse et entraine l'arriere du tracteur. Adherence laterale des roues
+## arriere, en fraction de la normale, par cote creve (0 .. 1). Sa jante freine
+## comme celle du tracteur (tire_burst_drag_ms2), sous le train de roues.
+@export_range(0.0, 1.0, 0.01) var tire_burst_trailer_grip_factor: float = 0.0
+## Remorque sur un pneu creve : elle chasse plus loin en virage et se balance
+## plus longtemps (consigne de balayage x ce facteur, amortissement / ce
+## facteur).
+@export_range(1.0, 3.0, 0.01) var tire_burst_trailer_sway_mult: float = 0.0
+
 @export_group("Direction")
 ## Angle de braquage max, atteint a basse vitesse.
 @export_range(0.0, 60.0, 0.1, "suffix:°") var max_steer_deg: float = 0.0
@@ -256,6 +284,12 @@ extends Resource
 @export_range(0.0, 720.0, 0.1, "suffix:°/s") var air_yaw_rate_deg_s: float = 0.0
 ## En l'air : acceleration angulaire max pour atteindre ce lacet.
 @export_range(0.0, 50.0, 0.01, "suffix:rad/s²") var air_control_accel: float = 0.0
+## Gravite en vol, en multiple de la gravite du projet (2026-10-06, « il faut
+## augmenter la gravite pour qu'elle soit plus realiste »). Au sol, rien ne
+## change (charge des roues, adherence, freinage : METRICS.md) ; en l'air, le
+## camion retombe plus vite : un saut de meme hauteur dure moins longtemps, la
+## trajectoire n'a plus l'air de flotter. 1 = gravite du projet seule.
+@export_range(1.0, 4.0, 0.01) var air_gravity_factor: float = 0.0
 
 
 ## Liste des erreurs de reglage ; vide = valide.
@@ -283,6 +317,14 @@ func validate() -> PackedStringArray:
 		errors.append("grip_slip_angle_deg = %s : doit etre < 45" % grip_slip_angle_deg)
 	if auto_countersteer_ratio >= 1.0:
 		errors.append("auto_countersteer_ratio = %s : doit etre < 1" % auto_countersteer_ratio)
+	if tire_burst_grip_factor >= 1.0:
+		errors.append("tire_burst_grip_factor = %s : doit etre < 1" % tire_burst_grip_factor)
+	if tire_burst_trailer_grip_factor >= 1.0:
+		errors.append("tire_burst_trailer_grip_factor = %s : doit etre < 1" % tire_burst_trailer_grip_factor)
+	if tire_burst_trailer_sway_mult < 1.0:
+		errors.append("tire_burst_trailer_sway_mult = %s : doit etre >= 1" % tire_burst_trailer_sway_mult)
+	if tire_burst_drop_m >= TruckSpec.WHEEL_RADIUS * 0.5:
+		errors.append("tire_burst_drop_m = %s : la jante passerait sous le sol" % tire_burst_drop_m)
 	if handbrake_engage_ticks < 1.0 or handbrake_release_ticks < 1.0:
 		errors.append("handbrake_engage_ticks / handbrake_release_ticks : au moins 1 tick")
 	if engine_taper_kmh >= top_speed_kmh:

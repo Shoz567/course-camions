@@ -54,11 +54,14 @@ func _test_finish() -> void:
 
 func _check_environment() -> void:
 	var env := load("res://tracks/cyber_night.tres") as Environment
-	var sky := env.sky.sky_material as ProceduralSkyMaterial
+	# ciel realiste (sky_night.gdshader, 2026-10-07) : nuages bas eclaires
+	# par la ville
+	var sky := env.sky.sky_material as ShaderMaterial
+	var top: Color = sky.get_shader_parameter("zenith_color") if sky != null else Color.WHITE
+	var hz: Color = sky.get_shader_parameter("glow_color") if sky != null else Color.BLACK
 	check("nuit : glow et brouillard actifs", env.glow_enabled and env.fog_enabled)
-	check("nuit : ciel bleu nuit en haut", sky.sky_top_color.get_luminance() < 0.05
-		and sky.sky_top_color.b > sky.sky_top_color.r, str(sky.sky_top_color))
-	var hz := sky.sky_horizon_color
+	check("nuit : ciel bleu nuit en haut", top.get_luminance() < 0.05
+		and top.b > top.r, str(top))
 	check("nuit : horizon pourpre", hz.r > hz.g and hz.b > hz.g, str(hz))
 	var fog := env.fog_light_color
 	check("nuit : brouillard bleute", fog.b > fog.r and fog.g > fog.r, str(fog))
@@ -182,6 +185,16 @@ func _check_race_decor() -> void:
 		and decor.screen_labels[0].text != decor.screen_labels[1].text, ad0)
 	check("8 faisceaux, qui balaient le ciel", decor.beams.size() == 8 and decor.beams[0].rotation != beam0,
 		"%d" % decor.beams.size())
+	# lampadaires (2026-10-07, « Night City trop sombre ») : au moins un tous
+	# les 50 m, projecteurs sans ombre vers le sol, mats au-dela des murs
+	var street := root.get_node_or_null("StreetLights") as Node3D
+	var spots := street.find_children("*", "SpotLight3D", false, false) if street != null else []
+	var lamps_ok := not spots.is_empty()
+	for n: Node in spots:
+		var sl := n as SpotLight3D
+		lamps_ok = lamps_ok and not sl.shadow_enabled and (-sl.global_basis.z).y < -0.8
+	check_above("lampadaires le long de la piste", spots.size(), int(_track.length() / 50.0))
+	check("lampadaires : projecteurs sans ombre, vers le sol", lamps_ok)
 	var stands := root.get_node_or_null("Grandstands") as Node3D
 	check("tribunes generees", stands != null)
 	if stands == null:

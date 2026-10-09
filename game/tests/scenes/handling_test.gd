@@ -182,7 +182,8 @@ func _write_baseline(measured: Array[float]) -> void:
 			return
 		text = re.sub(text, "${1}" + value)
 	var stamp := "%s, Godot %s" % [Time.get_date_string_from_system(), Engine.get_version_info().string]
-	var re_stamp := RegEx.create_from_string("(\"handling_measured\"\\s*:\\s*)[^,\\n]+")
+	# la date contient une virgule : toute la chaine entre guillemets
+	var re_stamp := RegEx.create_from_string("(\"handling_measured\"\\s*:\\s*)\"[^\"\\n]*\"")
 	text = re_stamp.sub(text, "${1}\"%s\"" % stamp)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if not check("baseline.json ouvert en ecriture", f != null, path):
