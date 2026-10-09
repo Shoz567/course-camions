@@ -666,6 +666,25 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   2 m/s, gerbe d'étincelles sous la jante, vers l'arrière, plus vive avec
   la vitesse ; sur la remorque, tout le train de roues
   (`tire_burst_test` H, I).
+- `[x]` **Tête du camion : roues et relief** (2026-10-09, « que ses roues
+  ressemblent plus aux roues de la remorque, moins plates ; un peu plus
+  détaillées, les textures avec plus de relief sur la tête ») :
+  - roues refaites par `realisme_vehicules.py` (`rebuild_wheels`) comme
+    celles du catalogue : pneu aux flancs bombés, épaulements arrondis,
+    bande à deux rainures ; jante emboutie en cuvette, dix ajours, moyeu
+    saillant, dix écrous (le voile plat au ras du pneu a disparu). Même
+    rayon, même largeur, même centre : pivot, roulement, passages de roue
+    et pneu éclaté inchangés (fût de jante à 0,6 × le rayon) ;
+  - matières en relief posées sur les pièces (`RELIEF_PARTS`) et dessinées
+    par `truck_body.gdshaderinc` (`head_relief`) : marchepieds alu et
+    plateau arrière en tôle larmée, pare-chaleur des échappements en tôle
+    perforée, calandre et prise d'air en nid d'abeille, longerons percés et
+    boulonnés ; trous noirs, motifs fondus au loin (pas de crénelage) ;
+  - plastiques moulés grainés (pare-chocs, garde-boue, rétroviseurs), peau
+    d'orange plus fine sur la peinture ;
+  - inchangé, vérifié en jeu et par les tests : dégâts (creux, cicatrices),
+    débris `Detail_`, pneus qui éclatent, jante à nu sur la route, fumée.
+    `truck_realism_test` vérifie les reliefs et les jantes à ajours.
 
 ---
 

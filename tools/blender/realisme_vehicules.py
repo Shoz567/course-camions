@@ -28,7 +28,11 @@ Ce qui faisait « maquette » et ce que le script y change :
      garde-boue arriere en plastique noir (plus en couleur carrosserie) ;
   3. remorques : les garde-boue plats (planches au-dessus des roues) deviennent
      des garde-boue cintres qui epousent chaque roue ; pieces de coin sur la
-     caisse d'un conteneur, barres de verrouillage sur ses portes.
+     caisse d'un conteneur, barres de verrouillage sur ses portes ;
+  4. tracteur (2026-10-09) : roues plates refaites comme celles du catalogue
+     (rebuild_wheels) et matieres en relief sur les pieces qui en ont un en
+     vrai (relief_materials : tole larmee, perforee, nid d'abeille, longeron
+     perce).
 Le nommage contractuel (Roue_*, Remorque, Gen_Essieu_*, Phare*, Feu_*...) ne
 change pas ; tout ajout porte le prefixe Detail_. Idempotent : chaque
 execution repart de l'original.
@@ -921,6 +925,201 @@ def detail_trailer(name, trailer):
     return merge_details(added)
 
 
+# --- roues du tracteur -----------------------------------------------------------
+# (2026-10-09, « que ses roues ressemblent plus aux roues de la remorque,
+# qu'elles soient moins plates ») : les roues de l'equipe ont un flanc droit et
+# un voile plat au ras du pneu. Elles sont refaites comme celles du catalogue
+# (catalogue_tete_commune.py, wheel) : pneu aux flancs bombes, epaulements
+# arrondis, bande a deux rainures ; jante emboutie (fut, rebord, voile creuse
+# en cuvette), ajours, moyeu saillant, dix ecrous. Meme rayon, meme largeur,
+# meme centre : le pivot, le rayon de roulement, les passages de roue et le
+# pneu eclate (fut de jante a 0,6 x le rayon, RIM_RATIO) ne changent pas.
+
+WHEEL_SEGS = 32
+WHEEL_NUTS = 10
+WHEEL_VENTS = 10
+# Les cotes absolues des profils du catalogue sont celles d'une roue de
+# 0,52 m : mises a l'echelle du rayon de chaque roue.
+REF_RADIUS = 0.52
+# Pieces des roues de l'equipe, remplacees.
+WHEEL_PARTS = ("Pneu", "Jante", "Voile_Jante", "Moyeu", "Ecrou")
+
+
+def lathe(name, profile, segs, mat, center, side, closed=False):
+    """Piece de revolution autour de l'axe X (monde) : profil (decalage le
+    long de l'axe, vers l'exterieur si side > 0 ; rayon). `closed` : le profil
+    boucle (pneu). Les rayons nuls se referment au centre."""
+    cx, cy, cz = center
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    rings = []
+    for i in range(segs):
+        a = 2.0 * math.pi * i / segs
+        ca, sa = math.cos(a), math.sin(a)
+        rings.append([bm.verts.new((cx + side * x, cy + ca * r, cz + sa * r)) for x, r in profile])
+    n = len(profile)
+    last = n if closed else n - 1
+    for i in range(segs):
+        ra, rb = rings[i], rings[(i + 1) % segs]
+        for j in range(last):
+            k = (j + 1) % n
+            quad = (ra[j], rb[j], rb[k], ra[k])
+            if len({v.co.to_tuple(5) for v in quad}) >= 3:
+                try:
+                    bm.faces.new(quad)
+                except ValueError:
+                    pass
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(o)
+    me.materials.append(mat)
+    return o
+
+
+def tire_profile(r, w, k, bulge):
+    """Profil du pneu (catalogue) : talons, flancs bombes de `bulge`,
+    epaulements arrondis, bande de roulement a deux rainures."""
+    h = w / 2.0
+    side = [(-h + 0.02 * k, 0.62 * r), (-h - 0.4 * bulge, 0.70 * r), (-h - bulge, 0.82 * r), (-h, 0.92 * r),
+            (-h + 0.03 * k, 0.975 * r), (-h + 0.075 * k, r)]
+    tread = [(-0.30 * h, r), (-0.26 * h, 0.975 * r), (-0.16 * h, 0.975 * r), (-0.12 * h, r),
+             (0.12 * h, r), (0.16 * h, 0.975 * r), (0.26 * h, 0.975 * r), (0.30 * h, r)]
+    other = [(-x, rr) for x, rr in reversed(side)]
+    return side + tread + other
+
+
+def join_as(objs, name):
+    first = objs[0]
+    if len(objs) > 1:
+        with bpy.context.temp_override(active_object=first, object=first, selected_objects=objs,
+                                       selected_editable_objects=objs):
+            bpy.ops.object.join()
+    first.name = name
+    first.data.name = name
+    smooth(first.data)
+    return first
+
+
+def wheel_pieces(center, r, w, side, outer, bulge, hub_k, mats):
+    """Pieces d'une roue (monde) : [pneu], [jante, ajours], [moyeu, ecrous]."""
+    k = r / REF_RADIUS
+    h = w / 2.0
+    cx, cy, cz = center
+    tyre = [lathe("Pneu", tire_profile(r, w, k, bulge), WHEEL_SEGS, mats["pneu"], center, side, closed=True)]
+    if not outer:
+        # roue interieure des jumelees : fut et fond, rien de visible
+        rim = [lathe("Jante", [(-h + 0.01 * k, 0.6 * r), (h - 0.01 * k, 0.6 * r), (h - 0.03 * k, 0.3 * r),
+                               (h - 0.03 * k, 0.0)], WHEEL_SEGS, mats["jante"], center, side)]
+        return tyre, rim, []
+    # fut, rebord qui pince le talon, puis voile emboutie en cuvette
+    rim = [lathe("Jante", [(-h + 0.01 * k, 0.6 * r), (h - 0.03 * k, 0.6 * r), (h - 0.005 * k, 0.63 * r),
+                           (h + 0.005 * k, 0.66 * r), (h - 0.01 * k, 0.6 * r), (h - 0.05 * k, 0.52 * r),
+                           (h - 0.07 * k, 0.36 * r), (h - 0.06 * k, 0.24 * r), (h - 0.05 * k, 0.0)],
+                 WHEEL_SEGS, mats["jante"], center, side)]
+    for i in range(WHEEL_VENTS):
+        a = 2.0 * math.pi * (i + 0.5) / WHEEL_VENTS
+        loc = Vector((cx + side * (h - 0.058 * k), cy + math.cos(a) * 0.44 * r, cz + math.sin(a) * 0.44 * r))
+        rim.append(add_cylinder("Ajour", 0.05 * r + 0.012 * k, 0.012 * k, loc, mats["ajour"], None, axis="X",
+                                segments=10, cap=True))
+    hub = [lathe("Moyeu", [(h - 0.05 * k, 0.21 * r), (h - 0.01 * hub_k, 0.2 * r), (h + 0.03 * hub_k, 0.17 * r),
+                           (h + 0.07 * hub_k, 0.12 * r), (h + 0.08 * hub_k, 0.0)], 16, mats["chrome"], center, side)]
+    # ecrous : posent sur la voile et en sortent de quelques centimetres
+    for i in range(WHEEL_NUTS):
+        a = 2.0 * math.pi * i / WHEEL_NUTS
+        loc = Vector((cx + side * (h - 0.05 * k), cy + math.cos(a) * 0.29 * r, cz + math.sin(a) * 0.29 * r))
+        hub.append(add_cylinder("Ecrou", 0.022 * k, 0.035 * k, loc, mats["chrome"], None, axis="X", segments=6))
+    return tyre, rim, hub
+
+
+def rebuild_wheels(trailer):
+    """Roues du tracteur refaites (voir plus haut). Renvoie le nombre de
+    roues."""
+    mats = {"pneu": material("Pneu"), "jante": material("Jante"), "chrome": material("Chrome"),
+            "ajour": material("Chassis")}
+    count = 0
+    for g in [o for o in bpy.data.objects if o.type == "EMPTY" and o.name.startswith("Roue_")
+              and (trailer is None or not is_under(o, trailer))]:
+        parts = [c for c in g.children if c.type == "MESH" and c.name.startswith(WHEEL_PARTS)]
+        tyres = [c for c in parts if c.name.startswith("Pneu")]
+        if not tyres:
+            continue
+        boxes = [wbox(t) for t in tyres]
+        side = 1.0 if sum(lo.x + hi.x for lo, hi in boxes) > 0.0 else -1.0
+        # roue exterieure d'abord
+        order = sorted(range(len(tyres)), key=lambda i: -side * (boxes[i][0].x + boxes[i][1].x))
+        # flanc exterieur de la roue exterieure, et bout du moyeu de l'equipe :
+        # le nouveau moyeu ne depasse pas plus
+        out_lo, out_hi = boxes[order[0]]
+        face = max(side * out_lo.x, side * out_hi.x)
+        tip = face
+        for c in parts:
+            if c.name.startswith("Moyeu"):
+                lo, hi = wbox(c)
+                tip = max(tip, side * lo.x, side * hi.x)
+        gap = None
+        if len(order) > 1:
+            in_lo, in_hi = boxes[order[1]]
+            gap = min(side * out_lo.x, side * out_hi.x) - max(side * in_lo.x, side * in_hi.x)
+        for c in parts:
+            bpy.data.objects.remove(c, do_unlink=True)
+        for rank, i in enumerate(order):
+            lo, hi = boxes[i]
+            center = ((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0, (lo.z + hi.z) / 2.0)
+            r = (hi.z - lo.z) / 2.0
+            w = hi.x - lo.x
+            k = r / REF_RADIUS
+            bulge = 0.043 * w if gap is None else min(0.043 * w, 0.4 * gap)
+            hub_k = min(k, max(tip - face, 0.02) / 0.08)
+            tyre, rim, hub = wheel_pieces(center, r, w, side, rank == 0, bulge, hub_k, mats)
+            for objs, name in ((tyre, "Pneu"), (rim, "Jante"), (hub, "Moyeu")):
+                if not objs:
+                    continue
+                o = join_as(objs, name)
+                o.parent = g
+                o.matrix_parent_inverse = g.matrix_world.inverted()
+            count += 1
+    return count
+
+
+# --- matieres en relief de la tete -----------------------------------------------
+# (2026-10-09, « les textures avec plus de relief sur la tete du camion ») :
+# des copies des matieres de l'equipe, posees sur les pieces qui en ont un
+# en vrai ; le relief est dessine par le jeu (TruckMaterials._relief_of,
+# truck_body.gdshaderinc) d'apres le nom.
+RELIEF_PARTS = [
+    # (prefixe de piece, matiere d'origine, matiere en relief)
+    ("Marchepied", "Aluminium", "Aluminium_Larme"),
+    ("Plateau_Arriere", "Carbone", "Chassis_Larme"),
+    (DETAIL + "Pare_Chaleur", "Aluminium", "Aluminium_Perfore"),
+    ("Calandre", "Plastique_Noir", "Plastique_Grille"),
+    (DETAIL + "Prise_Air", "Carbone", "Plastique_Grille"),
+    ("Longeron", "Chassis", "Chassis_Longeron"),
+]
+
+
+def relief_materials(trailer):
+    """Pose les matieres en relief (RELIEF_PARTS). Renvoie le nombre de
+    pieces."""
+    count = 0
+    for prefix, src, dst in RELIEF_PARTS:
+        for o in find(prefix):
+            if trailer is not None and is_under(o, trailer):
+                continue
+            for slot in o.material_slots:
+                if slot.material is None or not slot.material.name.startswith(src):
+                    continue
+                m = bpy.data.materials.get(dst)
+                if m is None:
+                    m = slot.material.copy()
+                    m.name = dst
+                slot.material = m
+                count += 1
+    return count
+
+
 # --- chaine ----------------------------------------------------------------------
 
 def process(src, dst, kind):
@@ -936,6 +1135,7 @@ def process(src, dst, kind):
         added = detail_tractor(root)
         reshaped = reshape_cab(trailer)
         print(f"silhouette : {reshaped} pieces deformees")
+        print(f"roues refaites : {rebuild_wheels(trailer)} ; matieres en relief : {relief_materials(trailer)}")
     else:
         trailer = next((o for o in bpy.data.objects if o.name == "Remorque"), None)
         if trailer is None:

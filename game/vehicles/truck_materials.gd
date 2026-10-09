@@ -23,7 +23,9 @@ extends RefCounted
 ## (upgrade). Couleur de la salissure et pluie : set_weather (par circuit).
 ## Relief par matiere (_relief_of) : tole ondulee des conteneurs, sculptures
 ## des pneus, soudures des citernes, lames des betailleres, plis des baches ;
-## ses axes sont mesures par maillage (_set_relief_frame).
+## sur la tete : tole larmee, pare-chaleur perfores, calandre en nid
+## d'abeille, longerons perces ; ses axes sont mesures par maillage
+## (_set_relief_frame).
 ## Textures procedurales (bruit), aucun fichier. Une copie par materiau
 ## source, partagee par tous les camions (cache). Purement visuel.
 
@@ -42,6 +44,12 @@ const RELIEF_TYRE := 2
 const RELIEF_TANK := 3
 const RELIEF_SLATS := 4
 const RELIEF_TARP := 5
+## Tete du camion (2026-10-09) : matieres posees par
+## tools/blender/realisme_vehicules.py sur les pieces concernees.
+const RELIEF_TREAD_PLATE := 6
+const RELIEF_PERFORATED := 7
+const RELIEF_HONEYCOMB := 8
+const RELIEF_DRILLED := 9
 const BEACH_GRIME := Color(0.46, 0.39, 0.29)
 
 static var _cache: Dictionary = {}
@@ -125,6 +133,10 @@ static func _set_relief_frame(mi: MeshInstance3D, up: Vector3) -> void:
 	if best >= 0:
 		var a := axes[best]
 		mi.set_instance_shader_parameter(&"relief_axis", Vector4(a.x, a.y, a.z, 0.0))
+		# centre de la piece : axe d'un pare-chaleur, ligne des trous d'un
+		# longeron
+		var c := box.get_center()
+		mi.set_instance_shader_parameter(&"relief_center", Vector4(c.x, c.y, c.z, 0.0))
 
 
 ## Plus bas point des maillages sous `root`, dans le repere de `frame`.
@@ -245,8 +257,9 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 			rough = 0.38
 			coat = 1.0
 			coat_rough = 0.04
-			bump = 0.00003
-			scale = 4.0
+			# peau d'orange fine (5 mm) : les reflets ondulent a peine
+			bump = 0.00004
+			scale = 12.0
 			variation = 0.25
 		&"chrome":
 			col = Color(0.9, 0.9, 0.92)
@@ -312,6 +325,11 @@ static func _body(src: BaseMaterial3D, kind: StringName) -> ShaderMaterial:
 			rough = minf(maxf(rough, 0.5) + 0.15, 0.95)
 			bump = 0.00006
 			scale = 8.0
+			# plastique moule (pare-chocs, garde-boue, retroviseurs) : grain
+			# grene de 2 a 3 mm, qui accroche la lumiere rasante
+			if src.resource_name.to_lower().begins_with("plastique"):
+				bump = 0.00022
+				scale = 24.0
 	m.set_shader_parameter(&"albedo", col)
 	m.set_shader_parameter(&"metallic", metal)
 	m.set_shader_parameter(&"roughness", rough)
@@ -356,6 +374,17 @@ static func _relief_of(material_name: String) -> Array:
 		return [RELIEF_TARP, 0.42, 0.018]
 	if n.begins_with("volet_roulant"):
 		return [RELIEF_SLATS, 0.05, 0.005]
+	# tete : marchepieds et plateau en tole larmee (larmes de 3 cm), tole
+	# perforee des pare-chaleur, nid d'abeille de la calandre, longerons
+	# perces au gabarit (trous de 17 mm tous les 5 cm)
+	if n.begins_with("aluminium_larme") or n.begins_with("chassis_larme"):
+		return [RELIEF_TREAD_PLATE, 0.032, 0.0018]
+	if n.begins_with("aluminium_perfore"):
+		return [RELIEF_PERFORATED, 0.022, 0.0015]
+	if n.begins_with("plastique_grille"):
+		return [RELIEF_HONEYCOMB, 0.026, 0.006]
+	if n.begins_with("chassis_longeron"):
+		return [RELIEF_DRILLED, 0.05, 0.004]
 	return [0, 0.28, 0.0]
 
 
