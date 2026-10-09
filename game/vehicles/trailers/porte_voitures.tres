@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"porte_voitures"
+display_name = "PORTE-VOITURES"
+tagline = "la plus longue, un peu flottante"
+model = "../Assets_Visuels/Armes_et_camions/vehicules/porte_voitures.glb"
+box_size = Vector3(3.0, 3.34, 16.05)
+box_center = Vector3(0, 3.83, 8.51)
+top_speed_mult = 0.98
+accel_mult = 0.96
+grip_mult = 0.96
+dropped_hp = 50.0
+dropped_mass_kg = 8500.0
+ability = &""

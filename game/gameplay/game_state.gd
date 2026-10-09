@@ -47,6 +47,10 @@ var speed_class: int = SpeedClass.NORMAL
 ## scene de course garde sa propre valeur (tests, lancement direct).
 var requested_players: int = 0
 
+## Remorque choisie par chaque joueur dans le sas READY (index dans
+## TrailerCatalog), gardee d'une course a l'autre. 0 = Conteneur (defaut).
+var trailer_choice: PackedInt32Array = PackedInt32Array([0, 0, 0, 0, 0, 0])
+
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
 static func track_scene(index: int) -> String:

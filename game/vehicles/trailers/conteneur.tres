@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"conteneur"
+display_name = "CONTENEUR"
+tagline = "la référence : polyvalente"
+model = "../Assets_Visuels/Armes_et_camions/vehicules/remorque.glb"
+box_size = Vector3(3.09, 4.2, 15.07)
+box_center = Vector3(0, 4.26, 8.02)
+top_speed_mult = 1.0
+accel_mult = 1.0
+grip_mult = 1.0
+dropped_hp = 50.0
+dropped_mass_kg = 9000.0
+ability = &""

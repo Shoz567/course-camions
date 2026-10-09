@@ -56,6 +56,8 @@ static var load_external_in_headless: bool = false
 const SPEC_LENGTH := TruckSpec.CHASSIS_SIZE.z
 const MODEL_ROOT := &"ExternalModel"
 const TRAILER_PIVOT := &"TrailerPivot"
+## Modele de la remorque choisie, sous TRAILER_PIVOT (set_trailer_type).
+const TRAILER_SKIN := &"TrailerSkin"
 
 ## Chemin absolu -> PackedScene du modele ajuste (null si absent ou illisible).
 ## Une ressource, pas un noeud orphelin : rien ne fuit a la sortie.
@@ -222,6 +224,48 @@ func make_trailer_copy() -> Node3D:
 	return copy
 
 
+## Remorque choisie (sas READY) : son modele remplace celui de la remorque du
+## camion, sous le pivot de la sellette (il suit donc l'articulation, le penche
+## et la copie larguee). Sans modele charge (boites, headless), la boite de
+## blockout prend la taille de la caisse. null ou sans modele : remorque
+## d'origine.
+func set_trailer_type(type: TrailerType) -> void:
+	if _trailer_pivot == null:
+		return
+	var old := _trailer_pivot.get_node_or_null(NodePath(TRAILER_SKIN))
+	if old != null:
+		_trailer_pivot.remove_child(old)
+		old.queue_free()
+	var skin: Node3D = null
+	if model_loaded and type != null and type.model != "":
+		var path := ProjectSettings.globalize_path("res://").path_join(type.model).simplify_path()
+		var template := _trailer_template(path)
+		if template != null:
+			skin = template.instantiate() as Node3D
+			skin.name = TRAILER_SKIN
+			for n in skin.find_children("*", "MeshInstance3D", true, false):
+				(n as MeshInstance3D).layers |= DamageFx.LAYER_BIT
+			_trailer_pivot.add_child(skin)
+	# remorque d'origine (modele du camion ou boite) : cachee sous un habillage
+	for c in _trailer_pivot.get_children():
+		if c != skin and c is Node3D and String(c.name) != TRAILER_SKIN:
+			(c as Node3D).visible = skin == null
+	if not model_loaded:
+		var mesh := _trailer_pivot.get_node_or_null(^"TrailerMesh") as Node3D
+		if mesh != null:
+			var size := type.box_size if type != null else TruckSpec.TRAILER_SIZE
+			var center := type.box_center if type != null else TruckSpec.TRAILER_CENTER
+			mesh.transform = Transform3D(Basis.from_scale(size / TruckSpec.TRAILER_SIZE),
+				center - TruckSpec.KINGPIN)
+
+
+## Habillage de remorque en place (null : remorque d'origine).
+func get_trailer_skin() -> Node3D:
+	if _trailer_pivot == null:
+		return null
+	return _trailer_pivot.get_node_or_null(NodePath(TRAILER_SKIN)) as Node3D
+
+
 func _probe_index(i: int) -> int:
 	return _probe_of[i] if not _probe_of.is_empty() else i
 
@@ -339,6 +383,42 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	var packed := PackedScene.new()
 	packed.pack(fitted)
 	fitted.free()
+	_templates[path] = packed
+	return packed
+
+
+## Remorque d'un vehicule du catalogue (Assets_Visuels/Armes_et_camions) : le
+## noeud `Remorque` du .glb, dans le repere de la sellette. Les modeles du
+## catalogue suivent deja VEHICLE_SPEC (pivot de `Remorque` a la sellette) :
+## aucun ajustement. Charge une fois par chemin.
+static func _trailer_template(path: String) -> PackedScene:
+	if _templates.has(path):
+		return _templates[path]
+	_templates[path] = null
+	if not FileAccess.file_exists(path):
+		return null
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		push_warning("TruckVisual : %s illisible, remorque d'origine" % path)
+		return null
+	var raw := doc.generate_scene(state) as Node3D
+	for n in raw.find_children("*", "", true, false):
+		n.owner = null
+	var trailer := _first_with_prefix(raw, "Remorque")
+	if trailer == null:
+		raw.free()
+		push_warning("TruckVisual : pas de noeud Remorque dans %s" % path)
+		return null
+	var xf := Transform3D(Basis.IDENTITY, TruckSpec.KINGPIN).affine_inverse() * _transform_to(trailer, raw)
+	trailer.get_parent().remove_child(trailer)
+	raw.free()
+	trailer.transform = xf
+	for n in trailer.find_children("*", "", true, false):
+		n.owner = trailer
+	var packed := PackedScene.new()
+	packed.pack(trailer)
+	trailer.free()
 	_templates[path] = packed
 	return packed
 

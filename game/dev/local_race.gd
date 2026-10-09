@@ -18,7 +18,10 @@ extends Node3D
 ## Chaque joueur a sa source d'input (sa manette, et AUCUNE autre : INPUT_SPEC
 ## §4), son camion, sa camera, son HUD. Sas « READY ? » (2026-10-02) : chaque
 ## vue montre le joueur et sa manette, et l'invite a appuyer sur CARRE (Maj au
-## clavier : la touche du boost, lue sur SA source d'input) ; des que tous
+## clavier : la touche du boost, lue sur SA source d'input). Avant, chacun
+## choisit sa semi-remorque (2026-10-06) : gauche / droite de SA source font
+## defiler TrailerCatalog sur son camion (modele, caisse, stats) ; le choix est
+## fige une fois READY et garde pour la course suivante. Des que tous
 ## sont READY, le compte a rebours commun demarre, puis la course (largage de
 ## remorque verrouille les 5 premieres secondes, TruckCargo) :
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
@@ -106,6 +109,13 @@ class Player:
 	var camera: ChaseCamera
 	var hud: RaceHud
 	var viewport: SubViewport
+	## Reglage ajuste a la categorie de vitesse, avant la remorque.
+	var base_tuning: VehicleTuning
+	## Remorque choisie (index dans TrailerCatalog).
+	var trailer: int = 0
+
+## Stick ou fleches au-dela de ce seuil : remorque suivante / precedente.
+const TRAILER_STEER_THRESHOLD := 0.6
 
 
 @export_range(1, 6) var player_count: int = 2
@@ -137,6 +147,9 @@ var _finish_order: Array[Truck] = []
 ## Sas READY : joueur pret, Carre (boost) enfonce au tick precedent.
 var ready_flags: Array[bool] = []
 var _square_was: Array[bool] = []
+## Sas READY : direction du stick au tick precedent (-1, 0, 1), pour ne
+## changer de remorque qu'une fois par poussee.
+var _steer_was: Array[int] = []
 ## Musique de course : demarre au GO, fondu a l'arrivee (inerte en headless).
 var music: RaceMusic
 
@@ -161,6 +174,7 @@ func _ready() -> void:
 	for i in player_count:
 		ready_flags.append(false)
 		_square_was.append(false)
+		_steer_was.append(0)
 	state = State.LOBBY if ready_gate else State.COUNTDOWN
 	_state_tick = Engine.get_physics_frames()
 
@@ -227,9 +241,12 @@ func _add_player(i: int) -> Player:
 	dress(t.get_node("Visual") as TruckVisual, i)
 	t.transform = track.get_start_transform(i)   # pose d'un camion immobile
 	# categorie de vitesse du menu (Normal par defaut : le reglage mesure)
-	t.tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
+	p.base_tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
+	t.tuning = p.base_tuning
 	add_child(t)
 	p.truck = t
+	# remorque choisie a la course precedente (Conteneur la premiere fois)
+	set_trailer(p, GameState.trailer_choice[i] if i < GameState.trailer_choice.size() else 0)
 	race.watch(t)
 	auto_reset.watch(t)
 	# 0 PV : epave 3 s, puis reapparition sur la piste (jamais un checkpoint
@@ -290,6 +307,36 @@ func all_ready() -> bool:
 	return not ready_flags.has(false)
 
 
+## Remorque `index` (TrailerCatalog, bouclee) pour le joueur : caisse de
+## collision, modele et reglage de son camion ; choix garde pour la course
+## suivante. Camions immobiles (sas READY, ou avant).
+func set_trailer(p: Player, index: int) -> void:
+	p.trailer = posmod(index, TrailerCatalog.count())
+	var type := TrailerCatalog.at(p.trailer)
+	p.truck.set_trailer_type(type)
+	(p.truck.get_node("Visual") as TruckVisual).set_trailer_type(type)
+	p.truck.tuning = type.apply_to(p.base_tuning)
+	p.truck.apply_tuning()
+	var i := players.find(p)
+	if i < 0:
+		i = players.size()   # en cours d'ajout (_add_player)
+	if i < GameState.trailer_choice.size():
+		GameState.trailer_choice[i] = p.trailer
+
+
+## Ligne du sas READY : « ◄ CITERNE ►  2/9 » puis ses stats.
+static func trailer_text(index: int) -> String:
+	var t := TrailerCatalog.at(index)
+	return "◄  REMORQUE : %s  ►   (%d/%d)\n%s\nvitesse %s   accélération %s   adhérence %s   PV larguée %d" % [
+		t.display_name, posmod(index, TrailerCatalog.count()) + 1, TrailerCatalog.count(), t.tagline,
+		_pct(t.top_speed_mult), _pct(t.accel_mult), _pct(t.grip_mult), roundi(t.dropped_hp)]
+
+
+static func _pct(mult: float) -> String:
+	var d := roundi((mult - 1.0) * 100.0)
+	return "=" if d == 0 else "%+d %%" % d
+
+
 ## Modele, couleur de repli et livree du joueur `i` (course et showroom).
 static func dress(visual: TruckVisual, i: int) -> void:
 	visual.external_model = MODELS[i]
@@ -344,11 +391,21 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(_delta: float) -> void:
 	var tick := Engine.get_physics_frames()
 	if state == State.LOBBY:
-		# sas READY : camions immobiles ; Carre (le boost de SA source) = pret
+		# sas READY : camions immobiles ; gauche / droite (SA source) = remorque
+		# precedente / suivante, Carre (le boost de SA source) = pret
 		_neutral.tick = tick
 		for i in players.size():
 			var f := players[i].input.poll(tick)
 			players[i].truck.set_input(_neutral)
+			var dir := 0
+			if f.steer > TRAILER_STEER_THRESHOLD:
+				dir = 1
+			elif f.steer < -TRAILER_STEER_THRESHOLD:
+				dir = -1
+			if dir != 0 and dir != _steer_was[i] and not ready_flags[i]:
+				set_trailer(players[i], players[i].trailer + dir)
+				MenuSound.play_select()
+			_steer_was[i] = dir
 			if f.boost and not _square_was[i] and not ready_flags[i]:
 				ready_flags[i] = true
 				MenuSound.play_confirm()
@@ -423,13 +480,14 @@ func _process(_delta: float) -> void:
 		p.hud.set_standings(standings)
 		if state == State.LOBBY:
 			if ready_flags[i]:
-				p.hud.set_center_message("%s\nREADY !\nen attente des autres (%d/%d)" % [player_tag(i),
+				p.hud.set_center_message("%s\nREADY !  remorque %s\nen attente des autres (%d/%d)" % [
+					player_tag(i), TrailerCatalog.at(p.trailer).display_name,
 					ready_flags.count(true), players.size()], Color(0.3, 1.0, 0.25))
 			else:
-				# invite clignotante (2 fois par seconde)
+				# invite clignotante (2 fois par seconde) ; la remorque reste lisible
 				var on := int(Time.get_ticks_msec() / 400) % 2 == 0
-				p.hud.set_center_message("%s\nAPPUYER SUR [CARRÉ] POUR ÊTRE READY" % player_tag(i),
-					Color(1.0, 0.85, 0.2, 1.0 if on else 0.35))
+				p.hud.set_center_message("%s\n%s\nAPPUYER SUR [CARRÉ] POUR ÊTRE READY" % [player_tag(i),
+					trailer_text(p.trailer)], Color(1.0, 0.85, 0.2, 1.0 if on else 0.6))
 		elif state == State.COUNTDOWN:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),

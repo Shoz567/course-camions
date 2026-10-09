@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="TrailerType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://vehicles/trailer_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"chariot_elevateur"
+display_name = "PORTE-ENGINS"
+tagline = "porte-engins surbaissé, deux chariots arrimés : léger et vif, mais fragile"
+model = "../Assets_Visuels/Armes_et_camions/vehicules/chariot_elevateur.glb"
+box_size = Vector3(3.0, 2.09, 15.96)
+box_center = Vector3(0, 3.21, 8.46)
+top_speed_mult = 1.04
+accel_mult = 1.06
+grip_mult = 1.0
+dropped_hp = 35.0
+dropped_mass_kg = 5500.0
+ability = &""

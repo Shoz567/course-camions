@@ -178,6 +178,48 @@ Mesuré : ×1,5 garde un drift (15,6°), ×2 et au-delà dégradent la réceptio
   propre : ce choc la remplace.
 - Vérifié par `truck_trailer_test` (dérapage, coup de volant, mur, balayage).
 
+### Remorque au choix (2026-10-06)
+
+Avant la course, dans le sas READY, chaque joueur choisit sa semi-remorque
+(◄ ► sur sa manette, Carré pour valider). Une remorque est un `TrailerType`
+(`game/vehicles/trailers/*.tres`, ordre dans `TrailerCatalog`) :
+
+- **modèle** : le nœud `Remorque` d'un véhicule du catalogue
+  (`Assets_Visuels/Armes_et_camions/vehicules/`, ART_PIPELINE §4 ter), posé à
+  la sellette ;
+- **caisse de collision** propre (`box_size`, `box_center`), mesurée sur le
+  modèle, toujours à partir de z = 0,48 (derrière la cabine) ;
+- **stats** : multiplicateurs de vitesse max, d'accélération (poussée et
+  boost) et d'adhérence latérale, appliqués au réglage de la catégorie de
+  vitesse ; PV et masse de la remorque une fois larguée ;
+- **capacité** : champ `ability`, vide en attendant le Module 8.
+
+La remorque d'origine du modèle de course n'est **plus proposée** (décision du
+2026-10-06) : chaque camion tire une remorque du catalogue. Le **Conteneur**
+(par défaut) a des stats à 1 : c'est la référence, la conduite mesurée
+(`baseline.json`) ne change pas. Masse, centre de masse et inertie du camion
+restent ceux du tracteur pour toutes les remorques : le poids d'une remorque se
+traduit en accélération, pas en masse. La caisse de `TruckSpec.TRAILER_*`
+ci-dessus reste celle d'un camion sans remorque choisie (tests de conduite).
+
+| Remorque | Vitesse | Accél. | Adhérence | PV larguée | Masse larguée | Caisse (l × h × L) |
+|---|---|---|---|---|---|---|
+| Conteneur (défaut) | = | = | = | 50 | 9 000 kg | 3,09 × 4,20 × 15,07 |
+| Citerne | −4 % | −8 % | = | 75 | 12 000 kg | 2,98 × 3,57 × 15,36 |
+| Bétaillère | −3 % | −5 % | −3 % | 60 | 10 000 kg | 3,64 × 4,53 × 15,46 |
+| Porte-voitures | −2 % | −4 % | −4 % | 50 | 8 500 kg | 3,00 × 3,34 × 16,05 |
+| Grue (semi-grue) | −1 % | −3 % | +3 % | 45 | 7 500 kg | 2,80 × 2,46 × 15,16 |
+| Pompier (fourgon incendie) | = | −1 % | = | 50 | 8 000 kg | 3,19 × 2,82 × 15,22 |
+| Saleuse (semi-trémie) | −1 % | −2 % | +6 % | 50 | 8 000 kg | 3,12 × 2,88 × 15,51 |
+| Porte-engins (2 chariots) | +4 % | +6 % | = | 35 | 5 500 kg | 3,00 × 2,09 × 15,96 |
+
+Chaque remorque est **unique**, structure comprise (ART_PIPELINE §4 ter) :
+aucune ne partage de châssis, d'essieux ni de roues avec une autre.
+
+**Premier jet, à équilibrer en jouant.** `TrailerType.validate()` refuse un
+multiplicateur hors de [0,8 ; 1,2]. Vérifié par `trailer_type_test` et
+`race_trailer_choice_test`.
+
 ## 5 quater bis. Direction et dérapage maîtrisé (2026-09-30)
 
 - Train avant vif : roues à 4°/tick (braquage complet en 8 ticks), angle à
