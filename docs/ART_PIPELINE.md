@@ -281,7 +281,14 @@ jeu charge (`TruckVisual.external_model`, `TrailerType.model`) :
   antibrouillards, poignées de maintien, pare-chaleur des cheminées, cornets
   de rétroviseur, garde-boue arrière noirs ;
 - remorques : garde-boue plats remplacés par des garde-boue cintrés au-dessus
-  de chaque roue ; pièces de coin et verrous sur le conteneur.
+  de chaque roue ; pièces de coin et verrous sur le conteneur ;
+- roues du tracteur refaites comme celles du catalogue (pneu bombé, jante
+  emboutie à ajours, moyeu saillant, dix écrous), au même rayon, à la même
+  largeur et au même centre que celles de l'équipe ;
+- matières en relief : copies des matières de l'équipe posées sur certaines
+  pièces (`Aluminium_Larme`, `Chassis_Larme`, `Aluminium_Perfore`,
+  `Plastique_Grille`, `Chassis_Longeron`) ; le jeu en dessine le relief
+  d'après le nom (`TruckMaterials._relief_of`).
 
 Les ajouts portent le préfixe `Detail_` (ils s'arrachent dans un gros choc,
 `BodyDamage`) et sont fusionnés par famille : une pièce par phare, par

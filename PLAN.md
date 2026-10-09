@@ -268,6 +268,86 @@ Coût GPU mesuré le 2026-09-30 sur la machine de développement (Radeon 780M,
 `baseline.json`) : 1 joueur 8 ms sans effet, 11 à 15 ms avec tout ; 4 joueurs
 10 ms → 14 ms (SSR + SSAO) → 16 ms (tout) ; 6 joueurs 12 ms → 15 ms (SSAO) →
 19 ms (tout), d'où ces seuils pour tenir 60 images par seconde.
+**Éclairage global** (2026-10-08, demande utilisateur : graphismes et effets
+visuels plutôt qu'un port Unreal) : les deux environnements activent **SDFGI**
+(4 cascades, cellule 0,5 m, lumière du ciel ; énergie 0,7 à la plage pour ne
+pas bleuir la route). Les néons de Cyber City colorent calandres, jantes et
+conteneurs ; le dessous des remorques s'assombrit. Coût mesuré sur la RTX
+5060 Ti (poste de l'utilisateur, 2026-10-08) : 1 vue ~165 → ~135 images/s,
+2 vues 117 → 81, 4 vues 96 → 54, d'où : qualité haute seulement, **jusqu'à 2 vues**. Anticrénelage en qualité haute :
+MSAA 2x + **SMAA** (le TAA a été essayé puis écarté : il efface la pluie).
+**Post-traitement par vue** (`ScreenFx`, effet du compositeur posé sur la
+caméra de chaque joueur, qualité haute et moyenne) : flou radial de vitesse
+au-delà de 60 km/h, plein à 170, plus fort au boost ; le camion, sous le
+centre de l'image, reste net ; aberration chromatique légère sur les bords,
+vignettage. Calculé après les transparents (la pluie reste). Coût mesuré :
+~0,25 ms GPU par vue.
+**Effets de roues** (`TruckWheelFx`, nœud « WheelFx » du camion) : glissement
+latéral des roues arrière au point de contact ; au-delà de 3,5 m/s, **traces
+de gomme** posées sur la route (MultiMesh en coordonnées monde, 720 segments
+par camion, les plus anciens s'effacent) ; au-delà de 5 m/s, **fumée de
+pneus**, plus épaisse avec le glissement (Playa del Sol seulement, voir
+Particules). Au-delà de 40 km/h, **projections** derrière les roues motrices
+et le train de la remorque : **traînées d'eau** sous la pluie de Cyber City,
+**poussière de sable** à Playa del Sol. Mesuré
+(`truck_drift_test`) : aucune trace en ligne droite ni en virage sans frein à
+main (glissement 1,6 m/s), traces sur 50 des 60 ticks du drift (18,9 m/s).
+**Météo de Playa del Sol** (Cyber City a déjà sa pluie, sa route mouillée et
+maintenant ses gerbes d'eau) : **vent de sable** dessiné par la chaussée
+(`playa_road.gdshader`) — rubans de sable étirés dans le sens du vent qui
+courent en travers de la piste, par rafales (des particules ont été essayées
+puis écartées : vues de près, des confettis qui flottent, et chaque vue de
+l'écran partagé voyait les émetteurs de tous les joueurs) ; **brume de
+chaleur** dans le post-traitement (`ScreenFx.haze`) : l'air ondule juste sous
+l'horizon, seulement au-delà de 45 m (profondeur de l'image), jamais sur le
+camion ni sur un portique proche.
+**Matières** (textures procédurales en mémoire, aucun fichier image, comme le
+reste du projet) : le bitume (`asphalt.gdshaderinc`) passe de gravillons ronds
+espacés (un motif de pois, de près) à un **granulat** : mosaïque de cailloux
+anguleux de 4 et 2 cm, teintes variées, quelques quartz clairs, liant noir
+dans les joints, effacée au loin vers sa moyenne. Le béton des tribunes, ponts et
+piliers (`concrete.gdshader`, auparavant un gris uni) : banches de 2,4 x
+1,2 m avec joints et trous de tiges, teinte par panneau et par plaques,
+pores, coulures sur les faces verticales ; trempé et brillant la nuit à
+Cyber City.
+**Particules** (2026-10-08, demande utilisateur : fumée des camions abîmés,
+débris, pluie, étincelles) : briques communes `FxKit`, toutes sur GPU.
+- **Fumée** (`fx/smoke.gdshader`) : bouffées qui tournent, contour rongé
+  par un bruit propre à chacune, éclairées comme des boules, fondues
+  contre le décor. De jour, panache noir épais ; de nuit, plus clair, il
+  renvoie la lueur de la ville. La turbulence du moteur a été écartée :
+  elle fige les bouffées sur place.
+- **Feu moteur** sous 15 PV, avec une lueur qui vacille ; l'épave brûle
+  ~10 s.
+- **Étincelles** (`fx/spark_particles.gdshader`) : traits étirés sur la
+  vitesse, qui refroidissent et rebondissent sur la route (un plan sous
+  l'émetteur). Sources : jantes nues, moteur à l'agonie, frottement contre
+  un mur (nouveau), gerbe à chaque choc franc (nouveau), avec de la
+  poussière de béton si le choc est violent.
+- **Explosion** : la sphère orange devient boule de feu, fumée noire,
+  braises et souffle au sol ; les barils explosifs l'utilisent aussi.
+- **Débris** : plaques de tôle froissée au lieu de boîtes ; les pièces
+  soufflées par une explosion fument, les deux premières brûlent.
+- **Pluie** (`rain.gdshader`) : les gouttes s'étirent selon leur vitesse
+  relative à la caméra et s'allument dans les phares et les lampadaires.
+  Éclaboussures sur la route devant la caméra. Chaque vue ne voit que sa
+  pluie (calques 13 à 18).
+- **Roues** : la fumée de pneus et les projections prennent le même rendu
+  de bouffées. Puis (« la fumée des roues empêche la visibilité ») : fumée
+  de pneus **à Playa del Sol seulement**, allégée (60 bouffées de 1,3 s au
+  lieu de 140 de 2,2 s, deux fois plus transparentes, qui gonflent ×2,4 au
+  lieu de ×4) ; poussière de sable allégée aussi. Cyber City n'a plus de
+  bouffées : **traînées d'eau** (`fx/water_streak.gdshader`, moteur des
+  étincelles) derrière les roues au-delà de 40 km/h, et nappe de gouttes
+  chassée du côté où le pneu glisse en dérapage
+  (`TruckWheelFx.tire_smoke`).
+- **Pièges notés** : un émetteur GPU déplacé d'un coup étale sa première
+  émission sur tout le trajet (un « peigne » de traits parallèles), d'où
+  les gerbes de choc créées sur place. Les shaders additifs coupent le
+  brouillard, qui s'y ajoutait en grands carrés.
+- **Coût** : temps GPU inchangé à 4 vues (3 à 4 ms, mesure avant/après).
+  L'à-coup de ~140 ms quand un camion explose existait déjà avant ces
+  particules.
 
 **Critères de sortie**
 - 4 manettes, 4 camions indépendants, aucune fuite d'input (test automatisé).
@@ -586,6 +666,25 @@ je veux qu'il soit le plus réaliste possible »)** — tout est procédural
   2 m/s, gerbe d'étincelles sous la jante, vers l'arrière, plus vive avec
   la vitesse ; sur la remorque, tout le train de roues
   (`tire_burst_test` H, I).
+- `[x]` **Tête du camion : roues et relief** (2026-10-09, « que ses roues
+  ressemblent plus aux roues de la remorque, moins plates ; un peu plus
+  détaillées, les textures avec plus de relief sur la tête ») :
+  - roues refaites par `realisme_vehicules.py` (`rebuild_wheels`) comme
+    celles du catalogue : pneu aux flancs bombés, épaulements arrondis,
+    bande à deux rainures ; jante emboutie en cuvette, dix ajours, moyeu
+    saillant, dix écrous (le voile plat au ras du pneu a disparu). Même
+    rayon, même largeur, même centre : pivot, roulement, passages de roue
+    et pneu éclaté inchangés (fût de jante à 0,6 × le rayon) ;
+  - matières en relief posées sur les pièces (`RELIEF_PARTS`) et dessinées
+    par `truck_body.gdshaderinc` (`head_relief`) : marchepieds alu et
+    plateau arrière en tôle larmée, pare-chaleur des échappements en tôle
+    perforée, calandre et prise d'air en nid d'abeille, longerons percés et
+    boulonnés ; trous noirs, motifs fondus au loin (pas de crénelage) ;
+  - plastiques moulés grainés (pare-chocs, garde-boue, rétroviseurs), peau
+    d'orange plus fine sur la peinture ;
+  - inchangé, vérifié en jeu et par les tests : dégâts (creux, cicatrices),
+    débris `Detail_`, pneus qui éclatent, jante à nu sur la route, fumée.
+    `truck_realism_test` vérifie les reliefs et les jantes à ajours.
 
 ---
 

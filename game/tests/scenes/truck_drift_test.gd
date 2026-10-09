@@ -37,6 +37,11 @@ var _real_entry: PackedFloat32Array = [0.0, 0.0, 0.0]
 var _real_min: PackedFloat32Array = [INF, INF, INF]
 var _max_roll: PackedFloat32Array = [0.0, 0.0, 0.0]
 var _upside: Array[bool] = [false, false, false]
+# effets de roues (TruckWheelFx) : ticks ou une roue arriere marque la route,
+# en ligne droite (lancement) et pendant le drift
+var _marks_launch: PackedInt32Array = [0, 0, 0]
+var _marks_drift: PackedInt32Array = [0, 0, 0]
+var _max_rear_slide: PackedFloat32Array = [0.0, 0.0, 0.0]
 
 
 func _test_setup() -> void:
@@ -72,6 +77,13 @@ func _test_tick(t: int) -> void:
 		elif i == 2 and t > release and t <= release + COUNTER:
 			f.steer = -1.0
 		tr.set_input(f)
+		var fx := tr.get_node("WheelFx") as TruckWheelFx
+		var marking := fx.is_marking(0) or fx.is_marking(1)
+		if t > 60 and t <= LAUNCH and marking:
+			_marks_launch[i] += 1
+		if t > LAUNCH and t <= release:
+			_marks_drift[i] += 1 if marking else 0
+			_max_rear_slide[i] = maxf(_max_rear_slide[i], maxf(fx.slide(0), fx.slide(1)))
 		var real := Vector2(tr.linear_velocity.x, tr.linear_velocity.z).length() * 3.6
 		if t == LAUNCH:
 			_speed_entry[i] = v
@@ -102,6 +114,15 @@ func _test_finish() -> void:
 		print("  INFO   %s : derive max %.1f deg, retour < %.0f deg en %d ticks, depassement %.1f deg, vitesse %.0f -> min %.0f km/h, roulis max %.1f deg"
 			% [l, _max_slip[i], RECOVERED_DEG, _recovered_at[i], _overshoot[i], _speed_entry[i], _speed_min[i], _max_roll[i]])
 	check_ratio_above("le drift s'amorce : derive B / derive A", _max_slip[1], _max_slip[0], 3.0)
+	# traces de gomme et fumee (2026-10-08) : rien en ligne droite, le drift
+	# marque la route ; glissement max des roues arriere affiche
+	check("aucune trace de gomme en ligne droite (lancement)", _marks_launch == PackedInt32Array([0, 0, 0]),
+		str(_marks_launch))
+	check_above("B : le drift laisse des traces (ticks sur %d)" % DRIFT, _marks_drift[1], DRIFT / 3)
+	check("B : la fumee de pneus (ou la nappe d'eau) monte pendant le drift",
+		TruckWheelFx.smoke_for(_max_rear_slide[1]) > 0.0, "glissement max %.1f m/s" % _max_rear_slide[1])
+	print("  INFO   glissement arriere max (m/s) : A %.1f  B %.1f  C %.1f ; ticks marques A %d  B %d  C %d"
+		% [_max_rear_slide[0], _max_rear_slide[1], _max_rear_slide[2], _marks_drift[0], _marks_drift[1], _marks_drift[2]])
 	# Ajoute le 2026-10-01 (« le derapage freine trop ») : drift court PUIS
 	# sortie, vitesse REELLE minimale >= 95 % de la vitesse d'entree. Mesure :
 	# 98,6 % avant le reglage du 2026-10-01, 100 % apres. Ce scenario court

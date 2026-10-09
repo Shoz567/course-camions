@@ -17,6 +17,8 @@ var _moved_countdown: float = 0.0
 var _started_at: int = -1
 var _p1_start: Vector3
 var _p2_start: Vector3
+var _spray: int = -1
+var _haze: float = -1.0
 
 
 func _test_setup() -> void:
@@ -24,6 +26,8 @@ func _test_setup() -> void:
 	_scene = (load("res://dev/race_2p.tscn") as PackedScene).instantiate() as Node3D
 	_scene.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	add_child(_scene)
+	_spray = TruckWheelFx.spray
+	_haze = ScreenFx.haze
 	var players: Array = _scene.get("players")
 	_p1 = players[0].truck
 	_p2 = players[1].truck
@@ -62,6 +66,8 @@ func _test_finish() -> void:
 	check("2 joueurs, 2 vues", players.size() == 2 and players[0].viewport != null and players[1].viewport != null)
 	var v1 := _p1.get_node("Visual") as TruckVisual
 	var v2 := _p2.get_node("Visual") as TruckVisual
+	check("Cyber City sous la pluie : trainees d'eau, pas de fumee de pneus ni de brume de chaleur",
+		_spray == TruckWheelFx.Spray.WATER and not TruckWheelFx.tire_smoke(_spray) and _haze == 0.0, "spray=%d haze=%.1f" % [_spray, _haze])
 	check("J1 bleu, J2 rouge", v1.external_model.ends_with("Camion_Bleu.glb") and v2.external_model.ends_with("Camion_Rouge.glb"),
 		"%s / %s" % [v1.external_model.get_file(), v2.external_model.get_file()])
 	var track: TrackBlockout = _scene.get("track")

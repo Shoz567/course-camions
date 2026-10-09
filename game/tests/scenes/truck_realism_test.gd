@@ -142,11 +142,38 @@ func _test_finish() -> void:
 	check("A conteneur en tole ondulee, ondes le long de la caisse", box_mat != null
 		and int(box_mat.get_shader_parameter(&"relief")) == TruckMaterials.RELIEF_CORRUGATED
 		and absf(box_axis.y) < 0.1 and Vector3(box_axis.x, box_axis.y, box_axis.z).length() > 0.9, str(box_axis))
+	# rayon dans le repere du maillage : pneus de la tete refaits en unites du
+	# modele (2026-10-09, roues comme celles de la remorque) - 0,72 a l'avant,
+	# 0,84 a l'arriere ; un essieu entier donnerait sa voie (> 1,5)
 	var tyre_axis := _relief_axis(vd, "Pneu")
 	var tyre_mat := (_material(vd, "Pneu")[1]) as ShaderMaterial
 	check("A pneus sculptes : axe de roue et rayon de pneu", tyre_mat != null
 		and int(tyre_mat.get_shader_parameter(&"relief")) == TruckMaterials.RELIEF_TYRE
-		and tyre_axis.w > 0.35 and tyre_axis.w < 0.7, str(tyre_axis))
+		and tyre_axis.w > 0.35 and tyre_axis.w < 0.9, str(tyre_axis))
+	# tete en relief (2026-10-09) : marchepieds et plateau en tole larmee,
+	# pare-chaleur perfores, calandre et prise d'air en nid d'abeille,
+	# longerons perces ; chaque piece a son axe et son centre
+	var heads := []
+	for c: Array in [["Aluminium_Larme", TruckMaterials.RELIEF_TREAD_PLATE],
+			["Chassis_Larme", TruckMaterials.RELIEF_TREAD_PLATE],
+			["Aluminium_Perfore", TruckMaterials.RELIEF_PERFORATED],
+			["Plastique_Grille", TruckMaterials.RELIEF_HONEYCOMB],
+			["Chassis_Longeron", TruckMaterials.RELIEF_DRILLED]]:
+		var mm := _material(vd, c[0])
+		var sm := mm[1] as ShaderMaterial if mm.size() == 2 else null
+		var ax := _relief_axis(vd, c[0])
+		heads.append(sm != null and int(sm.get_shader_parameter(&"relief")) == c[1]
+			and Vector3(ax.x, ax.y, ax.z).length() > 0.9)
+	check("A tete : tole larmee, tole perforee, nid d'abeille, longerons perces", not heads.has(false),
+		str(heads))
+	# roues de la tete comme celles de la remorque (2026-10-09) : jante
+	# emboutie avec ajours, moyeu et dix ecrous, sur chaque roue exterieure
+	var vented := 0
+	for n in vd.find_children("WheelPivot_*", "Node3D", true, false):
+		for j in n.find_children("Jante*", "MeshInstance3D", true, false):
+			vented += 1 if (j as MeshInstance3D).mesh.get_surface_count() == 2 else 0
+	check("A roues de la tete : jantes embouties a ajours (une par groupe de roues)", vented == 4,
+		"%d jantes a ajours" % vented)
 	# remorque creuse (2026-10-07, « des qu'elle s'abime on voit a
 	# l'interieur ») : caisse et chassis de la remorque en coque percable,
 	# vue des deux faces ; pas le tracteur

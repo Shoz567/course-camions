@@ -1,8 +1,9 @@
 shader_type spatial;
 
 // Chaussee de jour (Playa Del Sol) : bitume sec et clair (asphalt.
-// gdshaderinc : gravillons, ornieres, rustines, fissures), sable souffle sur
-// les bords, marquages blancs uses. Sur un pont en bois (COLOR.r = 1) :
+// gdshaderinc : granulat, ornieres, rustines, fissures), sable souffle sur
+// les bords et en rubans que le vent fait courir en travers de la piste,
+// marquages blancs uses. Sur un pont en bois (COLOR.r = 1) :
 // platelage de planches en travers. UV.x : 0 (bord gauche) .. 1 (bord droit).
 // UV.y : distance le long de la piste (m) ; ligne d'arrivee a 0.
 uniform float road_width = 75.0;
@@ -32,6 +33,13 @@ void fragment() {
 	// pas de sable sur les ponts (COLOR.r > 0) : il ne vole pas jusque-la
 	drift *= 1.0 - smoothstep(0.1, 0.4, COLOR.r);
 	vec3 sand = vec3(0.74, 0.63, 0.43) * (0.88 + 0.24 * grain);
+	// rubans de sable que le vent pousse en travers de la piste : fines trainees
+	// etirees dans le sens du vent, qui courent sur le bitume, par rafales
+	vec2 wp = vec2(x - TIME * 2.6, s);
+	float ribbon = smoothstep(0.63, 0.76, a_fbm(vec2(wp.x * 0.22, wp.y * 1.7) + 23.0));
+	ribbon *= smoothstep(0.4, 0.7, a_noise(vec2(s * 0.025 + 4.0, x * 0.03 - TIME * 0.08)));
+	ribbon *= a_detail(p, 1.7) * (1.0 - smoothstep(0.1, 0.4, COLOR.r));
+	drift = max(drift, ribbon * 0.4);
 	asphalt = mix(asphalt, sand, drift * 0.85);
 	rough = mix(rough, 0.95, drift);
 	h = mix(h, grain * 0.4, drift);

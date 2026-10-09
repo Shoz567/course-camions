@@ -6,15 +6,23 @@ extends RefCounted
 ## anticrenelage recoit chaque vue. Purement visuel.
 ##
 ## Les environnements (tracks/*.tres) decrivent le rendu COMPLET : reflets
-## (SSR), eclairage indirect (SSIL), occlusion ambiante (SSAO), brouillard
-## volumetrique (Cyber City : halo des phares dans la bruine). Ici, on en
-## retire selon la qualite choisie et le nombre de vues de l'ecran partage :
+## (SSR), eclairage indirect proche (SSIL) et global (SDFGI : la lumiere du
+## ciel et des neons rebondit, le dessous des remorques s'assombrit),
+## occlusion ambiante (SSAO), brouillard volumetrique (Cyber City : halo des
+## phares dans la bruine). Ici, on en retire selon la qualite choisie et le
+## nombre de vues de l'ecran partage :
 ##
-##   HAUTE    tout, MSAA 2x ; le volumetrique est coupe au-dela de
-##            VOLUMETRIC_MAX_VIEWS vues, l'eclairage indirect (le plus
-##            couteux) au-dela de SSIL_MAX_VIEWS
+##   HAUTE    tout, MSAA 2x + SMAA (lisse aussi les nervures des
+##            conteneurs, sans trainee sur la pluie comme le TAA) ;
+##            l'eclairage global est coupe au-dela de SDFGI_MAX_VIEWS vues,
+##            le volumetrique au-dela de VOLUMETRIC_MAX_VIEWS, l'eclairage
+##            indirect proche au-dela de SSIL_MAX_VIEWS
 ##   MOYENNE  SSAO seul, MSAA 2x
 ##   BASSE    aucun effet, anticrenelage FXAA (le moins couteux)
+##
+## Le post-traitement de chaque camera (ScreenFx : flou de vitesse,
+## aberration, vignettage ; ~0,3 ms par vue) est pose par ChaseCamera en
+## qualite haute et moyenne.
 
 enum Quality { HIGH, MEDIUM, LOW }
 
@@ -26,6 +34,9 @@ const SSR_MAX_VIEWS := 4
 ## Au-dela, le brouillard volumetrique est coupe meme en qualite haute (il est
 ## calcule une fois par vue).
 const VOLUMETRIC_MAX_VIEWS := 2
+## Au-dela, l'eclairage global est coupe meme en qualite haute (calcule une
+## fois par vue : 117 -> 81 images/s a 2 vues, 96 -> 54 a 4 sur RTX 5060 Ti).
+const SDFGI_MAX_VIEWS := 2
 
 
 ## Regle les effets de `env` pour la qualite et le nombre de vues 3D a
@@ -38,7 +49,10 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 	env.ssao_enabled = quality != Quality.LOW
 	env.ssr_enabled = high and views <= SSR_MAX_VIEWS
 	env.ssil_enabled = high and views <= SSIL_MAX_VIEWS
-	# volumetrique : seulement si l'environnement en decrit un
+	# eclairage global et volumetrique : seulement si l'environnement en decrit
+	if env.has_meta(&"sdfgi") or env.sdfgi_enabled:
+		env.set_meta(&"sdfgi", true)
+		env.sdfgi_enabled = high and views <= SDFGI_MAX_VIEWS
 	if env.has_meta(&"volumetric") or env.volumetric_fog_enabled:
 		env.set_meta(&"volumetric", true)
 		env.volumetric_fog_enabled = high and views <= VOLUMETRIC_MAX_VIEWS
@@ -54,7 +68,8 @@ static func apply_viewport(vp: Viewport, quality: int) -> void:
 		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
 	else:
 		vp.msaa_3d = Viewport.MSAA_2X
-		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_SMAA if quality == Quality.HIGH \
+			else Viewport.SCREEN_SPACE_AA_DISABLED
 
 
 ## Plein ecran sans bordure <-> fenetre (F11).

@@ -552,9 +552,10 @@ static func _attr2(arrays: Array, k: int, n: int) -> PackedVector2Array:
 ## Arrache jusqu'a `max_parts` petites pieces exterieures sous `root`, a moins
 ## de `radius` de `point` (monde) : cachees sur le camion, relancees en debris
 ## avec `velocity` (monde) plus une poussee `kick` vers l'exterieur. Renvoie
-## le nombre de pieces arrachees.
+## le nombre de pieces arrachees. Les `trails` premieres fument en volant
+## (les 2 premieres brulent : explosion).
 static func detach_parts(root: Node3D, world: Node, point: Vector3, radius: float, max_parts: int,
-		velocity: Vector3, kick: float) -> int:
+		velocity: Vector3, kick: float, trails: int = 0) -> int:
 	if root == null or world == null or max_parts <= 0:
 		return 0
 	var found: Array[MeshInstance3D] = []
@@ -579,7 +580,9 @@ static func detach_parts(root: Node3D, world: Node, point: Vector3, radius: floa
 		var c := mi.global_transform * mi.get_aabb().get_center()
 		var out := c - point
 		out = out.normalized() if out.length_squared() > 1e-4 else Vector3.UP
-		Debris.from_part(world, mi, velocity + (out + Vector3.UP * 0.6).normalized() * kick)
+		var d := Debris.from_part(world, mi, velocity + (out + Vector3.UP * 0.6).normalized() * kick)
+		if count < trails:
+			d.add_trail(count < 2)
 		mi.visible = false
 		mi.set_meta(META_DETACHED, true)
 		count += 1

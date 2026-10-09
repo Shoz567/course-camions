@@ -73,8 +73,8 @@ var _pending: Dictionary = {}
 var _vel_hist: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
 ## Point et normale (monde) du contact le plus violent de chaque choc en attente.
 var _pending_at: Dictionary = {}
-var _smoke: CPUParticles3D
-var _sparks: CPUParticles3D
+var _smoke: GPUParticles3D
+var _sparks: GPUParticles3D
 ## Etat visible : 0 neuve, 1 abimee (< 60 %), 2 en ruine (< 30 %).
 var damage_stage: int = 0
 var _marks: Array[Node3D] = []
@@ -140,7 +140,8 @@ func _ready() -> void:
 	_smoke = DamageFx.make_smoke()
 	_smoke.position = center + Vector3(0.0, 2.0, 0.0)
 	add_child(_smoke)
-	_sparks = DamageFx.make_sparks()
+	# origine au ras du sol : les etincelles rebondissent sur la route
+	_sparks = DamageFx.make_sparks(maxf(center.y - 0.5, 0.2))
 	_sparks.position = center + Vector3(0.0, -0.5, 0.0)
 	add_child(_sparks)
 	if dropped_by != null:

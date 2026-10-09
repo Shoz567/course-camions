@@ -40,7 +40,10 @@ uniform sampler2D grime_tex : filter_linear_mipmap_anisotropic, repeat_enable;
 uniform float scars = 1.0;
 // relief de la matiere (2026-10-07, « plus lisses et realistes, avec du
 // relief ») : 0 aucun, 1 tole ondulee (conteneur), 2 sculptures de pneu,
-// 3 viroles soudees (citerne), 4 lames nervurees (betaillere), 5 bache.
+// 3 viroles soudees (citerne), 4 lames nervurees (betaillere), 5 bache ;
+// tete du camion (2026-10-09, « les textures avec plus de relief ») :
+// 6 tole larmee (marchepieds, plateau), 7 tole perforee (pare-chaleur),
+// 8 nid d'abeille (calandre, prise d'air), 9 longeron perce et boulonne.
 // Pas et profondeur en metres ; axes par maillage (relief_axis, relief_center,
 // poses par TruckMaterials.upgrade).
 uniform int relief = 0;
@@ -166,12 +169,108 @@ vec3 bump(vec3 n, vec3 pos, float h) {
 }
 
 
+// Trous et larmes de la tete (reliefs 6 a 9) au point p, normale n : hauteur
+// (m), creux (0 .. 1) et trou (0 .. 1 : on voit le noir derriere la tole).
+// Repere : `a1` le long de la piece (relief_axis), `up` le haut ; centre de
+// la piece en relief_center. Au loin (une maille sous ~4 pixels), le motif
+// s'efface vers sa teinte moyenne (pas de crenelage).
+vec2 head_relief(vec3 p, vec3 n, vec3 up, vec3 axis, out float hole) {
+	hole = 0.0;
+	float upn = dot(n, up);
+	if (relief == 6) {
+		// tole larmee : larmes allongees a 45 degres, alternees d'une case a
+		// l'autre, sur les faces du dessus seulement
+		if (upn < 0.6) {
+			return vec2(0.0);
+		}
+		vec3 a1 = normalize(axis - up * dot(axis, up) + vec3(1e-5));
+		vec3 a2 = cross(up, a1);
+		vec2 q = vec2(dot(p, a1), dot(p, a2)) / relief_pitch;
+		vec2 f = fract(q) - 0.5;
+		vec2 cell = floor(q);
+		float flip = mod(cell.x + cell.y, 2.0) < 0.5 ? 1.0 : -1.0;
+		vec2 r = vec2(f.x + flip * f.y, f.y - flip * f.x) * 0.7071;
+		float e = length(r / vec2(0.36, 0.11));
+		float tear = 1.0 - smoothstep(0.55, 1.0, e);
+		float fade = (1.0 - smoothstep(0.12, 0.3, fwidth(q.x))) * smoothstep(0.6, 0.8, upn);
+		return vec2(tear * relief_depth * fade, (0.35 - tear * 0.6) * fade);
+	}
+	vec3 d = p - relief_center.xyz;
+	vec2 q;
+	float rad;
+	if (relief == 7) {
+		// pare-chaleur : tole roulee autour du pot, trous en quinconce
+		// (coordonnees cylindriques autour de l'axe vertical de la piece)
+		vec3 hz = d - up * dot(d, up);
+		float rr = max(length(hz), 0.02);
+		vec3 a1 = normalize(axis - up * dot(axis, up) + vec3(1e-5));
+		float ang = atan(dot(hz, cross(up, a1)), dot(hz, a1));
+		q = vec2(ang * rr, dot(d, up)) / relief_pitch;
+		q.x += mod(floor(q.y), 2.0) * 0.5;
+		rad = 0.3;
+	} else if (relief == 8) {
+		// nid d'abeille : alveoles hexagonales, faces avant et cotes
+		if (abs(upn) > 0.5) {
+			return vec2(0.0);
+		}
+		vec3 a1 = normalize(cross(up, n) + vec3(1e-5));
+		q = vec2(dot(p, a1), dot(p, up)) / relief_pitch;
+		vec2 s = vec2(1.0, 1.7320508);
+		vec2 ga = mod(q, s) - s * 0.5;
+		vec2 gb = mod(q - s * 0.5, s) - s * 0.5;
+		vec2 g = dot(ga, ga) < dot(gb, gb) ? ga : gb;
+		vec2 ag = abs(g);
+		float hx = max(dot(ag, vec2(0.5, 0.8660254)), ag.x);
+		float cellh = 1.0 - smoothstep(0.38, 0.44, hx);
+		float fade = 1.0 - smoothstep(0.12, 0.3, fwidth(q.x));
+		hole = mix(0.62, cellh, fade);
+		return vec2(-cellh * relief_depth * fade, hole * 0.4);
+	} else {
+		// longeron : rangees de trous (gabarit de percage du chassis), par
+		// groupes irreguliers, et quelques boulons a tete ronde ; flancs
+		// verticaux seulement
+		vec3 a1 = normalize(axis - up * dot(axis, up) + vec3(1e-5));
+		if (abs(upn) > 0.4 || abs(dot(n, a1)) > 0.5) {
+			return vec2(0.0);
+		}
+		q = vec2(dot(d, a1), dot(d, up)) / relief_pitch;
+		// deux rangees, au-dessus et au-dessous de l'axe du longeron
+		if (abs(q.y) > 1.0) {
+			return vec2(0.0);
+		}
+		rad = 0.17;
+	}
+	vec2 cell = floor(q);
+	vec2 f = fract(q) - 0.5;
+	float dist = length(f);
+	float bolt = 0.0;
+	float present = 1.0;
+	if (relief == 9) {
+		float hsh = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+		present = step(0.3, hsh);
+		bolt = step(0.86, hsh);
+	}
+	float fade = 1.0 - smoothstep(0.12, 0.3, fwidth(q.x));
+	float disk = 1.0 - smoothstep(rad * 0.75, rad, dist);
+	float avg = 3.1416 * rad * rad * 0.8 * (relief == 9 ? 0.55 : 1.0);
+	hole = mix(avg, disk * present * (1.0 - bolt), fade);
+	// tete de boulon : dome, plus large que le trou
+	float dome = bolt * present * (1.0 - smoothstep(rad * 0.9, rad * 1.5, dist)) * fade;
+	return vec2((dome * 0.6 - hole * 0.4) * relief_depth, hole * 0.5 - dome * 0.3);
+}
+
+
 // Relief de la matiere au point p (repere du maillage), normale n : hauteur
-// (m, a ajouter au bump) et creux (0 .. 1, assombri et sali).
-vec2 relief_at(vec3 p, vec3 n, vec3 up) {
+// (m, a ajouter au bump) et creux (0 .. 1, assombri et sali) ; `hole` : trou
+// (reliefs de la tete, head_relief).
+vec2 relief_at(vec3 p, vec3 n, vec3 up, out float hole) {
+	hole = 0.0;
 	vec3 axis = relief_axis.xyz;
 	if (relief == 0 || dot(axis, axis) < 0.5) {
 		return vec2(0.0);
+	}
+	if (relief >= 6) {
+		return head_relief(p, n, up, axis, hole);
 	}
 	float h = 0.0;
 	if (relief == 1 || relief == 4) {
@@ -327,9 +426,15 @@ void fragment() {
 	// relief de la matiere : ondes, sculptures, soudures ; la crasse se loge
 	// dans les creux
 	vec3 up_m = normalize(height_row.xyz + vec3(0.0, 1e-5, 0.0));
-	vec2 rel = relief_at(obj_pos, normalize(obj_n), up_m);
+	float hole;
+	vec2 rel = relief_at(obj_pos, normalize(obj_n), up_m, hole);
 	col *= 1.0 - 0.1 * max(rel.y, 0.0);
 	col = mix(col, col * 1.08, max(-rel.y, 0.0));
+	// trou dans la tole : le noir de derriere, mat
+	col = mix(col, vec3(0.012), hole * 0.9);
+	rough = mix(rough, 0.95, hole);
+	metal *= 1.0 - hole;
+	coat *= 1.0 - hole;
 
 	// salissure : basse, en plaques ; coulures ; poussiere sur le dessus
 	float patches = tri(grime_tex, obj_pos, obj_n, 0.35, vec2(1.0));

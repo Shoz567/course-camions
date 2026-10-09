@@ -9,8 +9,8 @@ extends RefCounted
 ##     un repere (DamageMark, Node3D sans rendu) : position, axe sortant et
 ##     gravite ; elles remplacent les decalques d'eraflures (2026-10-07 :
 ##     « des traits blancs, pas tres realiste ») ;
-##   - fumee (particules CPU, monde) : grise legere ou noire epaisse ;
-##   - etincelles (particules CPU) qui crepitent.
+##   - fumee (particules GPU, monde, FxKit) : grise legere ou noire epaisse ;
+##   - etincelles (FxKit) qui crepitent et rebondissent sur la route.
 ## Textures generees une fois, en memoire (aucun fichier, CLAUDE.md §8).
 
 ## Calque de rendu des carrosseries (camions, remorques larguees, debris).
@@ -21,7 +21,6 @@ const SCAR_RADIUS := Vector2(0.55, 1.5)
 
 enum Smoke { NONE, LIGHT, HEAVY, WRECK }
 
-static var _puff: GradientTexture2D
 
 
 ## Repere d'une trace de choc de gravite `severity` (0 .. 1).
@@ -57,122 +56,46 @@ static func scar(parent: Node3D, point: Vector3, outward: Vector3, severity: flo
 	return d
 
 
-static func _puff_texture() -> Texture2D:
-	if _puff == null:
-		var g := Gradient.new()
-		g.set_color(0, Color(1, 1, 1, 1))
-		g.set_color(1, Color(1, 1, 1, 0))
-		g.add_point(0.45, Color(1, 1, 1, 0.55))
-		_puff = GradientTexture2D.new()
-		_puff.gradient = g
-		_puff.fill = GradientTexture2D.FILL_RADIAL
-		_puff.fill_from = Vector2(0.5, 0.5)
-		_puff.fill_to = Vector2(1.0, 0.5)
-		_puff.width = 64
-		_puff.height = 64
-	return _puff
-
-
-## Panache de fumee (eteint) : bouffees en coordonnees monde, qui montent,
-## grossissent et s'effacent.
-static func make_smoke() -> CPUParticles3D:
-	var p := CPUParticles3D.new()
-	p.name = "Smoke"
-	p.emitting = false
-	p.amount = 48
-	p.lifetime = 1.6
-	p.local_coords = false
-	p.direction = Vector3.UP
-	p.spread = 18.0
-	p.initial_velocity_min = 2.5
-	p.initial_velocity_max = 4.2
-	p.gravity = Vector3(0.0, 2.0, 0.0)
-	p.damping_min = 0.6
-	p.damping_max = 1.2
-	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = 0.35
-	p.scale_amount_min = 0.9
-	p.scale_amount_max = 1.5
-	var grow := Curve.new()
-	grow.add_point(Vector2(0.0, 0.4))
-	grow.add_point(Vector2(1.0, 2.0))
-	p.scale_amount_curve = grow
-	var fade := Gradient.new()
-	fade.set_color(0, Color(1, 1, 1, 0.0))
-	fade.set_color(1, Color(1, 1, 1, 0.0))
-	fade.add_point(0.15, Color(1, 1, 1, 1.0))
-	p.color_ramp = fade
-	var quad := QuadMesh.new()
-	quad.size = Vector2(1.1, 1.1)
-	var mat := StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_texture = _puff_texture()
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	quad.material = mat
-	p.mesh = quad
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+## Panache de fumee (eteint) : bouffees en coordonnees monde qui montent,
+## grossissent, tournent et s'effacent (FxKit.make_smoke).
+static func make_smoke() -> GPUParticles3D:
+	return FxKit.make_smoke(72, 2.4)
 
 
 ## Regle le panache : rien, gris leger, noir epais, ou fumee d'epave (le
-## nombre de bouffees change : le panache repart, une fois par palier).
-static func set_smoke(p: CPUParticles3D, level: int) -> void:
+## debit change, le panache ne repart pas).
+static func set_smoke(p: GPUParticles3D, level: int) -> void:
 	if p == null:
 		return
+	# plus clair la nuit : il prend la lueur de la ville (FxKit.smoke_material)
+	var nk := 1.8 if TruckLights.night else 1.0
 	match level:
 		Smoke.NONE:
 			p.emitting = false
 		Smoke.LIGHT:
-			p.color = Color(0.85, 0.85, 0.88, 0.5)
-			p.amount = 16
-			p.scale_amount_min = 0.8
-			p.scale_amount_max = 1.3
-			p.emitting = true
+			FxKit.set_smoke_look(p, Color(0.8, 0.8, 0.82, 0.5), 0.35, 0.9, 1.4)
 		Smoke.HEAVY:
 			# anthracite plutot que noir : il se voit encore sur un ciel de nuit
-			p.color = Color(0.17, 0.16, 0.16, 0.9)
-			p.amount = 48
-			p.scale_amount_min = 1.3
-			p.scale_amount_max = 2.1
-			p.emitting = true
+			FxKit.set_smoke_look(p, Color(0.16 * nk, 0.15 * nk, 0.15 * nk, 0.95), 0.9, 1.4, 2.3)
 		_:
-			p.color = Color(0.13, 0.12, 0.12, 0.95)
-			p.amount = 60
-			p.scale_amount_min = 1.8
-			p.scale_amount_max = 2.8
-			p.emitting = true
+			FxKit.set_smoke_look(p, Color(0.1 * nk, 0.095 * nk, 0.09 * nk, 0.95), 1.0, 1.9, 3.0)
 
 
-## Etincelles (eteintes) : petits eclats orange qui jaillissent et retombent.
-static func make_sparks() -> CPUParticles3D:
-	var p := CPUParticles3D.new()
-	p.name = "Sparks"
-	p.emitting = false
-	p.amount = 18
-	p.lifetime = 0.45
-	p.explosiveness = 0.35
-	p.randomness = 0.6
-	p.local_coords = false
-	p.direction = Vector3.UP
-	p.spread = 70.0
-	p.initial_velocity_min = 4.0
-	p.initial_velocity_max = 9.0
-	p.gravity = Vector3(0.0, -14.0, 0.0)
-	p.scale_amount_min = 0.6
-	p.scale_amount_max = 1.0
-	var spark := BoxMesh.new()
-	spark.size = Vector3(0.06, 0.06, 0.22)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.75, 0.3)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.55, 0.12)
-	mat.emission_energy_multiplier = 6.0
-	spark.material = mat
-	p.mesh = spark
-	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+## Couleur des bouffees du panache `p`.
+static func smoke_color(p: GPUParticles3D) -> Color:
+	return (p.process_material as ParticleProcessMaterial).color
+
+
+## Etincelles (eteintes) : un moteur qui lache crache par a-coups des traits
+## orange qui tombent et rebondissent sur la route, `floor_below` m sous
+## l'emetteur.
+static func make_sparks(floor_below: float = 0.9) -> GPUParticles3D:
+	var p := FxKit.make_sparks(36, 0.8, {
+		"direction": Vector3(0.0, 0.6, -0.4), "spread": 1.0, "speed_min": 2.5, "speed_max": 7.0,
+		"inherit": 0.95, "box_extents": Vector3(0.5, 0.15, 0.2), "gravity": 14.0, "drag": 0.6,
+		"floor_below": floor_below, "life_min": 0.35, "stretch": 0.03, "max_len": 0.35,
+		"width": 0.018, "heat": 5.0})
+	# crepitement : emission irreguliere, par paquets
+	p.randomness = 0.9
+	p.explosiveness = 0.4
 	return p

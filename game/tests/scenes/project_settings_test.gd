@@ -69,11 +69,40 @@ func _check_lighting() -> void:
 	GraphicsSettings.apply_environment(day, GraphicsSettings.Quality.HIGH, 1)
 	check("volumetrique : haute a 1-2 vues, coupe a 4 vues et en moyenne ; jamais a la plage",
 		fog == [true, true, false, false, true] and not day.volumetric_fog_enabled, str(fog))
+	# eclairage global (SDFGI) sur les deux circuits : qualite haute jusqu'a
+	# 2 vues seulement
+	var gi := []
+	for e: Environment in [env, day]:
+		for c: Array in [[GraphicsSettings.Quality.HIGH, 1], [GraphicsSettings.Quality.HIGH, 2],
+				[GraphicsSettings.Quality.HIGH, 3], [GraphicsSettings.Quality.MEDIUM, 1],
+				[GraphicsSettings.Quality.HIGH, 1]]:
+			GraphicsSettings.apply_environment(e, c[0], c[1])
+			gi.append(e.sdfgi_enabled)
+	check("eclairage global : haute a 1-2 vues, coupe a 3 vues et en moyenne, sur les deux circuits",
+		gi == [true, true, false, false, true, true, true, false, false, true], str(gi))
 	var vp := SubViewport.new()
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.HIGH)
-	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED
+	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_SMAA
+	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.MEDIUM)
+	var medium := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_DISABLED
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.LOW)
-	check("vues de l'ecran partage : MSAA 2x (haute), FXAA (basse)", high
+	check("vues de l'ecran partage : MSAA 2x + SMAA (haute), MSAA 2x (moyenne), FXAA (basse)", high and medium
 		and vp.msaa_3d == Viewport.MSAA_DISABLED and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_FXAA)
 	vp.free()
+	# post-traitement (ScreenFx) : flou de vitesse nul en ville, plein a fond,
+	# le boost en ajoute ; jamais au-dela de 1
+	var b := [ScreenFx.blur_for(50.0, false), ScreenFx.blur_for(110.0, false),
+		ScreenFx.blur_for(170.0, false), ScreenFx.blur_for(170.0, true), ScreenFx.blur_for(300.0, true)]
+	check("flou de vitesse : 0 a 50 km/h, croissant, boost en plus, borne a 1",
+		b[0] == 0.0 and b[1] > 0.0 and b[2] > b[1] and b[3] > b[2] and b[4] <= 1.0, str(b))
+	# pluie (2026-10-08, particules) : chaque vue ne voit que la sienne
+	var masks := []
+	for i in RainFx.MAX_VIEWS:
+		masks.append(RainFx.cull_mask_for(0xFFFFF, i))
+	var own := true
+	for i in RainFx.MAX_VIEWS:
+		for k in RainFx.MAX_VIEWS:
+			own = own and (int(masks[i]) & RainFx.view_bit(k) != 0) == (i == k)
+	check("pluie : chaque camera voit sa pluie et pas celle des autres vues, le reste intact",
+		own and int(masks[0]) & 0xFFF == 0xFFF, str(masks))
 	check("qualite haute par defaut", GameState.graphics_quality == GraphicsSettings.Quality.HIGH)

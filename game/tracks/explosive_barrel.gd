@@ -302,13 +302,9 @@ func explode(truck: Truck) -> void:
 	linear_velocity = Vector3.UP * 11.5 - shove_dir * 4.0
 	angular_velocity = Vector3(randf_range(-9.0, 9.0), randf_range(-5.0, 5.0), randf_range(-9.0, 9.0))
 
-	# Flash visuel
-	_blast_fx.visible = true
-	_blast_fx.scale = Vector3.ONE * 1.0
-	_blast_light.visible = true
-	_blast_light.light_energy = 5.0
-	if _blast_mat != null:
-		_blast_mat.albedo_color.a = 0.85
+	# Explosion (boule de feu, fumee, braises, souffle : ExplosionFx), sans
+	# son : le baril joue le sien
+	ExplosionFx.spawn(get_parent(), global_position + Vector3.UP * BARREL_HEIGHT * 0.5, 4.5, false)
 
 	# Son d'explosion
 	if DisplayServer.get_name() != "headless" and _audio_player != null:

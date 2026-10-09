@@ -8,9 +8,14 @@ extends RigidBody3D
 ## pas, il ne voit que le decor), puis s'efface au bout de life_ticks.
 ## Au plus MAX_ALIVE debris dans la partie : au-dela, le plus ancien s'en va.
 ## Durees en ticks physiques (CLAUDE.md §7).
+## Les eclats sont des plaques de tole froissee, pliees et dechiquetees
+## (FxKit.shard_mesh), plus des boites (2026-10-08, particules) ; une piece
+## soufflee par une explosion peut trainer de la fumee, voire bruler
+## (add_trail), pendant TRAIL_TICKS.
 
 const MAX_ALIVE := 90
 const FADE_TICKS := 30
+const TRAIL_TICKS := 150
 
 static var _alive: Array[Debris] = []
 
@@ -18,6 +23,8 @@ static var _alive: Array[Debris] = []
 
 var _age: int = 0
 var _mesh: Node3D
+var _trail: GPUParticles3D
+var _flame: GPUParticles3D
 var _scale0: Vector3 = Vector3.ONE
 
 
@@ -50,9 +57,10 @@ static func from_part(world: Node, part: MeshInstance3D, velocity: Vector3) -> D
 static func shard(world: Node, at: Vector3, size: Vector3, material: Material, velocity: Vector3) -> Debris:
 	var d := Debris.new()
 	var mi := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	mi.mesh = box
+	# plaque froissee unitaire : largeur x, profondeur z ; son epaisseur et
+	# ses plis suivent la taille de l'eclat
+	mi.mesh = FxKit.shard_mesh(roundi(absf(at.x * 7.1 + at.z * 3.3 + at.y * 5.3) * 10.0))
+	mi.scale = Vector3(size.x, (size.x + size.z) * 0.5, size.z)
 	if material != null:
 		mi.material_override = material
 	mi.layers |= DamageFx.LAYER_BIT
@@ -99,8 +107,36 @@ func _ready() -> void:
 		_scale0 = _mesh.scale
 
 
+## Trainee de fumee sombre derriere la piece (et des flammes si `burning`)
+## pendant TRAIL_TICKS. Rien en headless (purement visuel).
+func add_trail(burning: bool) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	# serree (une bouffee tous les ~25 cm a 15 m/s) et deja large au depart :
+	# un ruban continu, pas un pointille
+	_trail = FxKit.make_smoke(110, 1.5, 1.1)
+	var nk := 1.8 if TruckLights.night else 1.0
+	FxKit.set_smoke_look(_trail, Color(0.12 * nk, 0.11 * nk, 0.1 * nk, 0.7), 1.0, 0.7, 1.2)
+	var pm := _trail.process_material as ParticleProcessMaterial
+	pm.initial_velocity_min = 0.3
+	pm.initial_velocity_max = 1.0
+	pm.inherit_velocity_ratio = 0.05
+	pm.emission_sphere_radius = 0.15
+	pm.scale_curve = FxKit.curve([[0.0, 0.6], [0.4, 0.95], [1.0, 1.5]])
+	add_child(_trail)
+	if burning:
+		_flame = FxKit.make_fire(24, 0.35, 0.7)
+		_flame.amount_ratio = FxKit.density()
+		_flame.emitting = true
+		add_child(_flame)
+
+
 func _physics_process(_delta: float) -> void:
 	_age += 1
+	if _age == TRAIL_TICKS and _trail != null:
+		_trail.emitting = false
+		if _flame != null:
+			_flame.emitting = false
 	var left := life_ticks - _age
 	if left < FADE_TICKS and _mesh != null:
 		_mesh.scale = _scale0 * maxf(float(left) / FADE_TICKS, 0.01)

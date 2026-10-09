@@ -390,26 +390,32 @@ func _build_beams(root: Node3D, track: TrackBlockout) -> void:
 
 # --- utilitaires ------------------------------------------------------------------
 
-static var _mat_concrete: StandardMaterial3D
+static var _mat_concrete: ShaderMaterial
 static var _mat_lamp: StandardMaterial3D
 
 
-static var _mat_concrete_day: StandardMaterial3D
+static var _mat_concrete_day: ShaderMaterial
 
 
-func _concrete() -> StandardMaterial3D:
+func _concrete() -> ShaderMaterial:
 	if not night:
 		if _mat_concrete_day == null:
-			_mat_concrete_day = StandardMaterial3D.new()
-			_mat_concrete_day.albedo_color = Color(0.74, 0.72, 0.68)
-			_mat_concrete_day.roughness = 0.85
+			_mat_concrete_day = _concrete_mat(Color(0.74, 0.72, 0.68), 0.0, 0.0)
 		return _mat_concrete_day
 	if _mat_concrete == null:
-		_mat_concrete = StandardMaterial3D.new()
-		_mat_concrete.albedo_color = Color(0.07, 0.075, 0.095)
-		_mat_concrete.metallic = 0.35
-		_mat_concrete.roughness = 0.5
+		# beton sombre trempe par la pluie
+		_mat_concrete = _concrete_mat(Color(0.075, 0.08, 0.1), 1.0, 0.3)
 	return _mat_concrete
+
+
+## Beton procedural (concrete.gdshader) : banches, pores, coulures.
+static func _concrete_mat(tint: Color, wet: float, metallic: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = preload("res://tracks/materials/concrete.gdshader")
+	m.set_shader_parameter("tint", tint)
+	m.set_shader_parameter("wetness", wet)
+	m.set_shader_parameter("metallic", metallic)
+	return m
 
 
 static func _lamp() -> StandardMaterial3D:

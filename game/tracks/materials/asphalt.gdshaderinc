@@ -2,8 +2,9 @@
 // playa_road.gdshader). Tout est procedural, en metres, dans le repere de la
 // piste : p.x a travers (0 au bord gauche), p.y le long (distance parcourue).
 //
-//   - enrobe : teinte de fond qui varie par grandes plaques, gravillons
-//     clairs (effaces au loin : pas de scintillement), micro-relief ;
+//   - enrobe : teinte de fond qui varie par grandes plaques, granulat
+//     (cailloux anguleux de teintes variees dans le liant noir, efface au
+//     loin : pas de scintillement), micro-relief ;
 //   - usure : deux ornieres par voie (passage des roues), plus sombres
 //     (gomme) et plus lisses, taches d'huile au milieu des voies ;
 //   - reparations : rustines rectangulaires plus noires, fissures colmatees
@@ -53,14 +54,36 @@ float a_detail(vec2 p, float freq) {
 	return 1.0 - smoothstep(0.35, 0.9, max(w.x, w.y));
 }
 
-// Gravillons : cellules de 1 / freq m, un caillou clair dans certaines.
-float a_stones(vec2 p, float freq, float density) {
-	vec2 c = floor(p * freq);
-	vec2 f = fract(p * freq);
-	vec2 o = a_hash2(c) * 0.6 + 0.2;
-	float d = length(f - o);
-	float present = step(1.0 - density, a_hash(c + 13.7));
-	return present * (1.0 - smoothstep(0.12, 0.32, d));
+// Granulat : mosaique de cailloux anguleux (cellules de Voronoi deformees,
+// distance mi-euclidienne mi-Chebyshev : des aretes, pas des ronds) noyes
+// dans le liant. Renvoie la teinte du caillou (0 .. 1) dans x, le masque
+// caillou / liant dans y (0 dans les joints).
+vec2 a_aggregate(vec2 p, float freq) {
+	vec2 q = p * freq;
+	vec2 c = floor(q);
+	vec2 f = fract(q);
+	float d1 = 8.0;
+	float d2 = 8.0;
+	float id = 0.0;
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 h = a_hash2(c + g);
+			vec2 r = g + h * 0.8 + 0.1 - f;
+			float a = h.x * 6.283;
+			vec2 rr = vec2(r.x * cos(a) - r.y * sin(a), r.x * sin(a) + r.y * cos(a));
+			float d = mix(length(rr), max(abs(rr.x), abs(rr.y)), 0.55);
+			if (d < d1) {
+				d2 = d1;
+				d1 = d;
+				id = a_hash(c + g + 71.3);
+			} else if (d < d2) {
+				d2 = d;
+			}
+		}
+	}
+	float joint = smoothstep(0.1, 0.32, d2 - d1);
+	return vec2(id, joint);
 }
 
 void asphalt_surface(vec2 p, float rw, float lane_count, float base_tone, float wet, float time,
@@ -71,13 +94,20 @@ void asphalt_surface(vec2 p, float rw, float lane_count, float base_tone, float 
 	vec3 col = vec3(base_tone) * (0.82 + 0.36 * big) * (0.9 + 0.2 * mid);
 	col *= mix(vec3(1.0, 0.98, 0.95), vec3(0.95, 0.97, 1.0), a_noise(p * 0.02));
 
-	// gravillons (deux tailles), effaces au loin
-	float k1 = a_detail(p, 9.0);
-	float k2 = a_detail(p, 22.0);
-	float st = a_stones(p, 9.0, 0.45) * k1 + a_stones(p + 3.3, 22.0, 0.55) * 0.7 * k2;
-	float st_mean = 0.06 * (1.0 - k1) + 0.05 * (1.0 - k2);
-	float stones = st + st_mean;
-	col *= 1.0 + 0.55 * stones;
+	// granulat (deux tailles : 4 et 2 cm), efface au loin vers sa moyenne :
+	// cailloux gris de teintes variees, quelques-uns clairs (quartz), liant noir
+	// dans les joints
+	float k1 = a_detail(p, 24.0);
+	float k2 = a_detail(p, 50.0);
+	vec2 g1 = a_aggregate(p, 24.0);
+	vec2 g2 = a_aggregate(p + 5.3, 50.0);
+	float tone1 = mix(0.94, 1.12, g1.x) + 0.3 * step(0.93, g1.x);
+	float tone2 = mix(0.95, 1.08, g2.x) + 0.22 * step(0.95, g2.x);
+	float agg1 = mix(0.84, tone1, g1.y);
+	float agg2 = mix(0.9, tone2, g2.y);
+	float agg = mix(0.98, agg1, k1) * mix(1.0, agg2, 0.7 * k2);
+	col *= agg;
+	float stones = (g1.y * g1.x * k1 + 0.5 * g2.y * g2.x * k2) * 0.5 + 0.1 * (1.0 - k1);
 	float grain = a_noise(p * 6.0) * k1 + 0.5 * (1.0 - k1);
 	col *= 0.92 + 0.16 * grain;
 
