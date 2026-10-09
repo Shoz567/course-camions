@@ -62,7 +62,7 @@ func _test_setup() -> void:
 	_a.transform = xf
 	add_child(_a)
 	_a.linear_velocity = -xf.basis.z * 100.0 / 3.6
-	_a.slowed_down.connect(func() -> void:
+	_a.puddle_slipped.connect(func(_ticks: int) -> void:
 		_a_slowed += 1
 		if _a_hit_at < 0:
 			_a_hit_at = tick
@@ -96,9 +96,9 @@ func _test_finish() -> void:
 	check("grille : 6 camions poses sans contact", _grid_contacts == 0, "%d contacts" % _grid_contacts)
 	check_below("grille : personne ne glisse (m)", moved, 0.6)
 	check_below("grille : tout le monde a l'arret (m/s)", speed, 0.1)
-	check("banc de sable : ralenti une seule fois", _a_slowed == 1, "%d" % _a_slowed)
+	check("banc de sable : glissade declenchee", _a_slowed == 1, "%d" % _a_slowed)
 	if _a_hit_at >= 0:
-		check_below("banc de sable : vitesse apres / avant", _a_after / maxf(_a_before, 0.1), 0.75)
+		check_above("banc de sable : vitesse conservee (pas de freinage)", _a_after / maxf(_a_before, 0.1), 0.90)
 	check_below("personne ne se couche (deg)", _max_tilt, 45.0)
 
 

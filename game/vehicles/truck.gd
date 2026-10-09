@@ -29,11 +29,14 @@ extends RigidBody3D
 ##       le tracteur seul est plus rapide, plus vif et plus nerveux jusqu'a ce
 ##       qu'elle se raccroche (reattach_trailer) ;
 ##   remorque larguee percutee (cargo_hit) : ralenti et deporte en lacet.
+##   impacts contre un mur (wall_impact) : signales avec la vitesse normale et
+##       la forme touchee (tracteur ou remorque) ; les PV sont l'affaire du
+##       gameplay (TruckHealth). Epave (set_wrecked) : gelee, sans force.
 ##
 ## Interface avec le gameplay (gameplay-engineer.md), la seule autorisee :
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
 ##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit(),
-##   detach_trailer(), reattach_trailer()
+##   detach_trailer(), reattach_trailer(), set_wrecked()
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -51,9 +54,22 @@ signal wall_unstuck(normal: Vector3)
 signal cargo_hit_taken
 ## Vient d'etre ralenti par la piste (flaque, panneau percute...).
 signal slowed_down
+## Glissade declenchee par une flaque d'eau (effet savonnette).
+signal puddle_slipped(ticks: int)
 ## La remorque vient d'etre detachee / raccrochee.
 signal trailer_detached
 signal trailer_reattached
+## Debut d'un contact avec un mur (glissiere) : vitesse normale a l'impact
+## (m/s, vers le mur) et partie touchee (remorque, ou tracteur). Les degats
+## sont l'affaire du gameplay (TruckHealth).
+signal wall_impact(normal_speed_ms: float, on_trailer: bool)
+## Le meme impact, avec le point de contact et la normale du mur (monde,
+## tournee vers le camion) : pour les traces de choc (TruckDamageFx).
+signal wall_impact_at(normal_speed_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
+## Debut d'un contact avec un autre corps mobile (camion, remorque larguee) :
+## vitesse d'approche, partie touchee, point et normale (monde, tournee vers
+## le camion). Purement informatif : aucun degat de PV.
+signal body_impact(approach_ms: float, on_trailer: bool, point: Vector3, normal: Vector3)
 
 ## Ce qui empeche la caisse de remorque de reapparaitre : decor, camions,
 ## obstacles (couche 5, remorques larguees, VEHICLE_SPEC §7).
@@ -162,6 +178,8 @@ var _trailer_ghost: bool = false
 var _slow_factor_pending: float = 1.0
 var _slow_ticks: int = 0
 var _slow_decel: float = 0.0
+## Perte d'adherence laterale temporaire (flaque savonnette)
+var _slip_ticks: int = 0
 var _trailer_shape: CollisionShape3D
 var _trailer_query: PhysicsShapeQueryParameters3D
 
@@ -174,6 +192,19 @@ var _wall_gap: int = 0
 ## Caisse de cargo percutee : position de la caisse, choc a appliquer.
 var _cargo_hit_pending: bool = false
 var _cargo_hit_from: Vector3 = Vector3.ZERO
+
+## Impacts contre un mur : un nouveau contact apres WALL_IMPACT_GAP_TICKS sans
+## contact, separement pour le tracteur et pour la remorque. Vitesse avant les
+## derniers pas (le choc a deja freine le camion quand le contact est lu).
+const WALL_IMPACT_GAP_TICKS := 12
+var _front_wall_gap: int = WALL_IMPACT_GAP_TICKS + 1
+var _trailer_wall_gap: int = WALL_IMPACT_GAP_TICKS + 1
+var _vel_hist: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
+## Contacts avec des corps mobiles : id du corps -> dernier pas de contact.
+var _body_contacts: Dictionary = {}
+var _contact_step: int = 0
+## Epave (0 PV, TruckHealth) : gelee, aucune force, aucune commande.
+var _wrecked: bool = false
 
 var _reset_pending: bool = false
 ## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
@@ -256,6 +287,7 @@ func get_input() -> InputFrame:
 func reset_to(xf: Transform3D) -> void:
 	_reset_xf = xf
 	_reset_pending = true
+	_slip_ticks = 0
 
 
 ## Vitesse le long de l'axe avant (-Z), pas la norme du vecteur (METRICS.md).
@@ -370,6 +402,25 @@ func apply_slowdown(speed_factor: float, ticks: int, extra_decel_ms2: float) -> 
 	_slow_decel = maxf(_slow_decel, extra_decel_ms2)
 
 
+## Perte d'adherence laterale (flaque savonnette) : le camion glisse sans
+## perte de vitesse longitudinale, deteriorant le controle du joueur.
+func apply_puddle_slip(ticks: int = 60) -> void:
+	var first := _slip_ticks == 0
+	_slip_ticks = maxi(_slip_ticks, ticks)
+	puddle_slipped.emit(_slip_ticks)
+	if first:
+		var xf := global_transform
+		var up := xf.basis.y
+		var v_fwd := linear_velocity.dot(-xf.basis.z)
+		if absf(v_fwd) > 2.0:
+			var kick_dir := 1.0 if (int(Engine.get_physics_frames()) % 2 == 0) else -1.0
+			apply_torque_impulse(up * kick_dir * mass * 0.8)
+
+
+func is_slipping() -> bool:
+	return _slip_ticks > 0
+
+
 func cargo_hit(crate_position: Vector3) -> void:
 	_cargo_hit_pending = true
 	_cargo_hit_from = crate_position
@@ -378,6 +429,29 @@ func cargo_hit(crate_position: Vector3) -> void:
 ## Ticks de frottement continu contre un mur (0 = libre).
 func get_wall_contact_ticks() -> int:
 	return _wall_ticks
+
+
+## Epave (0 PV) : gelee sur place, plus aucune force ni commande, jusqu'a ce
+## que le gameplay la relance (set_wrecked(false) puis reset_to).
+func set_wrecked(on: bool) -> void:
+	_wrecked = on
+	freeze = on
+	_boost_ticks = 0
+	_pad_boost_ticks = 0
+	_pad_kick_pending = false
+	_slip_ticks = 0
+	_slow_ticks = 0
+	_slow_factor_pending = 1.0
+
+
+func is_wrecked() -> bool:
+	return _wrecked
+
+
+## Vitesses au debut des trois derniers pas physiques, la plus recente en
+## tete : au moins l'une d'elles precede un choc qu'on vient de lire.
+func get_recent_velocities() -> PackedVector3Array:
+	return _vel_hist
 
 
 ## Angle de la remorque par rapport au tracteur (rad), > 0 : arriere de la
@@ -399,21 +473,77 @@ static func trailer_local_transform(angle: float) -> Transform3D:
 
 # --- simulation ------------------------------------------------------------------
 
+## Contact avec un corps mobile : au debut d'un contact (apres
+## WALL_IMPACT_GAP_TICKS sans), signale body_impact.
+func _note_body_contact(state: PhysicsDirectBodyState3D, i: int, obj: Object, at: Vector3) -> void:
+	var id := state.get_contact_collider_id(i)
+	var last: int = _body_contacts.get(id, -1000)
+	_body_contacts[id] = _contact_step
+	if _contact_step - last <= WALL_IMPACT_GAP_TICKS or obj == self:
+		return
+	var n := state.get_contact_local_normal(i)
+	if n.dot(state.transform.origin - at) < 0.0:
+		n = -n
+	n = n.normalized()
+	var other := state.get_contact_collider_velocity_at_position(i)
+	var approach := 0.0
+	for v in _vel_hist:
+		approach = maxf(approach, (other - v).dot(n))
+	var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
+	body_impact.emit(approach, shape_node == _trailer_shape, at, n)
+
+
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# contacts avec un mur : corps statique, normale presque horizontale (le
 	# sol et les rampes ont une normale verticale)
 	var n_sum := Vector3.ZERO
+	# impacts : vitesse vers le mur, pour le tracteur et pour la remorque (et
+	# le point du contact le plus violent de chacun)
+	var front := -1.0
+	var rear := -1.0
+	var front_at := Vector3.ZERO
+	var rear_at := Vector3.ZERO
+	var front_n := Vector3.ZERO
+	var rear_n := Vector3.ZERO
+	_contact_step += 1
 	for i in state.get_contact_count():
-		if not (state.get_contact_collider_object(i) is StaticBody3D):
+		var obj := state.get_contact_collider_object(i)
+		var at := state.get_contact_local_position(i)
+		if obj is RigidBody3D:
+			_note_body_contact(state, i, obj, at)
+			continue
+		if not (obj is StaticBody3D):
 			continue
 		var n := state.get_contact_local_normal(i)
 		if absf(n.y) > 0.6:
 			continue
 		n.y = 0.0
-		if n.dot(state.transform.origin - state.get_contact_local_position(i)) < 0.0:
+		if n.dot(state.transform.origin - at) < 0.0:
 			n = -n
-		n_sum += n.normalized()
+		n = n.normalized()
+		n_sum += n
+		var into := 0.0
+		for v in _vel_hist:
+			into = maxf(into, -v.dot(n))
+		var shape_node := shape_owner_get_owner(shape_find_owner(state.get_contact_local_shape(i)))
+		if shape_node == _trailer_shape:
+			if into > rear:
+				rear = into
+				rear_at = at
+				rear_n = n
+		elif into > front:
+			front = into
+			front_at = at
+			front_n = n
 	_wall_normal = n_sum.normalized() if n_sum.length_squared() > 1e-6 else Vector3.ZERO
+	if front >= 0.0 and _front_wall_gap > WALL_IMPACT_GAP_TICKS:
+		wall_impact.emit(front, false)
+		wall_impact_at.emit(front, false, front_at, front_n)
+	if rear >= 0.0 and _trailer_wall_gap > WALL_IMPACT_GAP_TICKS:
+		wall_impact.emit(rear, true)
+		wall_impact_at.emit(rear, true, rear_at, rear_n)
+	_front_wall_gap = 0 if front >= 0.0 else _front_wall_gap + 1
+	_trailer_wall_gap = 0 if rear >= 0.0 else _trailer_wall_gap + 1
 	if not _reset_pending:
 		return
 	_reset_pending = false
@@ -441,7 +571,11 @@ func _physics_process(_delta: float) -> void:
 		p.probe()
 		if p.in_contact:
 			_grounded += 1
-	if not _active:
+	# vitesses au debut des derniers pas : la plus recente en tete
+	_vel_hist[2] = _vel_hist[1]
+	_vel_hist[1] = _vel_hist[0]
+	_vel_hist[0] = linear_velocity
+	if not _active or _wrecked:
 		return
 
 	var xf := global_transform
@@ -564,6 +698,8 @@ func _physics_process(_delta: float) -> void:
 			apply_central_force(-fwd * _slow_decel * mass)
 		if _slow_ticks == 0:
 			_slow_decel = 0.0
+	if _slip_ticks > 0:
+		_slip_ticks -= 1
 
 	# saut de plaque : impulsion verticale ; a la reception (apres un vrai vol),
 	# suspension plus amortie. La chute, elle, a ete freinee avant le contact
@@ -630,6 +766,8 @@ func _physics_process(_delta: float) -> void:
 		if debug_grip:
 			var v_ref := maxf(absf(v_long), _min_ref_speed) * _tan_slip
 			var mu := t.lateral_grip_g * p.surface_grip * (rear_grip if rear else 1.0)
+			if _slip_ticks > 0:
+				mu *= 0.12 if rear else 0.22
 			f_lat = -mu * fs * clampf(v_lat / v_ref, -1.0, 1.0)
 
 		# 1.4 longitudinal : 4 roues motrices, forces proportionnelles a la masse.

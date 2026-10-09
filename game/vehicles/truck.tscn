@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://vehicles/truck.gd" id="1"]
 [ext_resource type="Resource" path="res://vehicles/default_vehicle.tres" id="2"]
@@ -8,6 +8,8 @@
 [ext_resource type="Script" path="res://vehicles/truck_boost_sound.gd" id="6"]
 [ext_resource type="Script" path="res://gameplay/truck_cargo.gd" id="7"]
 [ext_resource type="Script" path="res://vehicles/truck_vfx.gd" id="8"]
+[ext_resource type="Script" path="res://gameplay/truck_health.gd" id="9"]
+[ext_resource type="Script" path="res://gameplay/truck_damage_fx.gd" id="10"]
 
 [sub_resource type="BoxShape3D" id="shape_chassis"]
 size = Vector3(2.88, 1.2, 6.96)
@@ -141,6 +143,12 @@ script = ExtResource("6")
 
 [node name="Cargo" type="Node" parent="."]
 script = ExtResource("7")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("9")
+
+[node name="DamageFx" type="Node3D" parent="."]
+script = ExtResource("10")
 
 [node name="Headlights" type="SpotLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.990268, 0.139173, 0, -0.139173, 0.990268, 0, 1.68, -3.96)

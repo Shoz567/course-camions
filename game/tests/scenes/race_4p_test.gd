@@ -10,17 +10,21 @@ extends PhysicsTest
 ##     ZQSD fait avancer J2 et lui seul (pas J3, qui n'a pas de clavier) ; le
 ##     bouton camera de la manette 2 ne bascule que la vue de J3 ; Triangle de la
 ##     manette 2 ne fait larguer sa remorque qu'a J3, dont le HUD affiche la
-##     recharge.
+##     recharge ;
+##   - verrou de depart : 2 s apres le GO, Triangle est refuse (HUD « VERROU ») ;
+##     apres 5 s, il largue.
 
 var _scene: Node3D
 var _players: Array = []
 var _starts: Array[Vector3] = []
+var _locked: Array = []
 
 
 func _test_setup() -> void:
-	duration_ticks = 420
+	duration_ticks = 560
 	GameState.requested_players = 4
 	_scene = (load("res://dev/race.tscn") as PackedScene).instantiate() as Node3D
+	_scene.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	add_child(_scene)
 	_players = _scene.get("players")
 	for p: Object in _players:
@@ -54,10 +58,13 @@ func _test_tick(t: int) -> void:
 		_pad(2, JOY_BUTTON_RIGHT_STICK, true)
 	elif t == 402:
 		_pad(2, JOY_BUTTON_RIGHT_STICK, false)
-	if t == 300:
+	if t == 300 or t == 500:
 		_pad(2, JOY_BUTTON_Y, true)
-	elif t == 303:
+	elif t == 303 or t == 503:
 		_pad(2, JOY_BUTTON_Y, false)
+	if t == 320:
+		_locked = [_truck(2).is_trailer_detached(),
+			String((_players[2].hud as RaceHud).get("_cargo_label").text)]
 
 
 func _axis(device: int, axis: JoyAxis, value: float) -> void:
@@ -140,7 +147,9 @@ func _test_finish() -> void:
 		trailers.size() == 1 and (trailers[0] as DetachedTrailer).dropped_by == _truck(2)
 		and _truck(2).is_trailer_detached(), "%d remorque(s)" % trailers.size())
 	var hud_label := String((_players[2].hud as RaceHud).get("_cargo_label").text)
-	check("HUD de J3 : remorque larguee affichee", hud_label.begins_with("remorque larguee"), hud_label)
+	check("HUD de J3 : remorque larguee, la nouvelle arrive", hud_label.begins_with("nouvelle remorque"), hud_label)
+	check("verrou de depart : Triangle refuse 2 s apres le GO, HUD « VERROU »",
+		_locked.size() == 2 and _locked[0] == false and String(_locked[1]).begins_with("VERROU"), str(_locked))
 	check("manette 2 : seule la camera de J3 passe en cabine",
 		views == [ChaseCamera.View.CHASE, ChaseCamera.View.CHASE, ChaseCamera.View.COCKPIT, ChaseCamera.View.CHASE],
 		str(views))

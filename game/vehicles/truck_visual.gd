@@ -135,6 +135,19 @@ func _ready() -> void:
 	_body = get_node_or_null(body_path) as Node3D
 	if _body != null:
 		_body_rest = _body.transform
+	# carrosserie sur le calque des traces de choc (DamageFx) : les decalques
+	# ne marquent qu'elle, jamais la route
+	for n in find_children("*", "MeshInstance3D", true, false):
+		(n as MeshInstance3D).layers |= DamageFx.LAYER_BIT
+
+
+## Noeud qui porte les traces de choc : la caisse de la remorque (elle suit
+## l'articulation, et sa copie larguee les emporte), ou la carrosserie du
+## tracteur (elle suit le penche).
+func mark_parent(on_trailer: bool) -> Node3D:
+	if on_trailer and _trailer_pivot != null:
+		return _trailer_pivot
+	return _body if _body != null else self
 
 
 ## Apres le camion (enfant : meme tick, apres ses forces). Les transformations

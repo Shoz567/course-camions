@@ -9,12 +9,14 @@ script = ExtResource("1")
 segments = Array[Dictionary]([{
 "arch": 0.0,
 "arch_label": "CYBER CITY",
+"barrels": [[100.0, 10.0]],
 "length": 150.0,
 "name": "Ligne droite de depart",
 "type": "straight"
 }, {
 "angle": 180.0,
 "bank": 7.0,
+"barrels": [[220.0, -14.0]],
 "climb": 10.0,
 "name": "Grand virage releve (en montee)",
 "puddle": [[400.0, 27.0, 8.0]],
@@ -37,6 +39,7 @@ segments = Array[Dictionary]([{
 }, {
 "angle": -40.0,
 "bank": 3.0,
+"barrels": [[45.0, 12.0]],
 "climb": -5.0,
 "name": "S en devers inverse (droite)",
 "radius": 140.0,
@@ -72,6 +75,7 @@ segments = Array[Dictionary]([{
 "type": "straight"
 }, {
 "angle": -35.0,
+"barrels": [[65.0, 15.0]],
 "climb": -6.0,
 "name": "Chicane droite (descente)",
 "puddle": [[50.0, -24.0, 7.0]],

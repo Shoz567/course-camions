@@ -22,6 +22,7 @@ var _p2_start: Vector3
 func _test_setup() -> void:
 	duration_ticks = 440
 	_scene = (load("res://dev/race_2p.tscn") as PackedScene).instantiate() as Node3D
+	_scene.set("ready_gate", false)   # le sas READY a son propre test (race_ready_test)
 	add_child(_scene)
 	var players: Array = _scene.get("players")
 	_p1 = players[0].truck

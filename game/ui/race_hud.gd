@@ -24,6 +24,9 @@ var _boost_label: Label
 var _cargo_bar: ProgressBar
 var _cargo_label: Label
 var _cargo: TruckCargo
+var _health: TruckHealth
+var _hp_label: Label
+var _hp_bar: ProgressBar
 var _center: Label
 var _help: Label
 var _standings: Label
@@ -107,6 +110,28 @@ func _ready() -> void:
 		_cargo = truck.get_node_or_null(^"Cargo") as TruckCargo
 	_cargo_bar.visible = _cargo != null
 	_cargo_label.visible = _cargo != null
+	# PV : discret, sous les temps (les degradations visibles viendront ensuite)
+	_hp_label = _label(18, Vector2(24, 138) * k)
+	_hp_bar = ProgressBar.new()
+	_hp_bar.min_value = 0.0
+	_hp_bar.max_value = 1.0
+	_hp_bar.value = 1.0
+	_hp_bar.show_percentage = false
+	_hp_bar.position = Vector2(108, 146) * k
+	_hp_bar.size = Vector2(130, 9) * k
+	var h_bg := StyleBoxFlat.new()
+	h_bg.bg_color = Color(0.05, 0.05, 0.06, 0.8)
+	h_bg.set_corner_radius_all(roundi(maxf(2.0, 3.0 * k)))
+	var h_fill := StyleBoxFlat.new()
+	h_fill.bg_color = Color.WHITE
+	h_fill.set_corner_radius_all(roundi(maxf(2.0, 3.0 * k)))
+	_hp_bar.add_theme_stylebox_override("background", h_bg)
+	_hp_bar.add_theme_stylebox_override("fill", h_fill)
+	add_child(_hp_bar)
+	if truck != null:
+		_health = TruckHealth.of(truck)
+	_hp_label.visible = _health != null
+	_hp_bar.visible = _health != null
 	_help = _label(14, Vector2.ZERO)
 	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_help.offset_left = 24 * k
@@ -173,8 +198,19 @@ func _process(_delta: float) -> void:
 			_cargo_bar.modulate = Color(0.2, 0.9, 1.0)
 		else:
 			_cargo_bar.modulate = Color(0.6, 0.6, 0.6)
+	if _health != null:
+		var ratio := _health.hp / maxf(_health.max_hp, 1.0)
+		_hp_label.text = "%d HP" % ceili(_health.hp)
+		_hp_bar.value = ratio
+		var tint := Color(0.35, 1.0, 0.45) if ratio > 0.6 else (Color(1.0, 0.8, 0.2) if ratio > 0.3 else Color(1.0, 0.3, 0.2))
+		_hp_label.modulate = tint
+		_hp_bar.modulate = tint
 	var text := _center_text
 	var color := _center_color
+	# epave : prioritaire sur le GO et le compte a rebours de la scene
+	if _health != null and _health.is_wrecked():
+		text = "DÉTRUIT !\nretour dans %d s" % maxi(_health.wreck_seconds_left(), 1)
+		color = Color(1.0, 0.4, 0.15)
 	if text == "" and r.wrong_way:
 		text = "«« MAUVAIS SENS »»"
 		color = Color(1.0, 0.25, 0.15)

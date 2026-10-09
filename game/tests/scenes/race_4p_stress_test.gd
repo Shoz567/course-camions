@@ -5,11 +5,13 @@ extends PhysicsTest
 ## et largage de cargo. Quatre pilotes (TrackAutopilot, par InputFrame) partent
 ## de la grille, chacun sur sa voie, et roulent 25 s ; chacun largue sa remorque.
 ## Verifie la robustesse, pas un temps : aucun NaN, personne hors du monde ni
-## sur le toit plus de 2 s, tout le monde avance, toutes les remorques
-## larguees disparaissent (barrage ramene a DETACH_TICKS pour tenir en 25 s).
+## sur le toit plus de 2 s, tout le monde avance ; les remorques larguees
+## restent sur la piste (ou explosent sous les chocs), jamais de disparition
+## silencieuse, et chacun recoit une nouvelle remorque (recharge ramenee a
+## COOLDOWN_TICKS pour tenir en 25 s).
 
 const DURATION := 1500
-const DETACH_TICKS := 600
+const COOLDOWN_TICKS := 600
 const LANES: Array[float] = [-2.5, 2.5, -7.5, 7.5]
 
 var _track: TrackBlockout
@@ -26,6 +28,7 @@ var _escaped: bool = false
 var _resets: int = 0
 var _unsticks: int = 0
 var _shoves: int = 0
+var _destroyed: int = 0
 
 
 func _test_setup() -> void:
@@ -55,12 +58,13 @@ func _test_setup() -> void:
 		var p := TrackAutopilot.new(_track, t, float(g))
 		p.lane = LANES[i]
 		_pilots.append(p)
-		# barrage de 10 s (60 s par defaut depuis le 2026-10-02) : la course
-		# de 25 s voit les remorques disparaitre et se raccrocher
-		(t.get_node("Cargo") as TruckCargo).detach_ticks = DETACH_TICKS
+		# recharge de 10 s (30 s par defaut) : la course de 25 s voit chacun
+		# recevoir une nouvelle remorque
+		(t.get_node("Cargo") as TruckCargo).cooldown_ticks = COOLDOWN_TICKS
 		(t.get_node("Cargo") as TruckCargo).dropped.connect(func(c: DetachedTrailer) -> void:
 			_drops += 1
-			_crates.append(c))
+			_crates.append(c)
+			c.destroyed.connect(func() -> void: _destroyed += 1))
 		t.wall_unstuck.connect(func(_n: Vector3) -> void: _unsticks += 1)
 		t.trailer_shoved.connect(func(_o: Truck, _j: float) -> void: _shoves += 1)
 	auto_reset.truck_reset.connect(func(_t: Truck, _r: StringName) -> void: _resets += 1)
@@ -107,4 +111,9 @@ func _test_finish() -> void:
 	check("tout le monde avance (> 400 m en 25 s)", slow.is_empty(), "lents : %s" % [slow])
 	check("jamais sur le toit plus de 2 s", Array(_max_upside).max() < 120, str(_max_upside))
 	check("4 largages de cargo", _drops == 4, "%d" % _drops)
-	check("toutes les remorques larguees ont disparu", alive == 0, "%d restante(s)" % alive)
+	check("remorques larguees : sur la piste ou explosees, jamais disparues", alive + _destroyed == _drops,
+		"%d sur la piste, %d explosees, %d largages" % [alive, _destroyed, _drops])
+	var fresh := 0
+	for tr in _trucks:
+		fresh += 0 if tr.is_trailer_detached() else 1
+	check("chacun a recu une nouvelle remorque apres la recharge", fresh == 4, "%d / 4" % fresh)

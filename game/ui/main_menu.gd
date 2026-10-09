@@ -185,7 +185,7 @@ func select_track(k: int) -> void:
 	if subtitle != null:
 		var t: Dictionary = GameStateNode.TRACKS[GameState.selected_track]
 		var tag := String(t["tagline"])
-		subtitle.text = "%s  ·  3 tours" % (tag.left(1).to_upper() + tag.substr(1))
+		subtitle.text = "%s  ·  4 tours" % (tag.left(1).to_upper() + tag.substr(1))
 
 
 ## Scene de course du circuit choisi.

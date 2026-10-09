@@ -1,6 +1,6 @@
 extends Node3D
 
-## Course locale de 3 tours, de 1 a 6 joueurs, sur le circuit de la scene.
+## Course locale de 4 tours, de 1 a 6 joueurs, sur le circuit de la scene.
 ##
 ##   1 joueur    : plein ecran, n'importe quelle manette + tout le clavier.
 ##   2 joueurs   : ecran partage haut / bas (VBoxContainer).
@@ -16,7 +16,11 @@ extends Node3D
 ##   J6 orange CARBO              manette 5 (livree : lave, carbone, cuivre)
 ##
 ## Chaque joueur a sa source d'input (sa manette, et AUCUNE autre : INPUT_SPEC
-## §4), son camion, sa camera, son HUD. Compte a rebours commun, puis course :
+## §4), son camion, sa camera, son HUD. Sas « READY ? » (2026-10-02) : chaque
+## vue montre le joueur et sa manette, et l'invite a appuyer sur CARRE (Maj au
+## clavier : la touche du boost, lue sur SA source d'input) ; des que tous
+## sont READY, le compte a rebours commun demarre, puis la course (largage de
+## remorque verrouille les 5 premieres secondes, TruckCargo) :
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
 ## arrives : Options / Entree relance, Create / Echap revient au menu (Echap a tout
@@ -88,10 +92,13 @@ const HELP_SPLIT: PackedStringArray = [
 	"J6 : manette 6",
 ]
 const MAX_PLAYERS := 6
+## Couleur de chaque joueur, pour le sas READY.
+const COLOR_NAMES: PackedStringArray = ["BLEU", "ROUGE", "JAUNE", "VERT", "VIOLET", "ORANGE"]
 ## Echelle du HUD selon le nombre de joueurs (vues plus petites).
 const HUD_SCALE: Array[float] = [1.0, 0.85, 0.6, 0.6, 0.5, 0.5]
 
-enum State { COUNTDOWN, RACING, FINISHED }
+## LOBBY (sas READY) en dernier : les valeurs des autres etats ne changent pas.
+enum State { COUNTDOWN, RACING, FINISHED, LOBBY }
 
 class Player:
 	var truck: Truck
@@ -104,6 +111,9 @@ class Player:
 @export_range(1, 6) var player_count: int = 2
 ## Vrai : le nombre de joueurs choisi dans le menu remplace `player_count`.
 @export var players_from_menu: bool = false
+## Sas READY avant le compte a rebours. Faux : compte a rebours tout de suite
+## (tests qui ne portent pas sur le sas).
+@export var ready_gate: bool = true
 
 ## Le circuit de la scene (Track01 en ville, Track02 a la plage).
 @export var track_path: NodePath = ^"Track01"
@@ -124,6 +134,9 @@ var _state_tick: int = 0
 var _last_countdown_sec: int = -1
 var _neutral: InputFrame = InputFrame.new()
 var _finish_order: Array[Truck] = []
+## Sas READY : joueur pret, Carre (boost) enfonce au tick precedent.
+var ready_flags: Array[bool] = []
+var _square_was: Array[bool] = []
 ## Musique de course : demarre au GO, fondu a l'arrivee (inerte en headless).
 var music: RaceMusic
 
@@ -145,6 +158,10 @@ func _ready() -> void:
 		players.append(_add_player(i))
 	if player_count == 3 or player_count == 5:
 		_add_leader_view()
+	for i in player_count:
+		ready_flags.append(false)
+		_square_was.append(false)
+	state = State.LOBBY if ready_gate else State.COUNTDOWN
 	_state_tick = Engine.get_physics_frames()
 
 
@@ -215,6 +232,11 @@ func _add_player(i: int) -> Player:
 	p.truck = t
 	race.watch(t)
 	auto_reset.watch(t)
+	# 0 PV : epave 3 s, puis reapparition sur la piste (jamais un checkpoint
+	# saute : RaceLaps.respawn_transform)
+	var health := TruckHealth.of(t)
+	if health != null:
+		health.respawn_provider = race.respawn_transform
 	# input : sa manette seulement en ecran partage ; son jeu de touches
 	# (fleches pour J1, ZQSD pour J2, aucun au-dela)
 	var input := LocalInputSource.new()
@@ -239,6 +261,8 @@ func _add_player(i: int) -> Player:
 	cam.snap()
 	p.camera = cam
 	input.camera_toggle_requested.connect(cam.toggle_view)
+	if health != null:
+		health.respawned.connect(cam.snap)
 	var hud := RaceHud.new()
 	hud.truck = t
 	hud.race = race
@@ -248,6 +272,22 @@ func _add_player(i: int) -> Player:
 	view_parent.add_child(hud)
 	p.hud = hud
 	return p
+
+
+## Joueur et manette, pour le sas READY : « J1 - BLEU (Manette 1 / fleches) ».
+func player_tag(i: int) -> String:
+	var device := "manette ou clavier"
+	if player_count > 1:
+		device = "Manette %d" % (i + 1)
+		if i == 0:
+			device += " / flèches"
+		elif i == 1:
+			device += " / ZQSD"
+	return "J%d - %s (%s)" % [i + 1, COLOR_NAMES[i], device]
+
+
+func all_ready() -> bool:
+	return not ready_flags.has(false)
 
 
 ## Modele, couleur de repli et livree du joueur `i` (course et showroom).
@@ -303,6 +343,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(_delta: float) -> void:
 	var tick := Engine.get_physics_frames()
+	if state == State.LOBBY:
+		# sas READY : camions immobiles ; Carre (le boost de SA source) = pret
+		_neutral.tick = tick
+		for i in players.size():
+			var f := players[i].input.poll(tick)
+			players[i].truck.set_input(_neutral)
+			if f.boost and not _square_was[i] and not ready_flags[i]:
+				ready_flags[i] = true
+				MenuSound.play_confirm()
+			_square_was[i] = f.boost
+		if all_ready():
+			state = State.COUNTDOWN
+			_state_tick = tick
+			_last_countdown_sec = -1
+		return
 	if state == State.COUNTDOWN:
 		# camions immobilises jusqu'au depart
 		_neutral.tick = tick
@@ -318,13 +373,18 @@ func _physics_process(_delta: float) -> void:
 			race.start()
 			state = State.RACING
 			_state_tick = tick
+			# pas de largage pendant les premieres secondes (bouchon au depart)
+			for p in players:
+				var cargo := p.truck.get_node_or_null(^"Cargo") as TruckCargo
+				if cargo != null:
+					cargo.start_race_lock()
 			CountdownSound.play_go()
 			music.play()
 		return
 	for p in players:
 		var f := p.input.poll(tick)
 		p.truck.set_input(f)
-		if f.reset:
+		if f.reset and not p.truck.is_wrecked():
 			p.truck.reset_to(race.respawn_transform(p.truck))
 			p.camera.snap()
 
@@ -357,10 +417,20 @@ func standings_text() -> String:
 func _process(_delta: float) -> void:
 	var elapsed := Engine.get_physics_frames() - _state_tick
 	var standings := standings_text()
-	for p in players:
+	for i in players.size():
+		var p := players[i]
 		var r := race.racer(p.truck)
 		p.hud.set_standings(standings)
-		if state == State.COUNTDOWN:
+		if state == State.LOBBY:
+			if ready_flags[i]:
+				p.hud.set_center_message("%s\nREADY !\nen attente des autres (%d/%d)" % [player_tag(i),
+					ready_flags.count(true), players.size()], Color(0.3, 1.0, 0.25))
+			else:
+				# invite clignotante (2 fois par seconde)
+				var on := int(Time.get_ticks_msec() / 400) % 2 == 0
+				p.hud.set_center_message("%s\nAPPUYER SUR [CARRÉ] POUR ÊTRE READY" % player_tag(i),
+					Color(1.0, 0.85, 0.2, 1.0 if on else 0.35))
+		elif state == State.COUNTDOWN:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),
 				String(c["name"]).to_upper(), c["cc"]], Color(1.0, 0.85, 0.2))

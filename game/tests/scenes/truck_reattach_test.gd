@@ -52,7 +52,6 @@ func _test_setup() -> void:
 		t.detach_trailer()
 	# remorque larguee par un adversaire, a la place exacte de celle de D
 	_d_other = DetachedTrailer.new()
-	_d_other.lifetime_ticks = 100000
 	_d_other.transform = _d.detach_trailer()
 	add_child(_d_other)
 	# bloc de decor au milieu de la place de la remorque de A

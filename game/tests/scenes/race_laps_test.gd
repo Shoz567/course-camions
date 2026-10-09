@@ -38,6 +38,7 @@ func _test_setup() -> void:
 	add_child(_track)
 	_race = RaceLaps.new()
 	_race.track = _track
+	_race.total_laps = 3
 	add_child(_race)
 	_race.lap_completed.connect(func(t: Truck, _lap: int, ticks: int) -> void:
 		# PackedInt32Array est un type valeur : on reaffecte apres l'ajout

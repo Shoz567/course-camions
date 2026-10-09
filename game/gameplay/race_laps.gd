@@ -18,7 +18,7 @@ signal race_finished(truck: Truck, total_ticks: int)
 signal wrong_way_changed(truck: Truck, wrong: bool)
 
 @export var track: TrackBlockout
-@export var total_laps: int = 3
+@export var total_laps: int = 4
 ## Mauvais sens : vitesse a contre-sens (m/s) tenue pendant ce nombre de ticks.
 @export var wrong_way_speed_ms: float = 2.0
 @export var wrong_way_ticks: int = 45
