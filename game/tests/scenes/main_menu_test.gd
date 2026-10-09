@@ -198,6 +198,15 @@ func _test_tick(t: int) -> void:
 
 func _test_finish() -> void:
 	check("1 joueur par defaut, 1 camion montre, bouton 1 enfonce", _defaults_ok)
+	# compteur d'images par seconde (2026-10-09) : eteint par defaut, la case
+	# des parametres l'allume et l'eteint
+	var label := GameState.get_node_or_null(^"FpsCounter/Fps") as Label
+	var off_first := not GameState.show_fps and label != null and not label.visible
+	_menu.fps_check.button_pressed = true
+	var on := GameState.show_fps and label.visible
+	_menu.fps_check.button_pressed = false
+	check("parametres : compteur FPS eteint par defaut, la case l'affiche puis le cache",
+		off_first and on and not label.visible and GameStateNode.fps_text(60.0) == "60 FPS  (16.7 ms)")
 	check("6 boutons de joueurs", _menu.player_buttons.size() == 6)
 	check("touche 6 : 6 joueurs, 6 camions, tous sur le plateau", _seen.get("key6", []) == [6, 6, true],
 		str(_seen.get("key6", [])))

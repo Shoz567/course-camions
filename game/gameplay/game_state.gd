@@ -41,6 +41,17 @@ var selected_track: int = 0
 ## au lancement, celle que propose la carte graphique (default_quality).
 var graphics_quality: int = GraphicsSettings.default_quality()
 
+## Compteur d'images par seconde en haut a droite (parametres du menu,
+## 2026-10-09). Affiche par-dessus tout : menu, course, ecran partage.
+var show_fps: bool = false:
+	set(value):
+		show_fps = value
+		if _fps_label != null:
+			_fps_label.visible = value
+
+var _fps_label: Label
+var _fps_wait: float = 0.0
+
 ## Categorie choisie dans le menu (garde entre deux courses).
 var speed_class: int = SpeedClass.NORMAL
 
@@ -71,3 +82,43 @@ static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> Vehicle
 	t.drift_carve_g = base.drift_carve_g * float(c["drift"])
 	t.reverse_top_speed_kmh = minf(base.reverse_top_speed_kmh, t.top_speed_kmh * 0.5)
 	return t
+
+
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	var layer := CanvasLayer.new()
+	layer.name = "FpsCounter"
+	layer.layer = 128
+	add_child(layer)
+	_fps_label = Label.new()
+	_fps_label.name = "Fps"
+	_fps_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_fps_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_fps_label.position += Vector2(-16.0, 10.0)
+	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_fps_label.add_theme_font_size_override("font_size", 22)
+	_fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_fps_label.add_theme_constant_override("outline_size", 6)
+	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fps_label.visible = show_fps
+	layer.add_child(_fps_label)
+
+
+## Compteur : rafraichi 4 fois par seconde (lisible), vert a 55 images/s et
+## plus, jaune a 30, rouge en dessous.
+func _process(delta: float) -> void:
+	if not show_fps or _fps_label == null:
+		return
+	_fps_wait -= delta
+	if _fps_wait > 0.0:
+		return
+	_fps_wait = 0.25
+	var fps := Engine.get_frames_per_second()
+	_fps_label.text = fps_text(fps)
+	_fps_label.modulate = Color(0.45, 1.0, 0.5) if fps >= 55.0 else (Color(1.0, 0.85, 0.3) if fps >= 30.0 \
+		else Color(1.0, 0.4, 0.35))
+
+
+## Texte du compteur : images par seconde et duree d'une image.
+static func fps_text(fps: float) -> String:
+	return "%d FPS  (%.1f ms)" % [roundi(fps), 1000.0 / maxf(fps, 1.0)]

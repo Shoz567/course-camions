@@ -53,6 +53,8 @@ var settings: Control
 var sound_check: CheckButton
 var volume_slider: HSlider
 var quality_option: OptionButton
+## Compteur d'images par seconde (GameState.show_fps).
+var fps_check: CheckButton
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -236,6 +238,13 @@ func set_sound(on: bool) -> void:
 		sound_check.set_pressed_no_signal(on)
 	if is_node_ready():
 		MenuSound.play_toggle()
+
+
+## Compteur d'images par seconde, garde dans GameState (menu et courses).
+func set_show_fps(on: bool) -> void:
+	GameState.show_fps = on
+	if fps_check != null:
+		fps_check.set_pressed_no_signal(on)
 
 
 ## Qualite graphique (GraphicsSettings.Quality), gardee dans GameState pour les
@@ -587,6 +596,14 @@ func _build_settings() -> Control:
 	quality_option.select(GameState.graphics_quality)
 	quality_option.item_selected.connect(set_quality)
 	opts.add_child(quality_option)
+	fps_check = CheckButton.new()
+	fps_check.name = "FpsCheck"
+	fps_check.text = "Compteur d'images par seconde (FPS)"
+	fps_check.tooltip_text = "Affiché en haut à droite, au menu et en course."
+	fps_check.add_theme_font_size_override("font_size", 19)
+	fps_check.button_pressed = GameState.show_fps
+	fps_check.toggled.connect(set_show_fps)
+	opts.add_child(fps_check)
 
 	var back := Button.new()
 	back.name = "Back"
