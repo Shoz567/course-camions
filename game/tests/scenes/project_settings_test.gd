@@ -88,7 +88,27 @@ func _check_lighting() -> void:
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.LOW)
 	check("vues de l'ecran partage : MSAA 2x + SMAA (haute), MSAA 2x (moyenne), FXAA (basse)", high and medium
 		and vp.msaa_3d == Viewport.MSAA_DISABLED and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_FXAA)
+	check("case de l'ecran partage suivie par la resolution dynamique", vp.is_in_group(DynamicResolution.GROUP))
+	DynamicResolution.apply_to(vp, 0.75)
+	var fsr := vp.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR and is_equal_approx(vp.scaling_3d_scale, 0.75)
+	DynamicResolution.apply_to(vp, 1.0)
+	check("resolution dynamique : FSR sous 100 %, mise a l'echelle simple a 100 %", fsr
+		and vp.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and vp.scaling_3d_scale == 1.0)
 	vp.free()
+	# resolution dynamique (2026-10-09, GPU integres) : pleine resolution tant
+	# que le budget de 60 images/s tient ; au-dela, chute a l'echelle estimee
+	# (cout ~ pixels), bornee a MIN_SCALE ; remontee d'un palier apres
+	# RAISE_HOLD s, si elle ne repasse pas le budget ; sans mesure, rien
+	var steps := [DynamicResolution.next_scale(1.0, 10.0, 0.0), DynamicResolution.next_scale(1.0, 20.0, 0.0),
+		DynamicResolution.next_scale(1.0, 100.0, 0.0), DynamicResolution.next_scale(0.8, 8.0, 1.0),
+		DynamicResolution.next_scale(0.8, 8.0, 3.0), DynamicResolution.next_scale(0.8, 0.0, 3.0),
+		DynamicResolution.next_scale(0.95, 9.0, 3.0), DynamicResolution.next_scale(0.8, 12.0, 3.0)]
+	var want := [1.0, 0.8, DynamicResolution.MIN_SCALE, 0.8, 0.85, 0.8, 1.0, 0.8]
+	var same := true
+	for i in want.size():
+		same = same and is_equal_approx(float(steps[i]), float(want[i]))
+	check("resolution dynamique : 100 % dans le budget, baisse au cout estime, remontee prudente",
+		same, str(steps))
 	# post-traitement (ScreenFx) : plus de flou de vitesse (2026-10-09, a la
 	# demande de l'utilisateur)
 	var fx_methods := (load("res://gameplay/screen_fx.gd") as Script).get_script_method_list().map(

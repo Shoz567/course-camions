@@ -772,6 +772,21 @@ RTX 5060 Ti en 1080p). Les scripts et la physique ne coûtent que 0,3 à
   triangles 11,9 M → 2,8 M, CPU de rendu 4,6 → 3,0 ms, GPU 7,2 → 6,1 ms,
   125 → 152 images/s ; à 1 joueur 191 → 206 images/s.
 
+**Optimisation, passe 2 : résolution dynamique** (2026-10-09, « continue
+l'optimisation pour des petites config avec GPU intégré tout en conservant le
+plus possible les graphismes ») : en qualité moyenne (celle d'une puce
+intégrée), on a coupé chaque effet tour à tour à 1080p : SSAO 27 % du temps GPU,
+MSAA 11 %, flou lumineux 7 %, lumières 9 %, ombres 10 % ; SSAO ou ombres en
+qualité réduite : moins de 2 %. La résolution de la 3D, elle, compte d'un
+bloc : 77 % → −27 %, 67 % → −39 %. D'où `DynamicResolution` (case
+« Résolution dynamique » des paramètres, active par défaut) : tous les effets
+restent ; la 3D garde sa pleine résolution tant que le GPU tient 60 images/s,
+et ne descend (FSR 1, jusqu'à 60 %) que s'il décroche ; l'interface reste
+nette. Vérifié en course avec un budget abaissé pour simuler une petite
+carte : 1 vue 2,9 → 1,9 ms (3D à 75 %), 4 vues 5,2 → 3,6 ms (65 %) ; 3 à 4
+changements d'échelle au départ, puis plus aucun. Le compteur FPS affiche la
+résolution 3D quand elle est baissée.
+
 ---
 
 ## Questions de design ouvertes

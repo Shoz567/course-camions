@@ -49,6 +49,13 @@ var show_fps: bool = false:
 		if _fps_label != null:
 			_fps_label.visible = value
 
+## Resolution dynamique de la 3D (parametres du menu, DynamicResolution) :
+## active par defaut, sans effet tant que la carte tient 60 images/s.
+var dynamic_resolution: bool = true
+
+## Regle l'echelle 3D de toutes les vues (enfant de l'autoload).
+var resolution: DynamicResolution
+
 var _fps_label: Label
 var _fps_wait: float = 0.0
 
@@ -86,6 +93,9 @@ static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> Vehicle
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	resolution = DynamicResolution.new()
+	resolution.name = "DynamicResolution"
+	add_child(resolution)
 	var layer := CanvasLayer.new()
 	layer.name = "FpsCounter"
 	layer.layer = 128
@@ -114,11 +124,15 @@ func _process(delta: float) -> void:
 		return
 	_fps_wait = 0.25
 	var fps := Engine.get_frames_per_second()
-	_fps_label.text = fps_text(fps)
+	_fps_label.text = fps_text(fps, resolution.scale)
 	_fps_label.modulate = Color(0.45, 1.0, 0.5) if fps >= 55.0 else (Color(1.0, 0.85, 0.3) if fps >= 30.0 \
 		else Color(1.0, 0.4, 0.35))
 
 
-## Texte du compteur : images par seconde et duree d'une image.
-static func fps_text(fps: float) -> String:
-	return "%d FPS  (%.1f ms)" % [roundi(fps), 1000.0 / maxf(fps, 1.0)]
+## Texte du compteur : images par seconde, duree d'une image et, quand la
+## resolution dynamique l'a baissee, la resolution de la 3D.
+static func fps_text(fps: float, scale: float = 1.0) -> String:
+	var text := "%d FPS  (%.1f ms)" % [roundi(fps), 1000.0 / maxf(fps, 1.0)]
+	if scale < 0.999:
+		text += "\n3D %d %%" % roundi(scale * 100.0)
+	return text

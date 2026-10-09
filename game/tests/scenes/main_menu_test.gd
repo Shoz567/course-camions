@@ -206,7 +206,19 @@ func _test_finish() -> void:
 	var on := GameState.show_fps and label.visible
 	_menu.fps_check.button_pressed = false
 	check("parametres : compteur FPS eteint par defaut, la case l'affiche puis le cache",
-		off_first and on and not label.visible and GameStateNode.fps_text(60.0) == "60 FPS  (16.7 ms)")
+		off_first and on and not label.visible and GameStateNode.fps_text(60.0) == "60 FPS  (16.7 ms)"
+		and GameStateNode.fps_text(60.0, 0.75) == "60 FPS  (16.7 ms)\n3D 75 %")
+	# resolution dynamique (2026-10-09) : active par defaut, la case la coupe
+	# et ramene la 3D a pleine resolution
+	var dyn_default := GameState.dynamic_resolution and _menu.dynres_check.button_pressed
+	GameState.resolution.set_scale(0.7, [get_viewport()])
+	_menu.dynres_check.button_pressed = false
+	GameState.resolution._process(0.016)
+	var dyn_off := not GameState.dynamic_resolution and GameState.resolution.scale == 1.0 \
+		and get_viewport().scaling_3d_scale == 1.0
+	_menu.dynres_check.button_pressed = true
+	check("parametres : resolution dynamique active par defaut, la case la coupe (3D a 100 %)",
+		dyn_default and dyn_off and GameState.dynamic_resolution)
 	check("6 boutons de joueurs", _menu.player_buttons.size() == 6)
 	check("touche 6 : 6 joueurs, 6 camions, tous sur le plateau", _seen.get("key6", []) == [6, 6, true],
 		str(_seen.get("key6", [])))
