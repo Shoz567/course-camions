@@ -250,7 +250,7 @@ grandeurs observables : vitesse, position, angle de roulis, contact des roues.
 | Virage | plein braquage à 80 km/h pendant 300 ticks → jamais retourné (roulis < 45°) |
 | Saut | chute de 2 m → 4 roues au sol < 30 ticks **après le premier contact**, stabilisé < 60 ticks après, châssis jamais au sol, aucun NaN (la chute libre seule dure ~38 ticks) |
 | Haute vitesse | à vitesse max contre un mur de 0,3 m → **jamais traversé**, 5 fois sur 5 |
-| Perf | physique < 4 ms/tick à 4 camions ; rendu écran partagé à 4 : cible fixée par le spike V3 |
+| Perf | physique < 4 ms/tick à 4 camions ; rendu écran partagé à 4 : ≤ 16,7 ms par image sur la machine de référence, avec le budget du spike V3 (`docs/SPIKE.md`) |
 
 Les cibles vivent dans `docs/VEHICLE_SPEC.md` ; les valeurs **mesurées** dans
 `baseline.json`. Un test dont la référence est encore `null` se **saute**

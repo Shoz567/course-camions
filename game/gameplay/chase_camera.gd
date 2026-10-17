@@ -62,6 +62,9 @@ enum View { CHASE, COCKPIT }
 @export var cockpit_damping: float = 18.0
 
 var view: View = View.CHASE
+## Qualite de la course (GraphicsSettings.split_quality) : en basse, pas de
+## post-traitement. A poser avant l'entree dans l'arbre.
+var quality: int = GameState.graphics_quality
 var _cockpit_basis: Basis = Basis.IDENTITY
 
 var _arm: Node3D
@@ -94,8 +97,7 @@ func _ready() -> void:
 	_camera.current = true
 	_camera.position = Vector3(0.0, 0.0, distance)
 	_arm.add_child(_camera)
-	if DisplayServer.get_name() != "headless" \
-			and GameState.graphics_quality != GraphicsSettings.Quality.LOW:
+	if DisplayServer.get_name() != "headless" and quality != GraphicsSettings.Quality.LOW:
 		_fx = ScreenFx.new()
 		var comp := Compositor.new()
 		comp.compositor_effects = [_fx]

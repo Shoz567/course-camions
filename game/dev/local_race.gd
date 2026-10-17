@@ -133,6 +133,8 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @onready var auto_reset: AutoReset = $AutoReset
 
 var players: Array[Player] = []
+## Qualite appliquee a cette course (choisie, ou budget de l'ecran partage).
+var quality: int = GraphicsSettings.Quality.MEDIUM
 var state: State = State.COUNTDOWN
 ## Conteneur de l'ecran partage (VBoxContainer ou GridContainer), null en solo.
 var split: Container
@@ -224,12 +226,14 @@ func _build_split_screen() -> Container:
 ## nombre de vues (la case de la camera TV compte).
 func _apply_graphics() -> void:
 	var views := player_count + (1 if player_count == 3 or player_count == 5 else 0)
+	# ecran partage sur puce integree : budget du spike V3
+	quality = GraphicsSettings.split_quality(GameState.graphics_quality, views)
 	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world != null:
-		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, views)
+		GraphicsSettings.apply_environment(world.environment, quality, views)
 	for n in find_children("*", "DirectionalLight3D", false, false):
-		GraphicsSettings.apply_sun(n as DirectionalLight3D, views)
-	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
+		GraphicsSettings.apply_sun(n as DirectionalLight3D, views, quality)
+	GraphicsSettings.apply_viewport(get_viewport(), quality)
 
 
 ## Une case de l'ecran partage : SubViewportContainer etire + SubViewport.
@@ -242,7 +246,7 @@ func _new_view(view_name: String, listener: bool) -> SubViewport:
 	var vp := SubViewport.new()
 	vp.name = view_name
 	vp.audio_listener_enable_3d = listener
-	GraphicsSettings.apply_viewport(vp, GameState.graphics_quality)
+	GraphicsSettings.apply_viewport(vp, quality)
 	container.add_child(vp)
 	return vp
 
@@ -288,6 +292,7 @@ func _add_player(i: int) -> Player:
 	var cam := ChaseCamera.new()
 	cam.name = "Camera%d" % (i + 1)
 	cam.target = t
+	cam.quality = quality
 	view_parent.add_child(cam)
 	cam.snap()
 	p.camera = cam
@@ -369,6 +374,7 @@ func _add_leader_view() -> void:
 	var vp := _new_view("View%d" % (player_count + 1), false)
 	var cam := ChaseCamera.new()
 	cam.name = "LeaderCamera"
+	cam.quality = quality
 	cam.distance = 45.0
 	cam.focus_height = 6.0
 	cam.pitch_deg = 20.0
