@@ -33,6 +33,8 @@ var _center: Label
 var _help: Label
 var _standings: Label
 var _standings_card: PanelContainer
+## Pouvoirs du camion (TruckPowers) : « ◄ BOUCLIER  PRÊT   ► MISSILE  12 s ».
+var _powers_label: Label
 var _center_card: PanelContainer
 var _center_text: String = ""
 var _center_color: Color = Color.WHITE
@@ -154,6 +156,11 @@ func _ready() -> void:
 	_standings.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_standings.offset_top = 150 * k
 	_build_cards(k)
+	_powers_label = _label(20, Vector2.ZERO)
+	_powers_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_powers_label.offset_left = 24 * k
+	_powers_label.offset_top = (-70.0 - 18.0 * help_text.count("\n")) * k
+	_powers_label.add_theme_color_override("font_color", UiKit.CYAN)
 
 
 ## Charte arcade neon (UiKit, 2026-10-17) : classement et message central dans
@@ -275,6 +282,10 @@ func _process(_delta: float) -> void:
 		var t_tint := Color(0.4, 0.8, 1.0) if t_ratio > 0.6 else (Color(1.0, 0.8, 0.2) if t_ratio > 0.3 else Color(1.0, 0.3, 0.2))
 		_trailer_hp_label.modulate = t_tint
 		_trailer_hp_bar.modulate = t_tint
+	var powers := TruckPowers.of(truck)
+	_powers_label.visible = powers != null
+	if powers != null:
+		_powers_label.text = powers_text(powers)
 	var text := _center_text
 	var color := _center_color
 	# epave : prioritaire sur le GO et le compte a rebours de la scene
@@ -289,6 +300,18 @@ func _process(_delta: float) -> void:
 	_center_card.visible = text != ""
 	(_center_card.get_theme_stylebox("panel") as StyleBoxFlat).border_color = Color(color, 0.85)
 	(_center_card.get_theme_stylebox("panel") as StyleBoxFlat).shadow_color = Color(color, 0.3)
+
+
+## Etat des deux emplacements de pouvoir (vide : rien).
+static func powers_text(p: TruckPowers) -> String:
+	var parts := PackedStringArray()
+	for k in 2:
+		var left := p.seconds_left(k)
+		if left < 0:
+			continue
+		var state := "ACTIF" if (p.slots[k] == PowerCatalog.Id.LASER and p.laser_ticks > 0) else ("PRÊT" if left == 0 else "%d s" % left)
+		parts.append("%s %s  %s" % ["◄" if k == 0 else "►", PowerCatalog.display_name(p.slots[k]), state])
+	return "     ".join(parts)
 
 
 ## Temps affiche, derive des ticks.

@@ -14,6 +14,9 @@ const BIT_BOOST := 2
 const BIT_RESET := 4
 const BIT_HONK := 8
 const BIT_CARGO := 16
+## Pouvoirs (tache 4.5.8) : croix directionnelle gauche / droite.
+const BIT_POWER_LEFT := 32
+const BIT_POWER_RIGHT := 64
 
 var tick: int = 0
 var steer: float = 0.0        # -1 (gauche) .. +1 (droite), zone morte appliquee
@@ -24,6 +27,8 @@ var boost: bool = false       # etat maintenu
 var reset: bool = false       # front montant : vrai un seul tick
 var honk: bool = false        # front montant : coup de klaxon (vu des autres joueurs)
 var cargo: bool = false       # front montant : largage de cargo
+var power_left: bool = false  # front montant : pouvoir de gauche
+var power_right: bool = false # front montant : pouvoir de droite
 
 
 func copy_from(other: InputFrame) -> void:
@@ -36,6 +41,8 @@ func copy_from(other: InputFrame) -> void:
 	reset = other.reset
 	honk = other.honk
 	cargo = other.cargo
+	power_left = other.power_left
+	power_right = other.power_right
 
 
 ## Remet toutes les commandes au neutre (manette debranchee : roue libre).
@@ -48,6 +55,8 @@ func clear() -> void:
 	reset = false
 	honk = false
 	cargo = false
+	power_left = false
+	power_right = false
 
 
 func to_bytes() -> PackedByteArray:
@@ -80,6 +89,10 @@ func write_to(buf: PackedByteArray, offset: int) -> void:
 		bits |= BIT_HONK
 	if cargo:
 		bits |= BIT_CARGO
+	if power_left:
+		bits |= BIT_POWER_LEFT
+	if power_right:
+		bits |= BIT_POWER_RIGHT
 	buf.encode_u8(offset + 5, bits)
 
 
@@ -95,3 +108,5 @@ func read_from(buf: PackedByteArray, offset: int) -> void:
 	reset = (bits & BIT_RESET) != 0
 	honk = (bits & BIT_HONK) != 0
 	cargo = (bits & BIT_CARGO) != 0
+	power_left = (bits & BIT_POWER_LEFT) != 0
+	power_right = (bits & BIT_POWER_RIGHT) != 0

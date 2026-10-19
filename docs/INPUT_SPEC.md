@@ -71,6 +71,11 @@ prédiction du camion local (`docs/NETCODE.md` §5), et le groupement donne une
 redondance gratuite : un paquet perdu, le suivant contient encore deux des trois
 frames. À prévoir dès la phase 1 dans `to_bytes()`, à implémenter en phase 6.
 
+Ajout du 2026-10-17 (tâche 4.5.8) : `power_left` / `power_right`, fronts
+montants des deux pouvoirs (bits 32 et 64 de l'octet de boutons ; la frame
+garde ses 6 octets). Manette : flèches gauche / droite de la croix
+(réaffectables) ; clavier : F / G (ZQSD), K / L (flèches).
+
 ## 3. Mapping
 
 Profil **Forza Horizon, manette PlayStation 5 DualSense** (décidé le

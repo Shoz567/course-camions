@@ -374,7 +374,7 @@ Suite aux retours de jeu, enrichissement du gameplay arcade avec affrontement ph
 | 4.5.5 | Remorques larguées persistantes (50 HP) : restent sur piste sans disparition, nouvelle remorque réapparue sur le tracteur, interdiction de largage les 5 premières secondes | gameplay-engineer | `[x]` dégâts selon l'énergie du choc, explosion à 0 PV ; `trailer_hp_test`, `truck_cargo_test` (dégradation visuelle de la remorque : 4.5.6) |
 | 4.5.6 | Dégradations visuelles localisées selon la zone d'impact et fumée progressive (tracteur & remorque) | visual-artist | `[x]` lot 3 : `DamageFx`, `TruckDamageFx`, `DetachedTrailer` ; `damage_visuals_test` |
 | 4.5.7 | Sas "READY ?" avant START : écran scindé d'identification des joueurs avec validation sur la touche Carré (PS5 Square) | gameplay-engineer | `[x]` dans la course (`LocalRace`, état LOBBY) ; `race_ready_test` |
-| 4.5.8 | Système de pouvoirs : nouvelle formule (anciens pouvoirs provisoires retirés, nouvelle conception en attente) | gameplay-engineer | `[ ]` |
+| 4.5.8 | Système de pouvoirs : nouvelle formule (anciens pouvoirs provisoires retirés, nouvelle conception en attente) | gameplay-engineer | `[x]` 1re série proposée le 2026-10-17 (à valider par l'équipe) : BOUCLIER (5 s sans dégâts), MISSILE (vise le camion devant, 20 PV), LASER (rayon 1,5 s, 36 PV) sur la croix gauche / droite, armes de l'équipe sur le toit, recharges 15 à 20 s (`TruckPowers`, `PowerMissile`, `powers_test`) ; hors ligne seulement (la page de sélection n'existe pas en ligne) |
 
 **Critères de sortie du Lot 1 (Terminé)**
 - Les camions sans remorque accélèrent et pointent à x1.2 de leur vitesse de pointe normale (`solo_top_speed_factor = 1.2`).
@@ -759,10 +759,10 @@ Lire `docs/NETCODE.md` avant de commencer.
 | # | Tâche | Agent |
 |---|---|---|
 | 7.1 | Menu principal, options, remapping (`[x]` 2026-10-17 : options sauvegardées d'un lancement à l'autre - son, volume, qualité, compteur, résolution dynamique, circuit, vitesse, remorques - et réaffectation des boutons de la manette, `settings_remap_test` ; clavier non réaffectable ; écran de chargement avant chaque course, le départ attend qu'il s'efface - `loading_screen_test`) | gameplay-engineer |
-| 7.2 | Personnalisation des camions (couleurs, pièces générées) | blender-modeler |
+| 7.2 | Personnalisation des camions (couleurs, pièces générées) (en attente : décision de l'équipe, 2026-10-17) | blender-modeler |
 | 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, `crowd_sound_test`) - `[x]`) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
-| 7.5 | Pistes supplémentaires | track-designer |
+| 7.5 | Pistes supplémentaires (en attente : tracé et ambiance à décider par l'équipe, 2026-10-17) | track-designer |
 | 7.6 | Profilage et optimisation (`[~]` passes du 2026-10-09 et du 2026-10-17 ci-dessous) | godot-qa |
 | 7.7 | Export Windows/Linux, test sur machine vierge (`[~]` 2026-10-17 : `make export` produit les deux en 16 s, modèles copiés à côté ; Windows lancé sur la machine de référence : menu, page de sélection et course Cyber City avec les modèles de l'équipe ; reste : Linux et une machine vierge) | godot-qa |
 
