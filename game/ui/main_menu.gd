@@ -70,6 +70,8 @@ var host_button: Button
 var join_button: Button
 var launch_button: Button
 var leave_button: Button
+## En ligne : ouvre la page de selection (remorque, pouvoirs) de ce PC.
+var convoy_button: Button
 var online_status: Label
 var lobby_label: Label
 ## Host : connexion qui envoie peu (snapshots a 20 Hz au lieu de 60).
@@ -291,23 +293,36 @@ func select_players(n: int, manual: bool = true) -> void:
 
 ## PRET : la page de selection (une carte par joueur), l'accueil se cache.
 func open_selection() -> void:
-	if NetSession.is_online():
-		# en ligne : remorque choisie dans le sas READY de la course ; le host
-		# lance, le client attend (start_race)
-		start_race()
-		return
 	MenuSound.play_confirm()
+	if NetSession.is_online():
+		# en ligne : la meme page, pour le seul joueur de ce PC ; son choix part
+		# au lobby (start_race), puis le host lance quand tout le monde est PRET
+		online_panel.visible = false
+		home.visible = false
+		loadout.open(1)
+		return
 	GameState.requested_players = selected_players
 	home.visible = false
 	loadout.open(selected_players)
 
 
-## Retour de la page de selection vers l'accueil.
+## Retour de la page de selection vers l'accueil (en ligne : vers le lobby).
 func close_selection() -> void:
 	loadout.close()
-	home.visible = true
 	MenuSound.play_toggle()
+	if NetSession.is_online():
+		_show_lobby()
+		return
+	home.visible = true
 	start_button.grab_focus()
+
+
+## En ligne : le panneau de la partie, de nouveau au premier plan.
+func _show_lobby() -> void:
+	online_panel.visible = true
+	_update_home()
+	_refresh_online()
+	(launch_button if NetSession.is_host() and not launch_button.disabled else convoy_button).grab_focus()
 
 
 ## Tout le monde est pret : la course part, sans sas READY.
@@ -315,11 +330,13 @@ func start_race() -> void:
 	if LoadingScreen.covering():
 		return    # deja en route (une manette qui insiste sous l'ecran)
 	if NetSession.is_online():
-		# en ligne : le host lance la course de la partie, le client l'attend
-		if NetSession.is_host():
-			launch_online()
-		elif not online_panel.visible:
-			toggle_online()
+		# en ligne : convoi de ce PC envoye au lobby (PRET) ; le host lance
+		# ensuite la course de la partie (LANCER), le client l'attend
+		if loadout.visible:
+			NetSession.set_loadout(GameState.trailer_choice[0], GameState.power_left[0], GameState.power_right[0])
+			loadout.close()
+			MenuSound.play_confirm()
+		_show_lobby()
 		return
 	MenuSound.play_confirm()
 	GameState.requested_players = selected_players
@@ -739,17 +756,22 @@ func _refresh_online() -> void:
 	ip_edit.editable = not online
 	launch_button.visible = host
 	slow_check.visible = not NetSession.is_client()
-	launch_button.disabled = NetSession.members.size() < 1
+	launch_button.disabled = not NetSession.all_ready()
 	leave_button.visible = online
+	convoy_button.visible = online and NetSession.local_slot() >= 0
 	var status := ""
 	if host:
 		var ips := NetSessionNode.local_addresses()
 		status = "Partie ouverte. Les autres joueurs tapent : %s  (port %d)" % [
 			" ou ".join(ips) if not ips.is_empty() else "l'adresse IP de ce PC", NetSessionNode.DEFAULT_PORT]
-		status += "\nCircuit et vitesse : ceux choisis dans le menu. LANCER quand tout le monde est là."
+		status += "\nCircuit et vitesse : ceux choisis dans le menu. Chacun choisit son convoi ; LANCER quand tout le monde est PRÊT."
 	elif NetSession.is_client():
-		status = "Connecté, en attente du lancement par le host." if NetSession.local_slot() >= 0 \
-				else "Connexion à %s..." % ip_edit.text
+		if NetSession.local_slot() < 0:
+			status = "Connexion à %s..." % ip_edit.text
+		elif bool(NetSession.member_of_slot(NetSession.local_slot()).get("ready", false)):
+			status = "Convoi choisi : en attente du lancement par le host."
+		else:
+			status = "Connecté. Choisissez votre convoi (remorque et pouvoirs) : CHOISIR MON CONVOI."
 	elif NetSession.last_error != "":
 		status = NetSession.last_error
 	else:
@@ -761,12 +783,22 @@ func _refresh_online() -> void:
 	var lines := PackedStringArray()
 	for m in NetSession.members:
 		var slot := int(m["slot"])
-		lines.append("J%d  %s  (%s)%s%s" % [slot + 1, String(m["name"]), LocalRace.COLOR_NAMES[slot],
-			"  · host" if int(m["peer"]) == 1 else "", "  · vous" if slot == NetSession.local_slot() else ""])
+		lines.append("J%d  %s  (%s)%s%s   %s" % [slot + 1, String(m["name"]), LocalRace.COLOR_NAMES[slot],
+			"  · host" if int(m["peer"]) == 1 else "", "  · vous" if slot == NetSession.local_slot() else "",
+			lobby_convoy(m)])
 	lobby_label.text = "\n".join(lines) if not lines.is_empty() else "Personne pour l'instant."
 	if online_button != null:
 		online_button.text = ("EN LIGNE : %d JOUEUR%s" % [NetSession.members.size(),
 			"S" if NetSession.members.size() > 1 else ""]) if online else "EN LIGNE / RÉSEAU LOCAL"
+
+
+## Convoi d'un membre du lobby : « PRÊT · CITERNE · MISSILE + LASER », ou
+## « choisit son convoi... ».
+static func lobby_convoy(m: Dictionary) -> String:
+	if not bool(m.get("ready", false)):
+		return "· choisit son convoi..."
+	return "· PRÊT  %s  ·  %s + %s" % [TrailerCatalog.at(int(m["trailer"])).display_name.to_upper(),
+		PowerCatalog.display_name(int(m["power_left"])), PowerCatalog.display_name(int(m["power_right"]))]
 
 
 func toggle_settings() -> void:
@@ -1370,6 +1402,14 @@ func _build_online() -> Control:
 	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
 	bottom.add_theme_constant_override("separation", 16)
 	box.add_child(bottom)
+	convoy_button = Button.new()
+	convoy_button.name = "Convoy"
+	convoy_button.text = "CHOISIR MON CONVOI"
+	convoy_button.tooltip_text = "Remorque et pouvoirs de votre camion, comme en solo."
+	convoy_button.custom_minimum_size = Vector2(320, 64)
+	UiKit.style_choice(convoy_button, 22)
+	convoy_button.pressed.connect(open_selection)
+	bottom.add_child(convoy_button)
 	launch_button = Button.new()
 	launch_button.name = "Launch"
 	launch_button.text = "LANCER LA COURSE"
