@@ -761,7 +761,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 | 7.1 | Menu principal, options, remapping (`[x]` 2026-10-17 : options sauvegardées d'un lancement à l'autre - son, volume, qualité, compteur, résolution dynamique, circuit, vitesse, remorques - et réaffectation des boutons de la manette, `settings_remap_test` ; clavier non réaffectable) | gameplay-engineer |
 | 7.2 | Personnalisation des camions (couleurs, pièces générées) | blender-modeler |
 | 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; reste : la foule des tribunes) | — |
-| 7.4 | Juice complet (particules, ralentis d'arrivée) | gameplay-engineer |
+| 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires | track-designer |
 | 7.6 | Profilage et optimisation (`[~]` passe du 2026-10-09 ci-dessous) | godot-qa |
 | 7.7 | Export Windows/Linux, test sur machine vierge | godot-qa |
