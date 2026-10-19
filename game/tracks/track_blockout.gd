@@ -35,9 +35,15 @@ extends Node3D
 ##                  remplace les murs pleins jusqu'au sol (on voit dessous).
 ##
 ## L'habillage (materiaux, couleurs, sol) vient du theme (`theme_id`,
-## TrackTheme) : Cyber City de nuit par defaut, ou Playa Del Sol (ile au
+## TrackTheme) : Cyber City de nuit par defaut, Playa Del Sol (ile au
 ## soleil : le sol recoit un masque terre / mer calcule sur le trace, des
-## talus rocheux portent les portions hautes).
+## talus rocheux portent les portions hautes) ou Sakura (Japon au printemps :
+## arches en torii, murs de pierre sous les portions hautes).
+##
+## Trace qui se croise (circuit en 8, 2026-10-19) : au croisement, une
+## branche passe sur un pont ("bridge") au-dessus de l'autre. Le generateur
+## y veille : aucune pile de pont sur la route du dessous, pas de zone de
+## reset qui deborde sur l'autre branche, checkpoints arretes sous le pont.
 ##
 ## Genere : Geometry (chaussee, sol), Walls (2 glissieres continues, bord haut
 ## colore : cyan a gauche, magenta a droite en ville), Arches (portiques), Pads
@@ -71,6 +77,9 @@ const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
 const CHECKPOINT_LAYER := 3    # couche 3 `checkpoint`
 const VEHICLE_LAYER := 2
 const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
+## En deca de cet ecart d'abscisse (m), deux echantillons sont la meme portion
+## de piste ; au-dela, une autre (circuit en 8 : l'autre branche).
+const SAME_SECTION_M := 160.0
 
 @export var segments: Array[Dictionary] = []
 ## Largeur de chaussee entre les murs (METRICS.md §4 : 14 m minimum).
@@ -87,7 +96,7 @@ const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
 ## franches).
 @export var climb_blend_length: float = 0.0
 ## Habillage du circuit (TrackTheme.Id).
-@export_enum("Cyber City", "Playa Del Sol") var theme_id: int = 0
+@export_enum("Cyber City", "Playa Del Sol", "Sakura") var theme_id: int = 0
 
 @export_group("Glissieres")
 ## Epaisseur a hauteur de chaussee (METRICS.md §4 : 0,3 m minimum).
@@ -283,6 +292,29 @@ func closest_sample(p: Vector3, hint: int = -1) -> int:
 		if d < best_d:
 			best_d = d
 			best = i
+	return best
+
+
+## Plus petite distance HORIZONTALE (m) entre `p` et la ligne centrale d'une
+## autre portion de piste que celle de l'abscisse `s` (a plus de
+## SAME_SECTION_M), INF s'il n'y en a pas. `out` (non vide) recoit en [0]
+## l'indice de l'echantillon le plus proche. Un circuit en 8 se croise :
+## c'est la qu'elle est petite.
+func other_section_distance(p: Vector3, s: float, out: Array = []) -> float:
+	_ensure_built()
+	var n := _pos.size()
+	var best := INF
+	var best_i := -1
+	for j in range(0, n, 2):
+		var ds := absf(_s[j] - s)
+		if minf(ds, _length - ds) < SAME_SECTION_M:
+			continue
+		var d := Vector2(_pos[j].x - p.x, _pos[j].z - p.z).length()
+		if d < best:
+			best = d
+			best_i = j
+	if not out.is_empty():
+		out[0] = best_i
 	return best
 
 
@@ -825,6 +857,11 @@ func _build_bridges(parent: Node3D) -> void:
 			used[kind] = true
 		if _s[i] < next_pier:
 			continue
+		# au-dessus de l'autre branche (circuit en 8) : pas de pile, le tablier
+		# franchit la route d'une seule portee
+		if other_section_distance(Vector3(_pos[i].x, 0.0, _pos[i].z), _s[i]) \
+				< width + wall_thickness + 6.0:
+			continue
 		next_pier = _s[i] + bridge_pillar_spacing
 		var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
 		var r := t.cross(Vector3.UP).normalized()
@@ -1010,6 +1047,9 @@ static func _blur(grid: PackedByteArray, res: int) -> PackedByteArray:
 ## les camions qui arrivent, et une lumiere qui colore la piste dessous.
 ## Purement visuelle : aucune collision (ni camion, ni camera).
 func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
+	if theme.arch_style == TrackTheme.ArchStyle.TORII:
+		_build_torii(parent, s, label, index)
+		return
 	var i := index_at_s(s)
 	var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
 	var r := t.cross(Vector3.UP).normalized()
@@ -1055,6 +1095,94 @@ func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
 		root.add_child(light)
 
 
+## Torii (theme Sakura) : deux piliers vermillon sur socle noir au-dela des
+## murs, linteau bas (nuki), double linteau haut (shimaki vermillon, kasagi
+## noir aux extremites relevees), plaque centrale a l'enseigne, et deux
+## grandes lanternes de papier rouges suspendues. Purement visuel.
+func _build_torii(parent: Node3D, s: float, label: String, index: int) -> void:
+	var i := index_at_s(s)
+	var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
+	var r := t.cross(Vector3.UP).normalized()
+	var base := _pos[i]
+	var half := width / 2.0 + 4.0
+	var root := Node3D.new()
+	root.name = "Arch%d" % index
+	root.transform = Transform3D(Basis(r, Vector3.UP, -t), base)
+	parent.add_child(root)
+	var red: Material = theme.arch_tubes[0]
+	var black: Material = theme.arch_frame
+	var ground := GROUND_Y - base.y
+	var nuki_y := arch_height + 1.0
+	var top_y := arch_height + 7.5
+	for side: float in [-1.0, 1.0]:
+		var h := top_y - ground
+		var col := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 1.25
+		cm.bottom_radius = 1.45
+		cm.height = h
+		cm.radial_segments = 20
+		col.mesh = cm
+		col.material_override = red
+		col.position = Vector3(side * half, ground + h / 2.0, 0.0)
+		root.add_child(col)
+		# socle noir (kamaki)
+		var foot := MeshInstance3D.new()
+		var fm := CylinderMesh.new()
+		fm.top_radius = 1.6
+		fm.bottom_radius = 1.7
+		fm.height = 2.4
+		fm.radial_segments = 20
+		foot.mesh = fm
+		foot.material_override = black
+		foot.position = Vector3(side * half, ground + fm.height / 2.0, 0.0)
+		root.add_child(foot)
+	# nuki : linteau bas qui depasse un peu des piliers
+	_box(root, Vector3(half * 2.0 + 7.0, 1.5, 1.3), Vector3(0.0, nuki_y, 0.0), red)
+	# shimaki (vermillon) puis kasagi (noir), aux bouts releves
+	_box(root, Vector3(half * 2.0 + 9.0, 1.3, 2.0), Vector3(0.0, top_y - 0.65, 0.0), red)
+	_box(root, Vector3(half * 2.0 + 6.0, 1.2, 2.6), Vector3(0.0, top_y + 0.6, 0.0), black)
+	for side: float in [-1.0, 1.0]:
+		var tip := _box(root, Vector3(7.0, 1.1, 2.6), Vector3(side * (half + 5.6), top_y + 1.05, 0.0), black)
+		tip.rotation.z = side * deg_to_rad(9.0)
+	# gakuzuka : plaque verticale noire a liseré dore, kanji empiles
+	var mid_y := (top_y + nuki_y) / 2.0 - 0.3
+	_box(root, Vector3(3.6, 5.6, 0.5), Vector3(0.0, mid_y, 0.0), theme.arch_tubes[0])
+	_box(root, Vector3(3.0, 5.0, 0.6), Vector3(0.0, mid_y, 0.0), black)
+	if label != "":
+		for face: float in [1.0, -1.0]:
+			var l := Label3D.new()
+			l.name = "Sign" if face > 0.0 else "SignBack"
+			l.text = label
+			l.font = TrackTheme.cjk_font()
+			l.font_size = 110
+			l.pixel_size = 0.0125
+			l.line_spacing = -18.0
+			l.outline_size = 0
+			l.modulate = Color(1.0, 0.82, 0.35)
+			l.double_sided = false
+			l.position = Vector3(0.0, mid_y, 0.32 * face)
+			if face < 0.0:
+				l.rotation.y = PI
+			root.add_child(l)
+	# lanternes de papier suspendues sous le nuki, de chaque cote de la route
+	for side: float in [-1.0, 1.0]:
+		var x := side * (half - 9.0)
+		_box(root, Vector3(0.12, 2.0, 0.12), Vector3(x, nuki_y - 1.75, 0.0), black)
+		var lantern := MeshInstance3D.new()
+		var lm := SphereMesh.new()
+		lm.radius = 1.5
+		lm.height = 4.2
+		lm.radial_segments = 16
+		lm.rings = 8
+		lantern.mesh = lm
+		lantern.material_override = theme.lantern
+		lantern.position = Vector3(x, nuki_y - 4.6, 0.0)
+		root.add_child(lantern)
+		for cap_y: float in [-2.0, 2.0]:
+			_box(root, Vector3(1.6, 0.35, 1.6), Vector3(x, nuki_y - 4.6 + cap_y, 0.0), black)
+
+
 static func _box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -1094,12 +1222,33 @@ func _build_reset_zones(parent: Node3D) -> void:
 			area.add_child(cs)
 			var center := _pos[mid] + r * side * (inner + reset_zone_depth / 2.0)
 			center.y = GROUND_Y - 2.0 + reset_zone_height / 2.0
-			area.transform = Transform3D(zone_basis, center)
+			# l'autre branche passe dans la zone (circuit en 8) : pas de zone ici,
+			# AutoReset mesure la sortie de piste a la geometrie
+			var zone_xf := Transform3D(zone_basis, center)
+			if _box_hits_other_road(zone_xf, box.size, _s[mid]):
+				area.free()
+				continue
+			area.transform = zone_xf
 			area.body_entered.connect(_on_reset_zone_body_entered)
 			area.body_exited.connect(_on_reset_zone_body_exited)
 			parent.add_child(area)
 		k += 1
 		i += chunk
+
+
+## Vrai si la boite `size` posee en `xf` touche la chaussee (murs compris)
+## d'une autre portion de piste que celle de l'abscisse `s`.
+func _box_hits_other_road(xf: Transform3D, size: Vector3, s: float) -> bool:
+	var inv := xf.affine_inverse()
+	var pad := width / 2.0 + wall_thickness + 2.0
+	for j in range(0, _pos.size(), 2):
+		var ds := absf(_s[j] - s)
+		if minf(ds, _length - ds) < SAME_SECTION_M:
+			continue
+		var q := inv * _pos[j]
+		if absf(q.x) < size.x / 2.0 + pad and absf(q.z) < size.z / 2.0 + pad and absf(q.y) < size.y / 2.0 + 3.0:
+			return true
+	return false
 
 
 ## Checkpoints : une boite en travers de la piste, murs compris, orientee avec
@@ -1115,9 +1264,17 @@ func _build_checkpoints(parent: Node3D) -> void:
 		area.monitorable = false
 		var cs := CollisionShape3D.new()
 		var box := BoxShape3D.new()
-		box.size = Vector3(span, checkpoint_height, checkpoint_depth)
+		# sous l'autre branche (circuit en 8) : la boite s'arrete sous son
+		# tablier, un camion qui passe dessus ne la traverse pas
+		var height := checkpoint_height
+		var near := [-1]
+		if other_section_distance(_pos[i], _s[i], near) < span / 2.0 + width / 2.0 + 4.0:
+			var above := _pos[near[0]].y - bridge_deck_depth - 1.0 - _pos[i].y
+			if above > 0.0:
+				height = minf(height, above + 2.0)
+		box.size = Vector3(span, height, checkpoint_depth)
 		cs.shape = box
-		cs.position = Vector3(0.0, checkpoint_height / 2.0 - 2.0, 0.0)
+		cs.position = Vector3(0.0, height / 2.0 - 2.0, 0.0)
 		area.add_child(cs)
 		area.transform = frame_at(i, 0.0, 0.0)
 		area.body_entered.connect(_on_checkpoint_body_entered.bind(k))
@@ -1209,6 +1366,7 @@ func _build_barrel(parent: Node3D, s: float, lateral: float, index: int) -> void
 	var i := index_at_s(s)
 	var barrel := ExplosiveBarrel.new()
 	barrel.name = "Barrel%d" % index
+	barrel.apply_style(theme.barrel_style)
 	barrel.transform = frame_at(i, lateral, 0.0)
 	barrel.exploded.connect(func(truck: Truck) -> void:
 		barrel_hit.emit(truck, index))

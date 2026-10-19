@@ -5,6 +5,7 @@ extends PhysicsTest
 ## le debut ne depasse pas le plus grand pas a l'interieur), deux boucles
 ## differentes ; sur la plage, les vagues s'entendent (deux bosses
 ## d'energie grave par boucle) ; la course pose l'ambiance de son circuit.
+## Sakura (2026-10-19) : brise, clochettes, oiseau et cloche, sa propre boucle.
 
 var _scene: Node3D
 
@@ -19,7 +20,8 @@ func _test_setup() -> void:
 func _test_finish() -> void:
 	var city := AmbienceSound.build(TrackTheme.Id.CYBER_CITY)
 	var playa := AmbienceSound.build(TrackTheme.Id.PLAYA_DEL_SOL)
-	for pair: Array in [["Cyber City", city], ["Playa Del Sol", playa]]:
+	var sakura := AmbienceSound.build(TrackTheme.Id.SAKURA)
+	for pair: Array in [["Cyber City", city], ["Playa Del Sol", playa], ["Sakura", sakura]]:
 		var s: PackedFloat32Array = pair[1]
 		var peak := 0.0
 		var step := 0.0
@@ -38,6 +40,11 @@ func _test_finish() -> void:
 		if absf(city[i] - playa[i]) < 0.0001:
 			same += 1
 	check("deux ambiances differentes", same < 5, "%d echantillons egaux" % same)
+	var same3 := 0
+	for i in range(0, sakura.size(), 997):
+		if absf(sakura[i] - playa[i]) < 0.0001 or absf(sakura[i] - city[i]) < 0.0001:
+			same3 += 1
+	check("Sakura : une troisieme ambiance, differente", same3 < 5, "%d echantillons egaux" % same3)
 	# vagues : energie grave par huitieme de boucle ; chaque vague (4 s) culmine
 	# en son milieu (huitiemes 1-2 et 5-6) et retombe a ses bords (0, 3, 4, 7)
 	var e := _eighths(playa)

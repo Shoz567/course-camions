@@ -192,6 +192,27 @@ ni projecteurs). Environnement `playa_sun.tres`, soleil avec ombres
 mêmes règles que la piste n°1). Le circuit se choisit au menu
 (`GameState.selected_track`, `GameState.TRACKS`).
 
+**Piste n°3, « Sakura »** (2026-10-19, `game/tracks/track_03_sakura.tscn`,
+même générateur, thème `TrackTheme.SAKURA`) : le Japon au printemps, un
+**circuit en 8** de 2 764 m, 70 m de large. Avenue des cerisiers (départ, sous
+un torii 桜街道), virage du sanctuaire, montée des lanternes, épingle du
+château (R 123 m, 7°), courbe de la pagode, puis le **pont vermillon** : la
+seconde diagonale du 8 passe à 18 m au-dessus de l'avenue (16,4 m de hauteur
+libre), torii 神橋 ; descente du torii 花見, saut du ruisseau, S des jardins,
+grande courbe des cerisiers, grille à plat. Au croisement, le générateur ne
+pose aucune pile sur la route du dessous, aucune zone de reset sur l'autre
+branche (`AutoReset` mesure la sortie de piste à la géométrie), et arrête sous
+le tablier le checkpoint qui passe dessous. Habillage : chaussée aux pétales
+tombés, platelage laqué sur le pont, murs de temple (enduit, poteaux, chaperon
+de tuiles ; garde-corps vermillon sur le pont), murs de pierre de château
+sous les portions hautes, flaques de bassin aux pétales flottants, barils en
+tonneaux de saké (爆, gyrophare conservé). Décor (`SakuraBackdrop`, `JapanKit`,
+aucune collision) : ~760 cerisiers et quelques pins, rangées de machiya,
+donjon de château, pagode à cinq étages, temple, lanternes de pierre et de
+papier, le mont Fuji et une chaîne de montagnes ; pétales qui volent autour de
+chaque caméra (`SakuraPetals`), ambiance sonore (brise, clochettes, cloche de
+temple). Tests : `track_sakura_test`, `race_sakura_test`.
+
 **Critères de sortie**
 - `[x]` Un joueur fait 3 tours chronométrés sur la piste n°1 (`make run` :
   compte à rebours, 3 tours, arrivée, Start pour rejouer).

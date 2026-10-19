@@ -301,6 +301,9 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 			roof.rotation = Vector3(deg_to_rad(7.0), 0.0, 0.0)
 			var neon: Material = preload("res://tracks/materials/neon_cyan.tres") if side < 0.0 \
 					else preload("res://tracks/materials/neon_magenta.tres")
+			# Sakura : liseres aux couleurs du circuit (laque vermillon, rose)
+			if track.theme_id == TrackTheme.Id.SAKURA:
+				neon = track.theme.edge_left if side < 0.0 else track.theme.edge_right
 			_box(stand, Vector3(length, 0.3, 0.3), Vector3(0.0, top + 5.5, -3.9), neon)
 			_box(stand, Vector3(length, 0.25, 0.25), Vector3(0.0, 1.25, -0.2), neon)
 			if not night:

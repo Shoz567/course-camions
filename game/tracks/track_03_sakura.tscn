@@ -1,0 +1,136 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
+[ext_resource type="Script" path="res://tracks/sakura_backdrop.gd" id="2"]
+[ext_resource type="Script" path="res://tracks/race_decor.gd" id="3"]
+
+[node name="Track03" type="Node3D"]
+script = ExtResource("1")
+segments = Array[Dictionary]([{
+"arch": 40.0,
+"arch_label": "桜
+街
+道",
+"auto": true,
+"barrels": [[405.0, -12.0]],
+"boost": [[150.0, -14.0]],
+"name": "Avenue des cerisiers (depart)",
+"puddle": [[235.0, 18.0, 7.0]],
+"type": "straight"
+}, {
+"angle": -60.0,
+"bank": 5.0,
+"climb": 4.0,
+"name": "Virage du sanctuaire",
+"radius": 168.0,
+"signs": [[60.0, -33.0], [130.0, -33.0]],
+"type": "arc"
+}, {
+"barrels": [[40.0, 12.0]],
+"boost": [[15.0, -10.0]],
+"climb": 4.0,
+"length": 80.0,
+"name": "Montee des lanternes",
+"type": "straight"
+}, {
+"angle": -120.0,
+"bank": 7.0,
+"climb": 5.0,
+"name": "Epingle du chateau",
+"puddle": [[150.0, -20.0, 7.0]],
+"radius": 123.0,
+"signs": [[70.0, -33.0], [190.0, -33.0]],
+"type": "arc"
+}, {
+"climb": 2.0,
+"length": 55.0,
+"name": "Rampe du donjon",
+"type": "straight"
+}, {
+"angle": -90.0,
+"bank": 5.0,
+"climb": 3.0,
+"name": "Courbe de la pagode",
+"radius": 158.0,
+"signs": [[120.0, -33.0]],
+"type": "arc"
+}, {
+"arch": 30.0,
+"arch_label": "神
+橋",
+"auto": true,
+"barrels": [[300.0, -14.0]],
+"boost": [[100.0, 12.0]],
+"bridge": 2,
+"name": "Pont vermillon (au-dessus de l'avenue)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"arch": 60.0,
+"arch_label": "花
+見",
+"bank": 5.0,
+"climb": -5.0,
+"name": "Descente du torii",
+"radius": 158.0,
+"signs": [[90.0, 33.0]],
+"type": "arc"
+}, {
+"climb": -4.0,
+"jump": 30.0,
+"jump_offset": -12.0,
+"length": 70.0,
+"name": "Saut du ruisseau",
+"type": "straight"
+}, {
+"angle": 45.0,
+"climb": -3.0,
+"name": "S des jardins (gauche)",
+"radius": 140.0,
+"signs": [[50.0, 33.0]],
+"type": "arc"
+}, {
+"angle": -45.0,
+"climb": -3.0,
+"name": "S des jardins (droite)",
+"puddle": [[60.0, 20.0, 7.0]],
+"radius": 140.0,
+"type": "arc"
+}, {
+"angle": 180.0,
+"bank": 6.0,
+"barrels": [[220.0, 12.0]],
+"boost": [[150.0, -12.0]],
+"climb": -3.0,
+"name": "Grande courbe des cerisiers",
+"radius": 145.0,
+"signs": [[100.0, 33.0], [300.0, 33.0]],
+"type": "arc"
+}, {
+"length": 110.0,
+"name": "Grille de depart (a plat)",
+"type": "straight"
+}])
+width = 70.0
+bank_blend_length = 120.0
+climb_blend_length = 30.0
+theme_id = 2
+wall_height = 2.8
+wall_friction = 0.5
+jump_length = 14.0
+jump_angle_deg = 7.0
+jump_width = 14.0
+jump_offset = 12.0
+boost_pad_size = Vector2(12, 8)
+grid_row_spacing = 20.0
+grid_lateral = PackedFloat32Array(-10, 10, -30, 30)
+grid_back_lateral = PackedFloat32Array(-20, 20)
+
+[node name="SakuraBackdrop" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="RaceDecor" type="Node3D" parent="."]
+script = ExtResource("3")
+sky_beams = false
+street_lights = false
+night = false

@@ -906,7 +906,7 @@ const TEXT_DIM := UiKit.DIM
 const COLUMN_X := 84
 const COLUMN_W := 700
 ## Fond des cartes de circuit (Cyber City : nuit violette ; Playa : lagon).
-const TRACK_TINTS: Array[Color] = [Color(0.36, 0.1, 0.62), Color(0.0, 0.5, 0.58)]
+const TRACK_TINTS: Array[Color] = [Color(0.36, 0.1, 0.62), Color(0.0, 0.5, 0.58), Color(0.86, 0.3, 0.48)]
 
 
 ## Accueil (2026-10-16 : « fait une vraie belle UI de jeu video ») : voile
@@ -1239,15 +1239,18 @@ func _track_card(k: int, group: ButtonGroup) -> Button:
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.custom_minimum_size = Vector2(0, 92)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	UiKit.style_choice(b, 28)
+	# trois circuits et plus : cartes plus etroites, nom plus petit
+	var many := GameStateNode.TRACKS.size() > 2
+	UiKit.style_choice(b, 21 if many else 28)
+	var margin := 18 if many else 30
 	var tint: Color = TRACK_TINTS[k % TRACK_TINTS.size()]
 	for st: String in ["normal", "hover"]:
 		var sb := UiKit.box(tint.darkened(0.45 if st == "normal" else 0.3), Color(1, 1, 1, 0.12), 1)
-		sb.content_margin_left = 30
+		sb.content_margin_left = margin
 		b.add_theme_stylebox_override(st, sb)
 	for st: String in ["pressed", "hover_pressed"]:
 		var sb := UiKit.box(tint.lightened(0.05 if st == "pressed" else 0.15), ACCENT, 3, UiKit.SKEW, 3, Color(ACCENT, 0.5), 14)
-		sb.content_margin_left = 30
+		sb.content_margin_left = margin
 		b.add_theme_stylebox_override(st, sb)
 	return b
 

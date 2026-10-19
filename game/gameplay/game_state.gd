@@ -33,6 +33,7 @@ const SPEED_CLASSES: Array[Dictionary] = [
 const TRACKS: Array[Dictionary] = [
 	{"name": "Cyber City", "tagline": "nuit pluvieuse, néons, mégalopole", "scene": "res://dev/race.tscn"},
 	{"name": "Playa Del Sol", "tagline": "plage tropicale, plein soleil, océan", "scene": "res://dev/race_playa.tscn"},
+	{"name": "Sakura", "tagline": "Japon au printemps, cerisiers, circuit en 8 et pont vermillon", "scene": "res://dev/race_sakura.tscn"},
 ]
 
 ## Circuit choisi dans le menu (garde entre deux courses).

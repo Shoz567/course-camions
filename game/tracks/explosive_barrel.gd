@@ -13,8 +13,14 @@ extends RigidBody3D
 ##   - Le baril lui-meme est projete en l'air en tournoyant ;
 ##   - Respawn a sa position d'origine apres respawn_ticks.
 ## Degats : -15 PV au camion qui le fait sauter (PadEffects, TruckHealth).
+## Habillage selon le circuit (apply_style, 2026-10-19) : fut industriel
+## rouge, ou tonneau de sake (Sakura : paille, cordes, bandeau laque rouge
+## marque 爆 « explosion »). Le gyrophare reste : un danger se lit pareil
+## sur tous les circuits.
 
 signal exploded(truck: Truck)
+
+enum Style { INDUSTRIAL, SAKE }
 
 const HAZARD_LAYER := 5
 const BARREL_RADIUS := 1.2
@@ -43,6 +49,9 @@ var _beacon_mat: StandardMaterial3D
 var _halo_mat: ShaderMaterial
 ## Phase propre a chaque baril (ils ne clignotent pas tous ensemble).
 var _strobe_phase: float = 0.0
+var _body_mesh: MeshInstance3D
+var _rings: Array[MeshInstance3D] = []
+var _bands: Array[MeshInstance3D] = []
 static var _shared_stream: AudioStreamWAV
 
 
@@ -86,6 +95,7 @@ func _init() -> void:
 	body_mesh.material_override = red_metal
 	body_mesh.position = Vector3(0.0, BARREL_HEIGHT / 2.0, 0.0)
 	_barrel_model.add_child(body_mesh)
+	_body_mesh = body_mesh
 
 	# Cerclages noirs (haut, milieu, bas)
 	var ring_mat := StandardMaterial3D.new()
@@ -103,6 +113,7 @@ func _init() -> void:
 		ring.material_override = ring_mat
 		ring.position = Vector3(0.0, y_off, 0.0)
 		_barrel_model.add_child(ring)
+		_rings.append(ring)
 
 	# Deux bandes de chevrons jaunes et noirs lumineux
 	var chevron_mat := ShaderMaterial.new()
@@ -121,6 +132,7 @@ func _init() -> void:
 		band.material_override = chevron_mat
 		band.position = Vector3(0.0, y_band, 0.0)
 		_barrel_model.add_child(band)
+		_bands.append(band)
 
 	# Gyrophare stroboscopique au sommet : socle, dome lumineux, lumiere et
 	# halo (visible de tres loin, voir beacon_halo.gdshader)
@@ -273,6 +285,52 @@ func _physics_process(_delta: float) -> void:
 		_barrel_model.visible = true
 		_blast_fx.visible = false
 		_blast_light.visible = false
+
+
+## Habillage du circuit : INDUSTRIAL (par defaut) ou SAKE. A appeler avant
+## l'entree dans l'arbre. Forme et collision ne changent pas.
+func apply_style(style: int) -> void:
+	if style != Style.SAKE:
+		return
+	var straw := StandardMaterial3D.new()
+	straw.albedo_color = Color(0.86, 0.76, 0.54)
+	straw.roughness = 0.95
+	_body_mesh.material_override = straw
+	var rope := StandardMaterial3D.new()
+	rope.albedo_color = Color(0.32, 0.19, 0.09)
+	rope.roughness = 1.0
+	for ring in _rings:
+		ring.material_override = rope
+		(ring.mesh as CylinderMesh).height = 0.22
+	# un seul large bandeau laque rouge, lumineux : le danger se voit de loin
+	var lacquer := StandardMaterial3D.new()
+	lacquer.albedo_color = Color(0.85, 0.08, 0.04)
+	lacquer.roughness = 0.3
+	lacquer.emission_enabled = true
+	lacquer.emission = Color(0.95, 0.1, 0.03)
+	lacquer.emission_energy_multiplier = 0.6
+	for k in _bands.size():
+		var band := _bands[k]
+		band.material_override = lacquer
+		(band.mesh as CylinderMesh).height = 1.15
+		band.position.y = BARREL_HEIGHT * 0.52
+		band.visible = k == 0
+	# 爆 (explosion) en blanc, devant et derriere
+	for face: float in [1.0, -1.0]:
+		var l := Label3D.new()
+		l.name = "Kanji" if face > 0.0 else "KanjiBack"
+		l.text = "爆"
+		l.font = TrackTheme.cjk_font()
+		l.font_size = 96
+		l.pixel_size = 0.01
+		l.outline_size = 12
+		l.outline_modulate = Color(0.2, 0.0, 0.0)
+		l.modulate = Color(1.0, 0.97, 0.9)
+		l.double_sided = false
+		l.position = Vector3(0.0, BARREL_HEIGHT * 0.52, (BARREL_RADIUS + 0.06) * face)
+		if face < 0.0:
+			l.rotation.y = PI
+		_barrel_model.add_child(l)
 
 
 func _on_body_entered(body: Node3D) -> void:
