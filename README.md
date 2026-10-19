@@ -53,10 +53,16 @@ git lfs install --skip-repo              # une fois par machine : modèles des c
 git lfs pull                             # si le clone a précédé la ligne ci-dessus
 make test                                # doit afficher 0 échec
 make run                                 # lance le jeu (menu principal)
+make export                              # jeu autonome dans builds/windows et builds/linux
 ```
 
 Outils requis : **Godot 4.7.2**, **Blender 5.2 LTS**, **GNU Make**. Installation
 sous Windows et pièges connus : `docs/ENVIRONMENT.md`.
+
+`make export` demande les modèles d'export de Godot 4.7.2 (une fois par machine,
+`docs/ENVIRONMENT.md` §4.4). Pour donner le jeu, il faut livrer **tout** le
+dossier `builds/<plateforme>/` : les modèles des camions sont à côté de
+l'exécutable.
 
 Dans Claude Code :
 

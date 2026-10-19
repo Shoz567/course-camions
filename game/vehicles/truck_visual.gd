@@ -455,7 +455,7 @@ func set_trailer_type(type: TrailerType) -> void:
 		old.queue_free()
 	var skin: Node3D = null
 	if model_loaded and type != null and type.model != "":
-		var path := ProjectSettings.globalize_path("res://").path_join(type.model).simplify_path()
+		var path := asset_base().path_join(type.model).simplify_path()
 		var template := _trailer_template(path)
 		if template != null:
 			skin = template.instantiate() as Node3D
@@ -647,8 +647,18 @@ func _probe_index(i: int) -> int:
 
 # --- modele externe ---------------------------------------------------------------
 
+## Dossier depuis lequel se resolvent les chemins des modeles externes
+## (`../Assets_Visuels/...`) : celui du projet (game/) en developpement ; dans
+## un jeu exporte, `res://` n'est pas un dossier, les modeles sont copies a
+## cote de l'executable (`make export` : <exe>/Assets_Visuels/...), et
+## `<exe>/game/..` y mene.
+static func asset_base() -> String:
+	if OS.has_feature("template"):
+		return OS.get_executable_path().get_base_dir().path_join("game")
+	return ProjectSettings.globalize_path("res://")
+
 func _attach_external() -> void:
-	var path := ProjectSettings.globalize_path("res://").path_join(external_model).simplify_path()
+	var path := asset_base().path_join(external_model).simplify_path()
 	var template := _template(path, strip_prefixes, fit_exclude_prefixes, wheel_group_prefix, trailer_prefix)
 	if template == null:
 		return

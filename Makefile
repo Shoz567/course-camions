@@ -12,7 +12,7 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike vehicules
+.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike vehicules export export-windows export-linux
 
 help:
 	@echo "Cibles disponibles :"
@@ -24,6 +24,7 @@ help:
 	@echo "  make test-selftest - verifie le socle de test lui-meme"
 	@echo "  make baseline   - mesure les metriques de conduite et les ECRIT dans baseline.json"
 	@echo "  make run        - lance le jeu : menu principal, puis course de 1 a 4 joueurs"
+	@echo "  make export     - exporte le jeu Windows et Linux dans builds/ (modeles d'export requis)"
 	@echo "  make solo       - course a 1 joueur, plein ecran, sans passer par le menu"
 	@echo "  make sandbox    - lance le bac a sable (arene, tremplin, camions gares)"
 	@echo "  make clean-spike- supprime spike/ (fin de phase 0.5)"
@@ -40,6 +41,20 @@ vehicules:
 
 import:
 	$(GODOT) --headless --path $(PROJECT) --import
+
+# Export (tache 7.7) : jeu autonome dans builds/<plateforme>/, modeles de
+# l'equipe copies a cote (TruckVisual.asset_base) ; la copie d'abord : elle cree
+# le dossier, que l'export de Godot exige. Modeles d'export Godot
+# 4.7.2 requis (docs/ENVIRONMENT.md).
+export: export-windows export-linux
+
+export-windows: import
+	$(GODOT) --headless -s tools/export_assets.gd -- builds/windows
+	$(GODOT) --headless --path $(PROJECT) --export-release "Windows Desktop" ../builds/windows/CrazyWheels.exe
+
+export-linux: import
+	$(GODOT) --headless -s tools/export_assets.gd -- builds/linux
+	$(GODOT) --headless --path $(PROJECT) --export-release "Linux" ../builds/linux/CrazyWheels.x86_64
 
 # Suite rapide, lancee a chaque commit. Doit rester sous 60 s.
 test:

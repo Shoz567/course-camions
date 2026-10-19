@@ -186,11 +186,31 @@ cible se comporte bizarrement et qu'on veut isoler la commande sous-jacente :
 | `make test-full` | `godot --headless --path game -s res://tests/cli_runner.gd -- --runs=5` |
 | `make baseline` | `godot --headless --fixed-fps 60 --path game res://tests/scenes/handling_test.tscn -- --write-baseline` |
 | `make run` | `godot --path game` |
+| `make export-windows` | `godot --headless --path game --export-release "Windows Desktop" ../builds/windows/CrazyWheels.exe` puis `godot --headless -s tools/export_assets.gd -- builds/windows` |
 
 Note pour les chemins Windows : les scripts Blender doivent utiliser `pathlib`
 et jamais de séparateur `/` ou `\` écrit en dur. C'est déjà la règle dans
 `ART_PIPELINE.md` §2, elle compte double ici.
 
+### 4.4 Export (tâche 7.7)
+
+`make export` produit `builds/windows/CrazyWheels.exe` et
+`builds/linux/CrazyWheels.x86_64` (données incluses dans l'exécutable,
+`tests/` exclu, préréglages dans `game/export_presets.cfg`). Il faut d'abord
+les **modèles d'export officiels de Godot 4.7.2**, une fois par machine :
+éditeur → Projet → Exporter → Gérer les modèles d'export, ou le fichier
+`Godot_v4.7.2-stable_export_templates.tpz` des versions de godotengine sur
+GitHub, décompressé dans `%APPDATA%\Godot\export_templates\4.7.2.stable\`.
+
+Les modèles 3D de l'équipe (`Assets_Visuels/`, Git LFS) ne sont pas dans le
+projet Godot : le jeu les lit à l'exécution. `tools/export_assets.gd` copie
+les deux dossiers `Realiste/` (12 fichiers, 33 Mo) à côté de l'exécutable,
+où `TruckVisual.asset_base()` les cherche. Sans eux (ou dans un clone sans
+`git lfs pull`, que le script refuse), les camions s'affichent en boîtes.
+Le dossier livré est donc **tout** `builds/<plateforme>/`, pas l'exécutable
+seul.
+
+Vérifié le 2026-10-17 sur la machine de référence : export des deux plateformes en 16 s (`CrazyWheels.exe` 105 Mo, `CrazyWheels.x86_64` 71 Mo) ; l'exe Windows lancé ouvre le menu, la page de sélection et une course Cyber City avec les modèles de l'équipe. Les modèles release officiels refusent une scène passée en ligne de commande : on teste en passant par le menu. Une capture d'écran Windows d'un jeu Vulkan en plein écran exclusif sort grise : tester en `--windowed`.
 ## 5. Baseline de performance
 
 `game/tests/baseline.json` est **versionné** (exception explicite à la règle « pas
