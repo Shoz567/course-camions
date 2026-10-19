@@ -317,6 +317,8 @@ func _restyle() -> void:
 	remove_child(ui)
 	ui.queue_free()
 	player_buttons.clear()
+	bot_buttons.clear()
+	bot_level_buttons.clear()
 	speed_buttons.clear()
 	track_buttons.clear()
 	_join_slots.clear()
@@ -361,6 +363,17 @@ func select_speed(k: int) -> void:
 static func paint_player_button(b: Button, i: int, lit: bool) -> void:
 	var c := UiKit.PLAYER_COLORS[i]
 	UiKit.style_choice(b, b.get_theme_font_size("font_size"), c)
+	# habillage a tuiles (bois de Playa, de Sakura) : la tuile est gardee,
+	# teintee a la couleur du joueur ; neon : aplat de sa couleur
+	var tile := b.get_theme_stylebox("normal") as StyleBoxTexture
+	if tile != null:
+		if lit:
+			for state: String in ["normal", "hover", "pressed", "hover_pressed"]:
+				var t := (b.get_theme_stylebox(state) as StyleBox).duplicate() as StyleBox
+				if t is StyleBoxTexture:
+					(t as StyleBoxTexture).modulate_color = c.lightened(0.2 if state.begins_with("hover") else 0.0)
+				b.add_theme_stylebox_override(state, t)
+		return
 	b.add_theme_stylebox_override("pressed", UiKit.box(c, Color(1, 1, 1, 0.95), 3, UiKit.SKEW, 3, Color(c, 0.7), 14))
 	b.add_theme_stylebox_override("hover_pressed", UiKit.box(c.lightened(0.1), Color.WHITE, 3, UiKit.SKEW, 3, Color(c, 0.8), 16))
 	if not lit:
