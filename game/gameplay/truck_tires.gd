@@ -112,6 +112,11 @@ static func trailer_hit(box_xf: Transform3D, box_size: Vector3, point: Vector3, 
 	return Truck.TRAILER_LEFT if n.x > 0.0 else Truck.TRAILER_RIGHT
 
 
+## En ligne, chez un client (NetRace) : aucun pneu n'eclate ici ; le host
+## fait foi (Truck.burst_tire recu), les effets (eclatement, jantes) suivent.
+var net_mirror: bool = false
+
+
 func _ready() -> void:
 	_truck = get_parent() as Truck
 	if _truck == null:
@@ -158,6 +163,8 @@ func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3,
 ## Un choc a `speed_ms` sur le pneu `wheel` : il s'use, et eclate s'il a
 ## assez encaisse. Vrai s'il vient d'eclater.
 func take_hit(wheel: int, speed_ms: float) -> bool:
+	if net_mirror:
+		return false   # en ligne, chez un client : les crevaisons viennent du host
 	if wheel < 0 or wheel >= _wear.size() or _truck.is_tire_burst(wheel):
 		return false
 	_wear[wheel] += clampf(speed_ms / BURST_SPEED_MS, 1.0, MAX_HIT_WEAR)

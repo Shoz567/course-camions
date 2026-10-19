@@ -296,7 +296,22 @@ func explode(truck: Truck) -> void:
 	var shove_dir := to_truck.normalized() if to_truck.length() > 0.1 else -truck.global_transform.basis.z
 	var impulse := (shove_dir * yeet_out_speed + Vector3.UP * yeet_up_speed) * truck.mass
 	truck.apply_central_impulse(impulse)
+	_blast(shove_dir)
 
+
+## En ligne, chez un client : le host l'a fait sauter (un camion qu'on ne
+## simule pas ici). Explosion et envol, sans pousser personne ; deja parti ici
+## (notre camion l'a touche) : rien.
+func net_explode() -> void:
+	if exploded_state:
+		return
+	exploded_state = true
+	_exploded_ticks = 0
+	_blast(-global_transform.basis.z)
+
+
+## Envol du baril, explosion et son.
+func _blast(shove_dir: Vector3) -> void:
 	# Ejection physique du baril
 	freeze = false
 	linear_velocity = Vector3.UP * 11.5 - shove_dir * 4.0

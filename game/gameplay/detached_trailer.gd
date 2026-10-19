@@ -33,6 +33,9 @@ signal truck_hit(truck: Truck)
 signal damaged(amount: float, hp: float)
 ## A 0 PV : elle explose et disparait.
 signal destroyed
+## Un choc qui l'abime : point et normale (monde), PV retires, vitesse
+## d'approche (pour rejouer ses effets ailleurs : NetRace).
+signal struck(at: Vector3, normal: Vector3, amount: float, approach_ms: float)
 
 const HAZARD_LAYER := 5
 
@@ -78,6 +81,15 @@ var _sparks: GPUParticles3D
 ## Etat visible : 0 neuve, 1 abimee (< 60 %), 2 en ruine (< 30 %).
 var damage_stage: int = 0
 var _marks: Array[Node3D] = []
+## En ligne, chez un client (NetRace) : posee par le host, qui fait foi. Gelee
+## en cinematique (sa pose arrive par les snapshots), elle ne compte aucun
+## choc ; chocs et explosion du host sont rejoues (net_hit, net_destroy).
+var net_mirror: bool = false:
+	set(value):
+		net_mirror = value
+		if value:
+			freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+			freeze = true
 const MAX_MARKS := 10
 
 
@@ -192,12 +204,29 @@ func _physics_process(_delta: float) -> void:
 			_on_truck_hit(key as Truck, float(_pending[key]), _pending_at.get(key, []))
 	_pending.clear()
 	_pending_at.clear()
-	if hp <= 0.0:
-		ExplosionFx.spawn(get_parent(), _shape.global_position, 9.0)
-		BodyDamage.shards(get_parent(), _shape.global_position, Vector3.UP, 14, linear_velocity, 14.0,
-			BodyDamage.nearest_material(_visual, _shape.global_position), get_instance_id())
-		destroyed.emit()
-		queue_free()
+	if hp <= 0.0 and not net_mirror:
+		_explode()
+
+
+func _explode() -> void:
+	ExplosionFx.spawn(get_parent(), _shape.global_position, 9.0)
+	BodyDamage.shards(get_parent(), _shape.global_position, Vector3.UP, 14, linear_velocity, 14.0,
+		BodyDamage.nearest_material(_visual, _shape.global_position), get_instance_id())
+	destroyed.emit()
+	queue_free()
+
+
+## Client en ligne : choc decide par le host (PV restants left).
+func net_hit(at: Vector3, normal: Vector3, amount: float, approach_ms: float, left: float) -> void:
+	hp = left
+	damaged.emit(amount, hp)
+	_hit_effects(at, normal, amount, approach_ms)
+
+
+## Client en ligne : detruite chez le host.
+func net_destroy() -> void:
+	if not is_queued_for_deletion():
+		_explode()
 
 
 ## Choc d'un camion : PV retires selon l'energie ; un adversaire est penalise ;
@@ -217,13 +246,21 @@ func _on_truck_hit(truck: Truck, approach_ms: float, contact: Array) -> void:
 		# normale sortante de la remorque : vers le camion qui l'a frappee
 		if n.dot(truck.global_position - at) < 0.0:
 			n = -n
-		_add_mark(at, n, clampf(amount / 25.0, 0.2, 1.0))
-		# la tole s'enfonce, des eclats volent (purement visuel)
-		var severity := clampf(approach_ms / full_damage_speed_ms, 0.0, 1.0)
-		BodyDamage.dent(_visual, at, -n * lerpf(0.12, 0.7, severity), lerpf(0.9, 2.4, severity))
-		if severity > 0.35:
-			BodyDamage.shards(get_parent(), at, n, roundi(severity * 6.0), linear_velocity, 6.0 + 8.0 * severity,
-				BodyDamage.nearest_material(_visual, at), age_ticks)
+		struck.emit(at, n, amount, approach_ms)
+		_hit_effects(at, n, amount, approach_ms)
+	else:
+		_update_damage_stage()
+
+
+## Trace au point touche, tole enfoncee, eclats, fumee selon les PV (visuel).
+func _hit_effects(at: Vector3, n: Vector3, amount: float, approach_ms: float) -> void:
+	_add_mark(at, n, clampf(amount / 25.0, 0.2, 1.0))
+	# la tole s'enfonce, des eclats volent (purement visuel)
+	var severity := clampf(approach_ms / full_damage_speed_ms, 0.0, 1.0)
+	BodyDamage.dent(_visual, at, -n * lerpf(0.12, 0.7, severity), lerpf(0.9, 2.4, severity))
+	if severity > 0.35:
+		BodyDamage.shards(get_parent(), at, n, roundi(severity * 6.0), linear_velocity, 6.0 + 8.0 * severity,
+			BodyDamage.nearest_material(_visual, at), age_ticks)
 	_update_damage_stage()
 
 

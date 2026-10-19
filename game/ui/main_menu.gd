@@ -57,6 +57,20 @@ var quality_option: OptionButton
 var fps_check: CheckButton
 ## Resolution dynamique de la 3D (GameState.dynamic_resolution).
 var dynres_check: CheckButton
+## Panneau EN LIGNE (NetSession, phase 6) : pseudo, heberger, rejoindre par IP,
+## lobby, lancement de la course par le host.
+var online_button: Button
+var online_panel: Control
+var name_edit: LineEdit
+var ip_edit: LineEdit
+var host_button: Button
+var join_button: Button
+var launch_button: Button
+var leave_button: Button
+var online_status: Label
+var lobby_label: Label
+## Host : connexion qui envoie peu (snapshots a 20 Hz au lieu de 60).
+var slow_check: CheckButton
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -79,7 +93,15 @@ func _ready() -> void:
 	# on retrouve le dernier choix en revenant d'une course
 	select_players(GameState.requested_players if GameState.requested_players > 0 else 1)
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
+	for sig: Signal in [NetSession.lobby_changed, NetSession.joined, NetSession.race_launched]:
+		sig.connect(_refresh_online)
+	NetSession.join_failed.connect(func(_r: String) -> void: _refresh_online())
+	NetSession.connection_lost.connect(func(_r: String) -> void: _refresh_online())
+	_refresh_online()
 	start_button.grab_focus()
+	# retour d'une partie en ligne (perdue ou en cours) : le panneau la montre
+	if NetSession.is_online() or NetSession.last_error != "":
+		toggle_online()
 	_place_camera()
 
 
@@ -149,6 +171,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE:
 				if settings.visible:
 					toggle_settings()
+				elif online_panel.visible:
+					toggle_online()
 				else:
 					get_tree().quit()
 			_:
@@ -158,6 +182,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Rond (ui_cancel par defaut de Godot) : ferme les parametres
 		if event.is_action_pressed("ui_cancel") and settings.visible:
 			toggle_settings()
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action_pressed("ui_cancel") and online_panel.visible:
+			toggle_online()
 			get_viewport().set_input_as_handled()
 			return
 		match pad.button_index:
@@ -225,6 +253,13 @@ func select_players(n: int) -> void:
 
 
 func start_race() -> void:
+	if NetSession.is_online():
+		# en ligne : le host lance la course de la partie, le client l'attend
+		if NetSession.is_host():
+			launch_online()
+		elif not online_panel.visible:
+			toggle_online()
+		return
 	MenuSound.play_confirm()
 	GameState.requested_players = selected_players
 	launch_requested.emit(selected_players)
@@ -271,6 +306,88 @@ func set_quality(q: int) -> void:
 ## Volume general (0 a 100 %), sur le bus Master.
 func set_volume(percent: float) -> void:
 	AudioServer.set_bus_volume_db(_master_bus(), linear_to_db(maxf(percent, 0.001) / 100.0))
+
+
+func toggle_online() -> void:
+	online_panel.visible = not online_panel.visible
+	if is_node_ready():
+		MenuSound.play_toggle()
+	if online_panel.visible:
+		_refresh_online()
+		(launch_button if NetSession.is_host() else host_button).grab_focus()
+	else:
+		online_button.grab_focus()
+
+
+func host_game() -> void:
+	NetSession.player_name = NetSessionNode.clean_name(name_edit.text)
+	NetSession.host()
+	MenuSound.play_confirm()
+	_refresh_online()
+
+
+func join_game() -> void:
+	NetSession.player_name = NetSessionNode.clean_name(name_edit.text)
+	if NetSession.join(ip_edit.text) == OK:
+		MenuSound.play_confirm()
+	_refresh_online()
+
+
+func leave_game() -> void:
+	NetSession.leave()
+	NetSession.last_error = ""
+	MenuSound.play_toggle()
+	_refresh_online()
+
+
+## Host : la course de la partie, sur le circuit et la categorie de ce menu.
+func launch_online() -> void:
+	if not NetSession.is_host():
+		return
+	MenuSound.play_confirm()
+	NetSession.launch_race()
+
+
+## Etat de la partie dans le panneau EN LIGNE (et le bouton du menu).
+func _refresh_online() -> void:
+	if online_panel == null:
+		return
+	var online := NetSession.is_online()
+	var host := NetSession.is_host()
+	host_button.disabled = online
+	join_button.disabled = online
+	name_edit.editable = not online
+	ip_edit.editable = not online
+	launch_button.visible = host
+	slow_check.visible = not NetSession.is_client()
+	launch_button.disabled = NetSession.members.size() < 1
+	leave_button.visible = online
+	var status := ""
+	if host:
+		var ips := NetSessionNode.local_addresses()
+		status = "Partie ouverte. Les autres joueurs tapent : %s  (port %d)" % [
+			" ou ".join(ips) if not ips.is_empty() else "l'adresse IP de ce PC", NetSessionNode.DEFAULT_PORT]
+		status += "\nCircuit et vitesse : ceux choisis dans le menu. LANCER quand tout le monde est là."
+	elif NetSession.is_client():
+		status = "Connecté, en attente du lancement par le host." if NetSession.local_slot() >= 0 \
+				else "Connexion à %s..." % ip_edit.text
+	elif NetSession.last_error != "":
+		status = NetSession.last_error
+	else:
+		status = "Héberger : ce PC fait tourner la course. Rejoindre : l'adresse IP du PC qui héberge.\n" \
+				+ "Par Internet : le host ouvre le port UDP %d de sa box, ou passez par un VPN (Tailscale, ZeroTier)." \
+				% NetSessionNode.DEFAULT_PORT
+	online_status.text = status
+	online_status.modulate = Color(1.0, 0.6, 0.45) if not online and NetSession.last_error != "" else TEXT_DIM
+	var lines := PackedStringArray()
+	for m in NetSession.members:
+		var slot := int(m["slot"])
+		lines.append("J%d  %s  (%s)%s%s" % [slot + 1, String(m["name"]), LocalRace.COLOR_NAMES[slot],
+			"  · host" if int(m["peer"]) == 1 else "", "  · vous" if slot == NetSession.local_slot() else ""])
+	lobby_label.text = "\n".join(lines) if not lines.is_empty() else "Personne pour l'instant."
+	if online_button != null:
+		online_button.text = ("EN LIGNE : %d JOUEUR%s" % [NetSession.members.size(),
+			"S" if NetSession.members.size() > 1 else ""]) if online else "EN LIGNE / RÉSEAU LOCAL"
 
 
 func toggle_settings() -> void:
@@ -427,6 +544,15 @@ func _build_ui() -> void:
 	var push := Control.new()
 	push.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(push)
+	# en ligne / reseau local : un PC heberge, les autres le rejoignent par IP
+	online_button = Button.new()
+	online_button.name = "Online"
+	online_button.text = "EN LIGNE / RÉSEAU LOCAL"
+	online_button.custom_minimum_size = Vector2(0, 58)
+	_style_button(online_button, BUTTON_BG, ACCENT, 22)
+	online_button.pressed.connect(toggle_online)
+	column.add_child(online_button)
+	column.add_child(_gap(14))
 	start_button = Button.new()
 	start_button.name = "Start"
 	start_button.text = "COMMENCER"
@@ -484,6 +610,8 @@ func _build_ui() -> void:
 
 	settings = _build_settings()
 	root.add_child(settings)
+	online_panel = _build_online()
+	root.add_child(online_panel)
 
 
 ## Rangee d'une section : boutons de meme largeur, du bord gauche au bord droit.
@@ -631,6 +759,120 @@ func _build_settings() -> Control:
 	_style_button(back, Color(0.07, 0.09, 0.15, 0.88), Color(0.95, 0.55, 0.1), 26)
 	back.pressed.connect(toggle_settings)
 	box.add_child(back)
+	return layer
+
+
+## Panneau EN LIGNE : pseudo, HÉBERGER (adresse a donner aux autres),
+## REJOINDRE (adresse du host), joueurs de la partie, LANCER (host), QUITTER
+## LA PARTIE, RETOUR. Meme habillage que les parametres.
+func _build_online() -> Control:
+	var layer := Control.new()
+	layer.name = "OnlinePanel"
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.visible = false
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.7)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.custom_minimum_size = Vector2(1100, 0)
+	panel.add_theme_stylebox_override("panel", _box(Color(0.05, 0.07, 0.11, 0.97), ACCENT, 3))
+	layer.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	panel.add_child(box)
+	var head := _label("EN LIGNE  ·  RÉSEAU LOCAL", 40, 6)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(head)
+
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 12)
+	var name_label := _label("Pseudo", 20, 0)
+	name_label.custom_minimum_size.x = 120
+	name_row.add_child(name_label)
+	name_edit = LineEdit.new()
+	name_edit.name = "PlayerName"
+	name_edit.text = NetSession.player_name
+	name_edit.max_length = NetSessionNode.MAX_NAME
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.add_theme_font_size_override("font_size", 20)
+	name_row.add_child(name_edit)
+	box.add_child(name_row)
+
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	box.add_child(actions)
+	host_button = Button.new()
+	host_button.name = "Host"
+	host_button.text = "HÉBERGER UNE PARTIE"
+	host_button.custom_minimum_size = Vector2(0, 60)
+	host_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_style_button(host_button, BUTTON_BG, ACCENT, 22)
+	host_button.pressed.connect(host_game)
+	actions.add_child(host_button)
+	ip_edit = LineEdit.new()
+	ip_edit.name = "HostAddress"
+	ip_edit.placeholder_text = "adresse IP du host, ex. 192.168.1.20"
+	ip_edit.custom_minimum_size = Vector2(380, 60)
+	ip_edit.add_theme_font_size_override("font_size", 20)
+	ip_edit.text_submitted.connect(func(_t: String) -> void: join_game())
+	actions.add_child(ip_edit)
+	join_button = Button.new()
+	join_button.name = "Join"
+	join_button.text = "REJOINDRE"
+	join_button.custom_minimum_size = Vector2(220, 60)
+	_style_button(join_button, BUTTON_BG, ACCENT, 22)
+	join_button.pressed.connect(join_game)
+	actions.add_child(join_button)
+
+	slow_check = CheckButton.new()
+	slow_check.name = "SlowUpload"
+	slow_check.text = "Connexion lente du host : 20 envois par seconde au lieu de 60 (un peu plus de délai)"
+	slow_check.tooltip_text = "60 envois/s : le moins de délai (~270 kbps à 4 joueurs).\n20 envois/s : pour une connexion Internet qui envoie peu (~90 kbps)."
+	slow_check.add_theme_font_size_override("font_size", 17)
+	slow_check.button_pressed = NetSession.snapshot_ticks > 1
+	slow_check.toggled.connect(func(on: bool) -> void:
+		NetSession.snapshot_ticks = NetSessionNode.SNAPSHOT_TICKS_LOW_BANDWIDTH if on else 1)
+	box.add_child(slow_check)
+	online_status = _label("", 18, 0)
+	online_status.name = "Status"
+	online_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	online_status.custom_minimum_size = Vector2(0, 56)
+	box.add_child(online_status)
+	box.add_child(_section("Joueurs de la partie"))
+	lobby_label = _label("", 22, 0)
+	lobby_label.name = "Lobby"
+	lobby_label.custom_minimum_size = Vector2(0, 170)
+	box.add_child(lobby_label)
+
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 16)
+	box.add_child(bottom)
+	launch_button = Button.new()
+	launch_button.name = "Launch"
+	launch_button.text = "LANCER LA COURSE"
+	launch_button.custom_minimum_size = Vector2(340, 64)
+	_style_button(launch_button, ACCENT, ACCENT, 26)
+	launch_button.pressed.connect(launch_online)
+	bottom.add_child(launch_button)
+	leave_button = Button.new()
+	leave_button.name = "Leave"
+	leave_button.text = "QUITTER LA PARTIE"
+	leave_button.custom_minimum_size = Vector2(300, 64)
+	_style_button(leave_button, BUTTON_BG, ACCENT, 22)
+	leave_button.pressed.connect(leave_game)
+	bottom.add_child(leave_button)
+	var back := Button.new()
+	back.name = "Back"
+	back.text = "RETOUR"
+	back.custom_minimum_size = Vector2(220, 64)
+	_style_button(back, Color(0.07, 0.09, 0.15, 0.88), ACCENT, 22)
+	back.pressed.connect(toggle_online)
+	bottom.add_child(back)
 	return layer
 
 

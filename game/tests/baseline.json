@@ -24,6 +24,7 @@
   "truck_tris": null,
   "track_tris": null,
 
-  "snapshot_bytes_per_truck": null,
-  "uplink_kbps_4_players": null
+  "_net_comment": "Reseau (docs/NETCODE.md §3 et §11), mesure par net_protocol_test le 2026-10-17 : octets d'un camion par snapshot, et montant du host vers 3 clients a 60 Hz, en-tetes UDP/IP/ENet compris (48 o par datagramme). A 20 Hz (connexion lente) : ~96 kbps.",
+  "snapshot_bytes_per_truck": 36,
+  "uplink_kbps_4_players": 289
 }

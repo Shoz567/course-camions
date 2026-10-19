@@ -115,6 +115,16 @@ func _on_body_entered(body: Node3D) -> void:
 	_yeet.call_deferred(truck.linear_velocity)
 
 
+## En ligne, chez un client : le host l'a renverse (camion a `velocity`) ; deja
+## renverse ici (notre camion) : rien.
+func net_knock(velocity: Vector3) -> void:
+	if knocked:
+		return
+	knocked = true
+	_knocked_ticks = 0
+	_yeet(velocity)
+
+
 func _yeet(truck_velocity: Vector3) -> void:
 	freeze = false
 	var flat := truck_velocity * Vector3(1, 0, 1)

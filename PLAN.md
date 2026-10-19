@@ -716,18 +716,20 @@ Lire `docs/NETCODE.md` avant de commencer.
 
 | # | Tâche | Agent |
 |---|---|---|
-| 6.1 | Transport ENet, host/join par IP, lobby | netcode-engineer |
-| 6.2 | `RemoteInputSource` : inputs groupés par 3, 20 Hz | netcode-engineer |
-| 6.3 | Snapshots d'état quantifiés, acquittés par le client | netcode-engineer |
-| 6.4 | Camions distants interpolés ; camion local prédit puis corrigé en douceur | netcode-engineer |
-| 6.5 | Contacts entre camions arbitrés par le host | netcode-engineer |
-| 6.6 | Déconnexion, écran « connexion perdue » | netcode-engineer |
-| 6.7 | Tests avec latence et perte simulées ; mesure de la bande passante | godot-qa |
+| 6.1 | Transport ENet, host/join par IP, lobby (`[x]` 2026-10-16 : `NetSession`, panneau EN LIGNE du menu, `net_session_test` ; `NetRace` : NETCODE.md §11) | netcode-engineer |
+| 6.2 | `RemoteInputSource` : inputs groupés par 3, 20 Hz (`[x]` 2026-10-16 : fronts ni perdus ni répétés, `net_protocol_test` ; le 2026-10-17, 3 frames par paquet mais un paquet par tick) | netcode-engineer |
+| 6.3 | Snapshots d'état quantifiés, acquittés par le client (`[x]` 2026-10-17 : `TruckState` 36 o ; acquittement des inputs (`ack`) ; pas de delta, donc pas d'acquittement de snapshot, NETCODE.md §3) | netcode-engineer |
+| 6.4 | Camions distants interpolés ; camion local prédit puis corrigé en douceur (`[x]` 2026-10-17 : délai minimal, NETCODE.md §11) | netcode-engineer |
+| 6.5 | Contacts entre camions arbitrés par le host (`[x]` 2026-10-17 : le host décide dégâts, épaves, largages, barils ; chez les clients, camions proches en corps dynamiques menés, NETCODE.md §11 ; à confirmer sur 2 PC) | netcode-engineer |
+| 6.6 | Déconnexion, écran « connexion perdue » (`[x]` 2026-10-17 : abandon, coupure détectée en 3-8 s, NETCODE.md §11) | netcode-engineer |
+| 6.7 | Tests avec latence et perte simulées ; mesure de la bande passante (`[x]` 2026-10-17 : 0 à 300 ms, 0 à 5 %, `baseline.json` ; essai sur 2 PC à faire) | godot-qa |
 
 **Critères de sortie**
 - 2 machines, 4 joueurs, une course complète.
 - À 150 ms de latence et 2 % de perte, le camion local reste agréable à conduire.
 - Bande passante montante du host < 128 kbps à 4 joueurs, en-têtes compris.
+
+État au 2026-10-17 : course complète à 2 joueurs mesurée sur 1 PC (deux instances), pas encore sur 2 machines ni à 4 ; à 150 ms et 2 %, le camion local répond au tick de l'appui (prédit), corrigé en douceur ; montant du host à 4 joueurs : 289 kbps à 60 Hz (choix « moins de délai »), 96 kbps à 20 Hz (option « connexion lente ») : le seuil de 128 kbps n'est tenu qu'à 20 Hz, à trancher par l'équipe.
 
 ---
 

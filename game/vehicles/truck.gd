@@ -45,7 +45,8 @@ extends RigidBody3D
 ##   set_input(frame), reset_to(xf), get_speed_kmh(), is_upside_down(),
 ##   wheels_on_ground(), pad_boost(), jump_pad_launch(), cargo_hit(),
 ##   detach_trailer(), reattach_trailer(), set_wrecked(), set_trailer_type(),
-##   burst_tire(), repair_tires()
+##   burst_tire(), repair_tires() ; en ligne, cote client : set_net_puppet(),
+##   set_net_pose() (NetRace)
 ## Le camion ne lit jamais Input.* : il recoit une InputFrame.
 
 ## Coup de klaxon recu dans l'InputFrame (le son est l'affaire du gameplay).
@@ -251,6 +252,34 @@ var _contact_step: int = 0
 ## Epave (0 PV, TruckHealth) : gelee, aucune force, aucune commande.
 var _wrecked: bool = false
 var _layers_before_wreck: Vector2i = Vector2i.ZERO
+## Marionnette reseau (set_net_puppet) : etats visibles recus du host.
+var _net_puppet: bool = false
+var _layers_before_puppet: Vector2i = Vector2i.ZERO
+var _net_boosting: bool = false
+var _net_handbrake: bool = false
+var _puppet_ghost: bool = false
+var _teleport_ticks: int = 0
+## Marionnette dynamique (camion d'un autre joueur, chez un client) : pose et
+## vitesses visees au prochain pas.
+var _net_collide: bool = false
+var _net_driven: bool = false
+var _mask_before_driven: int = 0
+var _net_has_target: bool = false
+var _net_target_jump: bool = false
+var _net_target: Transform3D = Transform3D.IDENTITY
+var _net_target_vel: Vector3 = Vector3.ZERO
+var _net_target_spin: Vector3 = Vector3.ZERO
+## Part de l'ecart de pose rattrapee en un pas (1 : tout, sauf contact).
+const PUPPET_GAIN := 1.0
+## Correction du camion predit (net_correct), en attente du prochain pas.
+var _net_corr_pending: bool = false
+var _net_snap: bool = false
+var _net_snapped: bool = false
+var _net_dpos: Vector3 = Vector3.ZERO
+var _net_drot: Vector3 = Vector3.ZERO
+var _net_dvel: Vector3 = Vector3.ZERO
+var _net_dang: Vector3 = Vector3.ZERO
+var _net_dtrailer: float = 0.0
 
 var _reset_pending: bool = false
 ## Teleportation faite au dernier pas : l'interpolation du rendu doit repartir
@@ -360,6 +389,8 @@ func get_steer_deg() -> float:
 
 ## Engagement du frein a main, 0 .. 1 (rampes d'engagement et de relacher).
 func get_handbrake_blend() -> float:
+	if _net_puppet:
+		return 1.0 if _net_handbrake else 0.0
 	return _handbrake_blend
 
 
@@ -370,6 +401,8 @@ func get_boost_charge() -> float:
 
 
 func is_boosting() -> bool:
+	if _net_puppet:
+		return _net_boosting
 	return _boost_ticks > 0 or _pad_boost_ticks > 0
 
 
@@ -563,7 +596,7 @@ func set_wrecked(on: bool) -> void:
 		collision_layer = _layers_before_wreck.x
 		collision_mask = _layers_before_wreck.y
 	_wrecked = on
-	freeze = on
+	freeze = on or (_net_puppet and not _net_driven)
 	_boost_ticks = 0
 	_pad_boost_ticks = 0
 	_pad_kick_pending = false
@@ -574,6 +607,156 @@ func set_wrecked(on: bool) -> void:
 
 func is_wrecked() -> bool:
 	return _wrecked
+
+
+## Camion simule sur une autre machine (client, phase 6 : docs/NETCODE.md
+## §4) : sans force ni commande, NetRace le pose a chaque tick sur l'etat recu
+## du host (set_net_pose). Roues, roulis, effets et HUD le suivent sans rien
+## savoir du reseau.
+##   collide (camion d'un autre joueur) : un obstacle. Loin du camion du
+##     joueur, gele en cinematique, pose exactement ; pres de lui
+##     (set_net_near), corps DYNAMIQUE de sa vraie masse, mene a chaque pas
+##     vers la pose recue par sa vitesse (_drive_puppet) : le camion predit le
+##     pousse comme chez le host, il y revient aussitot. En cinematique (masse
+##     infinie), il l'arretait net et la prediction divergeait de plusieurs
+##     metres a chaque contact.
+##   sinon : gele en cinematique, sans collision (il ne touche rien).
+func set_net_puppet(on: bool, collide: bool = false) -> void:
+	if on == _net_puppet:
+		return
+	if _net_driven:
+		set_net_near(false)   # collisions avec le decor rendues
+	_net_puppet = on
+	if on and not collide:
+		_layers_before_puppet = Vector2i(collision_layer, collision_mask)
+		_puppet_ghost = true
+		collision_layer = 0
+		collision_mask = 0
+	elif not on and _puppet_ghost:
+		_puppet_ghost = false
+		collision_layer = _layers_before_puppet.x
+		collision_mask = _layers_before_puppet.y
+	_net_collide = on and collide
+	_net_driven = false
+	_net_has_target = false
+	gravity_scale = 1.0
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	_teleport_ticks = 0
+	freeze = on or _wrecked
+	_boost_ticks = 0
+	_pad_boost_ticks = 0
+
+
+func is_net_puppet() -> bool:
+	return _net_puppet
+
+
+## Marionnette-obstacle pres du camion du joueur : corps dynamique mene
+## (contact possible) ; loin : cinematique exacte (set_net_puppet).
+func set_net_near(near: bool) -> void:
+	var driven := _net_collide and near and not _wrecked
+	if driven == _net_driven:
+		return
+	_net_driven = driven
+	gravity_scale = 0.0 if driven else 1.0
+	# mene, il ne touche que les camions : le decor (route, murs) le freinerait
+	# loin de sa pose ; sa place, c'est le host qui la decide
+	if driven:
+		_mask_before_driven = collision_mask
+		collision_mask = 1 << (TruckSpec.LAYER_VEHICLE - 1)
+	else:
+		collision_mask = _mask_before_driven
+	freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	_teleport_ticks = 0
+	freeze = not driven
+	if driven:
+		# il part de sa pose actuelle, a la vitesse de la derniere pose recue
+		_net_target_jump = false
+		linear_velocity = _net_target_vel
+		angular_velocity = _net_target_spin
+
+
+## Camion predit par le client (NETCODE.md §5) : correction vers l'etat du
+## host, appliquee au prochain pas physique (state.transform, jamais
+## global_position : CLAUDE.md §6).
+## `rot` : rotation monde en vecteur
+## (axe x angle, rad). snap : saut assume (gros ecart), sans interpolation
+## du rendu. Les corrections s'additionnent jusqu'au pas suivant.
+func net_correct(pos: Vector3, rot: Vector3, vel: Vector3, ang: Vector3, trailer_rad: float,
+		snap: bool = false) -> void:
+	_net_dpos += pos
+	_net_drot += rot
+	_net_dvel += vel
+	_net_dang += ang
+	_net_dtrailer += trailer_rad
+	_net_corr_pending = true
+	_net_snap = _net_snap or snap
+
+
+## Pose recue du host (camion marionnette, au tick physique) : transformation,
+## braquage et angle de remorque (deg), etats visibles. `teleport` : saut
+## assume (reapparition, gros ecart), sans interpolation du rendu.
+func set_net_pose(xf: Transform3D, steer_deg: float, trailer_angle_deg: float, boosting: bool,
+		handbrake: bool, trailer_detached: bool, teleport: bool = false,
+		velocity: Vector3 = Vector3.ZERO, spin: Vector3 = Vector3.ZERO) -> void:
+	if not _net_puppet:
+		return
+	_steer_deg = steer_deg
+	_set_trailer_angle(deg_to_rad(trailer_angle_deg))
+	_net_boosting = boosting
+	_net_handbrake = handbrake
+	_trailer_detached = trailer_detached
+	_net_target_vel = velocity
+	_net_target_spin = spin
+	if _net_driven and not freeze:
+		# corps dynamique : la pose est une cible, atteinte au prochain pas
+		# (_drive_puppet) ; un saut la prend d'un coup
+		_net_target = xf
+		_net_target_jump = _net_target_jump or teleport or not _net_has_target
+		_net_has_target = true
+		if teleport:
+			reset_physics_interpolation()
+		return
+	# saut : deplace en cinematique, Jolt lui donnerait pour ce tick la vitesse
+	# du saut (des milliers de m/s : compteur fou, et tout ce qu'il traverse
+	# serait projete). Gele en statique le temps du saut, il ne bouge
+	# "physiquement" pas ; il redevient cinematique au tick suivant.
+	if _teleport_ticks > 0:
+		_teleport_ticks = 0
+		freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+	if teleport:
+		freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+		_teleport_ticks = 1
+	global_transform = xf
+	if teleport:
+		reset_physics_interpolation()
+
+
+## Marionnette dynamique (set_net_pose, collide, pres du camion du joueur) :
+## vitesses recues, plus de quoi rattraper l'ecart a la pose cible en un pas
+## (Jolt les applique au pas suivant : la vitesse recue compense ce tick de
+## retard). Un contact pendant le pas l'en ecarte (le solveur traite deux
+## corps de vraie masse, comme chez le host) ; le pas suivant l'y ramene.
+func _drive_puppet(state: PhysicsDirectBodyState3D) -> void:
+	if not _net_has_target:
+		state.linear_velocity = Vector3.ZERO
+		state.angular_velocity = Vector3.ZERO
+		return
+	if _net_target_jump:
+		_net_target_jump = false
+		state.transform = _net_target
+		state.linear_velocity = _net_target_vel
+		state.angular_velocity = _net_target_spin
+		return
+	var dt := maxf(state.step, 1e-4)
+	var xf := state.transform
+	state.linear_velocity = _net_target_vel + (_net_target.origin - xf.origin) * (PUPPET_GAIN / dt)
+	var q := (_net_target.basis.get_rotation_quaternion() * xf.basis.get_rotation_quaternion().inverse()).normalized()
+	if q.w < 0.0:
+		q = -q
+	var a := q.get_angle()
+	var turn := q.get_axis() * a if a > 1e-6 else Vector3.ZERO
+	state.angular_velocity = _net_target_spin + turn * (PUPPET_GAIN / dt)
 
 
 ## Vitesses au debut des trois derniers pas physiques, la plus recente en
@@ -646,6 +829,10 @@ func _note_body_contact(state: PhysicsDirectBodyState3D, i: int, obj: Object, at
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if _net_driven:
+		# camion d'un autre joueur : ses chocs sont ceux du host (NetRace)
+		_drive_puppet(state)
+		return
 	# contacts avec un mur : corps statique, normale presque horizontale (le
 	# sol et les rampes ont une normale verticale)
 	var n_sum := Vector3.ZERO
@@ -697,6 +884,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		wall_impact_at.emit(rear, true, rear_at, rear_n)
 	_front_wall_gap = 0 if front >= 0.0 else _front_wall_gap + 1
 	_trailer_wall_gap = 0 if rear >= 0.0 else _trailer_wall_gap + 1
+	if _net_corr_pending:
+		_apply_net_correction(state)
 	if not _reset_pending:
 		return
 	_reset_pending = false
@@ -706,7 +895,31 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_reset_applied = true
 
 
+func _apply_net_correction(state: PhysicsDirectBodyState3D) -> void:
+	_net_corr_pending = false
+	var xf := state.transform
+	xf.origin += _net_dpos
+	var a := _net_drot.length()
+	if a > 1e-7:
+		xf.basis = (Basis(_net_drot / a, a) * xf.basis).orthonormalized()
+	state.transform = xf
+	state.linear_velocity += _net_dvel
+	state.angular_velocity += _net_dang
+	if absf(_net_dtrailer) > 1e-7:
+		_trailer_angle += _net_dtrailer
+	_net_snapped = _net_snapped or _net_snap
+	_net_dpos = Vector3.ZERO
+	_net_drot = Vector3.ZERO
+	_net_dvel = Vector3.ZERO
+	_net_dang = Vector3.ZERO
+	_net_dtrailer = 0.0
+	_net_snap = false
+
+
 func _physics_process(_delta: float) -> void:
+	if _net_snapped:
+		_net_snapped = false
+		reset_physics_interpolation()
 	if _reset_applied:
 		_reset_applied = false
 		reset_physics_interpolation()
@@ -728,7 +941,7 @@ func _physics_process(_delta: float) -> void:
 	_vel_hist[2] = _vel_hist[1]
 	_vel_hist[1] = _vel_hist[0]
 	_vel_hist[0] = linear_velocity
-	if not _active or _wrecked:
+	if not _active or _wrecked or _net_puppet:
 		return
 
 	var xf := global_transform

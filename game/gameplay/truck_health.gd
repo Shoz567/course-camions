@@ -70,6 +70,10 @@ var trailer_max_hp: float = DEFAULT_TRAILER_HP
 var respawn_provider: Callable
 ## Derniere carcasse laissee sur la route (tests).
 var last_wreck: TruckWreck
+## En ligne, chez un client (NetRace) : le host fait foi. Aucun degat n'est
+## compte ici ; PV, epave et reapparition arrivent du host (net_*), et les
+## effets (fumee, explosion, carcasse) suivent comme d'habitude.
+var net_mirror: bool = false
 
 var _truck: Truck
 var _dead_pending: bool = false
@@ -144,7 +148,7 @@ func _hit(amount: float, on_trailer: bool, source: StringName) -> void:
 ## Retire `amount` PV a la tete (sans effet sur une epave). A 0 : destruction
 ## au prochain tick physique (le camion n'est jamais modifie pendant un pas).
 func damage(amount: float, source: StringName = &"") -> void:
-	if amount <= 0.0 or is_wrecked() or _dead_pending:
+	if net_mirror or amount <= 0.0 or is_wrecked() or _dead_pending:
 		return
 	hp = maxf(0.0, hp - amount)
 	damaged.emit(amount, source)
@@ -155,7 +159,7 @@ func damage(amount: float, source: StringName = &"") -> void:
 ## Retire `amount` PV a la remorque attelee, jamais a la tete. A 0 : elle
 ## explose au prochain tick physique.
 func damage_trailer(amount: float, source: StringName = &"") -> void:
-	if amount <= 0.0 or is_wrecked() or _dead_pending or _trailer_pending:
+	if net_mirror or amount <= 0.0 or is_wrecked() or _dead_pending or _trailer_pending:
 		return
 	if _truck == null or _truck.is_trailer_detached():
 		return
@@ -231,6 +235,11 @@ func _explode_trailer() -> void:
 ## le camion (cache, sans collision) attend sa reapparition.
 func _destroy() -> void:
 	_wreck_left = wreck_ticks
+	_leave_wreck()
+
+
+## Explosion, carcasse et remorque laissees sur la route, camion cache.
+func _leave_wreck() -> Array:
 	# d'abord les effets (pieces arrachees, suie) : la carcasse les reprend
 	destroyed.emit()
 	var world := _truck.get_parent()
@@ -259,6 +268,54 @@ func _destroy() -> void:
 		visual.visible = false
 	ExplosionFx.spawn(world, _truck.global_transform * TruckSpec.CENTER_OF_MASS, 8.0)
 	wreck_left.emit(wreck, left_trailer)
+	return [wreck, left_trailer]
+
+
+# --- en ligne, chez un client (net_mirror) --------------------------------------
+
+## PV recus du host ; une baisse rejoue les effets (fumee, etincelles).
+func net_apply_hp(new_hp: float, new_trailer_hp: float) -> void:
+	if new_hp < hp - 0.5:
+		damaged.emit(hp - new_hp, &"reseau")
+	if new_trailer_hp < trailer_hp - 0.5:
+		trailer_damaged.emit(trailer_hp - new_trailer_hp, &"reseau")
+	hp = new_hp
+	trailer_hp = new_trailer_hp
+
+
+## Le host a detruit le camion : explosion, carcasse et remorque laissees sur
+## la route, comme chez lui ([carcasse, remorque ou null], a relier aux
+## siennes). Pas de minuterie : la reapparition vient du host.
+func net_wreck() -> Array:
+	if _truck.is_wrecked():
+		return []
+	return _leave_wreck()
+
+
+## Le host a fait reapparaitre le camion (sa pose arrive par les snapshots).
+func net_respawn() -> void:
+	_truck.set_wrecked(false)
+	_truck.reattach_trailer(true)
+	var visual := _truck.get_node_or_null(^"Visual") as Node3D
+	if visual != null:
+		visual.visible = true
+	hp = max_hp
+	trailer_hp = trailer_max_hp
+	respawned.emit()
+
+
+## La remorque attelee a explose chez le host, centree en `at`.
+func net_trailer_exploded(at: Vector3) -> void:
+	if _truck.is_trailer_detached():
+		return
+	trailer_destroyed.emit(at)
+	var cargo := _truck.get_node_or_null(^"Cargo") as TruckCargo
+	if cargo != null:
+		cargo.lose_trailer()
+	else:
+		_truck.detach_trailer()
+	trailer_hp = 0.0
+	ExplosionFx.spawn(_truck.get_parent(), at, 9.0)
 
 
 func _respawn() -> void:

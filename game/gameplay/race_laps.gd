@@ -43,6 +43,10 @@ class Racer:
 
 
 var start_tick: int = -1
+## Course en ligne, cote client (phase 6, docs/NETCODE.md §2) : aucun tour ne
+## se valide ici, ils sont recopies du host (apply_remote). Le mauvais sens
+## reste calcule sur place : il ne sert qu'a l'affichage.
+var mirror: bool = false
 var _racers: Dictionary = {}      # Truck -> Racer
 
 
@@ -89,6 +93,8 @@ func current_lap_ticks(truck: Truck) -> int:
 
 
 func _on_checkpoint(body: Node3D, index: int) -> void:
+	if mirror:
+		return
 	var r: Racer = _racers.get(body)
 	if r == null or start_tick < 0 or r.finished or index != r.next_cp:
 		return
@@ -128,6 +134,32 @@ func _physics_process(_delta: float) -> void:
 		if wrong != r.wrong_way:
 			r.wrong_way = wrong
 			wrong_way_changed.emit(t, wrong)
+
+
+## Client en ligne : etat d'un concurrent tel que le host l'a valide (ticks
+## deja ramenes a l'horloge de cette machine). Emet lap_completed et
+## race_finished comme une validation locale : la course et le HUD n'y voient
+## pas de difference.
+func apply_remote(truck: Truck, lap: int, next_cp: int, last_cp: int, lap_start_tick: int,
+		last_lap: int, best_lap: int, finished: bool, finish_ticks: int) -> void:
+	var r: Racer = _racers.get(truck)
+	if r == null:
+		return
+	var lap_done := lap > r.lap and r.lap > 0
+	r.next_cp = next_cp
+	r.last_cp = last_cp
+	r.lap_start_tick = lap_start_tick
+	r.last_lap = last_lap
+	r.best_lap = best_lap
+	if lap_done or (finished and not r.finished):
+		if last_lap >= 0:
+			r.lap_times.append(last_lap)
+		lap_completed.emit(truck, r.lap, last_lap)
+	r.lap = lap
+	if finished and not r.finished:
+		r.finished = true
+		r.finish_ticks = finish_ticks
+		race_finished.emit(truck, finish_ticks)
 
 
 func racer_count() -> int:

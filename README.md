@@ -74,8 +74,25 @@ Dans Claude Code :
 | 2 — Piste et tour solo | ✅ |
 | 3 — Course complète et juice | 🟡 en partie : 2e circuit, sons et musique ; voir `PLAN.md` |
 | **4 — Écran partagé local** | **🟡 en cours** : 1 à 6 joueurs, menu ; « appuyez sur A pour rejoindre » et rebranchement à chaud à faire |
-| 5 à 7 | à venir — voir `PLAN.md` |
+| 5 | à venir — voir `PLAN.md` |
+| **6 — En ligne / réseau local** | **🟡 étapes 1 à 3 faites** (branche `reseau/host-et-lobby`) : héberger, rejoindre par IP, lobby, course synchronisée, camion du joueur prédit (aucun délai), PV, épaves, remorques, barils synchronisés ; voir `docs/NETCODE.md` §11 |
+| 7 | à venir — voir `PLAN.md` |
 
+## Jouer en réseau (phase 6)
+
+Un PC **héberge** : il fait tourner la course, et son joueur y participe. Les
+autres le **rejoignent** par son adresse IP. Menu → **EN LIGNE / RÉSEAU
+LOCAL** :
+
+1. le host choisit circuit et vitesse dans le menu, puis **HÉBERGER UNE
+   PARTIE** ; le panneau affiche l'adresse à donner (ex. `192.168.1.20`) ;
+2. chaque autre joueur tape cette adresse puis **REJOINDRE** ;
+3. le host **LANCE LA COURSE** ; sas READY, compte à rebours, course.
+
+Réseau local : rien à configurer (autoriser Godot dans le pare-feu Windows au
+premier lancement). Par Internet : le host ouvre le **port UDP 7777** de sa
+box, ou tout le monde passe par un VPN (Tailscale, ZeroTier). Un joueur par
+PC. Pour une connexion Internet qui envoie peu, le host coche « connexion lente » (20 envois/s au lieu de 60). Limites : `docs/NETCODE.md` §11.
 ## Contenu
 
 | Fichier | Rôle |
