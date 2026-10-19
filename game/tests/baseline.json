@@ -8,10 +8,10 @@
   "_jolt_comment": "Reglage Jolt mesure (spike S4 de l'ancien projet, sur 4.6.3). Un corps au repos s'enfonce de cette valeur : les roues aussi. Verifie sur 4.7 par make test-selftest.",
   "jolt_penetration_slop_m": 0.02,
 
-  "_perf_comment": "Mesure via Performance.TIME_PHYSICS_PROCESS, jamais le temps mural : en headless, Godot regule a 60 Hz et renverrait 16,67 ms quelle que soit la charge.",
-  "physics_frame_ms_1_truck": null,
-  "physics_frame_ms_4_trucks": null,
-  "render_frame_ms_split_4": null,
+  "_perf_comment": "Machine de reference, 2026-10-17. Physique : perf_physics_test sous --fixed-fps 60 (temps mural / ticks, mediane de 5 passages ; Performance.TIME_PHYSICS_PROCESS n'est rafraichi qu'une fois par seconde). Rendu : course reelle a 4 vues, Cyber City, 1080p, reglages par defaut (budget du spike V3, docs/SPIKE.md), temps d'image median.",
+  "physics_frame_ms_1_truck": 0.24,
+  "physics_frame_ms_4_trucks": 0.56,
+  "render_frame_ms_split_4": 16.05,
 
   "_handling_comment": "Metriques de conduite : mesurees par handling_test (cf. docs/METRICS.md), jamais decretees. Ecrites par `make baseline` seulement ; `make test` les verrouille a +/- 10 %. Physique pure : independantes de la machine, a la tolerance pres.",
   "handling_measured": "2026-10-07, Godot 4.7.2-stable (official)",

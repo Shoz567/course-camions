@@ -139,7 +139,11 @@ static func hits_near(root: Node3D, point: Vector3) -> int:
 ## Prepare a l'avance (subdivision, voisinage) toutes les carrosseries
 ## visibles sous `root` : sinon le premier choc sur chaque modele coute
 ## ~0,1 s (a-coup en pleine course). Une fois par modele et par partie.
-static func prewarm(root: Node3D) -> void:
+## `own` (2026-10-17, tache 7.6) : prepare aussi la copie propre de CETTE
+## instance (_own : ses tableaux de sommets) - le premier choc dur de chaque
+## camion coutait encore ~50 ms a la copier ; son maillage affiche ne change
+## pas.
+static func prewarm(root: Node3D, own: bool = false) -> void:
 	if root == null:
 		return
 	for n in root.find_children("*", "MeshInstance3D", true, false):
@@ -148,6 +152,8 @@ static func prewarm(root: Node3D) -> void:
 			continue
 		var src: Mesh = mi.get_meta(META_PRISTINE, mi.mesh)
 		_topology(tessellated(src))
+		if own:
+			_own(mi)
 
 
 ## Remet a neuf toutes les carrosseries sous `root` (copies abandonnees,

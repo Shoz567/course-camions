@@ -134,6 +134,26 @@ func _check_lighting() -> void:
 	check("qualite par defaut : haute (carte dediee), moyenne (integree), basse (logiciel)",
 		dq == [GraphicsSettings.Quality.HIGH, GraphicsSettings.Quality.MEDIUM, GraphicsSettings.Quality.LOW]
 		and GameState.graphics_quality == GraphicsSettings.Quality.HIGH, str(dq))
+	# budget de l'ecran partage sur puce integree (spike V3) : qualite basse a
+	# partir de 3 vues ; une carte dediee garde la sienne
+	var igpu := RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU
+	var dgpu := RenderingDevice.DEVICE_TYPE_DISCRETE_GPU
+	var budget := [GraphicsSettings.split_quality(GraphicsSettings.Quality.MEDIUM, 2, igpu),
+		GraphicsSettings.split_quality(GraphicsSettings.Quality.MEDIUM, 3, igpu),
+		GraphicsSettings.split_quality(GraphicsSettings.Quality.HIGH, 4, igpu),
+		GraphicsSettings.split_quality(GraphicsSettings.Quality.HIGH, 4, dgpu)]
+	check("budget ecran partage : integree basse a 3 vues et plus, dediee inchangee",
+		budget == [GraphicsSettings.Quality.MEDIUM, GraphicsSettings.Quality.LOW, GraphicsSettings.Quality.LOW,
+		GraphicsSettings.Quality.HIGH], str(budget))
+	var lamp := DirectionalLight3D.new()
+	lamp.shadow_enabled = true
+	var shadows := []
+	for c: Array in [[2, GraphicsSettings.Quality.LOW], [4, GraphicsSettings.Quality.LOW], [4, GraphicsSettings.Quality.MEDIUM]]:
+		GraphicsSettings.apply_sun(lamp, c[0], c[1])
+		shadows.append(lamp.shadow_enabled)
+	lamp.free()
+	check("budget ecran partage : ombre du soleil coupee en basse a 3 vues et plus, rendue sinon",
+		shadows == [true, false, true], str(shadows))
 	# ombre du soleil : 4 cascades jusqu'a 2 vues, 2 au-dela
 	var sun := DirectionalLight3D.new()
 	var modes := []

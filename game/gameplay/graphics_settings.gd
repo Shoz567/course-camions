@@ -78,13 +78,40 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 		env.volumetric_fog_enabled = high and views <= VOLUMETRIC_MAX_VIEWS
 
 
+## Budget de l'ecran partage sur puce integree (spike V3, 2026-10-17, machine
+## de reference Iris Xe, 1080p) : a 4 vues, Forward+ en qualite moyenne pleine
+## resolution tient 16 images/s (48 ms GPU) ; qualite basse + 3D a 60 % +
+## ombre du soleil coupee : 49 images/s (15 ms GPU). A partir de
+## SPLIT_BUDGET_VIEWS vues sur une puce integree, la course passe donc en
+## qualite basse et sans ombre de soleil ; la resolution dynamique (active par
+## defaut) descend la 3D jusqu'a 60 %. Une carte dediee garde la qualite
+## choisie.
+const SPLIT_BUDGET_VIEWS := 3
+
+
+## Qualite appliquee a la course : celle choisie, ou le budget de l'ecran
+## partage sur puce integree.
+static func split_quality(quality: int, views: int,
+		adapter: int = RenderingServer.get_video_adapter_type()) -> int:
+	if adapter == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU and views >= SPLIT_BUDGET_VIEWS:
+		return Quality.LOW
+	return quality
+
+
 ## Ombre du soleil (ou de la lune) : 4 cascades jusqu'a SHADOW_FULL_MAX_VIEWS
 ## vues, 2 au-dela - chaque vue est alors petite (960 x 540 a 4), la
 ## difference ne se voit pas, et chaque cascade redessine toute la scene dans
 ## chaque vue (2026-10-09, performance : -26 % d'appels de dessin a 4 vues).
-static func apply_sun(light: DirectionalLight3D, views: int) -> void:
+## Qualite basse a partir de SPLIT_BUDGET_VIEWS vues : pas d'ombre du tout
+## (budget du spike V3). L'ombre d'origine de la lumiere est gardee en meta :
+## la lumiere est partagee par les courses successives.
+static func apply_sun(light: DirectionalLight3D, views: int, quality: int = Quality.MEDIUM) -> void:
 	if light == null:
 		return
+	if not light.has_meta(&"shadow"):
+		light.set_meta(&"shadow", light.shadow_enabled)
+	light.shadow_enabled = bool(light.get_meta(&"shadow")) \
+			and not (quality == Quality.LOW and views >= SPLIT_BUDGET_VIEWS)
 	light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS \
 		if views <= SHADOW_FULL_MAX_VIEWS else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 

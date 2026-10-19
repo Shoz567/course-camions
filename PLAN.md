@@ -13,7 +13,7 @@ Colonne **Agent** = sous-agent de `.claude/agents/` à qui déléguer.
 | Phase | Objectif | Sortie visible | Effort indicatif |
 |---|---|---|---|
 | 0 | Fondations du dépôt | `make test` passe | ✅ fait |
-| 0.5 | Spikes du camion | 4 réponses, docs corrigés | 🟡 V1, V2, V4 faits ; V3 ouvert |
+| 0.5 | Spikes du camion | 4 réponses, docs corrigés | ✅ V1, V2, V3, V4 faits (V3 le 2026-10-17) |
 | **1** | **Un camion arcade qui se conduit bien** | **un camion sur un plat, testé** | **1–3 sem** |
 | 2 | Piste et tour solo | 3 tours chronométrés | 1–2 sem |
 | 3 | Course complète + premier juice | une course avec départ, classement, arrivée | 1–1,5 sem |
@@ -235,7 +235,7 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 | 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[x]` menu : 1 à 6 joueurs, couleur par joueur ; **salle d'attente** (2026-10-17) : chaque manette rejoint avec Croix, clavier Entrée / Espace (`join_hotplug_test`) |
 | 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[x]` `LocalRace` : plein écran, 2 vues haut / bas, grille 2 × 2 à 3-4, **3 × 2 à 5-6** (à 3 et à 5, la case libre = caméra TV sur le leader), HUD réduit (0,6 puis 0,5) |
 | 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer | `[x]` débranchée : roue libre, « MANETTE DÉCONNECTÉE » dans sa vue, aucune pause ; rebranchée : elle reprend son camion (`join_hotplug_test`, 2026-10-17) |
-| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[x]` isolation à 2, 4 et 6 joueurs (`race_scene_test`, `race_4p_test`, `race_6p_test`), grilles à 3 et 5 (`race_3p_test`, `race_5p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 |
+| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[x]` isolation à 2, 4 et 6 joueurs (`race_scene_test`, `race_4p_test`, `race_6p_test`), grilles à 3 et 5 (`race_3p_test`, `race_5p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 fait le 2026-10-17, 52 images/s à 4 joueurs avec le budget (`[x]` pour la perf) |
 
 Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course de
 1 à 6 joueurs** (6 depuis le 2026-09-30 ; `make run`, scène principale `ui/main_menu.tscn`). Le menu
@@ -763,7 +763,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 | 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, `crowd_sound_test`) - `[x]`) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires | track-designer |
-| 7.6 | Profilage et optimisation (`[~]` passe du 2026-10-09 ci-dessous) | godot-qa |
+| 7.6 | Profilage et optimisation (`[~]` passes du 2026-10-09 et du 2026-10-17 ci-dessous) | godot-qa |
 | 7.7 | Export Windows/Linux, test sur machine vierge (`[~]` 2026-10-17 : `make export` produit les deux en 16 s, modèles copiés à côté ; Windows lancé sur la machine de référence : menu, page de sélection et course Cyber City avec les modèles de l'équipe ; reste : Linux et une machine vierge) | godot-qa |
 
 **Optimisation, passe 1** (2026-10-09, « gros problèmes de performance sur
@@ -810,7 +810,24 @@ carte : 1 vue 2,9 → 1,9 ms (3D à 75 %), 4 vues 5,2 → 3,6 ms (65 %) ; 3 à 4
 changements d'échelle au départ, puis plus aucun. Le compteur FPS affiche la
 résolution 3D quand elle est baissée.
 
+**Optimisation, passe 3 : à-coups** (2026-10-17, machine de référence,
+Iris Xe, course réelle à 4 joueurs, réglages par défaut, budget du spike V3
+fusionné) : 56,5 → 59,1 images/s, 1 % bas 7,5 → 18, pire image 370 → 92 ms,
+99ᵉ centile 54 → 34 ms.
+- **Préchauffe des effets** (`FxWarmup`) : la première explosion de baril
+  compilait 9 pipelines (370 ms) ; une vue cachée filme une explosion, un
+  KABOOM, des étincelles, une fumée et un débris au chargement. Plus aucune
+  compilation en course.
+- **Destruction étalée** : les 4 bosses de la cabine (`BodyDamage.dent`,
+  ~38 ms chacune) se posent une par image au lieu d'un gel de 190 ms
+  (`wreck_dent_spread_test`).
+- **Copie de la carrosserie préparée au chargement** (`BodyDamage.prewarm`
+  `own`) : ~70 ms et 15 Mo par camion, −45 ms au premier choc dur.
+- Reste (`[~]`) : un choc dur contre un mur coûte encore 40 à 90 ms (calcul
+  du creux, déjà réparti sur les cœurs) ; piste : calcul asynchrone.
+
 ---
+
 
 ## Questions de design ouvertes
 

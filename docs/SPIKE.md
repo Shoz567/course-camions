@@ -155,9 +155,34 @@ rien d'acquis.
 **Réponse attendue.** Le renderer retenu, et un budget de rendu chiffré
 (triangles, ombres, résolution) pour les pistes et les camions.
 
-**⏳ Non mesuré.** Il faut un vrai rendu, fenêtre ouverte, sur la machine de
-référence (Iris Xe) : la machine du spike (Ryzen 7 8845HS / Radeon 780M) ne
-permet pas de conclure. Bloquant pour la phase 4, pas pour la phase 1.
+**✅ Mesuré le 2026-10-17** sur la machine de référence (i7-1255U, Iris Xe,
+1920 × 1080), en course réelle sur Cyber City (camions lancés par le pilote de
+mesure, 12 s mesurées après 6 s, vsync coupée, résolution dynamique coupée
+sauf mention). Une vue par camion : 1, 2 ou 4 camions.
+
+| Configuration | 1 vue | 2 vues | 4 vues | GPU à 4 vues |
+|---|---|---|---|---|
+| Forward+, qualité moyenne, 3D à 100 % | 30 images/s | 22 | 16 | 48 ms |
+| Mobile, 3D à 100 % | 47 | 35 | 23 | 33 ms (préparation CPU 21 ms) |
+| Compatibility, 3D à 100 % | 22 | 19 | 17 | 30 ms, à-coups nombreux |
+
+Effet de chaque réglage, Forward+ à 4 vues (16 images/s au départ) : 3D à
+60 % → 26 ; qualité basse → 23,5 ; ombre du soleil coupée → 20 ; distance
+d'affichage 250 m → 17 (sans effet notable). Combinés : **qualité basse + 3D
+à 60 % + sans ombre du soleil → 49 images/s, 15 ms GPU** ; qualité basse +
+60 % avec ombre → 33 ; Mobile à 60 % → 26 (le CPU de rendu y plafonne) ; à
+2 vues, qualité basse + 60 % → 52.
+
+**Réponse.** On garde **Forward+** : Mobile gagne en pleine résolution mais
+plafonne côté CPU dès 4 vues et perd les effets du projet ; Compatibility
+n'apporte rien. Budget de rendu (`GraphicsSettings.split_quality`,
+`apply_sun`) : sur une puce intégrée, **à partir de 3 vues, qualité basse et
+pas d'ombre du soleil**, la résolution dynamique (active par défaut) descend
+la 3D jusqu'à 60 %. Mesuré en course à 4 joueurs avec les réglages par
+défaut : **52 images/s, image médiane 16 ms** (`baseline.json`,
+`render_frame_ms_split_4`). Une carte dédiée garde la qualité choisie.
+Triangles à 4 vues : ~1,5 M en moyenne (2,8 M au pire), ~2 800 appels de
+dessin.
 
 ### V4 — Export Blender d'un véhicule à roues
 
@@ -190,7 +215,7 @@ sur 5.2.1 au premier `make assets` de la phase 5.
 |---|---|---|---|
 | V1 | modèle de véhicule | ✅ **`RigidBody3D` + 4 rayons** ; `VehicleBody3D` écarté (raideur hors unités physiques, avant en +Z, force max par défaut trop basse). Longueur libre par essieu, `linear_damp = 0` + traînée explicite, critère de chute corrigé | `VEHICLE_SPEC.md`, `vehicle-physics-engineer.md`, `godot-qa.md`, `CLAUDE.md` §6 et §10, `PLAN.md` phase 1 |
 | V2 | collisions à haute vitesse | ✅ 0 traversée / 720 essais jusqu'à 0,1 m et 200 km/h ; `continuous_cd = true` sur le camion ; tick à 60 Hz | `CLAUDE.md` §6 ; `METRICS.md` §4 (épaisseur de design : 0,3 m) |
-| V3 | écran partagé à 4 | ⏳ **non mesuré** (machine de référence requise) | — |
+| V3 | écran partagé à 4 | ✅ Forward+ gardé ; budget sur puce intégrée dès 3 vues : qualité basse, sans ombre du soleil, 3D jusqu'à 60 % → 52 images/s à 4 joueurs (Iris Xe) | `graphics_settings.gd`, `baseline.json`, `CLAUDE.md` §10 |
 | V4 | export d'un véhicule | ✅ pivots faux (2,24 m) avec la location appliquée → corrigé, 0,0000 m | `export.py`, `ART_PIPELINE.md` |
 
 Le code des spikes (`spike/`) a été supprimé à la fin de la phase ; les
