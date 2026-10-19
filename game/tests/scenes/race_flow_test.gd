@@ -9,7 +9,7 @@ extends PhysicsTest
 ##      position se lit au centre. Celui de devant reste 1er a chaque tick ;
 ##      puis le second est remis en piste (respawn_transform) : toujours 2e.
 ##   C. vraie course a 2 (dev/race.tscn) : un seul arrive ; HUD du second
-##      « FIN DE COURSE DANS », puis au temps limite resultats, « non classe ».
+##      bandeau « FIN DANS », puis au temps limite resultats, « non classe ».
 
 ## Distance centre -> avant du camion (m) : la zone de la ligne le voit avant
 ## que son centre ne la passe.
@@ -157,7 +157,8 @@ func _course(t: int) -> void:
 		r.finish_ticks = 1234
 		laps.race_finished.emit(t0, 1234)
 	if t == 230:
-		_seen["deadline"] = String((p1.get("hud") as RaceHud).get("_center_text")).contains("FIN DE COURSE DANS")
+		# temps limite dans le bandeau du haut, rien au centre (fin sans gene)
+		_seen["deadline"] = (p1.get("hud") as RaceHud).ticker_text().contains("FIN DANS")
 		_seen["still_racing"] = int(_scene.get("state")) == RaceManagerNode.State.RACING
 	if t == 200 + TIMEOUT + 5:
 		_seen["finished"] = int(_scene.get("state")) == RaceManagerNode.State.FINISHED and RaceManager.ended_by_timeout
@@ -168,7 +169,7 @@ func _course(t: int) -> void:
 
 func _test_finish() -> void:
 	check("course : partie au tick 200", bool(_seen.get("racing", false)))
-	check("un seul arrive : « FIN DE COURSE DANS » pour l'autre, course en cours",
+	check("un seul arrive : bandeau « FIN DANS » pour l'autre, course en cours",
 		bool(_seen.get("deadline", false)) and bool(_seen.get("still_racing", false)))
 	check("temps limite : resultats", bool(_seen.get("finished", false)))
 	check("classement : le second « non classe »", String(_seen.get("standings", "")).contains("non classé"),

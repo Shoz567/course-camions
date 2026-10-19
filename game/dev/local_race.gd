@@ -833,6 +833,33 @@ func ranking() -> Array[Player]:
 	return typed
 
 
+## Joueur encore en course alors qu'un autre a deja fini (bandeau du haut).
+func still_racing(r: RaceLaps.Racer) -> bool:
+	return state == State.RACING and r != null and not r.finished and not _finish_order.is_empty()
+
+
+## Bandeau des joueurs encore en course : premier arrive, temps limite, et
+## l'annonce du moment (un joueur parti).
+func ticker_text() -> String:
+	var parts := PackedStringArray()
+	if _notice != "" and Engine.get_physics_frames() < _notice_until:
+		parts.append(_notice.replace("\n", "  "))
+	if not _finish_order.is_empty():
+		parts.append("1er : %s  ·  %d/%d arrivés" % [player_name(players.find(_find_player(_finish_order[0]))),
+			_finish_order.size(), players.size()])
+	var left := RaceManager.deadline_left(Engine.get_physics_frames())
+	if left >= 0:
+		parts.append("FIN DANS %d s" % ceili(left / 60.0))
+	return "  ·  ".join(parts)
+
+
+func _find_player(truck: Truck) -> Player:
+	for p in players:
+		if p.truck == truck:
+			return p
+	return null
+
+
 ## Classement affiche a tous des la premiere arrivee : rang, nom, temps
 ## (ou "en course").
 func standings_text() -> String:
@@ -911,7 +938,11 @@ func _process(delta: float) -> void:
 		if p.hud == null:
 			continue   # joueur d'une autre machine (en ligne)
 		var r := race.racer(p.truck)
-		p.hud.set_standings(standings)
+		# encore en course apres la premiere arrivee : pas de carte au milieu
+		# de sa route, un bandeau en haut (le classement complet attend la fin)
+		var still := still_racing(r)
+		p.hud.set_standings("" if still else standings)
+		p.hud.set_ticker(ticker_text() if still else "")
 		if _lost_reason != "":
 			p.hud.set_center_message("CONNEXION PERDUE\n%s\nretour au menu..." % _lost_reason, Color(1.0, 0.4, 0.3))
 			continue
@@ -961,9 +992,8 @@ func _process(delta: float) -> void:
 			var again := "le host relance la course" if NetSession.is_client() else "Options / Entree : rejouer"
 			p.hud.set_center_message("NON CLASSÉ\ntemps limite écoulé\n%s   Create / Échap : menu" % again,
 				Color(1.0, 0.6, 0.35))
-		elif RaceManager.deadline_left(Engine.get_physics_frames()) >= 0:
-			p.hud.set_center_message("FIN DE COURSE DANS %d s" % ceili(
-				RaceManager.deadline_left(Engine.get_physics_frames()) / 60.0), Color(1.0, 0.85, 0.2))
+		elif still:
+			p.hud.set_center_message("")    # le temps limite est dans le bandeau
 		else:
 			p.hud.set_center_message("GO !" if elapsed < GO_TICKS and state == State.RACING else "",
 				Color(0.4, 1.0, 0.4))
