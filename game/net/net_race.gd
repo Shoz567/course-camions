@@ -41,7 +41,7 @@ const TELEPORT_DISTANCE := 8.0
 ## (Truck.set_net_near) : camion + remorque font ~20 m.
 const NEAR_DISTANCE := 25.0
 ## Retard de rendu des marionnettes (ticks) : bornes de l'adaptation.
-const MIN_INTERP_TICKS := 2.0
+const MIN_INTERP_TICKS := 1.0
 const MAX_INTERP_TICKS := 12.0
 ## Camion predit : part de l'ecart corrigee a chaque tick (~10 ticks pour
 ## l'essentiel), et seuils du saut assume (NETCODE.md §5).
@@ -911,7 +911,10 @@ func _track_clock(sample_offset: float) -> void:
 	else:
 		_offset = lerpf(_offset, sample_offset, 0.05)
 		_dev = lerpf(_dev, absf(sample_offset - _offset), 0.05)
-	_interp_ticks = clampf(ceilf(_interval) + 1.0, MIN_INTERP_TICKS, MAX_INTERP_TICKS)
+	# intervalle des snapshots, plus la gigue mesuree (ecart moyen) : une
+	# liaison reguliere affiche les autres camions au plus pres (2026-10-19)
+	# (20 Hz : un tick de marge en plus, un snapshot en retard y coute cher)
+	_interp_ticks = clampf(ceilf(_interval + _dev) + (1.0 if _interval > 1.5 else 0.0), MIN_INTERP_TICKS, MAX_INTERP_TICKS)
 
 
 ## Gigue des arrivees de snapshots (ticks).

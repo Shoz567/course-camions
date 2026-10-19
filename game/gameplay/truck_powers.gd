@@ -40,6 +40,12 @@ var laser_hit: Truck
 var last_target: Truck
 ## Client en ligne : effets seulement, le host decide (net_fire).
 var mirror: bool = false
+## Client en ligne, son propre camion (2026-10-19) : un appui joue le tir ici
+## tout de suite, sans attendre l'aller-retour ; l'annonce du host qui suit
+## (dans PREDICT_TICKS) ne le rejoue pas. Les degats restent ceux du host.
+var predict: bool = false
+const PREDICT_TICKS := 90
+var _predicted: PackedInt32Array = PackedInt32Array([0, 0])
 
 var _truck: Truck
 var _health: TruckHealth
@@ -109,6 +115,16 @@ func _physics_process(_delta: float) -> void:
 	if DisplayServer.get_name() != "headless":
 		_set_aura(_health != null and _health.shield_ticks > 0)
 	if mirror:
+		for k in 2:
+			if _predicted[k] > 0:
+				_predicted[k] -= 1
+		if predict:
+			var g := _truck.get_input()
+			for k in 2:
+				var pressed := g.power_left if k == 0 else g.power_right
+				if pressed and slots[k] >= 0 and cooldown[k] == 0 and not _truck.is_wrecked():
+					_fire(k, target_ahead() if slots[k] == PowerCatalog.Id.MISSILE else null)
+					_predicted[k] = PREDICT_TICKS
 		return
 	var f := _truck.get_input()
 	if f.power_left:
@@ -133,6 +149,9 @@ func use(k: int) -> bool:
 ## `aim`) ; memes effets ici, sans degat (le host les a deja comptes).
 func net_fire(k: int, aim: Truck) -> void:
 	if k < 0 or k > 1 or slots[k] < 0:
+		return
+	if _predicted[k] > 0:
+		_predicted[k] = 0    # deja joue ici a l'appui (predict)
 		return
 	_fire(k, aim)
 
