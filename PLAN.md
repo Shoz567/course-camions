@@ -764,7 +764,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 | 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires | track-designer |
 | 7.6 | Profilage et optimisation (`[~]` passe du 2026-10-09 ci-dessous) | godot-qa |
-| 7.7 | Export Windows/Linux, test sur machine vierge | godot-qa |
+| 7.7 | Export Windows/Linux, test sur machine vierge (`[~]` 2026-10-17 : `make export` produit les deux en 16 s, modèles copiés à côté ; Windows lancé sur la machine de référence : menu, page de sélection et course Cyber City avec les modèles de l'équipe ; reste : Linux et une machine vierge) | godot-qa |
 
 **Optimisation, passe 1** (2026-10-09, « gros problèmes de performance sur
 les petites configurations ; optimise sans forcément diminuer la qualité ») :
