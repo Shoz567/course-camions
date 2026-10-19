@@ -37,7 +37,7 @@ extends Node3D
 ## Le compte a rebours et l'enchainement migreront dans RaceManager (tache 3.1).
 
 const MENU_SCENE := "res://ui/main_menu.tscn"
-const COUNTDOWN_TICKS := 180      # 3 s
+const COUNTDOWN_TICKS := RaceManagerNode.COUNTDOWN_TICKS      # 3 s
 const GO_TICKS := 60              # "GO !" reste 1 s
 const MODELS: PackedStringArray = [
 	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
@@ -136,17 +136,29 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @onready var auto_reset: AutoReset = $AutoReset
 
 var players: Array[Player] = []
-var state: State = State.COUNTDOWN
+## Etat de la course : celui de RaceManager (tache 3.1), memes valeurs.
+var state: State:
+	get:
+		return int(RaceManager.state) as State
+	set(value):
+		RaceManager.enter(int(value) as RaceManagerNode.State, Engine.get_physics_frames())
 ## Conteneur de l'ecran partage (VBoxContainer ou GridContainer), null en solo.
 var split: Container
 ## Camera de la case libre (la 4e a 3 joueurs, la 6e a 5) : suit le camion en
 ## tete.
 var leader_camera: ChaseCamera
 var _leader_label: Label
-var _state_tick: int = 0
+## Tick d'entree dans l'etat courant, ordre d'arrivee : ceux de RaceManager.
+var _state_tick: int:
+	get:
+		return RaceManager.state_tick
+	set(value):
+		RaceManager.state_tick = value
 var _last_countdown_sec: int = -1
 var _neutral: InputFrame = InputFrame.new()
-var _finish_order: Array[Truck] = []
+var _finish_order: Array[Truck]:
+	get:
+		return RaceManager.finish_order
 ## Sas READY : joueur pret, Carre (boost) enfonce au tick precedent.
 var ready_flags: Array[bool] = []
 var _square_was: Array[bool] = []
@@ -214,8 +226,7 @@ func _ready() -> void:
 	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
 	for p in players:
 		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
-	state = State.LOBBY if ready_gate else State.COUNTDOWN
-	_state_tick = Engine.get_physics_frames()
+	RaceManager.begin(ready_gate, Engine.get_physics_frames())
 	if NetSession.is_online():
 		race.mirror = NetSession.is_client()
 		net = NetRace.new()
@@ -378,6 +389,11 @@ func _add_player(i: int) -> Player:
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)
+	# secousse de camera aux chocs de SON camion (tache 3.5)
+	t.wall_impact_at.connect(func(v: float, _r: bool, _at: Vector3, _n: Vector3) -> void:
+		cam.shake(shake_for(v)))
+	t.body_impact.connect(func(v: float, _r: bool, _at: Vector3, _n: Vector3) -> void:
+		cam.shake(shake_for(v)))
 	var hud := RaceHud.new()
 	hud.truck = t
 	hud.race = race
@@ -387,6 +403,12 @@ func _add_player(i: int) -> Player:
 	view_parent.add_child(hud)
 	p.hud = hud
 	return p
+
+## Secousse de camera (0 .. 1) pour un choc a cette vitesse (m/s) : rien sous
+## 4 m/s (frottement), pleine a 22 m/s (~80 km/h de face).
+static func shake_for(speed_ms: float) -> float:
+	return clampf((speed_ms - 4.0) / 18.0, 0.0, 1.0)
+
 
 ## Joueur et manette, pour le sas READY : « J1 - BLEU (Manette 1 / fleches) ».
 func player_tag(i: int) -> String:
@@ -558,6 +580,8 @@ func _simulate(tick: int) -> void:
 				if cargo != null:
 					cargo.start_race_lock()
 		return
+	# temps limite apres la premiere arrivee (une course se termine toujours)
+	_check_all_finished()
 	for p in players:
 		var f := p.input.poll(tick)
 		p.truck.set_input(f)
@@ -702,6 +726,8 @@ func standings_text() -> String:
 		var time := RaceHud.chrono(r.finish_ticks) if r.finished else "en course"
 		if _abandoned.has(players.find(p)) and not r.finished:
 			time = "abandon"
+		elif state == State.FINISHED and not r.finished:
+			time = "non classé"
 		lines.append("%d. %s   %s" % [rank, player_name(players.find(p)), time])
 		rank += 1
 	return "\n".join(lines)
@@ -755,6 +781,14 @@ func _process(_delta: float) -> void:
 				place = "1er !"
 			p.hud.set_center_message("%s\n%s   meilleur tour %s%s" % [place,
 				RaceHud.chrono(r.finish_ticks), RaceHud.chrono(r.best_lap), more], Color.WHITE)
+		elif state == State.FINISHED:
+			# temps limite ecoule avant son arrivee
+			var again := "le host relance la course" if NetSession.is_client() else "Options / Entree : rejouer"
+			p.hud.set_center_message("NON CLASSÉ\ntemps limite écoulé\n%s   Create / Échap : menu" % again,
+				Color(1.0, 0.6, 0.35))
+		elif RaceManager.deadline_left(Engine.get_physics_frames()) >= 0:
+			p.hud.set_center_message("FIN DE COURSE DANS %d s" % ceili(
+				RaceManager.deadline_left(Engine.get_physics_frames()) / 60.0), Color(1.0, 0.85, 0.2))
 		else:
 			p.hud.set_center_message("GO !" if elapsed < GO_TICKS and state == State.RACING else "",
 				Color(0.4, 1.0, 0.4))
@@ -767,13 +801,15 @@ func _process(_delta: float) -> void:
 
 
 func _on_race_finished(truck: Truck, _total: int) -> void:
-	_finish_order.append(truck)
+	RaceManager.record_finish(truck, Engine.get_physics_frames())
 	_check_all_finished()
 
 
-## Tous arrives (ou partis, en ligne) : fin de course. Le client attend le
-## host (apply_net_state).
+## Tous arrives (ou partis, en ligne), ou temps limite ecoule apres la
+## premiere arrivee : resultats. Le client attend le host (apply_net_state).
 func _check_all_finished() -> void:
-	if is_authority() and state != State.FINISHED and _finish_order.size() + _abandoned.size() >= players.size():
-		state = State.FINISHED
+	var tick := Engine.get_physics_frames()
+	if is_authority() and RaceManager.should_finish(tick, players.size(), _abandoned.size()):
+		RaceManager.finish(tick, RaceManager.deadline_left(tick) == 0 \
+				and _finish_order.size() + _abandoned.size() < players.size())
 		music.fade_out()

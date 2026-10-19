@@ -209,12 +209,12 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 
 | # | Tâche | Agent |
 |---|---|---|
-| 3.1 | `RaceManager` : grille de départ, compte à rebours, course, arrivée, résultats | gameplay-engineer |
-| 3.2 | Classement en temps réel : checkpoints passés + distance au suivant | gameplay-engineer |
-| 3.3 | Contacts entre camions : rester jouable, pas de camion « collé » | vehicle-physics-engineer |
-| 3.4 | Piste n°2, d'une autre « idée » que la n°1 | track-designer |
-| 3.5 | **Juice minimal** : son moteur au régime, crissement, impacts, fumée de dérapage, vibration de caméra aux chocs | gameplay-engineer |
-| 3.6 | Tests : classement correct en toutes circonstances, la course se termine toujours | godot-qa |
+| 3.1 | `RaceManager` : grille de départ, compte à rebours, course, arrivée, résultats (`[x]` 2026-10-17 : machine à états dans `RaceManager`, signaux ; temps limite de 30 s après la première arrivée, « non classé ») | gameplay-engineer |
+| 3.2 | Classement en temps réel : checkpoints passés + distance au suivant (`[x]` `RaceLaps.position` ; 2026-10-17 : juste aussi au passage de la ligne, où l'avant du camion valide le tour avant que son centre ne passe) | gameplay-engineer |
+| 3.3 | Contacts entre camions : rester jouable, pas de camion « collé » (`[x]` `truck_contact_test`, `track_01_contacts_test`) | vehicle-physics-engineer |
+| 3.4 | Piste n°2, d'une autre « idée » que la n°1 (`[x]` Playa Del Sol, `race_playa_test`) | track-designer |
+| 3.5 | **Juice minimal** : son moteur au régime, crissement, impacts, fumée de dérapage, vibration de caméra aux chocs (`[x]` 2026-10-17 : `TruckAudio` (moteur à 6 rapports, crissement, chocs, synthétisés), secousse de `ChaseCamera` ; fumée et traces : `TruckWheelFx` ; `juice_test`) | gameplay-engineer |
+| 3.6 | Tests : classement correct en toutes circonstances, la course se termine toujours (`[x]` 2026-10-17 : `race_flow_test`) | godot-qa |
 
 **Critères de sortie**
 - Une course complète se joue du départ aux résultats sans intervention.
