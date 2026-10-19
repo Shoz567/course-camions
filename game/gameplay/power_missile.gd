@@ -15,13 +15,17 @@ signal exploded(at: Vector3, victim: Truck)
 var shooter: Truck
 var target: Truck
 var direction: Vector3 = Vector3.FORWARD
+## Client en ligne : copie du missile du host, explosion sans degat ni
+## poussee (le host les applique, les PV arrivent par le snapshot).
+var mirror: bool = false
 var _life: int = 0
 
 
 ## Tire depuis le toit de `from` vers `aim` (null : tout droit).
-static func launch(from: Truck, aim: Truck) -> PowerMissile:
+static func launch(from: Truck, aim: Truck, as_mirror: bool = false) -> PowerMissile:
 	var m := PowerMissile.new()
 	m.name = "Missile"
+	m.mirror = as_mirror
 	m.shooter = from
 	m.target = aim
 	m.direction = -from.global_basis.z
@@ -77,7 +81,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _explode(at: Vector3, victim: Truck) -> void:
-	if victim != null:
+	if victim != null and not mirror:
 		var h := TruckHealth.of(victim)
 		if h != null:
 			h.damage(PowerCatalog.MISSILE_DAMAGE, &"missile")

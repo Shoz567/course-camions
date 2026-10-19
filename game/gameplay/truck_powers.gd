@@ -16,6 +16,9 @@ extends Node3D
 ## Recharge par emplacement, comptee en ticks des l'activation. Rien ne part
 ## d'une epave. Aucun tirage aleatoire. Sur la machine qui fait foi (hors
 ## ligne, host) ; les visuels ne decident rien (rien en headless).
+## En ligne, chez un client (mirror) : aucune decision, ni entree lue ni
+## degat. Le host annonce chaque tir (NetRace, Ev.POWER -> net_fire) ; le
+## client rejoue alors recharge, aura, rayon et missile, pour l'affichage.
 
 signal fired(slot: int, power: int)
 
@@ -33,6 +36,10 @@ var cooldown: PackedInt32Array = PackedInt32Array([0, 0])
 var laser_ticks: int = 0
 ## Dernier camion touche par le laser (tests, HUD).
 var laser_hit: Truck
+## Camion vise par le dernier missile (annonce aux clients).
+var last_target: Truck
+## Client en ligne : effets seulement, le host decide (net_fire).
+var mirror: bool = false
 
 var _truck: Truck
 var _health: TruckHealth
@@ -48,11 +55,12 @@ static var _models: Dictionary = {}
 
 ## Pose les pouvoirs `left` / `right` (PowerCatalog, -1 = aucun) sur `truck` ;
 ## null si aucun.
-static func setup(truck: Truck, left: int, right: int) -> TruckPowers:
+static func setup(truck: Truck, left: int, right: int, as_mirror: bool = false) -> TruckPowers:
 	if left < 0 and right < 0:
 		return null
 	var p := TruckPowers.new()
 	p.name = "Powers"
+	p.mirror = as_mirror
 	p.slots = PackedInt32Array([left, right])
 	truck.add_child(p)
 	return p
@@ -100,6 +108,8 @@ func _physics_process(_delta: float) -> void:
 		_beam.visible = false
 	if DisplayServer.get_name() != "headless":
 		_set_aura(_health != null and _health.shield_ticks > 0)
+	if mirror:
+		return
 	var f := _truck.get_input()
 	if f.power_left:
 		use(0)
@@ -111,19 +121,33 @@ func _physics_process(_delta: float) -> void:
 ## recharge, ou si le camion est une epave.
 func use(k: int) -> bool:
 	var p := slots[k]
-	if p < 0 or cooldown[k] > 0 or _truck == null or _truck.is_wrecked():
+	if mirror or p < 0 or cooldown[k] > 0 or _truck == null or _truck.is_wrecked():
 		return false
+	last_target = target_ahead() if p == PowerCatalog.Id.MISSILE else null
+	_fire(k, last_target)
+	fired.emit(k, p)
+	return true
+
+
+## Client en ligne : le host a declenche l'emplacement `k` (missile vers
+## `aim`) ; memes effets ici, sans degat (le host les a deja comptes).
+func net_fire(k: int, aim: Truck) -> void:
+	if k < 0 or k > 1 or slots[k] < 0:
+		return
+	_fire(k, aim)
+
+
+func _fire(k: int, aim: Truck) -> void:
+	var p := slots[k]
 	cooldown[k] = PowerCatalog.cooldown_ticks(p)
 	match p:
 		PowerCatalog.Id.SHIELD:
 			if _health != null:
 				_health.shield_ticks = PowerCatalog.SHIELD_TICKS
 		PowerCatalog.Id.MISSILE:
-			PowerMissile.launch(_truck, target_ahead())
+			PowerMissile.launch(_truck, aim, mirror)
 		PowerCatalog.Id.LASER:
 			laser_ticks = PowerCatalog.LASER_TICKS
-	fired.emit(k, p)
-	return true
 
 
 ## Secondes avant que l'emplacement `k` soit pret (0 : pret ; -1 : vide).
@@ -168,7 +192,7 @@ func _laser_tick() -> void:
 		var other := hit["collider"] as Truck
 		if other != null:
 			laser_hit = other
-			var h := TruckHealth.of(other)
+			var h := TruckHealth.of(other) if not mirror else null
 			if h != null:
 				h.damage(PowerCatalog.LASER_DAMAGE_PER_TICK, &"laser")
 	if _beam != null:
