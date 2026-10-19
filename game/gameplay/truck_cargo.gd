@@ -30,6 +30,9 @@ var _cooldown: int = 0
 var _lock: int = 0
 var _waiting: int = 0
 var last_trailer: DetachedTrailer
+## En ligne, chez un client (NetRace) : le host decide du largage et du
+## raccrochage ; la recharge affichee arrive du host (net_set_charge).
+var net_mirror: bool = false
 
 
 func _ready() -> void:
@@ -48,6 +51,8 @@ func _physics_process(_delta: float) -> void:
 		_lock -= 1
 	if _cooldown > 0:
 		_cooldown -= 1
+	if net_mirror:
+		return
 	if _truck == null or not _truck.is_trailer_detached() or _cooldown > 0 or _truck.is_wrecked():
 		return
 	# recharge finie : une nouvelle remorque apparait (l'ancienne reste)
@@ -91,7 +96,19 @@ func status_text() -> String:
 	return "REMORQUE PRETE"
 
 
+## Client en ligne : recharge et verrou du depart tels que le host les voit.
+func net_set_charge(charge: float, locked: bool) -> void:
+	if locked:
+		_lock = maxi(roundi((1.0 - charge) * first_seconds_lock_ticks), 1)
+		_cooldown = 0
+	else:
+		_lock = 0
+		_cooldown = roundi((1.0 - clampf(charge, 0.0, 1.0)) * cooldown_ticks)
+
+
 func _on_cargo_requested() -> void:
+	if net_mirror:
+		return
 	if not is_ready() or _truck.is_upside_down():
 		return
 	drop()

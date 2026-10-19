@@ -331,8 +331,19 @@ static func _own(mi: MeshInstance3D) -> Array:
 		if _primitive(src, s) != Mesh.PRIMITIVE_TRIANGLES:
 			return []
 		surfaces.append(src.surface_get_arrays(s))
-	if _topology(base).size() != surfaces.size():
+	var topo := _topology(base)
+	if topo.size() != surfaces.size():
 		return []
+	# maillage courant qui ne correspond plus a la grille (copie d'une instance
+	# marquee mais jamais subdivisee, 2026-10-17 : indices hors limites dans
+	# dent_lot) : on repart du neuf subdivise, sans ses anciens creux
+	for s in surfaces.size():
+		var verts: PackedVector3Array = surfaces[s][Mesh.ARRAY_VERTEX]
+		if verts.size() != (topo[s] as Topo).rest.size():
+			surfaces.clear()
+			for k in base.get_surface_count():
+				surfaces.append(base.surface_get_arrays(k))
+			break
 	mi.set_meta(META_OWNER, id)
 	mi.set_meta(META_BASE, base)
 	mi.set_meta(META_ARRAYS, surfaces)

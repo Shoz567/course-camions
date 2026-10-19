@@ -105,7 +105,10 @@ enum State { COUNTDOWN, RACING, FINISHED, LOBBY }
 
 class Player:
 	var truck: Truck
-	var input: LocalInputSource
+	## Locale (LocalInputSource) ; en ligne, cote host, RemoteInputSource pour
+	## un joueur distant ; cote client, neutre pour les autres (marionnettes).
+	var input: InputSource
+	## Seulement pour un joueur de cette machine (null sinon, en ligne).
 	var camera: ChaseCamera
 	var hud: RaceHud
 	var viewport: SubViewport
@@ -152,10 +155,29 @@ var _square_was: Array[bool] = []
 var _steer_was: Array[int] = []
 ## Musique de course : demarre au GO, fondu a l'arrivee (inerte en headless).
 var music: RaceMusic
+## Course en ligne (NetSession, phase 6) : un joueur par machine, dans l'ordre
+## des cases du lobby ; null hors ligne.
+var net: NetRace
+## En ligne : joueurs partis en cours de route (classes « abandon »).
+var _abandoned: Array[int] = []
+## Annonce passagere (« X a quitte la partie »), jusqu'au tick indique.
+var _notice: String = ""
+var _notice_until: int = 0
+## Client : partie perdue (host parti, coupure) ; la raison reste affichee
+## LOST_TICKS avant le retour au menu.
+var _lost_reason: String = ""
+var _lost_tick: int = 0
+const LOST_TICKS := 180
+const NOTICE_TICKS := 240
+## Sans snapshot depuis ce nombre de ticks : « connexion instable ».
+const UNSTABLE_TICKS := 90
 
 
 func _ready() -> void:
-	if players_from_menu and GameState.requested_players > 0:
+	if NetSession.is_online():
+		player_count = clampi(NetSession.members.size(), 1, MAX_PLAYERS)
+		ready_gate = true
+	elif players_from_menu and GameState.requested_players > 0:
 		player_count = clampi(GameState.requested_players, 1, MAX_PLAYERS)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
@@ -178,17 +200,52 @@ func _ready() -> void:
 	music.name = "RaceMusic"
 	add_child(music)
 	RaceMusic.prepare()
-	split = _build_split_screen()
+	split = null if NetSession.is_online() else _build_split_screen()
 	for i in player_count:
 		players.append(_add_player(i))
-	if player_count == 3 or player_count == 5:
+	if split != null and (player_count == 3 or player_count == 5):
 		_add_leader_view()
 	for i in player_count:
 		ready_flags.append(false)
 		_square_was.append(false)
 		_steer_was.append(0)
+	# carrosseries deformables preparees pendant le chargement (~0,5 s par
+	# modele) : le sas READY ne prepare plus que les remorques changees, sans
+	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
+	for p in players:
+		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
 	state = State.LOBBY if ready_gate else State.COUNTDOWN
 	_state_tick = Engine.get_physics_frames()
+	if NetSession.is_online():
+		race.mirror = NetSession.is_client()
+		net = NetRace.new()
+		add_child(net)
+		net.setup(self, players, race)
+		NetSession.connection_lost.connect(_on_connection_lost)
+
+
+## Machine qui simule la course : hors ligne, ou host en ligne.
+func is_authority() -> bool:
+	return not NetSession.is_client()
+
+
+## Case du lobby du joueur `i` (sa couleur) : `i` hors ligne.
+func slot_of(i: int) -> int:
+	if NetSession.is_online() and i < NetSession.members.size():
+		return int(NetSession.members[i]["slot"])
+	return i
+
+
+## Le joueur `i` joue-t-il sur cette machine ?
+func is_local(i: int) -> bool:
+	return not NetSession.is_online() or slot_of(i) == NetSession.local_slot()
+
+
+## Nom affiche : J1 AZUR... hors ligne, nom du lobby en ligne.
+func player_name(i: int) -> String:
+	if NetSession.is_online():
+		return NetSession.name_of_slot(slot_of(i))
+	return NAMES[i]
 
 
 ## Ecran partage : haut / bas a 2, grille 2 x 2 a 3-4, 3 x 2 a 5-6 (haut
@@ -223,7 +280,8 @@ func _build_split_screen() -> Container:
 ## Effets de l'environnement et anticrenelage selon la qualite choisie et le
 ## nombre de vues (la case de la camera TV compte).
 func _apply_graphics() -> void:
-	var views := player_count + (1 if player_count == 3 or player_count == 5 else 0)
+	# en ligne : une seule vue, celle du joueur de cette machine
+	var views := 1 if NetSession.is_online() else player_count + (1 if player_count == 3 or player_count == 5 else 0)
 	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world != null:
 		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, views)
@@ -249,30 +307,50 @@ func _new_view(view_name: String, listener: bool) -> SubViewport:
 
 func _add_player(i: int) -> Player:
 	var p := Player.new()
-	# camion : modele et couleur du joueur, case de depart i (centre de la grille)
+	var online := NetSession.is_online()
+	var mine := is_local(i)
+	# camion : modele et couleur du joueur (de sa case en ligne), case de
+	# depart i (centre de la grille)
 	var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 	t.name = "Truck%d" % (i + 1)
-	dress(t.get_node("Visual") as TruckVisual, i)
+	dress(t.get_node("Visual") as TruckVisual, slot_of(i))
 	t.transform = track.get_start_transform(i)   # pose d'un camion immobile
 	# categorie de vitesse du menu (Normal par defaut : le reglage mesure)
 	p.base_tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
 	t.tuning = p.base_tuning
 	add_child(t)
 	p.truck = t
-	# remorque choisie a la course precedente (Conteneur la premiere fois)
-	set_trailer(p, GameState.trailer_choice[i] if i < GameState.trailer_choice.size() else 0)
+	# remorque choisie a la course precedente (Conteneur la premiere fois) ;
+	# en ligne, celle de ce PC pour son joueur, le host diffuse les autres
+	var choice := 0
+	if not online and i < GameState.trailer_choice.size():
+		choice = GameState.trailer_choice[i]
+	elif online and mine:
+		choice = GameState.trailer_choice[0]
+	set_trailer(p, choice)
 	race.watch(t)
-	auto_reset.watch(t)
+	# client en ligne : NetRace predit le camion de ce PC et pose les autres sur
+	# l'etat du host ; la remise en piste et les PV sont l'affaire du host
+	if is_authority():
+		auto_reset.watch(t)
 	# 0 PV : epave 3 s, puis reapparition sur la piste (jamais un checkpoint
 	# saute : RaceLaps.respawn_transform)
 	var health := TruckHealth.of(t)
-	if health != null:
+	if health != null and is_authority():
 		health.respawn_provider = race.respawn_transform
+	if online and not mine:
+		# joueur d'une autre machine : ses inputs arrivent par le reseau (host),
+		# ou ne servent pas (client) ; ni camera ni HUD ici
+		var remote := RemoteInputSource.new() if is_authority() else InputSource.new()
+		remote.name = "Input%d" % (i + 1)
+		add_child(remote)
+		p.input = remote
+		return p
 	# input : sa manette seulement en ecran partage ; son jeu de touches
 	# (fleches pour J1, ZQSD pour J2, aucun au-dela)
 	var input := LocalInputSource.new()
 	input.name = "Input%d" % (i + 1)
-	if player_count > 1:
+	if split != null:
 		input.device = i
 		match i:
 			0: input.keyboard_layout = KeyboardInputSource.Layout.ARROWS
@@ -281,6 +359,7 @@ func _add_player(i: int) -> Player:
 	add_child(input)
 	p.input = input
 	# vue : plein ecran, ou une case de l'ecran partage (son 3D : J1)
+	var view := i if split != null else 0
 	var view_parent: Node = self
 	if split != null:
 		p.viewport = _new_view("View%d" % (i + 1), i == 0)
@@ -293,25 +372,26 @@ func _add_player(i: int) -> Player:
 	p.camera = cam
 	# nuit pluvieuse : la pluie tombe autour de chaque camera, et chaque vue
 	# ne voit que la sienne
-	cam.get_camera().cull_mask = RainFx.cull_mask_for(cam.get_camera().cull_mask, i)
+	cam.get_camera().cull_mask = RainFx.cull_mask_for(cam.get_camera().cull_mask, view)
 	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
-		view_parent.add_child(RainFx.make(cam.get_camera(), i))
+		view_parent.add_child(RainFx.make(cam.get_camera(), view))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)
 	var hud := RaceHud.new()
 	hud.truck = t
 	hud.race = race
-	hud.player_label = NAMES[i]
-	hud.help_text = HELP_SOLO if player_count == 1 else HELP_SPLIT[i]
-	hud.ui_scale = HUD_SCALE[player_count - 1]
+	hud.player_label = player_name(i)
+	hud.help_text = HELP_SOLO if split == null else HELP_SPLIT[i]
+	hud.ui_scale = HUD_SCALE[0 if split == null else player_count - 1]
 	view_parent.add_child(hud)
 	p.hud = hud
 	return p
 
-
 ## Joueur et manette, pour le sas READY : « J1 - BLEU (Manette 1 / fleches) ».
 func player_tag(i: int) -> String:
+	if NetSession.is_online():
+		return "%s - %s" % [player_name(i), COLOR_NAMES[slot_of(i)]]
 	var device := "manette ou clavier"
 	if player_count > 1:
 		device = "Manette %d" % (i + 1)
@@ -339,7 +419,11 @@ func set_trailer(p: Player, index: int) -> void:
 	var i := players.find(p)
 	if i < 0:
 		i = players.size()   # en cours d'ajout (_add_player)
-	if i < GameState.trailer_choice.size():
+	# en ligne, ce PC ne garde que le choix de son joueur (case 0 du choix)
+	if NetSession.is_online():
+		if is_local(i):
+			GameState.trailer_choice[0] = p.trailer
+	elif i < GameState.trailer_choice.size():
 		GameState.trailer_choice[i] = p.trailer
 
 
@@ -396,10 +480,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	var to_menu := (key_down and key.physical_keycode == KEY_ESCAPE) \
 			or (pad_down and pad.button_index == JOY_BUTTON_BACK and state == State.FINISHED)
 	if to_menu:
+		# en ligne : quitter la course, c'est quitter la partie (le host la ferme)
+		NetSession.leave()
 		get_tree().change_scene_to_file(MENU_SCENE)
 		return
 	if restart and state == State.FINISHED:
-		get_tree().reload_current_scene()
+		# en ligne, seul le host relance, pour tout le monde
+		if NetSession.is_host():
+			NetSession.launch_race()
+		elif not NetSession.is_online():
+			get_tree().reload_current_scene()
 		return
 	if key_down and key.physical_keycode == KEY_F1:
 		DebugDraw.enabled = not DebugDraw.enabled
@@ -409,6 +499,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(_delta: float) -> void:
 	var tick := Engine.get_physics_frames()
+	if _lost_reason != "":
+		# partie perdue : course figee, message, puis menu
+		if tick - _lost_tick >= LOST_TICKS:
+			get_tree().change_scene_to_file(MENU_SCENE)
+		return
+	if not is_authority():
+		_client_tick(tick)
+		return
+	_simulate(tick)
+	if net != null:
+		net.host_tick(tick)
+
+
+## Le deroule de la course, sur la machine qui fait foi (hors ligne, host).
+func _simulate(tick: int) -> void:
 	if state == State.LOBBY:
 		# sas READY : camions immobiles ; gauche / droite (SA source) = remorque
 		# precedente / suivante, Carre (le boost de SA source) = pret
@@ -423,19 +528,19 @@ func _physics_process(_delta: float) -> void:
 				dir = -1
 			if dir != 0 and dir != _steer_was[i] and not ready_flags[i]:
 				set_trailer(players[i], players[i].trailer + dir)
-				MenuSound.play_select()
+				if is_local(i):
+					MenuSound.play_select()
 			_steer_was[i] = dir
 			if f.boost and not _square_was[i] and not ready_flags[i]:
 				ready_flags[i] = true
-				MenuSound.play_confirm()
+				if is_local(i):
+					MenuSound.play_confirm()
 			_square_was[i] = f.boost
 		if all_ready():
 			# carrosseries deformables preparees maintenant, pas au premier choc
 			for p in players:
 				BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
-			state = State.COUNTDOWN
-			_state_tick = tick
-			_last_countdown_sec = -1
+			_enter_countdown(tick)
 		return
 	if state == State.COUNTDOWN:
 		# camions immobilises jusqu'au depart
@@ -443,30 +548,137 @@ func _physics_process(_delta: float) -> void:
 		for p in players:
 			p.input.poll(tick)
 			p.truck.set_input(_neutral)
-		var elapsed := tick - _state_tick
-		var sec := 3 - floori(float(elapsed) / 60.0)
-		if sec != _last_countdown_sec and sec >= 1 and sec <= 3:
-			_last_countdown_sec = sec
-			CountdownSound.play_tick()
-		if elapsed >= COUNTDOWN_TICKS:
+		_countdown_beeps(tick)
+		if tick - _state_tick >= COUNTDOWN_TICKS:
 			race.start()
-			state = State.RACING
-			_state_tick = tick
+			_enter_racing(tick)
 			# pas de largage pendant les premieres secondes (bouchon au depart)
 			for p in players:
 				var cargo := p.truck.get_node_or_null(^"Cargo") as TruckCargo
 				if cargo != null:
 					cargo.start_race_lock()
-			CountdownSound.play_go()
-			music.play()
 		return
 	for p in players:
 		var f := p.input.poll(tick)
 		p.truck.set_input(f)
 		if f.reset and not p.truck.is_wrecked():
 			p.truck.reset_to(race.respawn_transform(p.truck))
-			p.camera.snap()
+			if p.camera != null:
+				p.camera.snap()
 
+
+func _enter_countdown(tick: int) -> void:
+	state = State.COUNTDOWN
+	_state_tick = tick
+	_last_countdown_sec = -1
+
+
+func _enter_racing(tick: int) -> void:
+	state = State.RACING
+	_state_tick = tick
+	CountdownSound.play_go()
+	music.play()
+
+
+## Bips du compte a rebours (3, 2, 1), une fois par seconde.
+func _countdown_beeps(tick: int) -> void:
+	var sec := 3 - floori(float(tick - _state_tick) / 60.0)
+	if sec != _last_countdown_sec and sec >= 1 and sec <= 3:
+		_last_countdown_sec = sec
+		CountdownSound.play_tick()
+
+
+# --- course en ligne (NetRace) ----------------------------------------------------
+
+## Client : le camion de cette machine est predit (sa frame lui est appliquee
+## tout de suite, sans attendre le host), les autres sont poses sur les
+## snapshots ; l'input part au host, qui fait foi.
+func _client_tick(tick: int) -> void:
+	var local := _local_player()
+	var f := local.input.poll(tick) if local != null else _neutral
+	if local != null:
+		_neutral.tick = tick
+		# sas READY et compte a rebours : camion immobile, comme chez le host
+		local.truck.set_input(f if state == State.RACING or state == State.FINISHED else _neutral)
+		if state == State.RACING and f.reset and not local.truck.is_wrecked() and not local.truck.is_net_puppet():
+			local.truck.reset_to(race.respawn_transform(local.truck))
+			local.camera.snap()
+	net.client_tick(tick, f)
+	if state == State.COUNTDOWN:
+		_countdown_beeps(tick)
+
+
+func _local_player() -> Player:
+	for i in players.size():
+		if is_local(i):
+			return players[i]
+	return null
+
+
+## Etat de la course que le host diffuse (NetRace) : etat, tick d'entree
+## (horloge du host), sas READY, remorques, tick du depart des chronos.
+func net_state() -> Array:
+	var trailers := PackedInt32Array()
+	for p in players:
+		trailers.append(p.trailer)
+	return [int(state), _state_tick, ready_flags.duplicate(), trailers, race.start_tick]
+
+
+## Client : applique l'etat recu du host (net_state). Les ticks du host sont
+## ramenes a l'horloge de cette machine.
+func apply_net_state(s: Array) -> void:
+	if s.size() != 5:
+		return
+	var trailers := s[3] as PackedInt32Array
+	for i in mini(players.size(), trailers.size()):
+		if players[i].trailer != trailers[i]:
+			set_trailer(players[i], trailers[i])
+	var flags := s[2] as Array
+	for i in mini(ready_flags.size(), flags.size()):
+		if bool(flags[i]) and not ready_flags[i] and is_local(i):
+			MenuSound.play_confirm()
+		ready_flags[i] = bool(flags[i])
+	var start := int(s[4])
+	if start >= 0:
+		race.start_tick = net.to_local_tick(start)
+	var next: int = clampi(int(s[0]), 0, State.size() - 1)
+	if next == int(state):
+		return
+	var now := Engine.get_physics_frames()
+	if next == State.COUNTDOWN:
+		# comme chez le host : carrosserie de NOTRE camion (predit, il se cabosse
+		# ici) preparee maintenant, pas au premier choc (~0,5 s d'a-coup)
+		var mine := _local_player()
+		if mine != null:
+			BodyDamage.prewarm(mine.truck.get_node_or_null(^"Visual") as Node3D)
+		_enter_countdown(now)
+	elif next == State.RACING:
+		# depart manque (connexion en cours) : on part tout de suite
+		_enter_racing(mini(net.to_local_tick(int(s[1])), now))
+	elif next == State.FINISHED:
+		state = State.FINISHED
+		music.fade_out()
+	else:
+		state = State.LOBBY
+
+
+## Host : le joueur `i` a quitte la partie ; il ne bloque ni le sas READY ni
+## la fin de course.
+func mark_abandoned(i: int) -> void:
+	if _abandoned.has(i):
+		return
+	_abandoned.append(i)
+	ready_flags[i] = true
+	_check_all_finished()
+
+
+## Client : la partie est perdue (host parti) ; le menu affiche la raison
+## (NetSession.last_error).
+func _on_connection_lost(reason: String) -> void:
+	if _lost_reason == "":
+		_lost_reason = reason if reason != "" else "Connexion perdue"
+		_lost_tick = Engine.get_physics_frames()
+		music.fade_out()
 
 ## Joueurs par position courante (1er d'abord).
 func ranking() -> Array[Player]:
@@ -488,7 +700,9 @@ func standings_text() -> String:
 	for p in ranking():
 		var r := race.racer(p.truck)
 		var time := RaceHud.chrono(r.finish_ticks) if r.finished else "en course"
-		lines.append("%d. %s   %s" % [rank, NAMES[players.find(p)], time])
+		if _abandoned.has(players.find(p)) and not r.finished:
+			time = "abandon"
+		lines.append("%d. %s   %s" % [rank, player_name(players.find(p)), time])
 		rank += 1
 	return "\n".join(lines)
 
@@ -496,11 +710,27 @@ func standings_text() -> String:
 func _process(_delta: float) -> void:
 	var elapsed := Engine.get_physics_frames() - _state_tick
 	var standings := standings_text()
+	if _notice != "" and Engine.get_physics_frames() < _notice_until:
+		standings = _notice + ("\n\n" + standings if standings != "" else "")
+	var unstable := net != null and not net.is_host() and net.host_ready and _lost_reason == "" \
+			and net.ticks_since_snapshot() > UNSTABLE_TICKS
 	for i in players.size():
 		var p := players[i]
+		if p.hud == null:
+			continue   # joueur d'une autre machine (en ligne)
 		var r := race.racer(p.truck)
 		p.hud.set_standings(standings)
-		if state == State.LOBBY:
+		if _lost_reason != "":
+			p.hud.set_center_message("CONNEXION PERDUE\n%s\nretour au menu..." % _lost_reason, Color(1.0, 0.4, 0.3))
+			continue
+		if unstable:
+			p.hud.set_center_message("CONNEXION INSTABLE...\nplus de nouvelles du host depuis %.1f s" % (net.ticks_since_snapshot() / 60.0),
+				Color(1.0, 0.75, 0.3))
+			continue
+		if state == State.LOBBY and net != null and not net.is_host() and not net.host_ready:
+			# client : le host charge encore la course, l'invite READY attendra
+			p.hud.set_center_message("%s\nCONNEXION AU HOST..." % player_tag(i), Color(1.0, 0.85, 0.2))
+		elif state == State.LOBBY:
 			if ready_flags[i]:
 				p.hud.set_center_message("%s\nREADY !  remorque %s\nen attente des autres (%d/%d)" % [
 					player_tag(i), TrailerCatalog.at(p.trailer).display_name,
@@ -518,6 +748,8 @@ func _process(_delta: float) -> void:
 			var rank := _finish_order.find(p.truck) + 1
 			var more := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \
 					else "\nen attente des autres"
+			if state == State.FINISHED and NetSession.is_client():
+				more = "\nle host relance la course   Create / Echap : quitter la partie"
 			var place := ("%de" % rank) if player_count > 1 else "ARRIVEE"
 			if player_count > 1 and rank == 1:
 				place = "1er !"
@@ -529,13 +761,19 @@ func _process(_delta: float) -> void:
 	if leader_camera != null:
 		var leader := ranking()[0]
 		leader_camera.target = leader.truck
-		_leader_label.text = "EN TETE : %s" % NAMES[players.find(leader)]
+		_leader_label.text = "EN TETE : %s" % player_name(players.find(leader))
 		if standings != "":
 			_leader_label.text = standings
 
 
 func _on_race_finished(truck: Truck, _total: int) -> void:
 	_finish_order.append(truck)
-	if _finish_order.size() == players.size():
+	_check_all_finished()
+
+
+## Tous arrives (ou partis, en ligne) : fin de course. Le client attend le
+## host (apply_net_state).
+func _check_all_finished() -> void:
+	if is_authority() and state != State.FINISHED and _finish_order.size() + _abandoned.size() >= players.size():
 		state = State.FINISHED
 		music.fade_out()
