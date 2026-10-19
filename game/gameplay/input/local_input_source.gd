@@ -27,6 +27,8 @@ func _ready() -> void:
 	pad.name = "Pad"
 	# sans manette : un id qu'aucun evenement ne porte
 	pad.device_id = maxi(device, 0) if use_pad else NO_PAD
+	# boutons reaffectes dans les parametres (tache 7.1)
+	PadBindings.apply(pad, GameState.pad_bindings)
 	add_child(pad)
 	keyboard = KeyboardInputSource.new()
 	keyboard.name = "Keyboard"

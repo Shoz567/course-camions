@@ -758,7 +758,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 
 | # | Tâche | Agent |
 |---|---|---|
-| 7.1 | Menu principal, options, remapping | gameplay-engineer |
+| 7.1 | Menu principal, options, remapping (`[x]` 2026-10-17 : options sauvegardées d'un lancement à l'autre - son, volume, qualité, compteur, résolution dynamique, circuit, vitesse, remorques - et réaffectation des boutons de la manette, `settings_remap_test` ; clavier non réaffectable) | gameplay-engineer |
 | 7.2 | Personnalisation des camions (couleurs, pièces générées) | blender-modeler |
 | 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages à faire) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) | gameplay-engineer |

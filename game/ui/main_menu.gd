@@ -77,6 +77,11 @@ var waiting_button: Button
 var join_panel: Control
 var join_list: PackedInt32Array = PackedInt32Array()
 var _join_slots: Array[Label] = []
+## Reaffectation de la manette (tache 7.1) : panneau, bouton de chaque
+## action, action qui attend son bouton ("" : aucune).
+var remap_panel: Control
+var _remap_buttons: Dictionary = {}
+var remap_waiting: String = ""
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -104,6 +109,8 @@ func _ready() -> void:
 	NetSession.join_failed.connect(func(_r: String) -> void: _refresh_online())
 	NetSession.connection_lost.connect(func(_r: String) -> void: _refresh_online())
 	_refresh_online()
+	# retour de course : circuit, vitesse et remorques choisis sont gardes
+	GameState.save_settings()
 	start_button.grab_focus()
 	# retour d'une partie en ligne (perdue ou en cours) : le panneau la montre
 	if NetSession.is_online() or NetSession.last_error != "":
@@ -220,6 +227,7 @@ func select_track(k: int) -> void:
 	GameState.selected_track = clampi(k, 0, GameStateNode.TRACKS.size() - 1)
 	if is_node_ready() and GameState.selected_track != prev:
 		MenuSound.play_select()
+		GameState.save_settings()
 	for i in track_buttons.size():
 		track_buttons[i].set_pressed_no_signal(i == GameState.selected_track)
 	if subtitle != null:
@@ -237,6 +245,8 @@ func race_scene() -> String:
 ## pour la course et les suivantes.
 func select_speed(k: int) -> void:
 	GameState.speed_class = clampi(k, 0, GameStateNode.SPEED_CLASSES.size() - 1)
+	if is_node_ready():
+		GameState.save_settings()
 	for i in speed_buttons.size():
 		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
@@ -285,6 +295,7 @@ func set_sound(on: bool) -> void:
 		sound_check.set_pressed_no_signal(on)
 	if is_node_ready():
 		MenuSound.play_toggle()
+		GameState.save_settings()
 
 
 ## Compteur d'images par seconde, garde dans GameState (menu et courses).
@@ -292,6 +303,7 @@ func set_show_fps(on: bool) -> void:
 	GameState.show_fps = on
 	if fps_check != null:
 		fps_check.set_pressed_no_signal(on)
+	GameState.save_settings()
 
 
 ## Resolution dynamique, gardee dans GameState (DynamicResolution).
@@ -299,6 +311,7 @@ func set_dynamic_resolution(on: bool) -> void:
 	GameState.dynamic_resolution = on
 	if dynres_check != null:
 		dynres_check.set_pressed_no_signal(on)
+	GameState.save_settings()
 
 
 ## Qualite graphique (GraphicsSettings.Quality), gardee dans GameState pour les
@@ -311,11 +324,15 @@ func set_quality(q: int) -> void:
 	if world != null:
 		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, 1)
 	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
+	if is_node_ready():
+		GameState.save_settings()
 
 
 ## Volume general (0 a 100 %), sur le bus Master.
 func set_volume(percent: float) -> void:
 	AudioServer.set_bus_volume_db(_master_bus(), linear_to_db(maxf(percent, 0.001) / 100.0))
+	if is_node_ready():
+		GameState.save_settings()
 
 
 # --- salle d'attente (tache 4.2) ------------------------------------------------
@@ -374,6 +391,9 @@ func launch_join() -> void:
 ## joueur 1 lance ; clavier : Entree (fleches) et Espace (ZQSD) rejoignent, Retour
 ## arriere fait repartir le dernier, Echap ferme.
 func _input(event: InputEvent) -> void:
+	if remap_panel != null and remap_panel.visible:
+		_remap_input(event)
+		return
 	if join_panel == null or not join_panel.visible:
 		return
 	var pad := event as InputEventJoypadButton
@@ -481,6 +501,143 @@ func _build_join() -> Control:
 	_style_button(back, Color(0.07, 0.09, 0.15, 0.88), ACCENT, 22)
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(toggle_join)
+	bottom.add_child(back)
+	return layer
+
+
+# --- reaffectation de la manette (tache 7.1) ------------------------------------
+
+func toggle_remap() -> void:
+	remap_panel.visible = not remap_panel.visible
+	remap_waiting = ""
+	if is_node_ready():
+		MenuSound.play_toggle()
+	if remap_panel.visible:
+		_refresh_remap()
+		(_remap_buttons[PadBindings.ACTIONS[0]] as Button).grab_focus()
+	else:
+		(settings.find_child("Remap", true, false) as Button).grab_focus()
+
+
+## L'action attend son nouveau bouton : la prochaine pression d'une manette.
+func begin_remap(action: String) -> void:
+	remap_waiting = action
+	MenuSound.play_select()
+	_refresh_remap()
+
+
+## Donne `button` a `action` (PadBindings.assign), sauvegarde.
+func finish_remap(button: int) -> void:
+	if remap_waiting == "":
+		return
+	GameState.pad_bindings = PadBindings.assign(GameState.pad_bindings, remap_waiting, button)
+	remap_waiting = ""
+	GameState.save_settings()
+	MenuSound.play_confirm()
+	_refresh_remap()
+
+
+func reset_remap() -> void:
+	GameState.pad_bindings = PadBindings.defaults()
+	remap_waiting = ""
+	GameState.save_settings()
+	MenuSound.play_confirm()
+	_refresh_remap()
+
+
+## En attente : la pression suivante d'une manette est le nouveau bouton
+## (PS refuse), Echap annule ; rien d'autre n'atteint le menu. Sinon, Rond ou
+## Echap ferment le panneau.
+func _remap_input(event: InputEvent) -> void:
+	var pad := event as InputEventJoypadButton
+	var key := event as InputEventKey
+	if remap_waiting != "":
+		if pad != null and pad.pressed and not PadBindings.RESERVED.has(pad.button_index):
+			finish_remap(pad.button_index)
+		elif key != null and key.pressed and key.physical_keycode == KEY_ESCAPE:
+			remap_waiting = ""
+			MenuSound.play_toggle()
+			_refresh_remap()
+		if pad != null or key != null or event is InputEventJoypadMotion:
+			get_viewport().set_input_as_handled()
+		return
+	if (pad != null and pad.pressed and pad.button_index == JOY_BUTTON_B) \
+			or (key != null and key.pressed and not key.echo and key.physical_keycode == KEY_ESCAPE):
+		toggle_remap()
+		get_viewport().set_input_as_handled()
+
+
+func _refresh_remap() -> void:
+	for a: String in PadBindings.ACTIONS:
+		var b := _remap_buttons[a] as Button
+		if a == remap_waiting:
+			b.text = "appuyez sur un bouton…  (Échap : annuler)"
+		else:
+			b.text = PadBindings.list_name(GameState.pad_bindings[a])
+
+
+## Panneau : une ligne par action (nom, boutons actuels a cliquer), PAR
+## DEFAUT, RETOUR.
+func _build_remap() -> Control:
+	var layer := Control.new()
+	layer.name = "RemapPanel"
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.visible = false
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.custom_minimum_size = Vector2(980, 0)
+	panel.add_theme_stylebox_override("panel", _box(Color(0.05, 0.07, 0.11, 0.98), ACCENT, 3))
+	layer.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	panel.add_child(box)
+	var head := _label("RÉAFFECTER LA MANETTE", 36, 6)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(head)
+	var help := _label("Choisissez une action, puis appuyez sur son nouveau bouton. Un bouton ne sert qu'à une action :\n"
+		+ "pris ailleurs, il y est échangé. Toutes les manettes. R2, L2 et le stick gauche ne changent pas.", 17, 0)
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.modulate = TEXT_DIM
+	box.add_child(help)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 8)
+	box.add_child(grid)
+	for a: String in PadBindings.ACTIONS:
+		var l := _label(String(PadBindings.LABELS[a]), 21, 0)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_child(l)
+		var b := Button.new()
+		b.name = "Bind_" + a
+		b.custom_minimum_size = Vector2(420, 48)
+		_style_button(b, BUTTON_BG, ACCENT, 19)
+		b.pressed.connect(begin_remap.bind(a))
+		grid.add_child(b)
+		_remap_buttons[a] = b
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 16)
+	box.add_child(bottom)
+	var def := Button.new()
+	def.name = "Defaults"
+	def.text = "PAR DÉFAUT"
+	def.custom_minimum_size = Vector2(260, 58)
+	_style_button(def, BUTTON_BG, ACCENT, 22)
+	def.pressed.connect(reset_remap)
+	bottom.add_child(def)
+	var back := Button.new()
+	back.name = "Back"
+	back.text = "RETOUR"
+	back.custom_minimum_size = Vector2(220, 58)
+	_style_button(back, Color(0.07, 0.09, 0.15, 0.88), ACCENT, 22)
+	back.pressed.connect(toggle_remap)
 	bottom.add_child(back)
 	return layer
 
@@ -801,6 +958,8 @@ func _build_ui() -> void:
 	root.add_child(online_panel)
 	join_panel = _build_join()
 	root.add_child(join_panel)
+	remap_panel = _build_remap()
+	root.add_child(remap_panel)
 
 
 ## Rangee d'une section : boutons de meme largeur, du bord gauche au bord droit.
@@ -856,7 +1015,7 @@ func _build_settings() -> Control:
 	var head := _label("PARAMÈTRES", 40, 6)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(head)
-	var sub := _label("Commandes — manette PlayStation 5 DualSense (disposition Forza Horizon)", 20, 0)
+	var sub := _label("Commandes par défaut — manette PlayStation 5 DualSense (disposition Forza Horizon), réaffectables plus bas", 20, 0)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.modulate = Color(0.8, 0.82, 0.88)
 	box.add_child(sub)
@@ -939,6 +1098,14 @@ func _build_settings() -> Control:
 	dynres_check.button_pressed = GameState.dynamic_resolution
 	dynres_check.toggled.connect(set_dynamic_resolution)
 	opts.add_child(dynres_check)
+
+	var remap := Button.new()
+	remap.name = "Remap"
+	remap.text = "RÉAFFECTER LA MANETTE"
+	remap.custom_minimum_size = Vector2(0, 44)
+	_style_button(remap, BUTTON_BG, ACCENT, 17)
+	remap.pressed.connect(toggle_remap)
+	opts.add_child(remap)
 
 	var back := Button.new()
 	back.name = "Back"
