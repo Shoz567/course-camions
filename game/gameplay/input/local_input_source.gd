@@ -13,21 +13,26 @@ signal camera_toggle_requested
 
 @export var device: int = -1
 @export var keyboard_layout: KeyboardInputSource.Layout = KeyboardInputSource.Layout.BOTH
+## Faux : joueur au clavier seul (salle d'attente du menu, tache 4.2), aucune
+## manette ne le pilote.
+@export var use_pad: bool = true
 
 var pad: DeviceInputSource
 var keyboard: KeyboardInputSource
+const NO_PAD := -100
 
 
 func _ready() -> void:
 	pad = DeviceInputSource.new()
 	pad.name = "Pad"
-	pad.device_id = maxi(device, 0)
+	# sans manette : un id qu'aucun evenement ne porte
+	pad.device_id = maxi(device, 0) if use_pad else NO_PAD
 	add_child(pad)
 	keyboard = KeyboardInputSource.new()
 	keyboard.name = "Keyboard"
 	keyboard.layout = keyboard_layout
 	add_child(keyboard)
-	if device < 0:
+	if device < 0 and use_pad:
 		_pick_pad()
 		Input.joy_connection_changed.connect(func(_d: int, _c: bool) -> void: _pick_pad())
 	pad.camera_toggle_requested.connect(camera_toggle_requested.emit)

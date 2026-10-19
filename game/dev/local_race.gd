@@ -361,7 +361,19 @@ func _add_player(i: int) -> Player:
 	# (fleches pour J1, ZQSD pour J2, aucun au-dela)
 	var input := LocalInputSource.new()
 	input.name = "Input%d" % (i + 1)
-	if split != null:
+	var joined := joined_device(i)
+	if joined != NO_JOIN:
+		# salle d'attente du menu : l'appareil avec lequel ce joueur a rejoint,
+		# et lui seul (INPUT_SPEC §4)
+		if joined >= 0:
+			input.device = joined
+			if split != null:
+				input.keyboard_layout = KeyboardInputSource.Layout.NONE
+		else:
+			input.use_pad = false
+			input.keyboard_layout = KeyboardInputSource.Layout.ARROWS if joined == GameStateNode.JOIN_ARROWS \
+					else KeyboardInputSource.Layout.ZQSD
+	elif split != null:
 		input.device = i
 		match i:
 			0: input.keyboard_layout = KeyboardInputSource.Layout.ARROWS
@@ -410,10 +422,26 @@ static func shake_for(speed_ms: float) -> float:
 	return clampf((speed_ms - 4.0) / 18.0, 0.0, 1.0)
 
 
+## Appareil du joueur `i` choisi dans la salle d'attente du menu (id de
+## manette, GameState.JOIN_ARROWS / JOIN_ZQSD), ou NO_JOIN.
+const NO_JOIN := -1000
+
+
+func joined_device(i: int) -> int:
+	if NetSession.is_online() or not players_from_menu or GameState.join_devices.size() != player_count:
+		return NO_JOIN
+	return GameState.join_devices[i]
+
+
 ## Joueur et manette, pour le sas READY : « J1 - BLEU (Manette 1 / fleches) ».
 func player_tag(i: int) -> String:
 	if NetSession.is_online():
 		return "%s - %s" % [player_name(i), COLOR_NAMES[slot_of(i)]]
+	var joined := joined_device(i)
+	if joined != NO_JOIN:
+		var how := "Manette %d" % (joined + 1) if joined >= 0 else \
+				("flèches" if joined == GameStateNode.JOIN_ARROWS else "ZQSD")
+		return "J%d - %s (%s)" % [i + 1, COLOR_NAMES[i], how]
 	var device := "manette ou clavier"
 	if player_count > 1:
 		device = "Manette %d" % (i + 1)
@@ -752,6 +780,12 @@ func _process(_delta: float) -> void:
 		if unstable:
 			p.hud.set_center_message("CONNEXION INSTABLE...\nplus de nouvelles du host depuis %.1f s" % (net.ticks_since_snapshot() / 60.0),
 				Color(1.0, 0.75, 0.3))
+			continue
+		var local_in := p.input as LocalInputSource
+		if local_in != null and local_in.use_pad and local_in.pad != null and local_in.pad.unplugged:
+			# sa manette debranchee : roue libre, jamais de pause (INPUT_SPEC §6)
+			p.hud.set_center_message("MANETTE DÉCONNECTÉE\nrebranchez-la pour reprendre votre camion",
+				Color(1.0, 0.6, 0.3))
 			continue
 		if state == State.LOBBY and net != null and not net.is_host() and not net.host_ready:
 			# client : le host charge encore la course, l'invite READY attendra

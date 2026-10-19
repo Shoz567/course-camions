@@ -9,8 +9,9 @@ extends Node
 ## un slot en cours de course.
 ##
 ## Pour l'instant : le nombre de joueurs, la categorie de vitesse et le
-## circuit choisis dans le menu principal, lus par la course locale. Le mapping device -> slot
-## est fixe (joueur i = manette i).
+## circuit choisis dans le menu principal, lus par la course locale. Le mapping
+## device -> slot : celui de la salle d'attente (join_devices), sinon joueur
+## i = manette i.
 
 ## Categorie de vitesse, facon cylindree de Mario Kart.
 enum SpeedClass { SLOW, NORMAL, FAST, ULTRA }
@@ -65,6 +66,14 @@ var speed_class: int = SpeedClass.NORMAL
 ## Nombre de joueurs demande par le menu (1 a 6). 0 = rien de demande : la
 ## scene de course garde sa propre valeur (tests, lancement direct).
 var requested_players: int = 0
+
+## Salle d'attente du menu (« appuyez sur Croix pour rejoindre », tache 4.2) :
+## appareil de chaque joueur, dans l'ordre d'arrivee (id de manette, ou
+## JOIN_ARROWS / JOIN_ZQSD pour un joueur au clavier). Vide : joueur N =
+## manette N (choix du nombre de joueurs au menu).
+var join_devices: PackedInt32Array = PackedInt32Array()
+const JOIN_ARROWS := -1
+const JOIN_ZQSD := -2
 
 ## Remorque choisie par chaque joueur dans le sas READY (index dans
 ## TrailerCatalog), gardee d'une course a l'autre. 0 = Conteneur (defaut).
