@@ -271,6 +271,25 @@ func select_speed(k: int) -> void:
 		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
 
+## Bouton du joueur `i` : allume (dans le compte choisi) a la couleur de sa
+## pastille (2026-10-19 : « 3 joueurs : 1, 2 et 3 colories, chacun de la
+## couleur juste en dessous »), sinon tuile sombre ; le nombre choisi a en
+## plus un liseré blanc et un halo.
+static func paint_player_button(b: Button, i: int, lit: bool) -> void:
+	var c := UiKit.PLAYER_COLORS[i]
+	UiKit.style_choice(b, b.get_theme_font_size("font_size"), c)
+	b.add_theme_stylebox_override("pressed", UiKit.box(c, Color(1, 1, 1, 0.95), 3, UiKit.SKEW, 3, Color(c, 0.7), 14))
+	b.add_theme_stylebox_override("hover_pressed", UiKit.box(c.lightened(0.1), Color.WHITE, 3, UiKit.SKEW, 3, Color(c, 0.8), 16))
+	if not lit:
+		return
+	b.add_theme_stylebox_override("normal", UiKit.box(Color(c, 0.85), Color(1, 1, 1, 0.2), 1, UiKit.SKEW, 3, Color(c, 0.35), 8))
+	b.add_theme_stylebox_override("hover", UiKit.box(c, Color(UiKit.CYAN, 0.6), 1, UiKit.SKEW, 3, Color(c, 0.45), 10))
+	# texte sombre sur les couleurs claires (jaune, vert, orange)
+	var ink := UiKit.NIGHT if c.get_luminance() > 0.55 else UiKit.TEXT
+	for k: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(k, ink)
+
+
 ## Nombre de bots (borne pour que joueurs + bots ne depassent pas 6) ; les
 ## nombres trop grands sont grises.
 func select_bots(n: int, save: bool = true) -> void:
@@ -307,6 +326,7 @@ func select_players(n: int, manual: bool = true) -> void:
 		MenuSound.play_select()
 	for i in player_buttons.size():
 		player_buttons[i].set_pressed_no_signal(i == selected_players - 1)
+		paint_player_button(player_buttons[i], i, i < selected_players)
 	_fov_target = fov_deg if selected_players <= 4 else fov_wide_deg
 	# joueurs + bots : 6 au plus
 	if not bot_buttons.is_empty():
