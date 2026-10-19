@@ -121,6 +121,14 @@ Create revient au menu.
 - **Clavier** : le clavier est binaire. `steer` et `throttle` y sont **lissés
   en ticks** (montée en ~8 ticks) pour ne pas donner des coups de volant
   instantanés qu'aucune manette ne produit.
+- **Réaffectation** (2026-10-17, tâche 7.1) : Paramètres → RÉAFFECTER LA
+  MANETTE. Pour chaque action numérique (frein à main, nitro, largage, klaxon,
+  vue, reset), choisir l'action puis appuyer sur le nouveau bouton. Un bouton
+  ne sert qu'à une action ; pris ailleurs, il y est échangé, si bien qu'aucune
+  action ne reste sans bouton. Le bouton PS est refusé. Un profil pour toutes
+  les manettes (`PadBindings`, `GameState.pad_bindings`), sauvegardé dans
+  `user://settings.cfg` avec les autres options ; jamais en headless.
+  Gâchettes et stick gauche fixes ; clavier non réaffectable pour l'instant.
 
 ## 4. Écran partagé : routage par device
 

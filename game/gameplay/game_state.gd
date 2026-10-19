@@ -79,6 +79,16 @@ const JOIN_ZQSD := -2
 ## TrailerCatalog), gardee d'une course a l'autre. 0 = Conteneur (defaut).
 var trailer_choice: PackedInt32Array = PackedInt32Array([0, 0, 0, 0, 0, 0])
 
+## Boutons de chaque action de la manette (PadBindings, reaffectables dans les
+## parametres), pour toutes les manettes.
+var pad_bindings: Dictionary = PadBindings.defaults()
+
+## Options gardees d'un lancement a l'autre (tache 7.1) : son, volume,
+## qualite, compteur, resolution dynamique, circuit, vitesse, remorques,
+## boutons. Jamais en headless : les tests partent toujours des defauts.
+const SETTINGS_PATH := "user://settings.cfg"
+var persist: bool = DisplayServer.get_name() != "headless"
+
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
 static func track_scene(index: int) -> String:
@@ -121,6 +131,56 @@ func _ready() -> void:
 	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fps_label.visible = show_fps
 	layer.add_child(_fps_label)
+	if persist:
+		read_settings(SETTINGS_PATH)
+
+
+## Sauvegarde les options (sauf en headless) ; appele a chaque changement.
+func save_settings() -> void:
+	if persist:
+		write_settings(SETTINGS_PATH)
+
+
+func write_settings(path: String) -> Error:
+	var cfg := ConfigFile.new()
+	var bus := AudioServer.get_bus_index("Master")
+	cfg.set_value("audio", "on", not AudioServer.is_bus_mute(bus))
+	cfg.set_value("audio", "volume", db_to_linear(AudioServer.get_bus_volume_db(bus)))
+	cfg.set_value("video", "quality", graphics_quality)
+	cfg.set_value("video", "show_fps", show_fps)
+	cfg.set_value("video", "dynamic_resolution", dynamic_resolution)
+	cfg.set_value("race", "track", selected_track)
+	cfg.set_value("race", "speed_class", speed_class)
+	cfg.set_value("race", "trailers", trailer_choice)
+	for a: String in PadBindings.ACTIONS:
+		cfg.set_value("pad", a, pad_bindings[a])
+	return cfg.save(path)
+
+
+## Relit les options ; un fichier absent ou abime laisse les defauts, une
+## valeur hors bornes est ramenee dedans.
+func read_settings(path: String) -> Error:
+	var cfg := ConfigFile.new()
+	var err := cfg.load(path)
+	if err != OK:
+		return err
+	var bus := AudioServer.get_bus_index("Master")
+	AudioServer.set_bus_mute(bus, not bool(cfg.get_value("audio", "on", true)))
+	var vol := clampf(float(cfg.get_value("audio", "volume", 1.0)), 0.0, 1.0)
+	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(vol, 0.00001)))
+	graphics_quality = clampi(int(cfg.get_value("video", "quality", graphics_quality)), 0, GraphicsSettings.NAMES.size() - 1)
+	show_fps = bool(cfg.get_value("video", "show_fps", show_fps))
+	dynamic_resolution = bool(cfg.get_value("video", "dynamic_resolution", dynamic_resolution))
+	selected_track = clampi(int(cfg.get_value("race", "track", selected_track)), 0, TRACKS.size() - 1)
+	speed_class = clampi(int(cfg.get_value("race", "speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
+	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
+	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():
+		trailer_choice = trailers
+	var loaded := {}
+	for a: String in PadBindings.ACTIONS:
+		loaded[a] = cfg.get_value("pad", a, PackedInt32Array())
+	pad_bindings = PadBindings.sanitized(loaded)
+	return OK
 
 
 ## Compteur : rafraichi 4 fois par seconde (lisible), vert a 55 images/s et
