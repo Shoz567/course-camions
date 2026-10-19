@@ -54,7 +54,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	_frame = Panel.new()
 	_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_frame.add_theme_stylebox_override("panel", UiKit.box(Color(0.035, 0.04, 0.09, 0.93), Color(accent, 0.55), 2, 0.0, 10,
+	_frame.add_theme_stylebox_override("panel", UiKit.box(Color(UiKit.PANEL, 0.93), Color(accent, 0.55), 2, 0.0, 10,
 		Color(0, 0, 0, 0.5), 18))
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_frame)
@@ -104,7 +104,7 @@ func _build_body() -> void:
 	var tex := GradientTexture2D.new()
 	var g := Gradient.new()
 	g.set_color(0, Color(accent.darkened(0.55), 0.95))
-	g.set_color(1, Color(0.02, 0.025, 0.06, 0.95))
+	g.set_color(1, Color(UiKit.NIGHT, 0.95))
 	tex.gradient = g
 	tex.fill = GradientTexture2D.FILL_RADIAL
 	tex.fill_from = Vector2(0.5, 0.75)
@@ -231,7 +231,7 @@ func refresh() -> void:
 	(_bars["grip"] as StatBar).value = StatBar.from_mult(type.grip_mult)
 	(_bars["hp"] as StatBar).value = clampf(type.dropped_hp / 80.0, 0.0, 1.0)
 	_ready_banner.visible = confirmed
-	_frame.add_theme_stylebox_override("panel", UiKit.box(Color(0.035, 0.04, 0.09, 0.93),
+	_frame.add_theme_stylebox_override("panel", UiKit.box(Color(UiKit.PANEL, 0.93),
 		Color(UiKit.GOOD if confirmed else accent, 0.9 if confirmed else 0.55), 3 if confirmed else 2, 0.0, 10, Color(0, 0, 0, 0.5), 18))
 
 

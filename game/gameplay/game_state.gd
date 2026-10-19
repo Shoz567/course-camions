@@ -29,11 +29,15 @@ const SPEED_CLASSES: Array[Dictionary] = [
 	{"name": "Ultrasonique", "cc": "200cc", "top_kmh": 225.0, "accel": 1.55, "grip": 1.12, "steer": 1.25, "drift": 2.0},
 ]
 
-## Circuits : nom, ambiance (sous-titre du menu) et scene de course.
+## Circuits : nom, ambiance (sous-titre du menu), scene de course, image de
+## l'ecran de chargement.
 const TRACKS: Array[Dictionary] = [
-	{"name": "Cyber City", "tagline": "nuit pluvieuse, néons, mégalopole", "scene": "res://dev/race.tscn"},
-	{"name": "Playa Del Sol", "tagline": "plage tropicale, plein soleil, océan", "scene": "res://dev/race_playa.tscn"},
-	{"name": "Sakura", "tagline": "Japon au printemps, cerisiers, circuit en 8 et pont vermillon", "scene": "res://dev/race_sakura.tscn"},
+	{"name": "Cyber City", "tagline": "nuit pluvieuse, néons, mégalopole", "scene": "res://dev/race.tscn",
+		"image": "res://ui/loading/cyber_city.jpg"},
+	{"name": "Playa Del Sol", "tagline": "plage tropicale, plein soleil, océan", "scene": "res://dev/race_playa.tscn",
+		"image": "res://ui/loading/playa_del_sol.jpg"},
+	{"name": "Sakura", "tagline": "Japon au printemps, cerisiers, circuit en 8 et pont vermillon", "scene": "res://dev/race_sakura.tscn",
+		"image": "res://ui/loading/sakura.jpg"},
 ]
 
 ## Circuit choisi dans le menu (garde entre deux courses).

@@ -108,7 +108,7 @@ func _draw() -> void:
 	var border := Color(1, 1, 1, 0.12)
 	var bw := 1
 	var glow := 0
-	var fill := Color(0.1, 0.11, 0.22, 0.97)
+	var fill := Color(UiKit.TILE, 0.97)
 	if validated:
 		border = accent
 		bw = 3
@@ -117,7 +117,7 @@ func _draw() -> void:
 		border = UiKit.CYAN
 		bw = 3
 		glow = int(8 + 6 * p)
-		fill = Color(0.13, 0.15, 0.3, 0.97)
+		fill = Color(UiKit.TILE_HOVER, 0.97)
 	_tile(cr, fill, border, bw, glow)
 	var it_c := current()
 	var label_text := String(it_c["name"])

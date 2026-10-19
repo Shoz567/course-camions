@@ -304,6 +304,16 @@ légère sur les bords (le camion, au centre, reste net), vignettage. Calculé a
 (« retire le flou de mouvement »).
 **Compteur d'images par seconde** (2026-10-09) : case des paramètres,
 affiché en haut à droite au menu et en course (`GameState`).
+**Ambiance par circuit** (2026-10-19) : le circuit choisi au menu change
+le décor du showroom (`Showroom.set_theme` : toit de Cyber City la nuit, île
+de Playa au soleil, jardin japonais de Sakura avec torii, pagode, temple,
+cerisiers, Fuji et pétales), le ciel et la lumière, et **toute la direction
+artistique de l'interface** (`UiKit.apply_skin`, trois habillages : néon ;
+plage — tuiles de bois flotté, lagon, soleil ; Japon — cases en bois de miel,
+laque vermillon, plaque de laque noire à lettres d'or, police Mincho). Le menu
+se reconstruit en gardant ses choix et le panneau ouvert ; l'habillage suit
+jusqu'à l'écran de chargement (image du circuit, `ui/loading/*.jpg`) et au HUD
+de la course. Test : `menu_ambiance_test`.
 **Effets de roues** (`TruckWheelFx`, nœud « WheelFx » du camion) : glissement
 latéral des roues arrière au point de contact ; au-delà de 3,5 m/s, **traces
 de gomme** posées sur la route (MultiMesh en coordonnées monde, 720 segments

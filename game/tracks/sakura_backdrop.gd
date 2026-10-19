@@ -463,10 +463,15 @@ func _mountains(track: TrackBlockout) -> MeshInstance3D:
 		c += p
 	c /= _pts.size()
 	c.y = 0.0
+	return build_mountains(c, (track.sample_forward(0) * Vector3(1, 0, 1)).normalized())
+
+
+## Fuji a 3,3 km de `c` dans la direction `fwd`, chaine de montagnes autour
+## de `c` (aussi le decor du menu, Showroom).
+static func build_mountains(c: Vector3, fwd: Vector3) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	# Fuji : cone a flancs concaves, sommet tronque, neige aux bords dentes
-	var fwd := (track.sample_forward(0) * Vector3(1, 0, 1)).normalized()
 	var fuji := c + fwd * 3300.0
 	var R := 1600.0
 	var H := 640.0
@@ -520,7 +525,7 @@ func _mountains(track: TrackBlockout) -> MeshInstance3D:
 	return mi
 
 
-func _quad(st: SurfaceTool, p: Array, c: Array) -> void:
+static func _quad(st: SurfaceTool, p: Array, c: Array) -> void:
 	for k: int in [0, 2, 1, 0, 3, 2]:
 		st.set_color(c[k])
 		st.add_vertex(p[k])

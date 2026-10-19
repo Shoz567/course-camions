@@ -160,10 +160,14 @@ func _add_lighthouse(root: Node3D, track: TrackBlockout, beyond: float) -> void:
 	var t := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
 	var base := p + t.cross(Vector3.UP).normalized() * (beyond + 75.0)
 	base.y = TrackBlockout.GROUND_Y
+	root.add_child(build_lighthouse(base))
+
+
+## Phare raye rouge et blanc pose en `base` (aussi le decor du menu, Showroom).
+static func build_lighthouse(base: Vector3) -> Node3D:
 	var tower := Node3D.new()
 	tower.name = "Lighthouse"
 	tower.position = base
-	root.add_child(tower)
 	var white := _flat(Color(0.95, 0.95, 0.92))
 	var red := _flat(Color(0.85, 0.12, 0.1))
 	var y := 0.0
@@ -202,6 +206,7 @@ func _add_lighthouse(root: Node3D, track: TrackBlockout, beyond: float) -> void:
 	roof.material_override = red
 	roof.position = Vector3(0.0, y + 4.2, 0.0)
 	tower.add_child(roof)
+	return tower
 
 
 static func _flat(color: Color) -> StandardMaterial3D:
