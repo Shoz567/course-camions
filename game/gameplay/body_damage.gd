@@ -156,6 +156,35 @@ static func prewarm(root: Node3D, own: bool = false) -> void:
 			_own(mi)
 
 
+## Carrosseries a preparer d'une copie HORS de l'arbre (gabarit d'un modele,
+## ecran de chargement, 2026-10-17) : les caches de subdivision et de
+## voisinage sont indexes par maillage, et toutes les instances du modele
+## partagent ces maillages. Visibilite : celle des noeuds (pas d'arbre).
+static func detached_meshes(root: Node3D) -> Array[Mesh]:
+	var out: Array[Mesh] = []
+	if root == null:
+		return out
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null or _skipped(mi, root):
+			continue
+		var v: Node = mi
+		var shown := true
+		while v != null and v != root:
+			if v is Node3D and not (v as Node3D).visible:
+				shown = false
+				break
+			v = v.get_parent()
+		var m: Mesh = mi.get_meta(META_PRISTINE, mi.mesh)
+		if shown and not out.has(m):
+			out.append(m)
+	return out
+
+
+## Prepare un maillage (subdivision, voisinage) : une tranche de prewarm.
+static func prewarm_mesh(mesh: Mesh) -> void:
+	_topology(tessellated(mesh))
+
 ## Remet a neuf toutes les carrosseries sous `root` (copies abandonnees,
 ## cicatrices effacees, pieces arrachees remises).
 static func restore(root: Node3D) -> void:

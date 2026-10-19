@@ -139,6 +139,11 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @onready var auto_reset: AutoReset = $AutoReset
 
 var players: Array[Player] = []
+## Prechauffe des effets en cours (FxWarmup) ; depart retenu sous l'ecran de
+## chargement, et ce qu'il deviendra (sas READY ou compte a rebours).
+var _warmup: FxWarmup
+var _held: bool = false
+var _held_gate: bool = false
 ## Qualite appliquee a cette course (choisie, ou budget de l'ecran partage).
 var quality: int = GraphicsSettings.Quality.MEDIUM
 ## Etat de la course : celui de RaceManager (tache 3.1), memes valeurs.
@@ -238,11 +243,15 @@ func _ready() -> void:
 	_prewarm_bodies()
 	# shaders des explosions, etincelles, fumees compiles avant le depart
 	# (tache 7.6 : la premiere explosion figeait l'image 370 ms a 4 joueurs)
-	FxWarmup.start(self, quality)
+	_warmup = FxWarmup.start(self, quality)
 	# hors ligne, remorques et pouvoirs deja choisis au menu (page de selection) :
 	# pas de sas, compte a rebours tout de suite. En ligne, le sas READY reste
 	var gate := ready_gate and (NetSession.is_online() or not GameState.loadout_locked)
-	RaceManager.begin(gate, Engine.get_physics_frames())
+	# sous l'ecran de chargement (hors ligne) : rien ne part avant qu'il
+	# s'efface (release_start) ; la grille attend, camions immobiles
+	_held = LoadingScreen.covering() and not NetSession.is_online()
+	_held_gate = gate
+	RaceManager.begin(true if _held else gate, Engine.get_physics_frames())
 	if NetSession.is_online():
 		race.mirror = NetSession.is_client()
 		net = NetRace.new()
@@ -487,6 +496,21 @@ func player_tag(i: int) -> String:
 ## Avec la copie propre de chaque camion (BodyDamage.prewarm `own` : ~70 ms et
 ## 15 Mo par camion au chargement, -45 ms au premier gros choc) ; pas en
 ## headless (tests : rien a l'ecran, chargement plus court).
+## Course prete a etre montree (LoadingScreen) : modeles et carrosseries le
+## sont des _ready ; reste la prechauffe des effets.
+func loading_done() -> bool:
+	return _warmup == null or not is_instance_valid(_warmup)
+
+
+## L'ecran de chargement s'efface : la course demarre (sas READY ou compte a
+## rebours, comme sans ecran).
+func release_start() -> void:
+	if not _held:
+		return
+	_held = false
+	RaceManager.begin(_held_gate, Engine.get_physics_frames())
+
+
 func _prewarm_bodies() -> void:
 	var own := DisplayServer.get_name() != "headless"
 	for p in players:
@@ -581,7 +605,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if NetSession.is_host():
 			NetSession.launch_race()
 		elif not NetSession.is_online():
-			get_tree().reload_current_scene()
+			# rejouer : meme course, derriere l'ecran de chargement
+			LoadingScreen.go(get_tree(), scene_file_path)
 		return
 	if key_down and key.physical_keycode == KEY_F1:
 		DebugDraw.enabled = not DebugDraw.enabled
@@ -606,6 +631,12 @@ func _physics_process(_delta: float) -> void:
 
 ## Le deroule de la course, sur la machine qui fait foi (hors ligne, host).
 func _simulate(tick: int) -> void:
+	if _held:
+		_neutral.tick = tick
+		for p in players:
+			p.input.poll(tick)
+			p.truck.set_input(_neutral)
+		return
 	if state == State.LOBBY:
 		# sas READY : camions immobiles ; gauche / droite (SA source) = remorque
 		# precedente / suivante, Carre (le boost de SA source) = pret

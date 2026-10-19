@@ -312,6 +312,8 @@ func close_selection() -> void:
 
 ## Tout le monde est pret : la course part, sans sas READY.
 func start_race() -> void:
+	if LoadingScreen.covering():
+		return    # deja en route (une manette qui insiste sous l'ecran)
 	if NetSession.is_online():
 		# en ligne : le host lance la course de la partie, le client l'attend
 		if NetSession.is_host():
@@ -324,7 +326,7 @@ func start_race() -> void:
 	GameState.loadout_locked = true
 	launch_requested.emit(selected_players)
 	if auto_change_scene:
-		get_tree().change_scene_to_file(race_scene())
+		LoadingScreen.go(get_tree(), race_scene())
 
 
 ## Remorque changee sur la page de selection : le camion expose la prend.
