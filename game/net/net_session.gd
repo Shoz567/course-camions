@@ -42,12 +42,14 @@ const PROTOCOL := 3
 const MAX_NAME := 16
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
-## machine ne repond plus pendant quelques secondes), le reglage d'ENet, 5 a
-## 30 s.
+## machine ne repond plus pendant quelques secondes), 15 a 60 s : une machine
+## lente se fige ~5 s d'un bloc en chargeant la course, un host surcharge
+## jusqu'a 16 s (mesures 2026-10-19, deux instances sur un PC) ; au reglage
+## d'ENet (5 a 30 s), le client etait coupe une fois sur deux.
 const TIMEOUT_MIN_MS := 3000
 const TIMEOUT_MAX_MS := 8000
-const LOADING_TIMEOUT_MIN_MS := 5000
-const LOADING_TIMEOUT_MAX_MS := 30000
+const LOADING_TIMEOUT_MIN_MS := 15000
+const LOADING_TIMEOUT_MAX_MS := 60000
 ## Cadence des snapshots pour une connexion qui envoie peu : 20 Hz.
 const SNAPSHOT_TICKS_LOW_BANDWIDTH := 3
 

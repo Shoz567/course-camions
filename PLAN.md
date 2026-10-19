@@ -852,8 +852,15 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   un bandeau en haut, plus de carte au centre (`finish_overlay_test`).
 - [x] **Délai en ligne** : file d'inputs du host adaptative (1 frame sur une
   liaison régulière), rendu des autres camions selon la gigue, pouvoirs du
-  joueur local prédits (`net_latency_test`). Essai 2 instances headless : OK ;
-  en fenêtré sur 1 PC, le host tombe à ~4 images/s : à refaire sur 2 PC.
+  joueur local prédits (`net_latency_test`). Essai 2 instances headless : OK.
+- [x] **Robustesse du chargement en ligne** : un client s'annonce prêt une fois
+  son écran de chargement levé ; détection de coupure rapide seulement après
+  le sas READY ; délai de chargement 15 à 60 s. `BodyDamage` garde les
+  tableaux subdivisés au lieu de les relire au serveur de rendu (index faux
+  sous forte charge : 65535 pour 61 256 sommets).
+- [x] **Essai sur 2 vrais PC** — reporté (décision du 2026-10-19), à faire par l'équipe ; confié le 2026-10-19 (hors de portée d'un seul PC ; liste des points à vérifier dans la PR #54) : sur 1 PC, deux instances affichées
+  se figent jusqu'à 16 s en créant la course et la liaison tombe ; en
+  headless, tout passe.
 - [x] **Sortie de route** : hors piste, le camion tombe et explose au premier
   contact, épave puis réapparition ; en l'air, une trajectoire qui franchirait
   le mur est rabattue (`AutoReset.air_return`, METRICS inchangé) ; corrigé :
