@@ -19,8 +19,11 @@ extends PhysicsTest
 ##   - parametres : la qualite graphique choisie est gardee dans GameState et
 ##     regle l'environnement du menu (basse : plus aucun effet) ;
 ##   - camera d'orbite : tourne autour de la grille, a distance constante ;
-##   - Options et Croix (JOY_BUTTON_A, ui_accept de Godot) lancent la course :
-##     signal avec le nombre choisi, ecrit dans GameState.
+##   - Options et Croix (JOY_BUTTON_A, ui_accept de Godot) sur PRET ouvrent la
+##     page de selection (une carte par joueur), Rond y ramene a l'accueil ;
+##     une fois les 3 joueurs prets (Croix x 3 chacun : remorque, pouvoir,
+##     pouvoir), la course part : signal avec le nombre choisi, ecrit dans
+##     GameState.
 
 var _menu: MainMenu
 var _launches: Array[int] = []
@@ -32,7 +35,7 @@ var _seen: Dictionary = {}
 
 
 func _test_setup() -> void:
-	duration_ticks = 140
+	duration_ticks = 240
 	# la fenetre headless fait 64 x 64 : on lui donne la taille de reference
 	# (1920 x 1080, display/window/size) pour que les boutons soient a l'ecran
 	get_window().size = Vector2i(1920, 1080)
@@ -50,6 +53,7 @@ func _key(code: Key, pressed: bool) -> void:
 	e.keycode = code
 	e.pressed = pressed
 	Input.parse_input_event(e)
+	Input.flush_buffered_events()
 
 
 func _pad(button: JoyButton, pressed: bool) -> void:
@@ -58,6 +62,7 @@ func _pad(button: JoyButton, pressed: bool) -> void:
 	e.button_index = button
 	e.pressed = pressed
 	Input.parse_input_event(e)
+	Input.flush_buffered_events()
 
 
 ## Clic reel : la souris survole d'abord le bouton (BaseButton ignore un appui
@@ -184,10 +189,26 @@ func _test_tick(t: int) -> void:
 		110: _pad(JOY_BUTTON_START, true)
 		111: _pad(JOY_BUTTON_START, false)
 		114:
-			_seen["start"] = _launches.duplicate()
-			_menu.start_button.grab_focus()
-		116: _pad(JOY_BUTTON_A, true)
-		118: _pad(JOY_BUTTON_A, false)
+			_seen["start"] = [_menu.loadout.visible, _menu.loadout.panels.size(), _menu.home.visible,
+				_launches.duplicate()]
+			_pad(JOY_BUTTON_B, true)
+		115: _pad(JOY_BUTTON_B, false)
+		118:
+			_seen["back_home"] = [_menu.loadout.visible, _menu.home.visible, _menu.start_button.has_focus()]
+			_pad(JOY_BUTTON_A, true)
+		120: _pad(JOY_BUTTON_A, false)
+		122: _seen["cross_opens"] = [_menu.loadout.visible, _launches.duplicate()]
+	# chaque joueur (manette 0, 1, 2) : Croix x 3 = remorque, pouvoir, pouvoir
+	if t >= 124 and t < 124 + 18:
+		var k := t - 124
+		var e := InputEventJoypadButton.new()
+		e.device = floori(k / 6.0)
+		e.button_index = JOY_BUTTON_A
+		e.pressed = k % 2 == 0
+		Input.parse_input_event(e)
+		Input.flush_buffered_events()
+	if t == 144:
+		_seen["all_ready"] = _menu.loadout.all_ready()
 	if t >= 3:
 		_cam_dist.append(Vector2(cam.x - _menu._orbit_center.x, cam.z - _menu._orbit_center.z).length())
 	if t == 100:
@@ -288,7 +309,13 @@ func _test_finish() -> void:
 	circle.button_index = JOY_BUTTON_B
 	check("Croix valide, Rond revient (ui_accept / ui_cancel)", InputMap.action_has_event("ui_accept", cross)
 		and InputMap.action_has_event("ui_cancel", circle))
-	check("Options : lance la course a 3", _seen["start"] == [3], str(_seen["start"]))
-	check("Croix sur COMMENCER : relance", _launches == [3, 3], str(_launches))
+	check("PRET : bouton d'or, libelle PRET", _menu.start_button.text == "PRÊT")
+	check("Options : ouvre la selection (3 cartes, accueil cache), pas encore de depart",
+		_seen["start"] == [true, 3, false, []], str(_seen["start"]))
+	check("Rond : retour a l'accueil, focus sur PRET", _seen.get("back_home", []) == [false, true, true],
+		str(_seen.get("back_home")))
+	check("Croix sur PRET : rouvre la selection", _seen.get("cross_opens", []) == [true, []], str(_seen.get("cross_opens")))
+	check("3 joueurs : Croix x 3 chacun, tous prets", _seen.get("all_ready", false))
+	check("tous prets : la course part a 3", _launches == [3], str(_launches))
 	check("choix ecrit dans GameState", GameState.requested_players == 3, str(GameState.requested_players))
 

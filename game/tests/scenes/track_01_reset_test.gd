@@ -7,12 +7,16 @@ extends PhysicsTest
 ##   B. un camion retourne sur la chaussee est replace apres flipped_ticks ;
 ##   C. un camion qui frotte le mur avec sa semi-remorque a 100 km/h n'est
 ##      JAMAIS replace : les zones commencent au-dela du haut du mur.
+##   D. un camion en l'air au-dessus des zones (sorti d'une corniche, 2026-10-16)
+##      est replace AVANT d'atterrir hors piste (geometrie, pas les zones).
 
 var _track: TrackBlockout
 var _reset: AutoReset
 var _outside: Truck
 var _flipped: Truck
 var _rubbing: Truck
+var _flying: Truck
+var _flying_y: float = 0.0
 var _rub_frame: InputFrame = InputFrame.new()
 var _resets: Dictionary = {}      # Truck -> [tick, raison]
 var _rub_contacts: int = 0
@@ -27,7 +31,9 @@ func _test_setup() -> void:
 	add_child(_reset)
 	_reset.truck_reset.connect(func(t: Truck, reason: StringName) -> void:
 		if not _resets.has(t):
-			_resets[t] = [tick, reason])
+			_resets[t] = [tick, reason]
+			if t == _flying:
+				_flying_y = t.global_position.y)
 	# A. dans l'herbe, 12 m au-dela du mur droit de la ligne droite (s = 100 m)
 	var i := _index_at(100.0)
 	var out := _track.sample_position(i) + _track.sample_right(i) * (_track.width / 2.0 + 12.0)
@@ -45,7 +51,11 @@ func _test_setup() -> void:
 	_rubbing.linear_velocity = -xf.basis.z * 100.0 / 3.6
 	_rubbing.contact_monitor = true
 	_rubbing.max_contacts_reported = 4
-	for t in [_outside, _flipped, _rubbing]:
+	# D. 15 m au-dela du mur gauche (s = 300 m), 55 m au-dessus du sol
+	var k := _index_at(300.0)
+	var high := _track.sample_position(k) - _track.sample_right(k) * (_track.width / 2.0 + 15.0)
+	_flying = _spawn(Transform3D(_track.frame_at(k, 0.0, 0.0).basis, Vector3(high.x, 55.0, high.z)))
+	for t in [_outside, _flipped, _rubbing, _flying]:
 		_reset.watch(t)
 
 
@@ -87,3 +97,11 @@ func _test_finish() -> void:
 	check("B retourne : sur la chaussee, dans le sens de course", _on_road(_flipped))
 	check("C frottement : la remorque a touche le mur", _rub_contacts > 0, "ticks=%d" % _rub_contacts)
 	check("C frottement : jamais replace (pas de faux positif)", not _resets.has(_rubbing))
+	check("D en l'air hors piste : replace", _resets.has(_flying))
+	if _resets.has(_flying):
+		check_below("D en l'air : delai (ticks)", _resets[_flying][0], _reset.zone_ticks + 10)
+		check_above("D en l'air : replace avant d'atterrir (m)", _flying_y, 20.0)
+	var fi := _track.closest_sample(_flying.global_position)
+	check("D en l'air : sur la chaussee, dans le sens de course", _on_road(_flying), "roues=%d lat=%.1f cap=%.1f" % [
+		_flying.wheels_on_ground(), (_flying.global_position - _track.sample_position(fi)).dot(_track.sample_right(fi)),
+		rad_to_deg((-_flying.global_transform.basis.z).angle_to(_track.sample_forward(fi)))])

@@ -31,7 +31,7 @@ func _test_tick(t: int) -> void:
 	var cam := _cam.get_camera()
 	if t == 20:
 		_offsets.append(absf(cam.h_offset) + absf(cam.v_offset))   # avant tout choc
-		_cam.shake(LocalRace_shake(20.0))
+		_cam.shake(LocalRace_shake(20.0) * 0.45)   # LocalRace.IMPACT_SHAKE
 	if t > 20 and t <= 40:
 		_offsets.append(absf(cam.h_offset) + absf(cam.v_offset))
 

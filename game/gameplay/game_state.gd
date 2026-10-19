@@ -89,6 +89,17 @@ var pad_bindings: Dictionary = PadBindings.defaults()
 const SETTINGS_PATH := "user://settings.cfg"
 var persist: bool = DisplayServer.get_name() != "headless"
 
+## Pouvoirs choisis par chaque joueur sur la page de selection du menu
+## (index dans PowerCatalog, -1 = aucun), places sur la croix directionnelle :
+## gauche et droite. Aucun pouvoir n'existe encore (2026-10-16).
+var power_left: PackedInt32Array = PackedInt32Array([-1, -1, -1, -1, -1, -1])
+var power_right: PackedInt32Array = PackedInt32Array([-1, -1, -1, -1, -1, -1])
+
+## Vrai quand la page de selection du menu a fixe remorques et pouvoirs : la
+## course part directement au compte a rebours, sans le sas READY (« rejouer »
+## garde le meme choix). Faux au lancement direct d'une scene de course.
+var loadout_locked: bool = false
+
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
 static func track_scene(index: int) -> String:

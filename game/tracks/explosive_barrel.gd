@@ -318,8 +318,11 @@ func _blast(shove_dir: Vector3) -> void:
 	angular_velocity = Vector3(randf_range(-9.0, 9.0), randf_range(-5.0, 5.0), randf_range(-9.0, 9.0))
 
 	# Explosion (boule de feu, fumee, braises, souffle : ExplosionFx), sans
-	# son : le baril joue le sien
-	ExplosionFx.spawn(get_parent(), global_position + Vector3.UP * BARREL_HEIGHT * 0.5, 4.5, false)
+	# son : le baril joue le sien. Grosse et haute (2026-10-16 : « ils
+	# explosent pas ») : a 4,5 m au ras de la route, elle restait cachee par la
+	# remorque depuis la camera de poursuite. Elle secoue les cameras proches.
+	ExplosionFx.spawn(get_parent(), global_position + Vector3.UP * (BARREL_HEIGHT + 1.5), 10.0, false)
+	KaboomText.spawn(get_parent(), global_position + Vector3.UP * (BARREL_HEIGHT + 7.0))
 
 	# Son d'explosion
 	if DisplayServer.get_name() != "headless" and _audio_player != null:

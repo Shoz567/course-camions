@@ -24,6 +24,8 @@ extends Node3D
 ##   oeil derriere le pare-brise, orientation legerement amortie).
 ## - Post-traitement de la vue (ScreenFx, hors qualite basse) : aberration
 ##   sur les bords, vignettage (plus de flou de vitesse depuis le 2026-10-09).
+## - Tremblement (shake, 2026-10-16) : une explosion proche secoue l'image
+##   (decalage du cadrage et leger roulis), qui s'amortit en ~0,7 s.
 
 enum View { CHASE, COCKPIT }
 
@@ -61,12 +63,14 @@ enum View { CHASE, COCKPIT }
 ## Amortissement de l'orientation (1/s) : suit le camion sans les secousses.
 @export var cockpit_damping: float = 18.0
 
+@export_group("Tremblement")
+## Decalage maximal du cadrage (m) et roulis maximal (deg) a pleine secousse.
+@export var shake_offset: float = 0.9
+@export var shake_roll_deg: float = 2.5
+## Decroissance de la secousse (par seconde).
+@export var shake_decay: float = 1.5
+
 var view: View = View.CHASE
-## Secousse de choc en cours (0 .. 1) et son temps propre.
-var _shake: float = 0.0
-var _shake_time: float = 0.0
-const SHAKE_MAX_M := 0.25
-const SHAKE_DECAY := 16.0
 var _cockpit_basis: Basis = Basis.IDENTITY
 
 var _arm: Node3D
@@ -77,6 +81,9 @@ var _yaw: float = 0.0
 var _initialized: bool = false
 var _last_target: Vector3
 var _fx: ScreenFx
+## Secousse courante, 0..1 (l'image bouge en secousse^2).
+var trauma: float = 0.0
+var _shake_t: float = 0.0
 ## Au-dela de ce deplacement du camion entre deux images, c'est une
 ## teleportation (reset) : la camera se recale au lieu de traverser la piste.
 const TELEPORT_DISTANCE := 15.0
@@ -86,6 +93,7 @@ func _ready() -> void:
 	# la camera se deplace dans _process : pas d'interpolation physique sur elle
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	top_level = true
+	add_to_group(&"chase_cameras")
 	_arm = Node3D.new()
 	_arm.rotation.x = -deg_to_rad(pitch_deg)
 	add_child(_arm)
@@ -116,6 +124,25 @@ func snap() -> void:
 	_initialized = false
 
 
+## Secoue l'image (0..1, cumulable, plafonne a 1).
+func shake(amount: float) -> void:
+	trauma = clampf(trauma + amount, 0.0, 1.0)
+
+
+## Secoue chaque camera de poursuite selon sa distance a `at` : `strength` a
+## bout portant, rien au-dela de `reach` (m).
+static func shake_near(tree: SceneTree, at: Vector3, strength: float, reach: float) -> void:
+	if tree == null:
+		return
+	for node in tree.get_nodes_in_group(&"chase_cameras"):
+		var cam := node as ChaseCamera
+		if cam == null or cam.target == null:
+			continue
+		var k := 1.0 - cam.target.global_position.distance_to(at) / reach
+		if k > 0.0:
+			cam.shake(strength * k)
+
+
 ## Bascule poursuite <-> cabine.
 func toggle_view() -> void:
 	set_view(View.COCKPIT if view == View.CHASE else View.CHASE)
@@ -136,6 +163,7 @@ func _process(delta: float) -> void:
 	if xf.origin.distance_to(_last_target) > TELEPORT_DISTANCE:
 		_initialized = false
 	_last_target = xf.origin
+	_apply_shake(delta)
 	if view == View.COCKPIT:
 		_process_cockpit(xf, delta)
 		return
@@ -170,30 +198,6 @@ func _process(delta: float) -> void:
 	var speed_ratio := clampf(absf(forward_speed) * 3.6 / fov_speed_kmh, 0.0, 1.0)
 	var fov := lerpf(fov_min, fov_max, speed_ratio)
 	_camera.fov = lerpf(_camera.fov, fov, 1.0 - exp(-fov_damping * delta))
-	_apply_shake(delta)
-
-
-## Secousse de choc (tache 3.5) : `amount` 0 .. 1 (1 : choc frontal violent).
-## Jamais en conduite normale (la camera ne tremble pas : tache 2.1), seulement
-## a un choc ; elle s'amortit en ~0,25 s.
-func shake(amount: float) -> void:
-	_shake = clampf(maxf(_shake, amount), 0.0, 1.0)
-
-
-## Decalage de l'image (h_offset / v_offset de la camera) : deux sinus
-## incommensurables, aucun tirage aleatoire ; amplitude SHAKE_MAX_M au plus.
-func _apply_shake(delta: float) -> void:
-	if _shake <= 0.001:
-		if _camera.h_offset != 0.0 or _camera.v_offset != 0.0:
-			_camera.h_offset = 0.0
-			_camera.v_offset = 0.0
-		_shake = 0.0
-		return
-	_shake_time += delta
-	var a := _shake * _shake * SHAKE_MAX_M
-	_camera.h_offset = a * sin(_shake_time * 71.0)
-	_camera.v_offset = a * sin(_shake_time * 53.0 + 1.3)
-	_shake *= exp(-SHAKE_DECAY * delta)
 
 
 ## Longueur du bras a cette image : la sphere part du pivot vers la camera et
@@ -206,6 +210,23 @@ func _arm_length() -> float:
 	if hit.is_empty():
 		return distance
 	return maxf(distance * hit[0] - arm_margin, 0.0)
+
+
+## Secousse : decalage du cadrage (h/v_offset) et roulis, en bruit doux
+## (sommes de sinus de frequences premieres entre elles, sur le temps).
+func _apply_shake(delta: float) -> void:
+	trauma = maxf(0.0, trauma - shake_decay * delta)
+	var a := trauma * trauma
+	if a <= 0.0:
+		_camera.h_offset = 0.0
+		_camera.v_offset = 0.0
+		_camera.rotation.z = 0.0
+		return
+	_shake_t += delta
+	var t := _shake_t
+	_camera.h_offset = shake_offset * a * (sin(t * 37.0) * 0.6 + sin(t * 23.0 + 1.3) * 0.4)
+	_camera.v_offset = shake_offset * a * (sin(t * 41.0 + 0.7) * 0.6 + sin(t * 29.0 + 2.1) * 0.4)
+	_camera.rotation.z = deg_to_rad(shake_roll_deg) * a * sin(t * 31.0 + 0.4)
 
 
 func _process_cockpit(xf: Transform3D, delta: float) -> void:

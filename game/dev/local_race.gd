@@ -116,6 +116,9 @@ class Player:
 	var base_tuning: VehicleTuning
 	## Remorque choisie (index dans TrailerCatalog).
 	var trailer: int = 0
+	## Pouvoirs choisis au menu, croix gauche / droite (PowerCatalog, -1 = aucun).
+	var power_left: int = -1
+	var power_right: int = -1
 
 ## Stick ou fleches au-dela de ce seuil : remorque suivante / precedente.
 const TRAILER_STEER_THRESHOLD := 0.6
@@ -230,9 +233,11 @@ func _ready() -> void:
 	# carrosseries deformables preparees pendant le chargement (~0,5 s par
 	# modele) : le sas READY ne prepare plus que les remorques changees, sans
 	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
-	for p in players:
-		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
-	RaceManager.begin(ready_gate, Engine.get_physics_frames())
+	_prewarm_bodies()
+	# hors ligne, remorques et pouvoirs deja choisis au menu (page de selection) :
+	# pas de sas, compte a rebours tout de suite. En ligne, le sas READY reste
+	var gate := ready_gate and (NetSession.is_online() or not GameState.loadout_locked)
+	RaceManager.begin(gate, Engine.get_physics_frames())
 	if NetSession.is_online():
 		race.mirror = NetSession.is_client()
 		net = NetRace.new()
@@ -345,6 +350,8 @@ func _add_player(i: int) -> Player:
 	elif online and mine:
 		choice = GameState.trailer_choice[0]
 	set_trailer(p, choice)
+	p.power_left = GameState.power_left[i] if i < GameState.power_left.size() else -1
+	p.power_right = GameState.power_right[i] if i < GameState.power_right.size() else -1
 	race.watch(t)
 	# client en ligne : NetRace predit le camion de ce PC et pose les autres sur
 	# l'etat du host ; la remise en piste et les PV sont l'affaire du host
@@ -409,9 +416,9 @@ func _add_player(i: int) -> Player:
 		health.respawned.connect(cam.snap)
 	# secousse de camera aux chocs de SON camion (tache 3.5)
 	t.wall_impact_at.connect(func(v: float, _r: bool, _at: Vector3, _n: Vector3) -> void:
-		cam.shake(shake_for(v)))
+		cam.shake(IMPACT_SHAKE * shake_for(v)))
 	t.body_impact.connect(func(v: float, _r: bool, _at: Vector3, _n: Vector3) -> void:
-		cam.shake(shake_for(v)))
+		cam.shake(IMPACT_SHAKE * shake_for(v)))
 	var hud := RaceHud.new()
 	hud.truck = t
 	hud.race = race
@@ -426,6 +433,12 @@ func _add_player(i: int) -> Player:
 ## 4 m/s (frottement), pleine a 22 m/s (~80 km/h de face).
 static func shake_for(speed_ms: float) -> float:
 	return clampf((speed_ms - 4.0) / 18.0, 0.0, 1.0)
+
+
+## Part de la secousse d'un choc dans celle de la camera (ChaseCamera.shake : 1
+## = explosion a bout portant, 0,9 m et 2,5 deg pendant 0,7 s) : un choc de
+## face plein pot secoue d'environ 0,2 m, eteint en 0,3 s.
+const IMPACT_SHAKE := 0.45
 
 
 ## Dernier bruitage de course joue pour un joueur de cet ecran (RaceSound.Cue).
@@ -460,6 +473,12 @@ func player_tag(i: int) -> String:
 		elif i == 1:
 			device += " / ZQSD"
 	return "J%d - %s (%s)" % [i + 1, COLOR_NAMES[i], device]
+
+
+## Carrosseries deformables preparees avant le depart, pas au premier choc.
+func _prewarm_bodies() -> void:
+	for p in players:
+		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
 
 
 func all_ready() -> bool:

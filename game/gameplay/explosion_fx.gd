@@ -35,6 +35,8 @@ static func spawn(parent: Node, at: Vector3, size: float = 6.0, sound: bool = tr
 	var base := parent as Node3D
 	fx.position = base.global_transform.affine_inverse() * at if base != null and base.is_inside_tree() else at
 	parent.add_child(fx)
+	# le souffle secoue les cameras proches (plus fort pour une grosse explosion)
+	ChaseCamera.shake_near(parent.get_tree(), at, clampf(size / 10.0, 0.2, 1.0), size * 9.0)
 	return fx
 
 
