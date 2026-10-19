@@ -44,6 +44,10 @@ const LocalRace := preload("res://dev/local_race.gd")
 var selected_players: int = 1
 var trucks: Array[Truck] = []
 var player_buttons: Array[Button] = []
+## Bots hors ligne : nombre (0 a 5) et niveau (facile, moyen, dur).
+var bot_buttons: Array[Button] = []
+var bot_level_buttons: Array[Button] = []
+const BOT_LEVELS: PackedStringArray = ["FACILE", "MOYEN", "DUR"]
 var speed_buttons: Array[Button] = []
 var track_buttons: Array[Button] = []
 var subtitle: Label
@@ -267,6 +271,30 @@ func select_speed(k: int) -> void:
 		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
 
+## Nombre de bots (borne pour que joueurs + bots ne depassent pas 6) ; les
+## nombres trop grands sont grises.
+func select_bots(n: int, save: bool = true) -> void:
+	var room := LocalRace.MAX_PLAYERS - selected_players
+	GameState.bot_count = clampi(n, 0, room)
+	if save and is_node_ready():
+		GameState.save_settings()
+		MenuSound.play_select()
+	for k in bot_buttons.size():
+		bot_buttons[k].set_pressed_no_signal(k == GameState.bot_count)
+		bot_buttons[k].disabled = k > room
+	for k in bot_level_buttons.size():
+		bot_level_buttons[k].disabled = GameState.bot_count == 0
+
+
+func select_bot_level(k: int, save: bool = true) -> void:
+	GameState.bot_level = clampi(k, 0, BOT_LEVELS.size() - 1)
+	if save and is_node_ready():
+		GameState.save_settings()
+		MenuSound.play_select()
+	for i in bot_level_buttons.size():
+		bot_level_buttons[i].set_pressed_no_signal(i == GameState.bot_level)
+
+
 ## Nombre de joueurs (borne a 1..6) : bouton enfonce, camions montres. Choisi
 ## a la main (`manual`) : on revient a joueur N = manette N (la salle
 ## d'attente est oubliee).
@@ -280,6 +308,9 @@ func select_players(n: int, manual: bool = true) -> void:
 	for i in player_buttons.size():
 		player_buttons[i].set_pressed_no_signal(i == selected_players - 1)
 	_fov_target = fov_deg if selected_players <= 4 else fov_wide_deg
+	# joueurs + bots : 6 au plus
+	if not bot_buttons.is_empty():
+		select_bots(GameState.bot_count, false)
 	if _player_dots != null:
 		for i in _player_dots.get_child_count():
 			(_player_dots.get_child(i) as Control).modulate.a = 1.0 if i < selected_players else 0.12
@@ -710,7 +741,10 @@ func toggle_online() -> void:
 		MenuSound.play_toggle()
 	if online_panel.visible:
 		_refresh_online()
-		(launch_button if NetSession.is_host() else host_button).grab_focus()
+		if NetSession.is_online():
+			_show_lobby()
+		else:
+			host_button.grab_focus()
 	else:
 		online_button.grab_focus()
 
@@ -966,7 +1000,7 @@ func _build_ui() -> void:
 		dash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tag_row.add_child(dash)
 	tag_row.add_child(UiKit.label("COURSE DE CAMIONS ARCADE", 20, UiKit.CYAN, 800))
-	column.add_child(UiKit.gap(34))
+	column.add_child(UiKit.gap(18))
 
 	# circuit : une carte par circuit
 	column.add_child(_section("Circuit"))
@@ -984,7 +1018,7 @@ func _build_ui() -> void:
 	column.add_child(UiKit.gap(10))
 	column.add_child(subtitle)
 	select_track(GameState.selected_track)
-	column.add_child(UiKit.gap(26))
+	column.add_child(UiKit.gap(18))
 
 	# joueurs
 	column.add_child(_section("Joueurs"))
@@ -1013,6 +1047,33 @@ func _build_ui() -> void:
 		_player_dots.add_child(dot)
 	column.add_child(UiKit.gap(8))
 	column.add_child(_player_dots)
+	# bots (hors ligne) : nombre et niveau, sur une ligne
+	column.add_child(UiKit.gap(6))
+	var bots_row := _row("Bots")
+	var bots_label := _label("BOTS", 18, 0)
+	bots_label.custom_minimum_size.x = 72
+	bots_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bots_row.add_child(bots_label)
+	var bots_group := ButtonGroup.new()
+	for k in LocalRace.MAX_PLAYERS:
+		var bb := _choice("Bots%d" % k, str(k), bots_group, 20)
+		bb.custom_minimum_size.y = 44
+		bb.tooltip_text = "Aucun bot" if k == 0 else "%d bot%s pilote%s par l'ordinateur" % [k, "s" if k > 1 else "", "s" if k > 1 else ""]
+		bb.pressed.connect(select_bots.bind(k))
+		bots_row.add_child(bb)
+		bot_buttons.append(bb)
+	bots_row.add_child(UiKit.gap(0))
+	var level_group := ButtonGroup.new()
+	for k in BOT_LEVELS.size():
+		var lb := _choice("BotLevel%d" % k, BOT_LEVELS[k], level_group, 16)
+		lb.custom_minimum_size = Vector2(96, 44)
+		lb.size_flags_horizontal = Control.SIZE_FILL
+		lb.pressed.connect(select_bot_level.bind(k))
+		bots_row.add_child(lb)
+		bot_level_buttons.append(lb)
+	column.add_child(bots_row)
+	select_bots(GameState.bot_count, false)
+	select_bot_level(GameState.bot_level, false)
 	# manettes detectees a gauche ; salle d'attente (chacun rejoint avec SA
 	# manette ou son jeu de touches) a droite, sur la meme ligne
 	var pads_row := HBoxContainer.new()
@@ -1032,7 +1093,7 @@ func _build_ui() -> void:
 	pads_row.add_child(waiting_button)
 	column.add_child(UiKit.gap(8))
 	column.add_child(pads_row)
-	column.add_child(UiKit.gap(24))
+	column.add_child(UiKit.gap(16))
 
 	# categorie de vitesse, facon cylindree : chevrons de 1 a 4
 	column.add_child(_section("Vitesse"))
@@ -1059,11 +1120,11 @@ func _build_ui() -> void:
 	start_button = Button.new()
 	start_button.name = "Start"
 	start_button.text = "PRÊT"
-	start_button.custom_minimum_size = Vector2(0, 100)
+	start_button.custom_minimum_size = Vector2(0, 88)
 	UiKit.style_primary(start_button, 52)
 	start_button.pressed.connect(open_selection)
 	column.add_child(start_button)
-	column.add_child(UiKit.gap(12))
+	column.add_child(UiKit.gap(8))
 	var next := UiKit.label("ensuite : remorque et pouvoirs de chaque joueur", 16, TEXT_DIM, 600, false)
 	next.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(next)

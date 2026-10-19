@@ -99,6 +99,11 @@ var power_right: PackedInt32Array = PackedInt32Array([-1, -1, -1, -1, -1, -1])
 ## course part directement au compte a rebours, sans le sas READY (« rejouer »
 ## garde le meme choix). Faux au lancement direct d'une scene de course.
 var loadout_locked: bool = false
+## Bots de la course hors ligne (menu principal, 2026-10-19) : nombre (le
+## total joueurs + bots ne depasse pas LocalRace.MAX_PLAYERS) et niveau
+## (BotInputSource.Level).
+var bot_count: int = 0
+var bot_level: int = 1
 
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
@@ -163,6 +168,8 @@ func write_settings(path: String) -> Error:
 	cfg.set_value("race", "track", selected_track)
 	cfg.set_value("race", "speed_class", speed_class)
 	cfg.set_value("race", "trailers", trailer_choice)
+	cfg.set_value("race", "bots", bot_count)
+	cfg.set_value("race", "bot_level", bot_level)
 	for a: String in PadBindings.ACTIONS:
 		cfg.set_value("pad", a, pad_bindings[a])
 	return cfg.save(path)
@@ -184,6 +191,8 @@ func read_settings(path: String) -> Error:
 	dynamic_resolution = bool(cfg.get_value("video", "dynamic_resolution", dynamic_resolution))
 	selected_track = clampi(int(cfg.get_value("race", "track", selected_track)), 0, TRACKS.size() - 1)
 	speed_class = clampi(int(cfg.get_value("race", "speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
+	bot_count = clampi(int(cfg.get_value("race", "bots", bot_count)), 0, 5)
+	bot_level = clampi(int(cfg.get_value("race", "bot_level", bot_level)), 0, 2)
 	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
 	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():
 		trailer_choice = trailers

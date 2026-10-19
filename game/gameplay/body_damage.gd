@@ -801,6 +801,15 @@ static func _topology(base: Mesh) -> Array:
 			tp.idx.resize(n)
 			for i in n:
 				tp.idx[i] = i
+		# index au-dela des sommets (mesure 2026-10-19 en ligne, remorque GRUE :
+		# 65430 pour moins de sommets) : surface laissee sans creux plutot
+		# qu'une erreur qui interrompt la preparation de la course
+		var top := -1
+		for k in tp.idx.size():
+			top = maxi(top, tp.idx[k])
+		if top >= n:
+			push_warning("BodyDamage : surface %d de %s ignoree (index %d, %d sommets)" % [s, base.resource_name, top, n])
+			tp.idx = PackedInt32Array()
 		var cells: Dictionary = {}
 		var grain := PackedFloat32Array()
 		grain.resize(n)
