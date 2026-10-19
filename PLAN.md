@@ -837,13 +837,47 @@ fusionné) : 56,5 → 59,1 images/s, 1 % bas 7,5 → 18, pire image 370 → 92 m
 ---
 
 
+## Phase 7.8 — Retours de test (2026-10-19)
+
+Liste remontée après les essais multijoueur ; un lot par branche et par PR
+(#45 à #53, empilées sur #44), un test chacun, `make test` vert à chaque lot.
+
+- [x] **Sélection en ligne** : CHOISIR MON CONVOI ouvre la page de sélection du
+  solo ; remorque et pouvoirs partent au lobby (`NetSession.set_loadout`,
+  protocole 3), LANCER attend que tous soient PRÊTS (`net_loadout_test`).
+- [x] **Pouvoirs chez les clients** : chaque tir du host part en `Ev.POWER`,
+  rejoué en miroir chez les clients sans dégât ; HUD client
+  (`net_powers_test`).
+- [x] **Fin de course sans gêne** : après la 1re arrivée, ceux qui roulent ont
+  un bandeau en haut, plus de carte au centre (`finish_overlay_test`).
+- [x] **Délai en ligne** : file d'inputs du host adaptative (1 frame sur une
+  liaison régulière), rendu des autres camions selon la gigue, pouvoirs du
+  joueur local prédits (`net_latency_test`). Essai 2 instances headless : OK ;
+  en fenêtré sur 1 PC, le host tombe à ~4 images/s : à refaire sur 2 PC.
+- [x] **Sortie de route** : hors piste, le camion tombe et explose au premier
+  contact, épave puis réapparition ; en l'air, une trajectoire qui franchirait
+  le mur est rabattue (`AutoReset.air_return`, METRICS inchangé) ; corrigé :
+  coup de lacet de 14° à chaque réapparition (`air_return_test`,
+  `track_01_reset_test`).
+- [x] **Bots** hors ligne, 0 à 5, facile / moyen / dur (`BotInputSource`,
+  `bot_race_test`).
+- [x] **Pouvoirs, 2e série** : mitrailleuse, scie géante, boomerang aimanté
+  (`powers2_test`).
+- [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille
+  (`menu_players_test`).
+- [x] **HUD de course** : cadran façon arcade (vitesse, nitro, cargo, recharges
+  des pouvoirs, `HudDial`) et carte en haut à gauche (position, nom, tour,
+  temps, PV) (`race_hud_test`).
+- [ ] À valider en jeu par l'équipe : équilibrage des nouveaux pouvoirs et des
+  niveaux de bots, lisibilité du HUD à 5-6 joueurs.
+
 ## Questions de design ouvertes
 
 À trancher par l'équipe ; chacune deviendrait une phase à part entière, pas un
 ajout discret au milieu d'une autre.
 
-- **IA / adversaires pilotés par l'ordinateur.** Sans IA, pas de mode solo
-  contre des adversaires : à décider avant la phase 3.
+- **IA / adversaires pilotés par l'ordinateur.** Bots hors ligne livrés le
+  2026-10-19 (phase 7.8) ; en ligne : pas encore.
 - **Remorques** — tranché le 2026-09-28 (semi-remorque sur le même corps que le
   tracteur, inertie imposée), puis le 2026-09-29 : **articulée** à la sellette,
   ±35°, la caisse de collision pivote et balaie les adversaires (VEHICLE_SPEC

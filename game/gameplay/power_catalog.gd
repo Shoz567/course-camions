@@ -23,12 +23,12 @@ const POWERS: Array[Dictionary] = [
 		"model": "../Assets_Visuels/Armes_et_camions/armes/lance_missiles.glb"},
 	{"id": "laser", "name": "LASER", "tagline": "rayon droit devant 1,5 s · recharge 18 s", "cooldown": 1080,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/laser_emetteur.glb"},
-	{"id": "mitrailleuse", "name": "MITRAILLEUSE", "tagline": "rafale 2 s droit devant · recharge 14 s", "cooldown": 840,
+	{"id": "mitrailleuse", "name": "MITRAILLEUSE", "short": "MITRAILL.", "tagline": "rafale 2 s droit devant · recharge 14 s", "cooldown": 840,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/mitrailleuse.glb"},
-	{"id": "scie", "name": "SCIE GÉANTE", "tagline": "scies sur les flancs 4 s · recharge 16 s", "cooldown": 960,
+	{"id": "scie", "name": "SCIE GÉANTE", "short": "SCIE", "tagline": "scies sur les flancs 4 s · recharge 16 s", "cooldown": 960,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/scie_geante_g.glb",
 		"model_right": "../Assets_Visuels/Armes_et_camions/armes/scie_geante_d.glb"},
-	{"id": "boomerang", "name": "BOOMERANG", "tagline": "aller-retour aimanté · 15 PV par passage · recharge 15 s", "cooldown": 900,
+	{"id": "boomerang", "name": "BOOMERANG", "short": "BOOMER.", "tagline": "aller-retour aimanté · 15 PV par passage · recharge 15 s", "cooldown": 900,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/boomerang_aimante.glb"},
 ]
 
@@ -96,6 +96,14 @@ static func model(index: int, slot: int = 0) -> String:
 ## Nom affiche du pouvoir `index` ; -1 (ou hors liste) : AUCUN.
 static func display_name(index: int) -> String:
 	return String(POWERS[index]["name"]) if index >= 0 and index < POWERS.size() else "AUCUN"
+
+
+## Nom court (pastilles du cadran de course, HudDial).
+static func short_name(index: int) -> String:
+	if index < 0 or index >= POWERS.size():
+		return ""
+	var p: Dictionary = POWERS[index]
+	return String(p.get("short", p["name"]))
 
 
 static func tagline(index: int) -> String:

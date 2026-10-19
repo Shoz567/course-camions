@@ -1,10 +1,11 @@
 class_name RaceHud
 extends CanvasLayer
 
-## HUD de course (tache 2.7). Lit, ne decide rien (CLAUDE.md §7) : vitesse,
-## tour (1/3), temps du tour, meilleur et dernier tour, jauges de boost et de
-## cargo, et un message central (compte a rebours, mauvais sens, arrivee) pose
-## par la scene.
+## HUD de course (tache 2.7, refait le 2026-10-19). Lit, ne decide rien
+## (CLAUDE.md §7) : en haut a gauche une carte (position, nom, tour, temps,
+## PV) ; en bas a droite un cadran facon arcade (HudDial : vitesse, nitro,
+## cargo, recharge des pouvoirs) ; un message central (compte a rebours,
+## mauvais sens, arrivee) et un bandeau poses par la scene.
 ## Les temps affiches derivent des ticks : 60 ticks = 1 s.
 
 @export var truck: Truck
@@ -18,17 +19,20 @@ extends CanvasLayer
 var _lap: Label
 var _lap_time: Label
 var _times: Label
-var _speed: Label
-var _boost_bar: ProgressBar
-var _boost_label: Label
-var _cargo_bar: ProgressBar
-var _cargo_label: Label
+## Carte du haut a gauche (2026-10-19) : position en grand, nom a la couleur
+## du joueur, tour, temps, PV de la tete et de la remorque.
+var _pos: Label
+var _name: Label
+var _info_card: PanelContainer
+## Cadran du bas a droite : vitesse, nitro, cargo, pouvoirs (HudDial).
+var _dial: HudDial
 var _cargo: TruckCargo
 var _health: TruckHealth
 var _hp_label: Label
 var _hp_bar: ProgressBar
 var _trailer_hp_label: Label
 var _trailer_hp_bar: ProgressBar
+var _cargo_label: Label
 var _center: Label
 ## Bandeau du haut, pour un joueur encore en course apres la premiere arrivee
 ## (« 1er : J2  ·  FIN DANS 28 s ») : rien ne lui cache la route.
@@ -37,134 +41,135 @@ var _ticker_card: PanelContainer
 var _help: Label
 var _standings: Label
 var _standings_card: PanelContainer
-## Pouvoirs du camion (TruckPowers) : « ◄ BOUCLIER  PRÊT   ► MISSILE  12 s ».
-var _powers_label: Label
 var _center_card: PanelContainer
 var _center_text: String = ""
 var _center_color: Color = Color.WHITE
+var _slots: Array[Dictionary] = [{}, {}]
+
+## Couleur du joueur (bordure de la carte, nom).
+@export var accent: Color = UiKit.CYAN
 
 
 func _ready() -> void:
 	var k := ui_scale
-	_lap = _label(40, Vector2(24, 16) * k)
-	_lap_time = _label(28, Vector2(24, 68) * k)
-	_times = _label(20, Vector2(24, 108) * k)
 	_center = _label(72, Vector2.ZERO)
 	_center.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_center.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_center.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_center.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_speed = _label(64, Vector2.ZERO)
-	_speed.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_speed.offset_left = -330 * k
-	_speed.offset_top = -150 * k
-	_speed.offset_right = -24 * k
-	_speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_boost_bar = ProgressBar.new()
-	_boost_bar.min_value = 0.0
-	_boost_bar.max_value = 1.0
-	_boost_bar.show_percentage = false
-	_boost_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_boost_bar.offset_left = -330 * k
-	_boost_bar.offset_top = -52 * k
-	_boost_bar.offset_right = -24 * k
-	_boost_bar.offset_bottom = -30 * k
-	var b_bg := StyleBoxFlat.new()
-	b_bg.bg_color = Color(0.05, 0.07, 0.11, 0.85)
-	b_bg.border_color = Color(0.25, 0.35, 0.45, 0.7)
-	b_bg.set_border_width_all(roundi(maxf(1.0, 2.0 * k)))
-	b_bg.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
-	var b_fill := StyleBoxFlat.new()
-	b_fill.bg_color = Color(0.12, 0.88, 1.0)
-	b_fill.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
-	_boost_bar.add_theme_stylebox_override("background", b_bg)
-	_boost_bar.add_theme_stylebox_override("fill", b_fill)
-	add_child(_boost_bar)
-
-	_boost_label = _label(18, Vector2.ZERO)
-	_boost_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_boost_label.offset_left = -330 * k
-	_boost_label.offset_top = -80 * k
-	_boost_label.offset_right = -24 * k
-	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-	# cargo : a gauche de la jauge de boost, meme hauteur
-	_cargo_bar = ProgressBar.new()
-	_cargo_bar.min_value = 0.0
-	_cargo_bar.max_value = 1.0
-	_cargo_bar.show_percentage = false
-	_cargo_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_cargo_bar.offset_left = -560 * k
-	_cargo_bar.offset_top = -52 * k
-	_cargo_bar.offset_right = -350 * k
-	_cargo_bar.offset_bottom = -30 * k
-	var c_bg := StyleBoxFlat.new()
-	c_bg.bg_color = Color(0.06, 0.06, 0.04, 0.85)
-	c_bg.border_color = Color(0.55, 0.45, 0.15, 0.7)
-	c_bg.set_border_width_all(roundi(maxf(1.0, 2.0 * k)))
-	c_bg.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
-	var c_fill := StyleBoxFlat.new()
-	c_fill.bg_color = Color(1.0, 0.75, 0.1)
-	c_fill.set_corner_radius_all(roundi(maxf(2.0, 5.0 * k)))
-	_cargo_bar.add_theme_stylebox_override("background", c_bg)
-	_cargo_bar.add_theme_stylebox_override("fill", c_fill)
-	add_child(_cargo_bar)
-
-	_cargo_label = _label(18, Vector2.ZERO)
-	_cargo_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_cargo_label.offset_left = -560 * k
-	_cargo_label.offset_top = -80 * k
-	_cargo_label.offset_right = -350 * k
-	_cargo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	if truck != null:
 		_cargo = truck.get_node_or_null(^"Cargo") as TruckCargo
-	_cargo_bar.visible = _cargo != null
-	_cargo_label.visible = _cargo != null
-	# PV : discret, sous les temps (les degradations visibles viendront ensuite)
-	_hp_label = _label(18, Vector2(24, 138) * k)
-	_hp_bar = ProgressBar.new()
-	_hp_bar.min_value = 0.0
-	_hp_bar.max_value = 1.0
-	_hp_bar.value = 1.0
-	_hp_bar.show_percentage = false
-	_hp_bar.position = Vector2(108, 146) * k
-	_hp_bar.size = Vector2(130, 9) * k
-	var h_bg := StyleBoxFlat.new()
-	h_bg.bg_color = Color(0.05, 0.05, 0.06, 0.8)
-	h_bg.set_corner_radius_all(roundi(maxf(2.0, 3.0 * k)))
-	var h_fill := StyleBoxFlat.new()
-	h_fill.bg_color = Color.WHITE
-	h_fill.set_corner_radius_all(roundi(maxf(2.0, 3.0 * k)))
-	_hp_bar.add_theme_stylebox_override("background", h_bg)
-	_hp_bar.add_theme_stylebox_override("fill", h_fill)
-	add_child(_hp_bar)
-	# PV de la remorque attelee, sous ceux de la tete (deux reserves distinctes)
-	_trailer_hp_label = _label(14, Vector2(24, 160) * k)
-	_trailer_hp_bar = _hp_bar.duplicate() as ProgressBar
-	_trailer_hp_bar.position = Vector2(108, 166) * k
-	add_child(_trailer_hp_bar)
-	if truck != null:
 		_health = TruckHealth.of(truck)
-	_hp_label.visible = _health != null
-	_hp_bar.visible = _health != null
-	_trailer_hp_label.visible = _health != null
-	_trailer_hp_bar.visible = _health != null
-	_help = _label(14, Vector2.ZERO)
+	_build_info(k)
+	# cadran en bas a droite ; l'etat du largage juste au-dessus
+	_dial = HudDial.new()
+	_dial.name = "Dial"
+	_dial.ui_scale = k
+	add_child(_dial)
+	_dial.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_dial.offset_left = -_dial.custom_minimum_size.x - 20 * k
+	_dial.offset_top = -_dial.custom_minimum_size.y - 16 * k
+	_dial.offset_right = -20 * k
+	_dial.offset_bottom = -16 * k
+	_cargo_label = _label(16, Vector2.ZERO)
+	_cargo_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_cargo_label.offset_left = -360 * k
+	_cargo_label.offset_right = -24 * k
+	_cargo_label.offset_top = (-HudDial.SIZE - 46.0) * k
+	_cargo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_cargo_label.add_theme_color_override("font_color", UiKit.GOLD)
+	_cargo_label.visible = _cargo != null
+	_help = _label(13, Vector2.ZERO)
 	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	_help.offset_left = 24 * k
-	_help.offset_top = (-30.0 - 18.0 * help_text.count("\n")) * k
+	_help.offset_top = (-28.0 - 16.0 * help_text.count("\n")) * k
 	_help.text = help_text
+	_help.modulate = Color(1, 1, 1, 0.75)
 	_standings = _label(26, Vector2.ZERO)
 	_standings.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_standings.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_standings.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_standings.offset_top = 150 * k
 	_build_cards(k)
-	_powers_label = _label(20, Vector2.ZERO)
-	_powers_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_powers_label.offset_left = 24 * k
-	_powers_label.offset_top = (-70.0 - 18.0 * help_text.count("\n")) * k
-	_powers_label.add_theme_color_override("font_color", UiKit.CYAN)
+
+
+## Carte du haut a gauche, inclinee comme les menus : « 2e/4 » en grand a
+## gauche ; a droite le nom du joueur (sa couleur) et le tour ; en dessous les
+## temps et les PV de la tete et de la remorque.
+func _build_info(k: float) -> void:
+	_info_card = PanelContainer.new()
+	_info_card.name = "Info"
+	_info_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := UiKit.box(Color(UiKit.NIGHT, 0.72), Color(accent, 0.8), maxi(1, roundi(2 * k)), UiKit.SKEW, 4,
+		Color(accent, 0.25), roundi(12 * k))
+	sb.content_margin_left = 26 * k
+	sb.content_margin_right = 30 * k
+	sb.content_margin_top = 8 * k
+	sb.content_margin_bottom = 10 * k
+	_info_card.add_theme_stylebox_override("panel", sb)
+	_info_card.position = Vector2(20, 14) * k
+	add_child(_info_card)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", roundi(2 * k))
+	_info_card.add_child(col)
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", roundi(16 * k))
+	col.add_child(top)
+	_pos = _boxed(top, 60)
+	_pos.add_theme_font_override("font", UiKit.font(900))
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 0)
+	right.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_child(right)
+	_name = _boxed(right, 20)
+	_name.add_theme_color_override("font_color", accent.lightened(0.25))
+	_lap = _boxed(right, 28)
+	_lap_time = _boxed(col, 22)
+	_times = _boxed(col, 16)
+	_times.modulate = Color(1, 1, 1, 0.8)
+	var hp_row := _row(col, k)
+	_hp_label = _boxed(hp_row, 16)
+	_hp_label.custom_minimum_size.x = 92 * k
+	_hp_bar = _bar(hp_row, k, 150)
+	var trl_row := _row(col, k)
+	_trailer_hp_label = _boxed(trl_row, 13)
+	_trailer_hp_label.custom_minimum_size.x = 92 * k
+	_trailer_hp_bar = _bar(trl_row, k, 150)
+	for c: Control in [_hp_label, _hp_bar, _trailer_hp_label, _trailer_hp_bar]:
+		c.visible = _health != null
+
+
+func _row(parent: Control, k: float) -> HBoxContainer:
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", roundi(8 * k))
+	parent.add_child(r)
+	return r
+
+
+func _boxed(parent: Control, font_size: int) -> Label:
+	var l := _label(font_size, Vector2.ZERO)
+	remove_child(l)
+	parent.add_child(l)
+	return l
+
+
+func _bar(parent: Control, k: float, width: float) -> ProgressBar:
+	var b := ProgressBar.new()
+	b.min_value = 0.0
+	b.max_value = 1.0
+	b.value = 1.0
+	b.show_percentage = false
+	b.custom_minimum_size = Vector2(width, 10) * k
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# sa hauteur minimale suit la police du theme : une barre fine
+	b.add_theme_font_size_override("font_size", 1)
+	for pair: Array in [["background", UiKit.box(Color(0.05, 0.05, 0.08, 0.85), Color(1, 1, 1, 0.08), 1)],
+			["fill", UiKit.box(Color.WHITE)]]:
+		var sb := pair[1] as StyleBoxFlat
+		sb.set_content_margin_all(0)
+		b.add_theme_stylebox_override(pair[0], sb)
+	parent.add_child(b)
+	return b
 
 
 ## Charte arcade neon (UiKit, 2026-10-17) : classement et message central dans
@@ -205,14 +210,6 @@ func _build_cards(k: float) -> void:
 	_ticker_card.add_child(_ticker)
 	_center.add_theme_font_override("font", UiKit.font(900))
 	_center.add_theme_font_size_override("font_size", maxi(10, roundi(54 * ui_scale)))
-	for bar: ProgressBar in [_boost_bar, _cargo_bar, _hp_bar, _trailer_hp_bar]:
-		for s: String in ["background", "fill"]:
-			var sb := bar.get_theme_stylebox(s) as StyleBoxFlat
-			if sb != null:
-				sb = sb.duplicate() as StyleBoxFlat
-				sb.skew = Vector2(UiKit.SKEW, 0.0)
-				sb.anti_aliasing = true
-				bar.add_theme_stylebox_override(s, sb)
 
 
 func _card(border: Color, k: float) -> PanelContainer:
@@ -263,43 +260,38 @@ func _process(_delta: float) -> void:
 	var r := race.racer(truck)
 	if r == null:
 		return
-	var head := "TOUR %d/%d" % [race.display_lap(truck), race.total_laps]
-	if race.racer_count() > 1:
-		head = "%s   POS %d/%d   %s" % [player_label, race.position(truck), race.racer_count(), head]
-	_lap.text = head
+	var n := race.racer_count()
+	_pos.visible = n > 1
+	_name.visible = player_label != ""
+	if n > 1:
+		var place := race.position(truck)
+		_pos.text = "%d%s/%d" % [place, "er" if place == 1 else "e", n]
+	_name.text = player_label
+	_lap.text = "TOUR %d/%d" % [race.display_lap(truck), race.total_laps]
 	_lap_time.text = "Tour  %s" % chrono(race.current_lap_ticks(truck))
 	_times.text = "Meilleur  %s     Dernier  %s" % [chrono(r.best_lap), chrono(r.last_lap)]
-	var spd := roundi(absf(truck.get_speed_kmh()))
-	_speed.text = "%d km/h" % spd
-	if truck.is_boosting():
-		_speed.modulate = Color(1.0, 0.65, 0.15)
-	elif spd >= 140:
-		_speed.modulate = Color(0.15, 0.95, 1.0)
-	else:
-		_speed.modulate = Color(0.95, 0.96, 0.98)
 	var charge := truck.get_boost_charge()
-	_boost_bar.value = charge
+	var boost_label := "BOOST PRÊT" if charge >= 1.0 else ("nitro %d s" % maxi(ceili(
+		(1.0 - charge) * truck.tuning.boost_recharge_ticks / 60.0), 1))
 	if truck.is_boosting():
-		_boost_label.text = "BOOST !"
-		_boost_bar.modulate = Color(1.0, 0.55, 0.1)
-	elif charge >= 1.0:
-		_boost_label.text = "BOOST PRET"
-		_boost_bar.modulate = Color(0.3, 1.0, 0.4)
-	else:
-		# recharge (6 s) : secondes restantes, derivees de la jauge
-		var left := ceili((1.0 - charge) * truck.tuning.boost_recharge_ticks / 60.0)
-		_boost_label.text = "recharge %d s" % maxi(left, 1)
-		_boost_bar.modulate = Color(0.6, 0.6, 0.6)
+		boost_label = "BOOST !"
+	var cargo := -1.0
 	if _cargo != null:
 		# remorque : prete, larguee (compte a rebours du raccrochage), recharge
-		_cargo_bar.value = _cargo.get_charge()
+		cargo = _cargo.get_charge()
 		_cargo_label.text = _cargo.status_text()
-		if _cargo.is_ready():
-			_cargo_bar.modulate = Color(1.0, 0.6, 0.1)
-		elif truck.is_trailer_detached():
-			_cargo_bar.modulate = Color(0.2, 0.9, 1.0)
-		else:
-			_cargo_bar.modulate = Color(0.6, 0.6, 0.6)
+	var powers := TruckPowers.of(truck)
+	for k in 2:
+		var d := _slots[k]
+		d.clear()
+		if powers == null or powers.slots[k] < 0:
+			continue
+		var p := powers.slots[k]
+		d["name"] = PowerCatalog.short_name(p)
+		d["ready"] = 1.0 - float(powers.cooldown[k]) / maxf(float(PowerCatalog.cooldown_ticks(p)), 1.0)
+		d["left"] = powers.seconds_left(k)
+		d["active"] = powers.active(k)
+	_dial.set_state(roundi(absf(truck.get_speed_kmh())), charge, truck.is_boosting(), boost_label, cargo, _slots)
 	if _health != null:
 		var ratio := _health.hp / maxf(_health.max_hp, 1.0)
 		_hp_label.text = "%d HP" % ceili(_health.hp)
@@ -314,10 +306,6 @@ func _process(_delta: float) -> void:
 		var t_tint := Color(0.4, 0.8, 1.0) if t_ratio > 0.6 else (Color(1.0, 0.8, 0.2) if t_ratio > 0.3 else Color(1.0, 0.3, 0.2))
 		_trailer_hp_label.modulate = t_tint
 		_trailer_hp_bar.modulate = t_tint
-	var powers := TruckPowers.of(truck)
-	_powers_label.visible = powers != null
-	if powers != null:
-		_powers_label.text = powers_text(powers)
 	var text := _center_text
 	var color := _center_color
 	# epave : prioritaire sur le GO et le compte a rebours de la scene

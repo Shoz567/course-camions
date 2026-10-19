@@ -487,6 +487,7 @@ func _add_player(i: int) -> Player:
 	hud.truck = t
 	hud.race = race
 	hud.player_label = player_name(i)
+	hud.accent = UiKit.PLAYER_COLORS[slot_of(i)]
 	hud.help_text = HELP_SOLO if split == null else HELP_SPLIT[i]
 	hud.ui_scale = HUD_SCALE[0 if split == null else player_count - 1]
 	view_parent.add_child(hud)
