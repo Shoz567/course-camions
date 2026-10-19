@@ -87,7 +87,7 @@ func _test_tick(t: int) -> void:
 
 
 func _test_finish() -> void:
-	check("catalogue : BOUCLIER, MISSILE, LASER", PowerCatalog.count() == 3
+	check("catalogue : BOUCLIER, MISSILE, LASER en tete (2e serie : powers2_test)", PowerCatalog.count() >= 3
 		and PowerCatalog.display_name(PowerCatalog.Id.SHIELD) == "BOUCLIER"
 		and PowerCatalog.display_name(PowerCatalog.Id.MISSILE) == "MISSILE"
 		and PowerCatalog.display_name(PowerCatalog.Id.LASER) == "LASER" and PowerCatalog.display_name(-1) == "AUCUN")

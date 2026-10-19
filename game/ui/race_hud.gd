@@ -341,7 +341,7 @@ static func powers_text(p: TruckPowers) -> String:
 		var left := p.seconds_left(k)
 		if left < 0:
 			continue
-		var state := "ACTIF" if (p.slots[k] == PowerCatalog.Id.LASER and p.laser_ticks > 0) else ("PRÊT" if left == 0 else "%d s" % left)
+		var state := "ACTIF" if p.active(k) else ("PRÊT" if left == 0 else "%d s" % left)
 		parts.append("%s %s  %s" % ["◄" if k == 0 else "►", PowerCatalog.display_name(p.slots[k]), state])
 	return "     ".join(parts)
 
