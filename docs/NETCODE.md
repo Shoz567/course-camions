@@ -302,6 +302,27 @@ autres camions proches ~35 cm (90 %), 2 cm médian. Sur ce PC, le host ne tient
 pas le temps réel avec deux instances (~38 ticks/s) : il saute ou répète des
 inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
 2 PC.
+### Étape 5 : retours de test (2026-10-19)
+
+- **Lobby, protocole 3** : chaque membre porte `trailer`, `power_left`,
+  `power_right`, `ready` ; le client les envoie au host (`set_loadout`, RPC
+  fiable), le host les diffuse avec le lobby et au lancement. LANCER attend
+  `all_ready()`.
+- **Pouvoirs** : `Ev.POWER [camion, emplacement, cible du missile]`. Chez un
+  client, `TruckPowers.mirror` rejoue recharge, aura, rayon, rafale, scies,
+  missile et boomerang sans dégât. Son propre tir part à l'appui
+  (`predict`) ; l'annonce du host qui suit (dans 90 ticks) ne le rejoue pas.
+- **Délai** : cible de la file d'inputs du host adaptative
+  (`RemoteInputSource.target`, 1 à 3 frames ; −1 après 3 fenêtres de 120
+  ticks sans file vide, +1 dès une file vide) ; retard de rendu des
+  marionnettes = intervalle des snapshots + gigue (1 tick à 60 Hz régulier ;
+  +1 à 20 Hz).
+- **Aide en l'air** (`AutoReset.air_return`) appliquée aussi au camion prédit
+  du client (`watch_assist`), pour que sa prédiction suive le host.
+- Essai 2 instances en headless sur 1 PC : convois, `Ev.POWER` (bouclier,
+  laser, recharges) et file à 1 frame vérifiés. En fenêtré, le host tombe à
+  ~4 images/s et le client est coupé (délai ENet) : limite de la machine.
+
 ### Pas encore fait
 
 - Essai sur 2 vrais PC, puis à 4 joueurs (critère de sortie de la phase 6).
