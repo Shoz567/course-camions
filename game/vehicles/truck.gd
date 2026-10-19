@@ -833,6 +833,13 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		# camion d'un autre joueur : ses chocs sont ceux du host (NetRace)
 		_drive_puppet(state)
 		return
+	if _reset_pending:
+		# les contacts de ce pas sont ceux de l'ancienne place (sa propre
+		# epave, sa remorque laissee la) : ni choc ni coup de lacet apres la
+		# remise en piste (mesure 2026-10-19 : +14 deg de cap a chaque
+		# reapparition apres une epave)
+		_apply_reset(state)
+		return
 	# contacts avec un mur : corps statique, normale presque horizontale (le
 	# sol et les rampes ont une normale verticale)
 	var n_sum := Vector3.ZERO
@@ -886,8 +893,11 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_trailer_wall_gap = 0 if rear >= 0.0 else _trailer_wall_gap + 1
 	if _net_corr_pending:
 		_apply_net_correction(state)
-	if not _reset_pending:
-		return
+	if _reset_pending:
+		_apply_reset(state)
+
+
+func _apply_reset(state: PhysicsDirectBodyState3D) -> void:
 	_reset_pending = false
 	state.transform = _reset_xf
 	state.linear_velocity = Vector3.ZERO
@@ -926,6 +936,8 @@ func _physics_process(_delta: float) -> void:
 		_reset_applied = false
 		reset_physics_interpolation()
 		# remis en piste : remorque dans l'axe, plus d'aide ni de boost de plaque
+		# ni de coup de lacet d'un choc vu a l'ancienne place
+		_cargo_hit_pending = false
 		_trailer_yaw_rate = 0.0
 		_lat_accel = 0.0
 		_accel_ready = false

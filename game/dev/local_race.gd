@@ -388,6 +388,8 @@ func _add_player(i: int) -> Player:
 	# l'etat du host ; la remise en piste et les PV sont l'affaire du host
 	if is_authority():
 		auto_reset.watch(t)
+	elif mine:
+		auto_reset.watch_assist(t)
 	# 0 PV : epave 3 s, puis reapparition sur la piste (jamais un checkpoint
 	# saute : RaceLaps.respawn_transform)
 	var health := TruckHealth.of(t)

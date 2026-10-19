@@ -155,6 +155,18 @@ func _hit(amount: float, on_trailer: bool, source: StringName) -> void:
 		damage(amount, source)
 
 
+## Destruction sur le coup (chute hors piste, AutoReset) : ni le bouclier ni
+## le hors piste ne la retiennent. Explosion, epave et reapparition comme a
+## 0 PV, au prochain tick physique.
+func crash(source: StringName = &"chute") -> void:
+	if net_mirror or is_wrecked() or _dead_pending:
+		return
+	var lost := hp
+	hp = 0.0
+	damaged.emit(lost, source)
+	_dead_pending = true
+
+
 ## Retire `amount` PV a la tete (sans effet sur une epave). A 0 : destruction
 ## au prochain tick physique (le camion n'est jamais modifie pendant un pas).
 func damage(amount: float, source: StringName = &"") -> void:
@@ -257,6 +269,8 @@ func _leave_wreck() -> Array:
 	var world := _truck.get_parent()
 	var visual := _truck.get_node_or_null(^"Visual") as TruckVisual
 	var wreck := TruckWreck.new()
+	# sa propre carcasse : il ne s'y heurte pas en reapparaissant
+	wreck.dropped_by = _truck
 	if visual != null:
 		wreck.set_visual(visual.make_wreck_copy())
 	wreck.transform = _truck.global_transform
@@ -266,6 +280,7 @@ func _leave_wreck() -> Array:
 	if not _truck.is_trailer_detached():
 		left_trailer = DetachedTrailer.new()
 		left_trailer.configure(_truck.trailer_type)
+		left_trailer.dropped_by = _truck
 		left_trailer.initial_hp = trailer_hp
 		if visual != null:
 			left_trailer.set_visual(visual.make_trailer_copy())
