@@ -232,10 +232,10 @@ klaxon (son généré, transmis par l'`InputFrame`), vue cabine.
 | # | Tâche | Agent | État |
 |---|---|---|---|
 | 4.1 | `DeviceInputSource` : routage des `InputEvent` par `device` id (`docs/INPUT_SPEC.md`) | gameplay-engineer | `[x]` + profil MK8 Switch, jeux de touches par joueur |
-| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[~]` menu principal (`ui/main_menu.tscn`) : choix de 1 à 6 joueurs, couleur fixe par joueur, joueur N = manette N ; « appuyez sur A pour rejoindre » à faire |
+| 4.2 | Lobby local : « appuyez sur A pour rejoindre », 2 à 4 joueurs, couleur par joueur | gameplay-engineer | `[x]` menu : 1 à 6 joueurs, couleur par joueur ; **salle d'attente** (2026-10-17) : chaque manette rejoint avec Croix, clavier Entrée / Espace (`join_hotplug_test`) |
 | 4.3 | Écran partagé : 1 caméra et 1 HUD par joueur dans des `SubViewport` (2, 3, 4 vues) | gameplay-engineer | `[x]` `LocalRace` : plein écran, 2 vues haut / bas, grille 2 × 2 à 3-4, **3 × 2 à 5-6** (à 3 et à 5, la case libre = caméra TV sur le leader), HUD réduit (0,6 puis 0,5) |
-| 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer | `[~]` débranchement : roue libre (testé en solo) ; rebranchement en course non testé |
-| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[~]` isolation à 2, 4 et 6 joueurs (`race_scene_test`, `race_4p_test`, `race_6p_test`), grilles à 3 et 5 (`race_3p_test`, `race_5p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 |
+| 4.4 | Manette branchée ou débranchée à chaud, sans pause ni crash | gameplay-engineer | `[x]` débranchée : roue libre, « MANETTE DÉCONNECTÉE » dans sa vue, aucune pause ; rebranchée : elle reprend son camion (`join_hotplug_test`, 2026-10-17) |
+| 4.5 | Tests : isolation des inputs entre joueurs ; perf du rendu à 4 vues | godot-qa | `[x]` isolation à 2, 4 et 6 joueurs (`race_scene_test`, `race_4p_test`, `race_6p_test`), grilles à 3 et 5 (`race_3p_test`, `race_5p_test`), menu (`main_menu_test`) ; perf de rendu : spike V3 |
 
 Anticipé les 2026-09-28 et 29 pour le playtest : **menu principal puis course de
 1 à 6 joueurs** (6 depuis le 2026-09-30 ; `make run`, scène principale `ui/main_menu.tscn`). Le menu

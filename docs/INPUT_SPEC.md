@@ -155,6 +155,8 @@ Le clavier a `device == -1` par convention (les manettes commencent à 0).
 Le mapping `device_id → player_slot` est détenu par `GameState` et **persiste
 pendant toute la course**.
 
+Fait le 2026-10-17 (tâche 4.2) : bouton **SALLE D'ATTENTE** du menu. Croix rejoint, Rond repart (les suivants remontent d'une case), Options du joueur 1 lance ; au clavier, Entrée (flèches) et Espace (ZQSD) rejoignent, Retour arrière fait repartir le dernier. La liste est `GameState.join_devices` (id de manette, ou `JOIN_ARROWS` / `JOIN_ZQSD`) ; choisir un nombre de joueurs avec les boutons 1 à 6 revient à joueur N = manette N. Test : `join_hotplug_test`.
+
 ## 6. Branchement à chaud
 
 `Input.joy_connection_changed` :
@@ -163,6 +165,8 @@ pendant toute la course**.
   déconnectée » s'affiche dans **sa** vue ;
 - la même manette rebranchée reprend **son** camion, via son `device_id` ;
 - **manette branchée** en course → elle attend le prochain lobby.
+
+Vérifié le 2026-10-17 (`join_hotplug_test`) : débranchée, gaz à zéro et « MANETTE DÉCONNECTÉE » dans sa vue, aucune pause ; rebranchée, elle reprend son camion.
 
 Ne mets jamais la course en pause sur une déconnexion : en écran partagé, c'est
 plus frustrant que le problème lui-même.

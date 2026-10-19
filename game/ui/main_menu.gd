@@ -71,6 +71,12 @@ var online_status: Label
 var lobby_label: Label
 ## Host : connexion qui envoie peu (snapshots a 20 Hz au lieu de 60).
 var slow_check: CheckButton
+## Salle d'attente (« appuyez sur Croix pour rejoindre », tache 4.2) :
+## appareils inscrits, dans l'ordre d'arrivee (GameState.join_devices).
+var waiting_button: Button
+var join_panel: Control
+var join_list: PackedInt32Array = PackedInt32Array()
+var _join_slots: Array[Label] = []
 var _gear: GearIcon
 var _pads_label: Label
 var _orbit_center: Vector3
@@ -91,7 +97,7 @@ func _ready() -> void:
 	# musique de course rendue en fond pendant le menu (sans effet en headless)
 	RaceMusic.prepare()
 	# on retrouve le dernier choix en revenant d'une course
-	select_players(GameState.requested_players if GameState.requested_players > 0 else 1)
+	select_players(GameState.requested_players if GameState.requested_players > 0 else 1, false)
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	for sig: Signal in [NetSession.lobby_changed, NetSession.joined, NetSession.race_launched]:
 		sig.connect(_refresh_online)
@@ -235,8 +241,12 @@ func select_speed(k: int) -> void:
 		speed_buttons[i].set_pressed_no_signal(i == GameState.speed_class)
 
 
-## Nombre de joueurs (borne a 1..6) : bouton enfonce, camions montres.
-func select_players(n: int) -> void:
+## Nombre de joueurs (borne a 1..6) : bouton enfonce, camions montres. Choisi
+## a la main (`manual`) : on revient a joueur N = manette N (la salle
+## d'attente est oubliee).
+func select_players(n: int, manual: bool = true) -> void:
+	if manual:
+		GameState.join_devices = PackedInt32Array()
 	var prev := selected_players
 	selected_players = clampi(n, 1, LocalRace.MAX_PLAYERS)
 	if is_node_ready() and selected_players != prev:
@@ -306,6 +316,173 @@ func set_quality(q: int) -> void:
 ## Volume general (0 a 100 %), sur le bus Master.
 func set_volume(percent: float) -> void:
 	AudioServer.set_bus_volume_db(_master_bus(), linear_to_db(maxf(percent, 0.001) / 100.0))
+
+
+# --- salle d'attente (tache 4.2) ------------------------------------------------
+
+## Ouvre ou ferme la salle d'attente ; a l'ouverture, elle repart de la liste
+## de la course precedente.
+func toggle_join() -> void:
+	join_panel.visible = not join_panel.visible
+	if is_node_ready():
+		MenuSound.play_toggle()
+	if join_panel.visible:
+		join_list = GameState.join_devices.duplicate()
+		_refresh_join()
+	else:
+		waiting_button.grab_focus()
+
+
+## Un appareil rejoint (id de manette, GameState.JOIN_ARROWS / JOIN_ZQSD) :
+## premiere case libre. Deja inscrit, ou plus de place : rien.
+func join_device(device: int) -> bool:
+	if join_list.has(device) or join_list.size() >= LocalRace.MAX_PLAYERS:
+		return false
+	join_list.append(device)
+	MenuSound.play_confirm()
+	_refresh_join()
+	return true
+
+
+## Un appareil inscrit repart ; les suivants remontent d'une case.
+func leave_device(device: int) -> bool:
+	var k := join_list.find(device)
+	if k < 0:
+		return false
+	join_list.remove_at(k)
+	MenuSound.play_toggle()
+	_refresh_join()
+	return true
+
+
+## Lance la course avec les inscrits, chacun sur son appareil.
+func launch_join() -> void:
+	if join_list.is_empty():
+		return
+	GameState.join_devices = join_list.duplicate()
+	select_players(join_list.size(), false)
+	join_panel.visible = false
+	MenuSound.play_confirm()
+	GameState.requested_players = join_list.size()
+	launch_requested.emit(join_list.size())
+	if auto_change_scene:
+		get_tree().change_scene_to_file(race_scene())
+
+
+## Manettes et clavier dans la salle d'attente, avant les boutons du menu :
+## Croix rejoint, Rond repart (ferme si on n'etait pas inscrit), Options du
+## joueur 1 lance ; clavier : Entree (fleches) et Espace (ZQSD) rejoignent, Retour
+## arriere fait repartir le dernier, Echap ferme.
+func _input(event: InputEvent) -> void:
+	if join_panel == null or not join_panel.visible:
+		return
+	var pad := event as InputEventJoypadButton
+	var key := event as InputEventKey
+	if pad != null and pad.pressed:
+		match pad.button_index:
+			JOY_BUTTON_A:
+				join_device(pad.device)
+			JOY_BUTTON_B:
+				if not leave_device(pad.device):
+					toggle_join()
+			JOY_BUTTON_START:
+				# le joueur 1 lance (INPUT_SPEC §5)
+				if not join_list.is_empty() and pad.device == join_list[0]:
+					launch_join()
+		get_viewport().set_input_as_handled()
+	elif key != null and key.pressed and not key.echo:
+		match key.physical_keycode:
+			KEY_ENTER, KEY_KP_ENTER:
+				if not join_device(GameStateNode.JOIN_ARROWS):
+					launch_join()
+			KEY_SPACE:
+				join_device(GameStateNode.JOIN_ZQSD)
+			KEY_BACKSPACE:
+				if not join_list.is_empty():
+					leave_device(join_list[join_list.size() - 1])
+			KEY_ESCAPE:
+				toggle_join()
+			_:
+				return
+		get_viewport().set_input_as_handled()
+
+
+## Nom de l'appareil d'un inscrit.
+static func device_label(device: int) -> String:
+	if device == GameStateNode.JOIN_ARROWS:
+		return "clavier : flèches"
+	if device == GameStateNode.JOIN_ZQSD:
+		return "clavier : ZQSD"
+	var pad_name := Input.get_joy_name(device)
+	return "manette %d%s" % [device + 1, (" — " + pad_name) if pad_name != "" else ""]
+
+
+func _refresh_join() -> void:
+	for k in _join_slots.size():
+		var l := _join_slots[k]
+		if k < join_list.size():
+			l.text = "J%d  %s   ·   %s" % [k + 1, LocalRace.COLOR_NAMES[k], device_label(join_list[k])]
+			l.modulate = Color.WHITE
+		else:
+			l.text = "J%d  appuyez sur CROIX pour rejoindre" % (k + 1)
+			l.modulate = TEXT_DIM
+	select_players(maxi(join_list.size(), 1), false)
+
+
+## Panneau : six cases, aide des commandes, COMMENCER et RETOUR.
+func _build_join() -> Control:
+	var layer := Control.new()
+	layer.name = "JoinPanel"
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.visible = false
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.7)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.custom_minimum_size = Vector2(900, 0)
+	panel.add_theme_stylebox_override("panel", _box(Color(0.05, 0.07, 0.11, 0.97), ACCENT, 3))
+	layer.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	panel.add_child(box)
+	var head := _label("SALLE D'ATTENTE", 40, 6)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(head)
+	var help := _label("Croix : rejoindre  ·  Rond : repartir  ·  Options : commencer\n"
+		+ "Clavier : Entrée (flèches) ou Espace (ZQSD) pour rejoindre, Retour arrière pour repartir", 17, 0)
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.modulate = TEXT_DIM
+	box.add_child(help)
+	for k in LocalRace.MAX_PLAYERS:
+		var l := _label("", 22, 0)
+		l.name = "Slot%d" % (k + 1)
+		box.add_child(l)
+		_join_slots.append(l)
+	var bottom := HBoxContainer.new()
+	bottom.alignment = BoxContainer.ALIGNMENT_CENTER
+	bottom.add_theme_constant_override("separation", 16)
+	box.add_child(bottom)
+	var go := Button.new()
+	go.name = "Start"
+	go.text = "COMMENCER"
+	go.custom_minimum_size = Vector2(300, 64)
+	_style_button(go, ACCENT, ACCENT, 26)
+	go.focus_mode = Control.FOCUS_NONE   # manettes et clavier : voir _input
+	go.pressed.connect(launch_join)
+	bottom.add_child(go)
+	var back := Button.new()
+	back.name = "Back"
+	back.text = "RETOUR"
+	back.custom_minimum_size = Vector2(220, 64)
+	_style_button(back, Color(0.07, 0.09, 0.15, 0.88), ACCENT, 22)
+	back.focus_mode = Control.FOCUS_NONE
+	back.pressed.connect(toggle_join)
+	bottom.add_child(back)
+	return layer
 
 
 func toggle_online() -> void:
@@ -518,6 +695,16 @@ func _build_ui() -> void:
 	_pads_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(_gap(10))
 	column.add_child(_pads_label)
+	# salle d'attente : chacun rejoint avec SA manette (ou son jeu de touches)
+	waiting_button = Button.new()
+	waiting_button.name = "WaitingRoom"
+	waiting_button.text = "SALLE D'ATTENTE : CHACUN SA MANETTE"
+	waiting_button.tooltip_text = "Chaque joueur appuie sur Croix (ou Entrée / Espace au clavier) pour rejoindre."
+	waiting_button.custom_minimum_size = Vector2(0, 46)
+	_style_button(waiting_button, BUTTON_BG, ACCENT, 17)
+	waiting_button.pressed.connect(toggle_join)
+	column.add_child(_gap(8))
+	column.add_child(waiting_button)
 	column.add_child(_gap(30))
 
 	# categorie de vitesse, facon cylindree
@@ -612,6 +799,8 @@ func _build_ui() -> void:
 	root.add_child(settings)
 	online_panel = _build_online()
 	root.add_child(online_panel)
+	join_panel = _build_join()
+	root.add_child(join_panel)
 
 
 ## Rangee d'une section : boutons de meme largeur, du bord gauche au bord droit.

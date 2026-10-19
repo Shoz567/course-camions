@@ -73,7 +73,7 @@ Dans Claude Code :
 | 1 — Un camion qui se conduit bien | ✅ |
 | 2 — Piste et tour solo | ✅ |
 | 3 — Course complète et juice | ✅ `RaceManager`, temps limite, classement, sons du moteur et des chocs, secousse de caméra |
-| **4 — Écran partagé local** | **🟡 en cours** : 1 à 6 joueurs, menu ; « appuyez sur A pour rejoindre » et rebranchement à chaud à faire |
+| 4 — Écran partagé local | ✅ 1 à 6 joueurs, salle d'attente (chacun sa manette), manettes à chaud, budget de rendu à 4 vues |
 | 5 | à venir — voir `PLAN.md` |
 | **6 — En ligne / réseau local** | **🟡 étapes 1 à 3 faites** (branche `reseau/host-et-lobby`) : héberger, rejoindre par IP, lobby, course synchronisée, camion du joueur prédit (aucun délai), PV, épaves, remorques, barils synchronisés ; voir `docs/NETCODE.md` §11 |
 | 7 | à venir — voir `PLAN.md` |

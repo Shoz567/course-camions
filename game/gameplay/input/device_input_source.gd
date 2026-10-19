@@ -57,6 +57,9 @@ signal camera_toggle_requested
 @export var axis_camera: JoyAxis = JOY_AXIS_RIGHT_Y
 
 var connected: bool = false
+## Debranchee en cours de route, pas encore rebranchee (INPUT_SPEC §6 : la vue
+## de son joueur l'affiche).
+var unplugged: bool = false
 
 var _axis_x: float = 0.0
 var _rt: float = 0.0
@@ -157,6 +160,7 @@ func _on_joy_connection_changed(device: int, is_connected: bool) -> void:
 	if device != device_id:
 		return
 	connected = is_connected
+	unplugged = not is_connected
 	if not is_connected:
 		# manette debranchee : gaz a zero, roue libre, jamais de pause (§6)
 		_axis_x = 0.0
