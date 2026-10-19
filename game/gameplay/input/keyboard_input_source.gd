@@ -6,11 +6,11 @@ extends InputSource
 ## reference) : Z Q S D sur AZERTY = W A S D sur QWERTY.
 ##
 ##   ZQSD    : Z Q S D, Espace drift, Maj gauche boost, E cargo, H klaxon,
-##             C camera, R reset
+##             C camera, R reset, F / G pouvoirs
 ##   FLECHES : fleches, Ctrl droit drift, Maj droite boost, touche a gauche de
 ##             Maj droite (! en AZERTY) klaxon, la suivante (: en AZERTY)
 ##             camera, encore la suivante (; en AZERTY) cargo, Retour arriere
-##             reset
+##             reset, K / L pouvoirs
 ##   LES DEUX: les deux jeux de touches (joueur seul)
 ##   AUCUN   : pas de clavier (J3 et J4, manette seulement)
 ##
@@ -34,6 +34,8 @@ var _boost: bool = false
 var _reset_pending: bool = false
 var _honk_pending: bool = false
 var _cargo_pending: bool = false
+var _power_left_pending: bool = false
+var _power_right_pending: bool = false
 
 
 func _input(event: InputEvent) -> void:
@@ -84,6 +86,15 @@ func _input(event: InputEvent) -> void:
 			if zqsd and p: _reset_pending = true
 		KEY_BACKSPACE:
 			if arrows and p: _reset_pending = true
+		# pouvoirs (tache 4.5.8) : F / G (ZQSD), K / L (fleches)
+		KEY_F:
+			if zqsd and p: _power_left_pending = true
+		KEY_G:
+			if zqsd and p: _power_right_pending = true
+		KEY_K:
+			if arrows and p: _power_left_pending = true
+		KEY_L:
+			if arrows and p: _power_right_pending = true
 
 
 func poll(tick: int) -> InputFrame:
@@ -98,7 +109,11 @@ func poll(tick: int) -> InputFrame:
 	frame.reset = _reset_pending
 	frame.honk = _honk_pending
 	frame.cargo = _cargo_pending
+	frame.power_left = _power_left_pending
+	frame.power_right = _power_right_pending
 	_reset_pending = false
 	_honk_pending = false
 	_cargo_pending = false
+	_power_left_pending = false
+	_power_right_pending = false
 	return frame

@@ -77,6 +77,9 @@ var last_wreck: TruckWreck
 ## compte ici ; PV, epave et reapparition arrivent du host (net_*), et les
 ## effets (fumee, explosion, carcasse) suivent comme d'habitude.
 var net_mirror: bool = false
+## Bouclier (pouvoir, tache 4.5.8) : ticks restants sans degats, tete et
+## remorque attelee.
+var shield_ticks: int = 0
 
 var _truck: Truck
 var _dead_pending: bool = false
@@ -155,7 +158,7 @@ func _hit(amount: float, on_trailer: bool, source: StringName) -> void:
 ## Retire `amount` PV a la tete (sans effet sur une epave). A 0 : destruction
 ## au prochain tick physique (le camion n'est jamais modifie pendant un pas).
 func damage(amount: float, source: StringName = &"") -> void:
-	if net_mirror or amount <= 0.0 or is_wrecked() or _dead_pending:
+	if net_mirror or amount <= 0.0 or is_wrecked() or _dead_pending or shield_ticks > 0:
 		return
 	hp = maxf(0.0, hp - amount)
 	damaged.emit(amount, source)
@@ -166,7 +169,7 @@ func damage(amount: float, source: StringName = &"") -> void:
 ## Retire `amount` PV a la remorque attelee, jamais a la tete. A 0 : elle
 ## explose au prochain tick physique.
 func damage_trailer(amount: float, source: StringName = &"") -> void:
-	if net_mirror or amount <= 0.0 or is_wrecked() or _dead_pending or _trailer_pending:
+	if net_mirror or amount <= 0.0 or is_wrecked() or _dead_pending or _trailer_pending or shield_ticks > 0:
 		return
 	if _truck == null or _truck.is_trailer_detached():
 		return
@@ -188,6 +191,8 @@ func wreck_seconds_left() -> int:
 func _physics_process(_delta: float) -> void:
 	if _truck == null:
 		return
+	if shield_ticks > 0:
+		shield_ticks -= 1
 	_sync_trailer_type()
 	if _dead_pending:
 		_dead_pending = false

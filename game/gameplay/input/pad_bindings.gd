@@ -12,7 +12,7 @@ extends RefCounted
 ## anciens boutons de la premiere (aucune action ne devient injouable).
 
 ## Actions dans l'ordre de l'ecran, et leur nom affiche.
-const ACTIONS: PackedStringArray = ["handbrake", "boost", "cargo", "honk", "camera", "reset"]
+const ACTIONS: PackedStringArray = ["handbrake", "boost", "cargo", "honk", "camera", "reset", "power_left", "power_right"]
 const LABELS: Dictionary = {
 	"handbrake": "Frein à main / dérapage (drift)",
 	"boost": "Nitro boost",
@@ -20,6 +20,8 @@ const LABELS: Dictionary = {
 	"honk": "Klaxon",
 	"camera": "Changer de vue",
 	"reset": "Reset sur la piste",
+	"power_left": "Pouvoir de gauche",
+	"power_right": "Pouvoir de droite",
 }
 
 ## Boutons qu'on ne peut pas donner : le bouton PS ouvre le systeme.
@@ -35,6 +37,8 @@ static func defaults() -> Dictionary:
 		"honk": PackedInt32Array([JOY_BUTTON_LEFT_SHOULDER]),
 		"camera": PackedInt32Array([JOY_BUTTON_RIGHT_STICK]),
 		"reset": PackedInt32Array([JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]),
+		"power_left": PackedInt32Array([JOY_BUTTON_DPAD_LEFT]),
+		"power_right": PackedInt32Array([JOY_BUTTON_DPAD_RIGHT]),
 	}
 
 
@@ -88,6 +92,8 @@ static func apply(source: DeviceInputSource, bindings: Dictionary) -> void:
 	source.buttons_honk = _typed(b["honk"])
 	source.buttons_camera = _typed(b["camera"])
 	source.buttons_reset = _typed(b["reset"])
+	source.buttons_power_left = _typed(b["power_left"])
+	source.buttons_power_right = _typed(b["power_right"])
 
 
 static func _typed(list: PackedInt32Array) -> Array[JoyButton]:

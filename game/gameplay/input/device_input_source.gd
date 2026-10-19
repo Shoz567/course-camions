@@ -23,6 +23,7 @@ extends InputSource
 ##   klaxon           L1
 ##   camera           R3, ou un coup franc du stick droit : signal local
 ##   reset            Options, Create ou pave tactile
+##   pouvoirs         fleches gauche / droite de la croix (4.5.8)
 
 ## Changement de vue demande (1re / 3e personne). Local : la camera ne modifie
 ## pas la simulation, elle n'est pas dans l'InputFrame (INPUT_SPEC §2).
@@ -45,6 +46,9 @@ signal camera_toggle_requested
 @export var buttons_boost: Array[JoyButton] = [JOY_BUTTON_X]
 @export var buttons_honk: Array[JoyButton] = [JOY_BUTTON_LEFT_SHOULDER]
 @export var buttons_cargo: Array[JoyButton] = [JOY_BUTTON_Y]
+## Pouvoirs (tache 4.5.8) : fleches gauche / droite de la croix.
+@export var buttons_power_left: Array[JoyButton] = [JOY_BUTTON_DPAD_LEFT]
+@export var buttons_power_right: Array[JoyButton] = [JOY_BUTTON_DPAD_RIGHT]
 @export var buttons_camera: Array[JoyButton] = [JOY_BUTTON_RIGHT_STICK]
 @export var buttons_reset: Array[JoyButton] = [JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]
 ## Gachette d'accelerateur analogique (R2).
@@ -73,6 +77,8 @@ var _boost_held: int = 0
 var _reset_pending: bool = false
 var _honk_pending: bool = false
 var _cargo_pending: bool = false
+var _power_left_pending: bool = false
+var _power_right_pending: bool = false
 
 
 func _ready() -> void:
@@ -123,6 +129,10 @@ func _input(event: InputEvent) -> void:
 		_honk_pending = true
 	if buttons_cargo.has(b):
 		_cargo_pending = true
+	if buttons_power_left.has(b):
+		_power_left_pending = true
+	if buttons_power_right.has(b):
+		_power_right_pending = true
 	if buttons_camera.has(b):
 		camera_toggle_requested.emit()
 	if buttons_reset.has(b):
@@ -141,6 +151,10 @@ func poll(tick: int) -> InputFrame:
 	frame.reset = _reset_pending
 	frame.honk = _honk_pending
 	frame.cargo = _cargo_pending
+	frame.power_left = _power_left_pending
+	frame.power_right = _power_right_pending
+	_power_left_pending = false
+	_power_right_pending = false
 	_reset_pending = false
 	_honk_pending = false
 	_cargo_pending = false
@@ -175,3 +189,5 @@ func _on_joy_connection_changed(device: int, is_connected: bool) -> void:
 		_reset_pending = false
 		_honk_pending = false
 		_cargo_pending = false
+		_power_left_pending = false
+		_power_right_pending = false

@@ -70,4 +70,6 @@ func poll(tick: int) -> InputFrame:
 	frame.reset = p.reset or k.reset
 	frame.honk = p.honk or k.honk
 	frame.cargo = p.cargo or k.cargo
+	frame.power_left = p.power_left or k.power_left
+	frame.power_right = p.power_right or k.power_right
 	return frame

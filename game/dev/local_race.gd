@@ -85,10 +85,10 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
 	},
 ]
-const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L1 klaxon, R3 camera, Options reset.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, R reset.   Echap : menu"
+const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L1 klaxon, R3 camera, Options reset, croix gauche / droite pouvoirs.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, R reset, F / G pouvoirs.   Echap : menu"
 const HELP_SPLIT: PackedStringArray = [
-	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset)",
-	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset)",
+	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset), K / L (pouvoirs)",
+	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset), F / G (pouvoirs)",
 	"J3 : manette 3",
 	"J4 : manette 4",
 	"J5 : manette 5",
@@ -368,6 +368,11 @@ func _add_player(i: int) -> Player:
 	set_trailer(p, choice)
 	p.power_left = GameState.power_left[i] if i < GameState.power_left.size() else -1
 	p.power_right = GameState.power_right[i] if i < GameState.power_right.size() else -1
+	# cibles des pouvoirs : tous les camions de la course ; pouvoirs choisis
+	# sur la page de selection (hors ligne), simules sur la machine qui fait foi
+	t.add_to_group(TruckPowers.TARGETS)
+	if is_authority():
+		TruckPowers.setup(t, p.power_left, p.power_right)
 	race.watch(t)
 	# client en ligne : NetRace predit le camion de ce PC et pose les autres sur
 	# l'etat du host ; la remise en piste et les PV sont l'affaire du host

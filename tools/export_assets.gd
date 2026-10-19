@@ -12,6 +12,8 @@ extends SceneTree
 const DIRS: PackedStringArray = [
 	"Assets_Visuels/Camion/Camions_Course_Export/Realiste",
 	"Assets_Visuels/Armes_et_camions/vehicules/Realiste",
+	# armes des pouvoirs (TruckPowers)
+	"Assets_Visuels/Armes_et_camions/armes",
 ]
 
 

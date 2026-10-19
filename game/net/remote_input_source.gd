@@ -93,6 +93,8 @@ func poll(tick: int) -> InputFrame:
 		frame.reset = false
 		frame.honk = false
 		frame.cargo = false
+		frame.power_left = false
+		frame.power_right = false
 		_current_valid = false
 		held_ticks += 1
 	else:
@@ -123,6 +125,8 @@ func _drop_oldest() -> void:
 	next.reset = next.reset or old.reset
 	next.honk = next.honk or old.honk
 	next.cargo = next.cargo or old.cargo
+	next.power_left = next.power_left or old.power_left
+	next.power_right = next.power_right or old.power_right
 	next.boost = next.boost or old.boost
 	next.handbrake = next.handbrake or old.handbrake
 	dropped_frames += 1
