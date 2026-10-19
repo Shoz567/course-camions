@@ -771,7 +771,54 @@ func standings_text() -> String:
 	return "\n".join(lines)
 
 
-func _process(_delta: float) -> void:
+## Ralenti d'arrivee (tache 7.4) : quand le dernier camion passe la ligne,
+## hors ligne et pas au temps limite, le temps du jeu tombe a SLOWMO_SCALE
+## pendant SLOWMO_HOLD_S puis revient en douceur a 1 a SLOWMO_TOTAL_S
+## (secondes REELLES). Presentation seulement : la simulation compte toujours
+## ses ticks, il y en a juste moins par seconde. En ligne, jamais (le host
+## ralentirait tout le monde).
+const SLOWMO_SCALE := 0.3
+const SLOWMO_HOLD_S := 0.7
+const SLOWMO_TOTAL_S := 1.8
+var _slowmo_t: float = -1.0
+
+
+static func slowmo_scale(t: float) -> float:
+	if t < 0.0 or t >= SLOWMO_TOTAL_S:
+		return 1.0
+	if t < SLOWMO_HOLD_S:
+		return SLOWMO_SCALE
+	var u := (t - SLOWMO_HOLD_S) / (SLOWMO_TOTAL_S - SLOWMO_HOLD_S)
+	return lerpf(SLOWMO_SCALE, 1.0, u * u * (3.0 - 2.0 * u))
+
+
+func slowmo_active() -> bool:
+	return _slowmo_t >= 0.0
+
+
+func _start_slowmo() -> void:
+	_slowmo_t = 0.0
+	Engine.time_scale = SLOWMO_SCALE
+
+
+## delta est deja ralenti par time_scale : on avance en temps reel.
+func _update_slowmo(delta: float) -> void:
+	if _slowmo_t < 0.0:
+		return
+	_slowmo_t += delta / maxf(Engine.time_scale, 0.01)
+	Engine.time_scale = slowmo_scale(_slowmo_t)
+	if _slowmo_t >= SLOWMO_TOTAL_S:
+		_slowmo_t = -1.0
+		Engine.time_scale = 1.0
+
+
+func _exit_tree() -> void:
+	# menu ou rejouer en plein ralenti : le jeu repart a vitesse normale
+	Engine.time_scale = 1.0
+
+
+func _process(delta: float) -> void:
+	_update_slowmo(delta)
 	var elapsed := Engine.get_physics_frames() - _state_tick
 	var standings := standings_text()
 	if _notice != "" and Engine.get_physics_frames() < _notice_until:
@@ -867,3 +914,5 @@ func _check_all_finished() -> void:
 		RaceManager.finish(tick, RaceManager.deadline_left(tick) == 0 \
 				and _finish_order.size() + _abandoned.size() < players.size())
 		music.fade_out()
+		if not NetSession.is_online() and not RaceManager.ended_by_timeout:
+			_start_slowmo()
