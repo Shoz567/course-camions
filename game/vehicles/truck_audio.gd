@@ -9,7 +9,9 @@ extends Node3D
 ##     arriere (derapage, frein a main) quand les roues touchent ; moitie moins
 ##     fort sur la route mouillee de Cyber City ;
 ##   - chocs : un coup sourd et metallique a chaque impact (mur, camion,
-##     obstacle), d'autant plus fort que le choc est violent.
+##     obstacle), d'autant plus fort que le choc est violent ;
+##   - largage (tache 7.3) : la sellette qui s'ouvre, un clac metallique sec
+##     puis le pneumatique qui souffle.
 ## Tout est synthetise une fois a l'execution, partage par tous les camions
 ## (aucun fichier audio tiers, CLAUDE.md §8 ; rien de lourd a l'apparition
 ## d'un camion, SPIKE A14), sans tirage aleatoire (CLAUDE.md §7). Cote reseau,
@@ -37,11 +39,15 @@ const IMPACT_GAP_S := 0.12
 static var _engine_stream: AudioStreamWAV
 static var _squeal_stream: AudioStreamWAV
 static var _impact_stream: AudioStreamWAV
+static var _release_stream: AudioStreamWAV
 
 var _truck: Truck
 var _engine: AudioStreamPlayer3D
 var _squeal: AudioStreamPlayer3D
 var _impacts: Array[AudioStreamPlayer3D] = []
+var _release: AudioStreamPlayer3D
+## Largages entendus (compteur : se teste aussi en headless).
+var releases: int = 0
 var _next_impact: int = 0
 var _impact_wait: float = 0.0
 var rpm: float = IDLE_RPM
@@ -55,6 +61,9 @@ func _ready() -> void:
 		return
 	_truck.wall_impact_at.connect(func(v: float, _r: bool, _at: Vector3, _n: Vector3) -> void: impact(v))
 	_truck.body_impact.connect(func(v: float, _r: bool, _at: Vector3, _n: Vector3) -> void: impact(v))
+	var cargo := _truck.get_node_or_null(^"Cargo") as TruckCargo
+	if cargo != null:
+		cargo.dropped.connect(func(_t: DetachedTrailer) -> void: release())
 	_live = DisplayServer.get_name() != "headless"
 	if not _live:
 		return
@@ -62,6 +71,7 @@ func _ready() -> void:
 		_engine_stream = _loop(_build_engine())
 		_squeal_stream = _loop(_build_squeal())
 		_impact_stream = _wav(_build_impact())
+		_release_stream = _wav(build_release())
 	_engine = _player(_engine_stream, 16.0, -8.0)
 	_engine.position = TruckSpec.CAB_CENTER
 	_engine.play()
@@ -70,6 +80,8 @@ func _ready() -> void:
 	for k in 2:
 		var p := _player(_impact_stream, 14.0, 0.0)
 		_impacts.append(p)
+	_release = _player(_release_stream, 14.0, -2.0)
+	_release.position = TruckSpec.KINGPIN
 
 
 func _player(stream: AudioStream, unit: float, db: float) -> AudioStreamPlayer3D:
@@ -123,6 +135,13 @@ func impact(speed_ms: float) -> void:
 	# chocs violents plus graves, legers plus secs ; aucun tirage
 	p.pitch_scale = lerpf(1.25, 0.8, level)
 	p.play()
+
+
+## Remorque larguee : la sellette s'ouvre.
+func release() -> void:
+	releases += 1
+	if _live and _release != null:
+		_release.play()
 
 
 func _process(delta: float) -> void:
@@ -257,4 +276,31 @@ static func _build_impact() -> PackedFloat32Array:
 		var burst := noise[i] * exp(-t * 30.0)
 		var attack := minf(1.0, t / 0.002)
 		out[i] = (thump * 0.9 + clang * 0.45 + burst * 1.2) * attack * 0.7
+	return out
+
+## Largage : 0,7 s, clac de la sellette (deux coups metalliques rapproches,
+## partiels inharmoniques tres brefs) puis le souffle de l'air comprime des
+## flexibles qui se debranchent (bruit filtre qui decroit).
+static func build_release() -> PackedFloat32Array:
+	var n := roundi(RATE * 0.7)
+	var hiss := _looped_noise(n, 19, 0.55)
+	var low := _looped_noise(n, 19, 0.06)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		var s := 0.0
+		for hit: float in [0.0, 0.045]:
+			var u := t - hit
+			if u >= 0.0:
+				var clank := sin(TAU * 1170.0 * u) * 0.5 + sin(TAU * 1760.0 * u) * 0.35 + sin(TAU * 3020.0 * u) * 0.2
+				s += clank * exp(-u * 38.0) * minf(1.0, u / 0.001) * (1.0 if hit == 0.0 else 0.7)
+				s += sin(TAU * 150.0 * u) * exp(-u * 25.0) * 0.6
+		var h := t - 0.08
+		if h > 0.0:
+			s += (hiss[i] - low[i]) * 1.3 * minf(1.0, h / 0.02) * exp(-h * 5.0)
+		out[i] = s * 0.6
+	var fade := roundi(RATE * 0.01)
+	for i in fade:
+		out[n - 1 - i] *= float(i) / fade
 	return out

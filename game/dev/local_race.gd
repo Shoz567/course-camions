@@ -208,6 +208,12 @@ func _ready() -> void:
 		TruckMaterials.set_weather(TruckMaterials.BEACH_GRIME, 0.0)
 	auto_reset.respawn_provider = race.respawn_transform
 	race.race_finished.connect(_on_race_finished)
+	race.lap_completed.connect(_on_lap_completed)
+	# pluie et ville, ou vagues et vent, sous la musique
+	var ambience := AmbienceSound.new()
+	ambience.name = "Ambience"
+	ambience.theme_id = track.theme_id
+	add_child(ambience)
 	music = RaceMusic.new()
 	music.name = "RaceMusic"
 	add_child(music)
@@ -420,6 +426,10 @@ func _add_player(i: int) -> Player:
 ## 4 m/s (frottement), pleine a 22 m/s (~80 km/h de face).
 static func shake_for(speed_ms: float) -> float:
 	return clampf((speed_ms - 4.0) / 18.0, 0.0, 1.0)
+
+
+## Dernier bruitage de course joue pour un joueur de cet ecran (RaceSound.Cue).
+var last_cue: int = RaceSound.Cue.NONE
 
 
 ## Appareil du joueur `i` choisi dans la salle d'attente du menu (id de
@@ -837,6 +847,16 @@ func _process(_delta: float) -> void:
 func _on_race_finished(truck: Truck, _total: int) -> void:
 	RaceManager.record_finish(truck, Engine.get_physics_frames())
 	_check_all_finished()
+
+
+## Tour boucle par un joueur de cet ecran : carillon, dernier tour, arrivee
+## (RaceSound). Les camions des autres joueurs en ligne ne sonnent pas ici.
+func _on_lap_completed(truck: Truck, lap: int, _lap_ticks: int) -> void:
+	for i in players.size():
+		if players[i].truck == truck and is_local(i):
+			last_cue = RaceSound.cue_for(lap, race.total_laps)
+			RaceSound.play(last_cue)
+			return
 
 
 ## Tous arrives (ou partis, en ligne), ou temps limite ecoule apres la
