@@ -62,6 +62,11 @@ enum View { CHASE, COCKPIT }
 @export var cockpit_damping: float = 18.0
 
 var view: View = View.CHASE
+## Secousse de choc en cours (0 .. 1) et son temps propre.
+var _shake: float = 0.0
+var _shake_time: float = 0.0
+const SHAKE_MAX_M := 0.25
+const SHAKE_DECAY := 16.0
 var _cockpit_basis: Basis = Basis.IDENTITY
 
 var _arm: Node3D
@@ -165,6 +170,30 @@ func _process(delta: float) -> void:
 	var speed_ratio := clampf(absf(forward_speed) * 3.6 / fov_speed_kmh, 0.0, 1.0)
 	var fov := lerpf(fov_min, fov_max, speed_ratio)
 	_camera.fov = lerpf(_camera.fov, fov, 1.0 - exp(-fov_damping * delta))
+	_apply_shake(delta)
+
+
+## Secousse de choc (tache 3.5) : `amount` 0 .. 1 (1 : choc frontal violent).
+## Jamais en conduite normale (la camera ne tremble pas : tache 2.1), seulement
+## a un choc ; elle s'amortit en ~0,25 s.
+func shake(amount: float) -> void:
+	_shake = clampf(maxf(_shake, amount), 0.0, 1.0)
+
+
+## Decalage de l'image (h_offset / v_offset de la camera) : deux sinus
+## incommensurables, aucun tirage aleatoire ; amplitude SHAKE_MAX_M au plus.
+func _apply_shake(delta: float) -> void:
+	if _shake <= 0.001:
+		if _camera.h_offset != 0.0 or _camera.v_offset != 0.0:
+			_camera.h_offset = 0.0
+			_camera.v_offset = 0.0
+		_shake = 0.0
+		return
+	_shake_time += delta
+	var a := _shake * _shake * SHAKE_MAX_M
+	_camera.h_offset = a * sin(_shake_time * 71.0)
+	_camera.v_offset = a * sin(_shake_time * 53.0 + 1.3)
+	_shake *= exp(-SHAKE_DECAY * delta)
 
 
 ## Longueur du bras a cette image : la sphere part du pivot vers la camera et

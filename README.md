@@ -72,7 +72,7 @@ Dans Claude Code :
 | 0.5 — Spikes du camion | ✅ V1, V2, V4 ; V3 (rendu à 4 vues sur la machine de référence) à mesurer |
 | 1 — Un camion qui se conduit bien | ✅ |
 | 2 — Piste et tour solo | ✅ |
-| 3 — Course complète et juice | 🟡 en partie : 2e circuit, sons et musique ; voir `PLAN.md` |
+| 3 — Course complète et juice | ✅ `RaceManager`, temps limite, classement, sons du moteur et des chocs, secousse de caméra |
 | **4 — Écran partagé local** | **🟡 en cours** : 1 à 6 joueurs, menu ; « appuyez sur A pour rejoindre » et rebranchement à chaud à faire |
 | 5 | à venir — voir `PLAN.md` |
 | **6 — En ligne / réseau local** | **🟡 étapes 1 à 3 faites** (branche `reseau/host-et-lobby`) : héberger, rejoindre par IP, lobby, course synchronisée, camion du joueur prédit (aucun délai), PV, épaves, remorques, barils synchronisés ; voir `docs/NETCODE.md` §11 |

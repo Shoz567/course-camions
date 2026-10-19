@@ -178,6 +178,14 @@ func progress(truck: Truck) -> float:
 	var s := track.sample_s(idx)
 	if r.lap == 0:
 		return s - length
+	# a la ligne, le tour change quand l'AVANT du camion touche sa zone, alors
+	# que la position se lit au centre (2026-10-17, race_flow_test : 6 ticks de
+	# classement faux a chaque passage) : tour deja compte, centre encore
+	# avant la ligne, ou centre passe, tour pas encore compte
+	if r.last_cp == 0 and s > length * 0.5:
+		s -= length
+	elif r.next_cp == 0 and s < length * 0.5:
+		s += length
 	return (r.lap - 1) * length + s
 
 
