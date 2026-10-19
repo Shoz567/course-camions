@@ -319,9 +319,15 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   +1 à 20 Hz).
 - **Aide en l'air** (`AutoReset.air_return`) appliquée aussi au camion prédit
   du client (`watch_assist`), pour que sa prédiction suive le host.
+- **Chargement** : le client s'annonce prêt (`_scene_ready`) une fois son
+  écran de chargement levé ; la détection de coupure rapide (3 à 8 s) n'est
+  posée, des deux côtés, qu'après le sas READY ; pendant le chargement, 15 à
+  60 s (au réglage d'ENet, 5 à 30 s, un client figé 5 s était coupé une fois
+  sur deux).
 - Essai 2 instances en headless sur 1 PC : convois, `Ev.POWER` (bouclier,
-  laser, recharges) et file à 1 frame vérifiés. En fenêtré, le host tombe à
-  ~4 images/s et le client est coupé (délai ENet) : limite de la machine.
+  laser, recharges) et file adaptative vérifiés. En fenêtré sur 1 PC, chaque
+  instance se fige jusqu'à 16 s en créant la course et la liaison tombe :
+  limite de la machine, essai à faire sur 2 PC.
 
 ### Pas encore fait
 

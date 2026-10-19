@@ -76,6 +76,11 @@ var snapshot_ticks: int = 1
 var _peer_index: Dictionary = {}
 ## Host : peers dont la scene de course est chargee (prets a recevoir).
 var _ready_peers: Dictionary = {}
+## Host : peers prets, en attente de la detection de coupure rapide (posee
+## une fois l'ecran de chargement du host leve, cf. _scene_ready).
+var _slow_peers: Dictionary = {}
+## Client : detection de coupure rapide posee (apres le sas READY).
+var _fast_timeout: bool = false
 var _last_state_sig: String = ""
 ## Client : joueur de cette machine, ses dernieres frames, snapshots recus,
 ## horloge du host.
@@ -304,9 +309,11 @@ func _scene_ready() -> void:
 	if not _peer_index.has(id):
 		return
 	_ready_peers[id] = true
-	# scene chargee des deux cotes (le host avant de lancer le sas) : coupure
-	# detectee vite
-	NetSession.set_fast_timeout(id, true)
+	# scene chargee des deux cotes : coupure detectee vite, mais seulement une
+	# fois l'ecran de chargement du host leve et le sas READY passe
+	# (2026-10-19 : le host encore en preparation se figeait jusqu'a 16 s et
+	# coupait le client qui venait d'arriver)
+	_slow_peers[id] = true
 	_race_state.rpc_id(id, race_scene.call("net_state"))
 	for i in players.size():
 		_racer.rpc_id(id, i, _racer_data(i))
@@ -328,6 +335,11 @@ func _inputs(bytes: PackedByteArray) -> void:
 
 ## A la fin de chaque tick de la course, cote host.
 func host_tick(tick: int) -> void:
+	var loaded := not LoadingScreen.covering() and RaceManager.state != RaceManagerNode.State.LOBBY
+	if not _slow_peers.is_empty() and loaded:
+		for id: int in _slow_peers:
+			NetSession.set_fast_timeout(id, true)
+		_slow_peers.clear()
 	var state: Array = race_scene.call("net_state")
 	var sig := str(state)
 	if sig != _last_state_sig:
@@ -399,6 +411,7 @@ func _on_member_left(_slot: int, peer_id: int) -> void:
 	var i: int = _peer_index.get(peer_id, -1)
 	_peer_index.erase(peer_id)
 	_ready_peers.erase(peer_id)
+	_slow_peers.erase(peer_id)
 	if i < 0:
 		return
 	var src := (players[i] as Object).get("input") as RemoteInputSource
@@ -474,7 +487,11 @@ func _send_event(kind: int, data: Array, except_peer: int = 0) -> void:
 func client_tick(tick: int, local_frame: InputFrame) -> void:
 	if not host_ready:
 		_announce_wait -= 1
-		if _announce_wait <= 0:
+		# pret seulement une fois l'ecran de chargement leve : la preparation
+		# des camions dessous fige encore la machine par moments (~5 s d'un
+		# bloc sur un PC lent, 2026-10-19), et le host passe a la detection de
+		# coupure rapide des qu'on s'annonce
+		if _announce_wait <= 0 and not LoadingScreen.covering():
 			_announce_wait = 30
 			_announce_ready()
 		return
@@ -942,7 +959,10 @@ func interp_ticks() -> float:
 
 @rpc("authority", "call_remote", "reliable")
 func _race_state(state: Array) -> void:
-	if not host_ready:
+	# coupure detectee vite seulement apres le sas READY : le host peut encore
+	# se figer en preparant sa course (16 s d'un bloc mesurees sur un PC lent)
+	if not _fast_timeout and state.size() > 0 and int(state[0]) != RaceManagerNode.State.LOBBY:
+		_fast_timeout = true
 		NetSession.set_fast_timeout(1, true)
 	host_ready = true
 	states_received += 1

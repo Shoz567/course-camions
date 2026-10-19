@@ -43,6 +43,11 @@ const META_DETACHED := &"dent_detached"
 
 ## Mesh source -> version subdivisee (partagee, jamais modifiee).
 static var _tessellated: Dictionary = {}
+## Tableaux de chaque surface d'un maillage subdivise, gardes tels quels : les
+## relire au serveur de rendu juste apres sa creation renvoyait parfois des
+## index faux sous forte charge (2026-10-19, deux instances en ligne : 65535
+## pour 61 256 sommets), et la course s'arretait en erreur.
+static var _tess_arrays: Dictionary = {}
 ## Maillage subdivise -> Array[Topo] (voisinage, grille), partage.
 static var _topologies: Dictionary = {}
 ## Cote des cellules de la grille de recherche (repere du maillage).
@@ -99,7 +104,7 @@ static func dent(root: Node3D, point: Vector3, push: Vector3, radius: float) -> 
 	return moved
 
 
-## Pieces deformables sous oot (ni sautees, ni sans maillage), gardees par
+## Pieces deformables sous `root` (ni sautees, ni sans maillage), gardees par
 ## carrosserie : chercher parmi la centaine de pieces d'une cabine et
 ## comparer leurs noms aux prefixes sautes coutait ~27 ms a chaque creux
 ## (2026-10-18, tache 7.6). La liste ne change pas en course (une piece
@@ -476,7 +481,7 @@ static func dents_in_flight() -> int:
 	return _flights.size()
 
 
-## Abandonne les creux en vol sous oot (remise a neuf).
+## Abandonne les creux en vol sous `root` (remise a neuf).
 static func _cancel_flights(root: Node) -> void:
 	for mi: Variant in _flights.keys():
 		var fl := _flights[mi] as DentFlight
@@ -503,7 +508,7 @@ static func _own(mi: MeshInstance3D) -> Array:
 	for s in src.get_surface_count():
 		if _primitive(src, s) != Mesh.PRIMITIVE_TRIANGLES:
 			return []
-		surfaces.append(src.surface_get_arrays(s))
+		surfaces.append(_arrays_of(src, s))
 	var topo := _topology(base)
 	if topo.size() != surfaces.size():
 		return []
@@ -515,7 +520,7 @@ static func _own(mi: MeshInstance3D) -> Array:
 		if verts.size() != (topo[s] as Topo).rest.size():
 			surfaces.clear()
 			for k in base.get_surface_count():
-				surfaces.append(base.surface_get_arrays(k))
+				surfaces.append(_arrays_of(base, k))
 			break
 	mi.set_meta(META_OWNER, id)
 	mi.set_meta(META_BASE, base)
@@ -791,7 +796,7 @@ static func _topology(base: Mesh) -> Array:
 		return _topologies[base]
 	var out: Array = []
 	for s in base.get_surface_count():
-		var arrays := base.surface_get_arrays(s)
+		var arrays := _arrays_of(base, s)
 		var tp := Topo.new()
 		tp.rest = arrays[Mesh.ARRAY_VERTEX]
 		var n := tp.rest.size()
@@ -854,14 +859,26 @@ static func tessellated(mesh: Mesh) -> Mesh:
 	if _tessellated.has(mesh):
 		return _tessellated[mesh]
 	var out := ArrayMesh.new()
+	var kept: Array = []
 	for s in mesh.get_surface_count():
 		var arrays := mesh.surface_get_arrays(s)
 		if _primitive(mesh, s) == Mesh.PRIMITIVE_TRIANGLES:
 			arrays = _subdivide(arrays)
 		out.add_surface_from_arrays(_primitive(mesh, s), arrays)
 		out.surface_set_material(s, mesh.surface_get_material(s))
+		kept.append(arrays)
 	_tessellated[mesh] = out
+	_tess_arrays[out] = kept
 	return out
+
+
+## Tableaux de la surface `s` : ceux gardes a la subdivision s'il y en a (sans
+## relecture du serveur de rendu), sinon ceux du maillage.
+static func _arrays_of(mesh: Mesh, s: int) -> Array:
+	var kept: Array = _tess_arrays.get(mesh, [])
+	if s < kept.size():
+		return (kept[s] as Array).duplicate(true)   # copie : les creux modifient les tableaux sur place
+	return mesh.surface_get_arrays(s)
 
 
 ## Coupe en deux toute arete plus longue que MAX_EDGE, jusqu'a ce qu'il n'en
