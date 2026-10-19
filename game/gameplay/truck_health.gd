@@ -68,6 +68,9 @@ var trailer_max_hp: float = DEFAULT_TRAILER_HP
 ## Transformation de reapparition (Truck -> Transform3D). Par defaut : sur
 ## place, a plat, 1 m au-dessus.
 var respawn_provider: Callable
+## Hors piste (AutoReset) : ni les murs ni les obstacles ne blessent, le
+## camion va etre replace.
+var off_track: bool = false
 ## Derniere carcasse laissee sur la route (tests).
 var last_wreck: TruckWreck
 ## En ligne, chez un client (NetRace) : le host fait foi. Aucun degat n'est
@@ -120,6 +123,8 @@ func _ready() -> void:
 
 
 func _on_wall_impact(normal_speed_ms: float, on_trailer: bool) -> void:
+	if off_track:
+		return
 	if on_trailer:
 		damage_trailer(wall_damage_for(normal_speed_ms), &"mur")
 	else:
@@ -139,6 +144,8 @@ func _on_truck_impact(_other: Truck, approach_ms: float, on_trailer: bool, _poin
 
 
 func _hit(amount: float, on_trailer: bool, source: StringName) -> void:
+	if off_track:
+		return
 	if on_trailer:
 		damage_trailer(amount, source)
 	else:

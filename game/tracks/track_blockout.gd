@@ -408,12 +408,14 @@ func is_water(p: Vector3) -> bool:
 
 
 ## Reapparition au plus pres de `p` : sur la chaussee, dans le sens de course,
-## ecart lateral conserve mais ramene a 2 m des murs, 1 m au-dessus du sol.
+## ecart lateral conserve mais ramene a 2 m des murs (10 % de la largeur sur
+## une piste large : un camion replace contre le mur s'y couchait), 1 m
+## au-dessus du sol.
 func get_respawn_transform(p: Vector3) -> Transform3D:
 	_ensure_built()
 	var i := closest_sample(p)
 	var lateral := (p - sample_position(i)).dot(sample_right(i))
-	var limit := width / 2.0 - 2.0
+	var limit := width / 2.0 - maxf(2.0, width * 0.1)
 	return frame_at(i, clampf(lateral, -limit, limit), 1.0)
 
 

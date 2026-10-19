@@ -32,6 +32,8 @@ var _trailer_hp_bar: ProgressBar
 var _center: Label
 var _help: Label
 var _standings: Label
+var _standings_card: PanelContainer
+var _center_card: PanelContainer
 var _center_text: String = ""
 var _center_color: Color = Color.WHITE
 
@@ -151,11 +153,63 @@ func _ready() -> void:
 	_standings.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_standings.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_standings.offset_top = 150 * k
+	_build_cards(k)
 
+
+## Charte arcade neon (UiKit, 2026-10-17) : classement et message central dans
+## des cartes inclinees, empilees au centre de la vue (elles ne se chevauchent
+## plus a l'arrivee) ; barres inclinees comme les boutons des menus.
+func _build_cards(k: float) -> void:
+	var stack := VBoxContainer.new()
+	stack.name = "Cards"
+	stack.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	stack.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	stack.grow_vertical = Control.GROW_DIRECTION_BOTH
+	stack.alignment = BoxContainer.ALIGNMENT_CENTER
+	stack.add_theme_constant_override("separation", roundi(12 * k))
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(stack)
+	_standings_card = _card(UiKit.CYAN, k)
+	_center_card = _card(UiKit.PINK, k)
+	for pair: Array in [[_standings_card, _standings], [_center_card, _center]]:
+		var card := pair[0] as PanelContainer
+		var l := pair[1] as Label
+		stack.add_child(card)
+		remove_child(l)
+		l.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		l.position = Vector2.ZERO
+		card.add_child(l)
+		card.visible = false
+	_center.add_theme_font_override("font", UiKit.font(900))
+	_center.add_theme_font_size_override("font_size", maxi(10, roundi(54 * ui_scale)))
+	for bar: ProgressBar in [_boost_bar, _cargo_bar, _hp_bar, _trailer_hp_bar]:
+		for s: String in ["background", "fill"]:
+			var sb := bar.get_theme_stylebox(s) as StyleBoxFlat
+			if sb != null:
+				sb = sb.duplicate() as StyleBoxFlat
+				sb.skew = Vector2(UiKit.SKEW, 0.0)
+				sb.anti_aliasing = true
+				bar.add_theme_stylebox_override(s, sb)
+
+
+func _card(border: Color, k: float) -> PanelContainer:
+	var p := PanelContainer.new()
+	p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var sb := UiKit.box(Color(UiKit.NIGHT, 0.8), Color(border, 0.85), maxi(1, roundi(2 * k)), UiKit.SKEW, 4,
+		Color(border, 0.3), roundi(14 * k))
+	sb.content_margin_left = 34 * k
+	sb.content_margin_right = 34 * k
+	sb.content_margin_top = 10 * k
+	sb.content_margin_bottom = 10 * k
+	p.add_theme_stylebox_override("panel", sb)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return p
 
 ## Classement (liste multiligne, vide pour l'effacer), en haut au centre.
 func set_standings(text: String) -> void:
 	_standings.text = text
+	if _standings_card != null:
+		_standings_card.visible = text != ""
 
 
 ## Message central (vide pour l'effacer).
@@ -231,7 +285,10 @@ func _process(_delta: float) -> void:
 		text = "«« MAUVAIS SENS »»"
 		color = Color(1.0, 0.25, 0.15)
 	_center.text = text
-	_center.modulate = color
+	_center.add_theme_color_override("font_color", color)
+	_center_card.visible = text != ""
+	(_center_card.get_theme_stylebox("panel") as StyleBoxFlat).border_color = Color(color, 0.85)
+	(_center_card.get_theme_stylebox("panel") as StyleBoxFlat).shadow_color = Color(color, 0.3)
 
 
 ## Temps affiche, derive des ticks.
@@ -247,6 +304,7 @@ func _label(size: int, pos: Vector2) -> Label:
 	var l := Label.new()
 	l.position = pos
 	size = maxi(10, roundi(size * ui_scale))
+	l.add_theme_font_override("font", UiKit.font(800))
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	l.add_theme_constant_override("outline_size", maxi(4, roundi(size / 6.0)))

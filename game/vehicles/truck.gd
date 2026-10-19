@@ -892,6 +892,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	state.transform = _reset_xf
 	state.linear_velocity = Vector3.ZERO
 	state.angular_velocity = Vector3.ZERO
+	# la vitesse d'avant le reset (chute) ne compte pas dans les impacts d'apres
+	_vel_hist.fill(Vector3.ZERO)
 	_reset_applied = true
 
 

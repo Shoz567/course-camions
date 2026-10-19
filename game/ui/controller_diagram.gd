@@ -28,7 +28,8 @@ const SHELL := Color(0.93, 0.94, 0.96)
 const SHELL_EDGE := Color(0.62, 0.65, 0.72)
 const CORE := Color(0.07, 0.075, 0.09)
 const KEY := Color(0.13, 0.14, 0.17)
-const ACCENT := Color(1.0, 0.62, 0.12)
+## Charte arcade neon (UiKit) : traits et touches en cyan.
+const ACCENT := UiKit.CYAN
 const TEXT := Color(0.95, 0.95, 0.97)
 const LIGHT_BAR := Color(0.25, 0.55, 1.0)
 
@@ -230,7 +231,7 @@ func _draw_dpad(p: Vector2) -> void:
 
 
 func _draw_labels() -> void:
-	var font := get_theme_default_font()
+	var font := UiKit.font(800, false)
 	for c in CALLOUTS:
 		var r := label_rect(c)
 		var is_left := int(c["side"]) < 0

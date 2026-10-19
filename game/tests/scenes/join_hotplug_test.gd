@@ -3,7 +3,8 @@ extends PhysicsTest
 ## Salle d'attente du menu et manettes a chaud (taches 4.2, 4.4) :
 ##   A. menu : la manette 3 appuie sur Croix -> J1 ; la manette 1 -> J2 ;
 ##      Espace -> J3 au clavier ZQSD ; la manette 3 appuie sur Rond -> elle
-##      repart, les autres remontent ; Options (manette 1) lance a 2 :
+##      repart, les autres remontent ; Options (manette 1) ouvre la page de
+##      selection a 2, chaque appareil y pilote son joueur ; depart :
 ##      GameState.join_devices = [1, ZQSD] ;
 ##   B. course lancee avec cette liste : la manette 1 fait avancer J1 et lui
 ##      seul, ZQSD fait avancer J2 et lui seul, la manette 0 (non inscrite)
@@ -77,6 +78,22 @@ func _test_tick(t: int) -> void:
 			_pad(1, JOY_BUTTON_START, true)
 		11:
 			_pad(1, JOY_BUTTON_START, false)
+			# Options : la page de selection s'ouvre pour les inscrits
+			var sel := _menu.loadout
+			_seen["selection"] = [sel.visible, sel.panels.size()]
+			var e1 := InputEventJoypadButton.new()
+			e1.device = 1
+			e1.button_index = JOY_BUTTON_A
+			e1.pressed = true
+			var e3 := e1.duplicate() as InputEventJoypadButton
+			e3.device = 3
+			var sp := InputEventKey.new()
+			sp.physical_keycode = KEY_SPACE
+			sp.pressed = true
+			var en := sp.duplicate() as InputEventKey
+			en.physical_keycode = KEY_ENTER
+			_seen["route"] = [sel.route(e1), sel.route(e3), sel.route(sp), sel.route(en)]
+			_menu.start_race()
 			_seen["launched"] = _launched
 			_seen["devices"] = GameState.join_devices.duplicate()
 			_menu.queue_free()
@@ -134,7 +151,13 @@ func _test_finish() -> void:
 		and String(_seen.get("slot3", "")).contains("JAUNE"), String(_seen.get("slot3", "")))
 	check("Rond : la manette 3 repart, les autres remontent",
 		str(_seen.get("after_leave", [])) == str(PackedInt32Array([1, zqsd])), str(_seen.get("after_leave", [])))
-	check("Options lance a 2, avec les appareils inscrits", int(_seen.get("launched", 0)) == 2
+	var sel: Array = _seen.get("selection", [false, 0])
+	check("Options : page de selection ouverte, 2 cartes", bool(sel[0]) and int(sel[1]) == 2, str(sel))
+	var r: Array = _seen.get("route", [])
+	check("selection : manette 1 -> J1, manette 3 (partie) -> personne, Espace -> J2, Entree -> personne",
+		r.size() == 4 and str(r[0]) == str([0, &"accept"]) and (r[1] as Array).is_empty()
+		and str(r[2]) == str([1, &"accept"]) and (r[3] as Array).is_empty(), str(r))
+	check("tous prets : depart a 2, avec les appareils inscrits", int(_seen.get("launched", 0)) == 2
 		and str(_seen.get("devices", [])) == str(PackedInt32Array([1, zqsd])), str(_seen.get("devices", [])))
 	var p1: Array = _seen.get("pad1", [0.0, 0.0])
 	var kz: Array = _seen.get("zqsd", [0.0, 0.0])
