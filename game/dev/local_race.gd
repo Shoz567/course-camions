@@ -210,6 +210,8 @@ func _ready() -> void:
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
 	_apply_graphics()
+	# HUD et ecrans a l'habillage du circuit (le meme qu'au menu)
+	UiKit.apply_skin(UiKit.skin_for_track(track.theme_id))
 	# de nuit, les phares des camions eclairent la route
 	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
 	# projections des roues : gerbes d'eau sous la pluie, sable a la plage

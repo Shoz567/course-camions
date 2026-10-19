@@ -9,6 +9,10 @@ extends Node3D
 ## (Showroom) : les camions des joueurs choisis exposes sur un plateau tournant,
 ## sur le toit d'une tour de Cyber City, sous les projecteurs ; camera en orbite
 ## lente, decalee pour montrer les camions a droite, le menu a gauche.
+## Ambiance du circuit choisi (2026-10-19) : le decor du showroom, le ciel et
+## la lumiere (Cyber City de nuit, Playa au soleil, jardin japonais), et toute
+## l'interface (UiKit : neon, plage, bois et laque) changent avec lui ;
+## l'interface se reconstruit (_restyle) et retrouve son etat.
 ##
 ## Manette (PlayStation, positions SDL) : croix directionnelle ou stick pour
 ## naviguer, Croix pour valider, Rond ou Create pour fermer les parametres,
@@ -26,6 +30,9 @@ extends Node3D
 signal launch_requested(players: int)
 
 const LocalRace := preload("res://dev/local_race.gd")
+## Ciel et brume de chaque circuit (les memes que ses courses).
+const ENVIRONMENTS: Array[Environment] = [preload("res://tracks/cyber_night.tres"),
+	preload("res://tracks/playa_sun.tres"), preload("res://tracks/sakura_day.tres")]
 
 ## Faux pour les tests : le depart emet `launch_requested` sans changer de scene.
 @export var auto_change_scene: bool = true
@@ -102,6 +109,9 @@ var _orbit_center: Vector3
 var _orbit_angle: float = 0.0
 var _time: float = 0.0
 var _fov_target: float = 55.0
+## Lune de Cyber City (main_menu.tscn) : retrouvee en revenant de la plage.
+var _moon_xf: Transform3D
+var _ambiance: int = -1
 
 
 func _ready() -> void:
@@ -109,6 +119,9 @@ func _ready() -> void:
 	_setup_menu_input()
 	camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	camera.current = true
+	_moon_xf = ($Moon as DirectionalLight3D).transform
+	showroom.camera = camera
+	apply_ambiance(GameState.selected_track)
 	_spawn_trucks()
 	_build_ui()
 	set_quality(GameState.graphics_quality)
@@ -250,10 +263,80 @@ func select_track(k: int) -> void:
 		GameState.save_settings()
 	for i in track_buttons.size():
 		track_buttons[i].set_pressed_no_signal(i == GameState.selected_track)
+	# ambiance du circuit : decor et ciel tout de suite, interface a la fin de
+	# l'image (le bouton clique ne se libere pas pendant son propre signal)
+	if is_node_ready() and GameState.selected_track != _ambiance:
+		apply_ambiance(GameState.selected_track)
+		call_deferred(&"_restyle")
 	if subtitle != null:
 		var t: Dictionary = GameStateNode.TRACKS[GameState.selected_track]
 		var tag := String(t["tagline"])
 		subtitle.text = "%s  ·  4 tours" % (tag.left(1).to_upper() + tag.substr(1))
+
+
+## Ambiance du circuit `track` : habillage de l'interface (UiKit, pour les
+## controles construits ensuite), decor du showroom, ciel, lumiere.
+func apply_ambiance(track: int) -> void:
+	_ambiance = clampi(track, 0, ENVIRONMENTS.size() - 1)
+	UiKit.apply_skin(UiKit.skin_for_track(_ambiance))
+	showroom.set_theme(_ambiance)
+	var world := get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+	if world != null:
+		world.environment = ENVIRONMENTS[_ambiance]
+		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, 1)
+	var sun := get_node_or_null(^"Moon") as DirectionalLight3D
+	if sun == null:
+		return
+	match _ambiance:
+		TrackTheme.Id.PLAYA_DEL_SOL:
+			sun.transform = Transform3D(Basis(Vector3(0.819, 0.0, -0.574), Vector3(-0.383, 0.744, -0.547),
+				Vector3(0.427, 0.668, 0.609)), _moon_xf.origin)
+			sun.light_color = Color(1.0, 0.93, 0.78)
+			sun.light_energy = 1.1
+			sun.shadow_enabled = true
+		TrackTheme.Id.SAKURA:
+			sun.transform = Transform3D(Basis(Vector3(0.819, 0.0, -0.574), Vector3(-0.369, 0.766, -0.527),
+				Vector3(0.439, 0.643, 0.628)), _moon_xf.origin)
+			sun.light_color = Color(1.0, 0.86, 0.7)
+			sun.light_energy = 1.25
+			sun.shadow_enabled = true
+		_:
+			sun.transform = _moon_xf
+			sun.light_color = Color(0.55, 0.62, 1.0)
+			sun.light_energy = 0.3
+			sun.shadow_enabled = false
+
+
+## Reconstruit l'interface dans l'habillage courant et retrouve son etat :
+## choix, panneau ouvert, focus sur le circuit.
+func _restyle() -> void:
+	var ui := get_node_or_null(^"UI")
+	if ui == null:
+		return
+	var open := [settings.visible, online_panel.visible, join_panel.visible, remap_panel.visible]
+	remove_child(ui)
+	ui.queue_free()
+	player_buttons.clear()
+	speed_buttons.clear()
+	track_buttons.clear()
+	_join_slots.clear()
+	_remap_buttons.clear()
+	_build_ui()
+	var on := not AudioServer.is_bus_mute(_master_bus())
+	sound_button.set_pressed_no_signal(on)
+	sound_button.text = "SON : ON" if on else "SON : OFF"
+	sound_check.set_pressed_no_signal(on)
+	select_players(selected_players, false)
+	_refresh_online()
+	settings.visible = open[0]
+	online_panel.visible = open[1]
+	join_panel.visible = open[2]
+	remap_panel.visible = open[3]
+	if join_panel.visible:
+		_refresh_join()
+	_update_home()
+	if home.visible:
+		track_buttons[GameState.selected_track].grab_focus()
 
 
 ## Scene de course du circuit choisi.
@@ -899,9 +982,14 @@ func _update_pads_label() -> void:
 
 # --- interface ------------------------------------------------------------------
 
-## Charte : UiKit (arcade neon). Rose = choisi, cyan = focus, or = PRET.
-const ACCENT := UiKit.PINK
-const TEXT_DIM := UiKit.DIM
+## Charte : UiKit, habillage du circuit choisi (neon, plage, Japon). En
+## neon : rose = choisi, cyan = focus, or = PRET.
+var ACCENT: Color:
+	get:
+		return UiKit.PINK
+var TEXT_DIM: Color:
+	get:
+		return UiKit.DIM
 ## Colonne de gauche (px, ecran de reference 1920 x 1080).
 const COLUMN_X := 84
 const COLUMN_W := 700
@@ -946,7 +1034,7 @@ func _build_ui() -> void:
 	home.add_child(veil)
 	# filet rose incline le long du voile
 	var stripe := Panel.new()
-	stripe.add_theme_stylebox_override("panel", UiKit.box(Color(ACCENT, 0.75), Color(0, 0, 0, 0), 0, -0.12, 1,
+	stripe.add_theme_stylebox_override("panel", UiKit.box(Color(ACCENT, 0.75), Color(0, 0, 0, 0), 0, -0.6 * UiKit.SKEW, 1,
 		Color(ACCENT, 0.4), 10))
 	stripe.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	stripe.offset_left = COLUMN_X + COLUMN_W + 64
@@ -994,16 +1082,16 @@ func _build_ui() -> void:
 	title_box.custom_minimum_size = Vector2(0, 214)
 	title_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(title_box)
-	title = UiKit.label("CRAZY", 112, UiKit.TEXT, 900)
+	title = UiKit.label("CRAZY", 112, UiKit.LOGO_TOP, 900)
 	title.name = "Title"
-	title.add_theme_color_override("font_shadow_color", Color(ACCENT, 0.9))
+	title.add_theme_color_override("font_shadow_color", Color(UiKit.LOGO_SHADOW, 0.9))
 	title.add_theme_constant_override("shadow_offset_x", 6)
 	title.add_theme_constant_override("shadow_offset_y", 6)
 	title.position = Vector2(-4, -10)
 	title_box.add_child(title)
-	var wheels := UiKit.label("WHEELS", 112, UiKit.GOLD, 900)
+	var wheels := UiKit.label("WHEELS", 112, UiKit.LOGO_BOTTOM, 900)
 	wheels.name = "Title2"
-	wheels.add_theme_color_override("font_shadow_color", Color(ACCENT, 0.9))
+	wheels.add_theme_color_override("font_shadow_color", Color(UiKit.LOGO_SHADOW, 0.9))
 	wheels.add_theme_constant_override("shadow_offset_x", 6)
 	wheels.add_theme_constant_override("shadow_offset_y", 6)
 	wheels.position = Vector2(64, 92)
@@ -1016,7 +1104,7 @@ func _build_ui() -> void:
 		var dash := Panel.new()
 		dash.custom_minimum_size = Vector2(w, 6)
 		dash.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		dash.add_theme_stylebox_override("panel", UiKit.box(UiKit.CYAN, Color(0, 0, 0, 0), 0, 0.5, 1))
+		dash.add_theme_stylebox_override("panel", UiKit.box(UiKit.CYAN, Color(0, 0, 0, 0), 0, UiKit.SKEW * 2.5, 1))
 		dash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tag_row.add_child(dash)
 	tag_row.add_child(UiKit.label("COURSE DE CAMIONS ARCADE", 20, UiKit.CYAN, 800))
@@ -1154,7 +1242,7 @@ func _build_ui() -> void:
 	bar.name = "HelpBar"
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_top = -64
-	var bsb := UiKit.box(Color(0.015, 0.02, 0.05, 0.88), Color(0, 0, 0, 0), 0, 0.0, 0)
+	var bsb := UiKit.box(Color(UiKit.NIGHT, 0.88), Color(0, 0, 0, 0), 0, 0.0, 0)
 	bsb.content_margin_left = COLUMN_X
 	bsb.border_width_top = 1
 	bsb.border_color = Color(ACCENT, 0.5)
@@ -1249,9 +1337,12 @@ func _track_card(k: int, group: ButtonGroup) -> Button:
 		sb.content_margin_left = margin
 		b.add_theme_stylebox_override(st, sb)
 	for st: String in ["pressed", "hover_pressed"]:
-		var sb := UiKit.box(tint.lightened(0.05 if st == "pressed" else 0.15), ACCENT, 3, UiKit.SKEW, 3, Color(ACCENT, 0.5), 14)
+		var sb := UiKit.box(tint.lightened(0.05 if st == "pressed" else 0.15), ACCENT, 3, -1.0, -1, Color(ACCENT, 0.5), 14)
 		sb.content_margin_left = margin
 		b.add_theme_stylebox_override(st, sb)
+	# fonds teintes sombres : texte clair, quel que soit l'habillage
+	for c: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(c, UiKit.TEXT)
 	return b
 
 

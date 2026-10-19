@@ -283,8 +283,8 @@ func _build_chrome() -> void:
 	var dim := TextureRect.new()
 	var tex := GradientTexture2D.new()
 	var g := Gradient.new()
-	g.set_color(0, Color(0.02, 0.025, 0.07, 0.94))
-	g.set_color(1, Color(0.04, 0.02, 0.09, 0.78))
+	g.set_color(0, Color(UiKit.NIGHT, 0.94))
+	g.set_color(1, Color(UiKit.NIGHT.lightened(0.04), 0.78))
 	tex.gradient = g
 	tex.fill_from = Vector2(0, 0)
 	tex.fill_to = Vector2(1, 1)
@@ -344,7 +344,7 @@ func _build_chrome() -> void:
 	var bar := PanelContainer.new()
 	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_top = -BOTTOM + 14
-	var sb := UiKit.box(Color(0.02, 0.025, 0.06, 0.9), Color(0, 0, 0, 0), 0, 0.0, 0)
+	var sb := UiKit.box(Color(UiKit.NIGHT, 0.9), Color(0, 0, 0, 0), 0, 0.0, 0)
 	sb.content_margin_left = 64
 	bar.add_theme_stylebox_override("panel", sb)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -235,3 +235,24 @@ func stone_lantern(xf: Transform3D) -> void:
 	box(Mat.STONE, xf * Transform3D(Basis.IDENTITY, Vector3(0, 1.7, 0)), Vector3(1.0, 0.25, 1.0), Color(1, 0.5, 1))
 	box(Mat.PAPER, xf * Transform3D(Basis.IDENTITY, Vector3(0, 1.95, 0)), Vector3(0.6, 0.6, 0.6), Color.WHITE)
 	hip_roof(Mat.STONE, xf * Transform3D(Basis.IDENTITY, Vector3(0, 2.6, 0)), 0.7, 0.7, 0.55, 0.35, 0.12, Color(1, 0.5, 1))
+
+
+## Torii de `span` m entre piliers et `height` m sous le linteau : piliers
+## vermillon sur socles noirs, nuki, shimaki vermillon et kasagi noir aux
+## bouts releves.
+func torii(xf: Transform3D, span: float, height: float) -> void:
+	var half := span / 2.0
+	var r := maxf(0.4, span * 0.03)
+	for side: float in [-1.0, 1.0]:
+		var at := xf * Transform3D(Basis.IDENTITY, Vector3(side * half, 0, 0))
+		cylinder(Mat.LACQUER, at, r * 1.1, r * 0.95, height + r * 4.0, 16, Color.WHITE)
+		cylinder(Mat.WOOD, at, r * 1.35, r * 1.3, r * 2.0, 16, Color.WHITE)
+	var nuki_y := height * 0.78
+	box(Mat.LACQUER, xf * Transform3D(Basis.IDENTITY, Vector3(0, nuki_y, 0)), Vector3(span + r * 5.0, r * 1.1, r * 0.9), Color.WHITE)
+	var top_y := height + r * 2.6
+	box(Mat.LACQUER, xf * Transform3D(Basis.IDENTITY, Vector3(0, top_y, 0)), Vector3(span + r * 7.0, r * 1.0, r * 1.5), Color.WHITE)
+	box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(0, top_y + r * 1.0, 0)), Vector3(span + r * 5.0, r * 0.9, r * 1.9), Color.WHITE)
+	for side: float in [-1.0, 1.0]:
+		var tip := Transform3D(Basis(Vector3.BACK, side * deg_to_rad(10.0)), Vector3(side * (half + r * 4.2), top_y + r * 1.3, 0))
+		box(Mat.WOOD, xf * tip, Vector3(r * 5.0, r * 0.8, r * 1.9), Color.WHITE)
+	box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(0, nuki_y + r * 0.6, 0)), Vector3(r * 2.4, top_y - nuki_y - r * 0.6, r * 0.5), Color.WHITE)

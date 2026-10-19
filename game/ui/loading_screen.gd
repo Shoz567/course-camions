@@ -14,6 +14,8 @@ extends CanvasLayer
 ##   3. l'ecran s'efface en fondu et libere le depart (scene.release_start()) :
 ##      hors ligne, le compte a rebours ne part qu'a ce moment.
 ## En headless (tests), pas d'ecran : changement de scene direct.
+## Fond (2026-10-19) : une image du circuit qui se charge (GameState.TRACKS,
+## "image"), voilee en bas pour le texte ; habillage du circuit (UiKit).
 
 signal finished
 
@@ -187,6 +189,32 @@ func _work() -> void:
 		_items += meshes.size() - 3
 		_queue.append_array(meshes)
 
+## Voile degrade de la couleur de fond, d'opacite `a0` en `from` a `a1` en `to`.
+static func _veil(from: Vector2, to: Vector2, a0: float, a1: float) -> TextureRect:
+	var veil := TextureRect.new()
+	var vt := GradientTexture2D.new()
+	var vg := Gradient.new()
+	vg.set_color(0, Color(UiKit.NIGHT, a0))
+	vg.set_color(1, Color(UiKit.NIGHT, a1))
+	vt.gradient = vg
+	vt.fill_from = from
+	vt.fill_to = to
+	veil.texture = vt
+	veil.stretch_mode = TextureRect.STRETCH_SCALE
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return veil
+
+
+## Image du circuit `track` (GameState.TRACKS, "image"), null sans image.
+static func track_image(track: int) -> Texture2D:
+	var t: Dictionary = GameStateNode.TRACKS[clampi(track, 0, GameStateNode.TRACKS.size() - 1)]
+	var path := String(t.get("image", ""))
+	if path == "" or not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+
 func _set_progress(v: float) -> void:
 	progress = clampf(maxf(progress, v), 0.0, 1.0)
 	if _bar_fill != null:
@@ -201,8 +229,8 @@ func _build() -> void:
 	var bg := TextureRect.new()
 	var tex := GradientTexture2D.new()
 	var g := Gradient.new()
-	g.set_color(0, Color(0.02, 0.025, 0.07))
-	g.set_color(1, Color(0.07, 0.02, 0.12))
+	g.set_color(0, UiKit.NIGHT)
+	g.set_color(1, UiKit.NIGHT.lightened(0.06))
 	tex.gradient = g
 	tex.fill_from = Vector2(0, 0)
 	tex.fill_to = Vector2(1, 1)
@@ -210,10 +238,22 @@ func _build() -> void:
 	bg.stretch_mode = TextureRect.STRETCH_SCALE
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(bg)
-	# logo, comme l'accueil : CRAZY blanc, WHEELS or, ombre rose
-	for pair: Array in [["CRAZY", UiKit.TEXT, Vector2(64, 40)], ["WHEELS", UiKit.GOLD, Vector2(120, 120)]]:
+	# image du circuit, couvrant l'ecran, voilee du bas (texte) et du coin du logo
+	var image := track_image(GameState.selected_track)
+	if image != null:
+		var pic := TextureRect.new()
+		pic.name = "TrackImage"
+		pic.texture = image
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_root.add_child(pic)
+		_root.add_child(_veil(Vector2(0.5, 0.35), Vector2(0.5, 1.0), 0.0, 0.94))
+		_root.add_child(_veil(Vector2(0.0, 0.0), Vector2(0.45, 0.3), 0.55, 0.0))
+	# logo, comme l'accueil (couleurs de l'habillage)
+	for pair: Array in [["CRAZY", UiKit.LOGO_TOP, Vector2(64, 40)], ["WHEELS", UiKit.LOGO_BOTTOM, Vector2(120, 120)]]:
 		var l := UiKit.label(String(pair[0]), 96, pair[1] as Color, 900)
-		l.add_theme_color_override("font_shadow_color", Color(UiKit.PINK, 0.9))
+		l.add_theme_color_override("font_shadow_color", Color(UiKit.LOGO_SHADOW, 0.9))
 		l.add_theme_constant_override("shadow_offset_x", 6)
 		l.add_theme_constant_override("shadow_offset_y", 6)
 		l.position = pair[2] as Vector2

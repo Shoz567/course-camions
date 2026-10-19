@@ -36,6 +36,8 @@ func _test_setup() -> void:
 	_build_ms = (Time.get_ticks_usec() - t0) / 1000.0
 	_showroom = Showroom.new()
 	add_child(_showroom)
+	# decor de Cyber City (le menu le choisit selon le circuit, 2026-10-19)
+	_showroom.set_theme(TrackTheme.Id.CYBER_CITY)
 
 
 func _test_finish() -> void:
@@ -225,7 +227,7 @@ func _check_race_decor() -> void:
 func _check_showroom() -> void:
 	var body := _showroom.get_node("PlateCollision") as StaticBody3D
 	check("showroom : dessus du plateau sur la couche 1 (suspension)", body != null and body.collision_layer == 1)
-	var city := _showroom.find_child("City", false, false) as Node3D
+	var city := _showroom.set_node(TrackTheme.Id.CYBER_CITY).find_child("City", false, false) as Node3D
 	var towers: Array = city.get_meta(&"buildings", []) if city != null else []
 	var below := 0
 	for xf: Transform3D in towers:
