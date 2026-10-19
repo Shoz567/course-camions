@@ -8,6 +8,9 @@ extends Node
 ##   host(port)        ouvre la partie ; le host est le joueur de la case 0
 ##   join(ip, port)    rejoint ; le host attribue une case (0 a 5) et diffuse
 ##                     le lobby a tous (members)
+##   set_loadout(...)  remorque et pouvoirs de ce PC (page de selection du
+##                     menu) : envoyes au host, diffuses avec le lobby, le
+##                     joueur est alors PRET (ready)
 ##   launch_race()     host : circuit et categorie du host, puis la scene de
 ##                     course chez tout le monde (LocalRace lit la session)
 ##   leave()           quitte, ferme la partie si on est le host
@@ -35,7 +38,7 @@ enum Mode { OFFLINE, HOST, CLIENT }
 const DEFAULT_PORT := 7777
 const MAX_PLAYERS := 6
 ## Versions de protocole differentes : le host refuse le client.
-const PROTOCOL := 2
+const PROTOCOL := 3
 const MAX_NAME := 16
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
@@ -49,7 +52,9 @@ const LOADING_TIMEOUT_MAX_MS := 30000
 const SNAPSHOT_TICKS_LOW_BANDWIDTH := 3
 
 var mode: Mode = Mode.OFFLINE
-## Lobby, trie par case : [{"peer": int, "name": String, "slot": int}].
+## Lobby, trie par case : [{"peer": int, "name": String, "slot": int,
+## "trailer": int, "power_left": int, "power_right": int, "ready": bool}]
+## (choix de la page de selection, PowerCatalog : -1 = aucun).
 var members: Array[Dictionary] = []
 var player_name: String = ""
 ## Faux pour les tests : launch_race ne change pas de scene.
@@ -169,7 +174,7 @@ func host(port: int = DEFAULT_PORT) -> Error:
 		return err
 	_attach(p)
 	mode = Mode.HOST
-	members = [{"peer": 1, "name": player_name, "slot": 0}]
+	members = [_member(1, player_name, 0)]
 	last_error = ""
 	lobby_changed.emit()
 	return OK
@@ -304,9 +309,63 @@ func _hello(name_in: String, protocol: int) -> void:
 	var slot := 0
 	while used.has(slot):
 		slot += 1
-	members.append({"peer": id, "name": clean_name(name_in), "slot": slot})
+	members.append(_member(id, clean_name(name_in), slot))
 	members.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["slot"]) < int(b["slot"]))
 	_broadcast_lobby()
+
+
+static func _member(peer: int, member_name: String, slot: int, trailer: int = 0, left: int = -1,
+		right: int = -1, ready: bool = false) -> Dictionary:
+	return {"peer": peer, "name": member_name, "slot": slot, "trailer": trailer,
+		"power_left": left, "power_right": right, "ready": ready}
+
+
+## Remorque et pouvoirs du joueur de ce PC, choisis sur la page de selection :
+## le joueur devient PRET. Host : applique et diffuse ; client : au host.
+func set_loadout(trailer: int, left: int, right: int) -> void:
+	if is_host():
+		_apply_loadout(1, trailer, left, right)
+	elif is_client():
+		_loadout.rpc_id(1, trailer, left, right)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _loadout(trailer: int, left: int, right: int) -> void:
+	if is_host():
+		_apply_loadout(multiplayer.get_remote_sender_id(), trailer, left, right)
+
+
+func _apply_loadout(peer: int, trailer: int, left: int, right: int) -> void:
+	for m in members:
+		if int(m["peer"]) == peer:
+			m["trailer"] = posmod(trailer, TrailerCatalog.count())
+			m["power_left"] = _power(left)
+			m["power_right"] = _power(right)
+			m["ready"] = true
+			_broadcast_lobby()
+			return
+
+
+static func _power(p: int) -> int:
+	return p if p >= 0 and p < PowerCatalog.count() else -1
+
+
+## Choix du joueur de la case `slot` (membre du lobby), {} si personne.
+func member_of_slot(slot: int) -> Dictionary:
+	for m in members:
+		if int(m["slot"]) == slot:
+			return m
+	return {}
+
+
+## Tous les joueurs de la partie ont choisi leur convoi (PRET).
+func all_ready() -> bool:
+	if members.is_empty():
+		return false
+	for m in members:
+		if not bool(m["ready"]):
+			return false
+	return true
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -345,7 +404,8 @@ func _lobby(data: Array) -> void:
 static func _pack(list: Array[Dictionary]) -> Array:
 	var out := []
 	for m in list:
-		out.append([int(m["peer"]), String(m["name"]), int(m["slot"])])
+		out.append([int(m["peer"]), String(m["name"]), int(m["slot"]), int(m["trailer"]),
+			int(m["power_left"]), int(m["power_right"]), bool(m["ready"])])
 	return out
 
 
@@ -353,9 +413,10 @@ static func _unpack(data: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for e: Variant in data:
 		var a := e as Array
-		if a == null or a.size() != 3:
+		if a == null or a.size() != 7:
 			continue
-		out.append({"peer": int(a[0]), "name": clean_name(str(a[1])), "slot": clampi(int(a[2]), 0, MAX_PLAYERS - 1)})
+		out.append(_member(int(a[0]), clean_name(str(a[1])), clampi(int(a[2]), 0, MAX_PLAYERS - 1),
+			posmod(int(a[3]), TrailerCatalog.count()), _power(int(a[4])), _power(int(a[5])), bool(a[6])))
 	return out
 
 

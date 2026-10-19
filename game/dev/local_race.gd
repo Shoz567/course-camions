@@ -361,16 +361,20 @@ func _add_player(i: int) -> Player:
 	t.tuning = p.base_tuning
 	add_child(t)
 	p.truck = t
-	# remorque choisie a la course precedente (Conteneur la premiere fois) ;
-	# en ligne, celle de ce PC pour son joueur, le host diffuse les autres
+	# remorque et pouvoirs choisis sur la page de selection du menu ; en ligne,
+	# ceux que chaque joueur a envoyes au lobby (NetSession.set_loadout)
 	var choice := 0
-	if not online and i < GameState.trailer_choice.size():
-		choice = GameState.trailer_choice[i]
-	elif online and mine:
-		choice = GameState.trailer_choice[0]
+	if online:
+		var m := NetSession.member_of_slot(slot_of(i))
+		choice = int(m.get("trailer", GameState.trailer_choice[0] if mine else 0))
+		p.power_left = int(m.get("power_left", -1))
+		p.power_right = int(m.get("power_right", -1))
+	else:
+		if i < GameState.trailer_choice.size():
+			choice = GameState.trailer_choice[i]
+		p.power_left = GameState.power_left[i] if i < GameState.power_left.size() else -1
+		p.power_right = GameState.power_right[i] if i < GameState.power_right.size() else -1
 	set_trailer(p, choice)
-	p.power_left = GameState.power_left[i] if i < GameState.power_left.size() else -1
-	p.power_right = GameState.power_right[i] if i < GameState.power_right.size() else -1
 	# cibles des pouvoirs : tous les camions de la course ; pouvoirs choisis
 	# sur la page de selection (hors ligne), simules sur la machine qui fait foi
 	t.add_to_group(TruckPowers.TARGETS)
@@ -662,7 +666,8 @@ func _simulate(tick: int) -> void:
 				dir = 1
 			elif f.steer < -TRAILER_STEER_THRESHOLD:
 				dir = -1
-			if dir != 0 and dir != _steer_was[i] and not ready_flags[i]:
+			# en ligne, la remorque est deja choisie au menu (page de selection)
+			if dir != 0 and dir != _steer_was[i] and not ready_flags[i] and not NetSession.is_online():
 				set_trailer(players[i], players[i].trailer + dir)
 				if is_local(i):
 					MenuSound.play_select()
@@ -931,8 +936,11 @@ func _process(delta: float) -> void:
 			else:
 				# invite clignotante (2 fois par seconde) ; la remorque reste lisible
 				var on := int(Time.get_ticks_msec() / 400) % 2 == 0
+				# en ligne, convoi deja choisi au menu : il reste affiche, sans fleches
+				var convoy := ("REMORQUE : %s" % TrailerCatalog.at(p.trailer).display_name) \
+						if NetSession.is_online() else trailer_text(p.trailer)
 				p.hud.set_center_message("%s\n%s\nAPPUYER SUR [CARRÉ] POUR ÊTRE READY" % [player_tag(i),
-					trailer_text(p.trailer)], Color(1.0, 0.85, 0.2, 1.0 if on else 0.6))
+					convoy], Color(1.0, 0.85, 0.2, 1.0 if on else 0.6))
 		elif state == State.COUNTDOWN:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),
