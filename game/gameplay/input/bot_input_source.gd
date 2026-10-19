@@ -160,6 +160,19 @@ func _avoid_shift() -> float:
 	return side * AVOID_SHIFT_M
 
 
+## Un camion juste a cote de la cabine (a portee des scies), ou null.
+func _beside() -> Truck:
+	var inv := truck.global_transform.affine_inverse()
+	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
+		var t := n as Truck
+		if t == null or t == truck:
+			continue
+		var local := inv * t.global_position
+		if absf(local.z) < PowerCatalog.SAW_HALF_LENGTH_M and absf(local.x) < TruckSpec.CAB_SIZE.x + PowerCatalog.SAW_REACH_M:
+			return t
+	return null
+
+
 func _boost() -> void:
 	var press := false
 	if BOOST[level] and truck.get_boost_charge() >= 1.0 and not truck.is_boosting():
@@ -196,6 +209,14 @@ func _powers() -> void:
 			PowerCatalog.Id.LASER:
 				var t := powers.target_ahead()
 				use = t != null and truck.global_position.distance_to(t.global_position) < PowerCatalog.LASER_RANGE_M * 0.6
+			PowerCatalog.Id.GUN:
+				var t := powers.target_ahead()
+				use = t != null and truck.global_position.distance_to(t.global_position) < PowerCatalog.GUN_RANGE_M * 0.6
+			PowerCatalog.Id.BOOMERANG:
+				var t := powers.target_ahead()
+				use = t != null and truck.global_position.distance_to(t.global_position) < 40.0
+			PowerCatalog.Id.SAW:
+				use = _beside() != null
 		if use:
 			if k == 0:
 				frame.power_left = true

@@ -5,13 +5,16 @@ extends RefCounted
 ## directionnelle (gauche / droite) ; -1 = AUCUN. Premiere serie (2026-10-17,
 ## tache 4.5.8 : « propose une 1re serie »), d'apres les armes modelisees par
 ## l'equipe (Assets_Visuels/Armes_et_camions) : bouclier, lance-missiles,
-## laser. Ils agissent dans TruckPowers ; durees en ticks.
+## laser. Deuxieme serie (2026-10-19, « plus de pouvoirs », d'apres les autres
+## armes de l'equipe) : mitrailleuse, scie geante, boomerang aimante. Ils
+## agissent dans TruckPowers ; durees en ticks.
 ##
 ## Chaque pouvoir : id (stable, sauvegarde), name (affiche), tagline,
 ## cooldown (ticks entre deux usages, depuis l'activation), model (arme
-## montee sur le toit, chemin relatif a TruckVisual.asset_base()).
+## montee sur le toit, chemin relatif a TruckVisual.asset_base() ;
+## model_right : variante pour l'emplacement droit, s'il y en a une).
 
-enum Id { SHIELD, MISSILE, LASER }
+enum Id { SHIELD, MISSILE, LASER, GUN, SAW, BOOMERANG }
 
 const POWERS: Array[Dictionary] = [
 	{"id": "bouclier", "name": "BOUCLIER", "tagline": "5 s sans dégâts · recharge 20 s", "cooldown": 1200,
@@ -20,6 +23,13 @@ const POWERS: Array[Dictionary] = [
 		"model": "../Assets_Visuels/Armes_et_camions/armes/lance_missiles.glb"},
 	{"id": "laser", "name": "LASER", "tagline": "rayon droit devant 1,5 s · recharge 18 s", "cooldown": 1080,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/laser_emetteur.glb"},
+	{"id": "mitrailleuse", "name": "MITRAILLEUSE", "tagline": "rafale 2 s droit devant · recharge 14 s", "cooldown": 840,
+		"model": "../Assets_Visuels/Armes_et_camions/armes/mitrailleuse.glb"},
+	{"id": "scie", "name": "SCIE GÉANTE", "tagline": "scies sur les flancs 4 s · recharge 16 s", "cooldown": 960,
+		"model": "../Assets_Visuels/Armes_et_camions/armes/scie_geante_g.glb",
+		"model_right": "../Assets_Visuels/Armes_et_camions/armes/scie_geante_d.glb"},
+	{"id": "boomerang", "name": "BOOMERANG", "tagline": "aller-retour aimanté · 15 PV par passage · recharge 15 s", "cooldown": 900,
+		"model": "../Assets_Visuels/Armes_et_camions/armes/boomerang_aimante.glb"},
 ]
 
 ## Bouclier : duree (ticks).
@@ -39,6 +49,32 @@ const MISSILE_KICK_MS := 3.0
 const LASER_TICKS := 90
 const LASER_RANGE_M := 120.0
 const LASER_DAMAGE_PER_TICK := 0.4
+## Mitrailleuse : duree de la rafale (ticks), une balle tous les GUN_INTERVAL
+## ticks (rayon droit devant), portee (m), degats par balle (20 balles : 24 PV).
+const GUN_TICKS := 120
+const GUN_INTERVAL := 6
+const GUN_RANGE_M := 90.0
+const GUN_DAMAGE := 1.2
+## Scie geante : duree (ticks) ; portee au-dela du flanc (m) et longueur
+## couverte autour du centre du camion (m) ; degats par tick a un camion
+## dans la zone, et acceleration qui l'ecarte (m/s2, force continue).
+const SAW_TICKS := 240
+const SAW_REACH_M := 2.6
+const SAW_HALF_LENGTH_M := 7.0
+const SAW_DAMAGE_PER_TICK := 0.12
+## Au-dela de l'adherence laterale des pneus (~11 m/s2) : il glisse vraiment.
+const SAW_PUSH_MS2 := 16.0
+## Boomerang : vitesse (m/s), ticks a l'aller avant le demi-tour (net, vers le
+## tireur : il repasse sur son trajet), duree de vie, virage au retour pour
+## suivre le tireur (deg par tick), degats et coup par camion touche (une fois
+## a l'aller, une fois au retour), rayon de contact (m).
+const BOOMERANG_SPEED_MS := 55.0
+const BOOMERANG_OUT_TICKS := 50
+const BOOMERANG_LIFE_TICKS := 200
+const BOOMERANG_TURN_DEG := 6.0
+const BOOMERANG_DAMAGE := 15.0
+const BOOMERANG_KICK_MS := 3.0
+const BOOMERANG_RADIUS_M := 2.2
 
 static func count() -> int:
 	return POWERS.size()
@@ -49,8 +85,12 @@ static func cooldown_ticks(index: int) -> int:
 	return int(POWERS[index]["cooldown"]) if index >= 0 and index < POWERS.size() else 0
 
 
-static func model(index: int) -> String:
-	return String(POWERS[index]["model"]) if index >= 0 and index < POWERS.size() else ""
+## Arme de l'emplacement `slot` (0 gauche, 1 droit) pour le pouvoir `index`.
+static func model(index: int, slot: int = 0) -> String:
+	if index < 0 or index >= POWERS.size():
+		return ""
+	var p: Dictionary = POWERS[index]
+	return String(p["model_right"]) if slot == 1 and p.has("model_right") else String(p["model"])
 
 
 ## Nom affiche du pouvoir `index` ; -1 (ou hors liste) : AUCUN.
