@@ -29,6 +29,21 @@ const BATCH := 3
 const TARGET_QUEUE := 2
 const MAX_QUEUE := 12
 const SLOW_DROP_TICKS := 30
+## Cible adaptative (2026-10-19, « le delai est legerement perceptible ») :
+## liaison reguliere (aucune file vide pendant ADAPT_CLEAN_WINDOWS fenetres
+## de ADAPT_TICKS), la cible descend d'une frame, jusqu'a MIN_TARGET (~16 ms
+## de moins) ; une file vide dans la fenetre, elle remonte, jusqu'a
+## MAX_TARGET.
+const MIN_TARGET := 1
+const MAX_TARGET := 3
+const ADAPT_TICKS := 120
+const ADAPT_CLEAN_WINDOWS := 3
+
+## File visee en ce moment (TARGET_QUEUE au depart).
+var target: int = TARGET_QUEUE
+var _window_ticks: int = 0
+var _window_starved: int = 0
+var _clean_windows: int = 0
 
 var _queue: Array[InputFrame] = []
 var _pool: Array[InputFrame] = []
@@ -69,7 +84,7 @@ func push_packet(bytes: PackedByteArray) -> bool:
 		f.steer = clampf(f.steer, -1.0, 1.0)
 		_queue.append(f)
 	if _queue.size() > MAX_QUEUE:
-		while _queue.size() > TARGET_QUEUE:
+		while _queue.size() > target:
 			_drop_oldest()
 		_above_target = 0
 	return true
@@ -84,7 +99,8 @@ func poll(tick: int) -> InputFrame:
 	applied_tick = _current_tick
 	applied_valid = _current_valid
 	# trop d'avance depuis un moment : une frame sautee, pas plus
-	_above_target = _above_target + 1 if _queue.size() > TARGET_QUEUE else 0
+	_adapt()
+	_above_target = _above_target + 1 if _queue.size() > target else 0
 	if _above_target >= SLOW_DROP_TICKS and _queue.size() > 1:
 		_drop_oldest()
 		_above_target = 0
@@ -95,6 +111,9 @@ func poll(tick: int) -> InputFrame:
 		frame.cargo = false
 		frame.power_left = false
 		frame.power_right = false
+		# file vide alors que le client envoyait : la marge manquait
+		if _current_valid:
+			_window_starved += 1
 		_current_valid = false
 		held_ticks += 1
 	else:
@@ -117,6 +136,28 @@ func clear() -> void:
 	_current_valid = false
 	applied_valid = false
 	_above_target = 0
+	target = TARGET_QUEUE
+	_window_ticks = 0
+	_window_starved = 0
+	_clean_windows = 0
+
+
+## Fin de fenetre : cible remontee apres une file vide, descendue apres
+## ADAPT_CLEAN_WINDOWS fenetres sans.
+func _adapt() -> void:
+	_window_ticks += 1
+	if _window_ticks < ADAPT_TICKS:
+		return
+	if _window_starved > 0:
+		target = mini(target + 1, MAX_TARGET)
+		_clean_windows = 0
+	else:
+		_clean_windows += 1
+		if _clean_windows >= ADAPT_CLEAN_WINDOWS:
+			target = maxi(target - 1, MIN_TARGET)
+			_clean_windows = 0
+	_window_ticks = 0
+	_window_starved = 0
 
 
 func _drop_oldest() -> void:
