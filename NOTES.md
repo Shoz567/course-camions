@@ -5,7 +5,7 @@
 ## ÉTAT DE LA BASE DE CODE
 - Branche : `main` alignée sur `origin/main` (`dba2a5e`).
 - 46 tests automatisés au vert (`make test` : 46/46 PASS).
-- Déjà implémenté : 2 circuits (Cyber City & Playa Del Sol), 1 à 6 joueurs en écran partagé (grille 3x2), manette PS5 DualSense style Forza Horizon, musique arcade Mega Drive FM procédurale, collines 43m de dénivelé, drift débridé à 16° sans tête-à-queue, 4 vitesses (50cc à 200cc).
+- Déjà implémenté : 3 circuits (Cyber City, Playa Del Sol, Sakura en 8 avec pont), 1 à 6 joueurs en écran partagé (grille 3x2), manette PS5 DualSense style Forza Horizon, musique arcade Mega Drive FM procédurale, collines 43m de dénivelé, drift débridé à 16° sans tête-à-queue, 4 vitesses (50cc à 200cc).
 
 ---
 

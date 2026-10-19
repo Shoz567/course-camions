@@ -48,10 +48,10 @@ func _axis(device: int, value: float) -> void:
 func _test_finish() -> void:
 	_axis(0, 0.0)
 	check("circuit par defaut : Cyber City", _default_scene == "res://dev/race.tscn", _default_scene)
-	check("2 circuits au choix, noms et scenes", GameStateNode.TRACKS.size() == 2
+	check("3 circuits au choix, noms et scenes", GameStateNode.TRACKS.size() == 3
 		and GameStateNode.TRACKS[1]["name"] == "Playa Del Sol"
 		and GameStateNode.track_scene(1) == "res://dev/race_playa.tscn"
-		and GameStateNode.track_scene(99) == "res://dev/race_playa.tscn")
+		and GameStateNode.track_scene(99) == "res://dev/race_sakura.tscn")
 	check("scenes de course presentes", ResourceLoader.exists(GameStateNode.track_scene(0))
 		and ResourceLoader.exists(GameStateNode.track_scene(1)))
 	var track := _scene.get("track") as TrackBlockout

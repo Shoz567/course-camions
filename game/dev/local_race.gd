@@ -214,8 +214,9 @@ func _ready() -> void:
 	TruckLights.night = track.theme_id == TrackTheme.Id.CYBER_CITY
 	# projections des roues : gerbes d'eau sous la pluie, sable a la plage
 	TruckWheelFx.spray = TruckWheelFx.Spray.WATER if TruckLights.night else TruckWheelFx.Spray.DUST
-	# brume de chaleur sur la route de jour (post-traitement des cameras)
-	ScreenFx.haze = 0.0 if TruckLights.night else 1.0
+	# brume de chaleur sur la route de jour (post-traitement des cameras) ;
+	# legere au printemps
+	ScreenFx.haze = 0.0 if TruckLights.night else (0.35 if track.theme_id == TrackTheme.Id.SAKURA else 1.0)
 	# camions sales de la route : poussiere claire au bord de mer, crasse
 	# sombre et carrosseries mouillees sous la pluie
 	if TruckLights.night:
@@ -475,6 +476,9 @@ func _add_player(i: int) -> Player:
 	cam.get_camera().cull_mask = RainFx.cull_mask_for(cam.get_camera().cull_mask, view)
 	if track.theme_id == TrackTheme.Id.CYBER_CITY and DisplayServer.get_name() != "headless":
 		view_parent.add_child(RainFx.make(cam.get_camera(), view))
+	# Sakura : petales de cerisier qui volent autour de chaque camera
+	if track.theme_id == TrackTheme.Id.SAKURA and DisplayServer.get_name() != "headless":
+		view_parent.add_child(SakuraPetals.make(cam.get_camera(), view))
 	input.camera_toggle_requested.connect(cam.toggle_view)
 	if health != null:
 		health.respawned.connect(cam.snap)

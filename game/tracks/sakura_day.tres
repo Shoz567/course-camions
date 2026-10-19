@@ -1,0 +1,64 @@
+[gd_resource type="Environment" load_steps=4 format=3]
+
+[ext_resource type="Shader" path="res://tracks/materials/sky_day.gdshader" id="1"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("1")
+shader_parameter/zenith_color = Color(0.2, 0.45, 0.86, 1)
+shader_parameter/horizon_color = Color(1, 0.86, 0.72, 1)
+shader_parameter/sea_color = Color(0.55, 0.6, 0.66, 1)
+shader_parameter/cloud_coverage = 0.3
+shader_parameter/cloud_scale = 0.5
+shader_parameter/sun_size_deg = 0.7
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+radiance_size = 2
+
+[resource]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_color = Color(1, 0.95, 0.9, 1)
+ambient_light_sky_contribution = 0.6
+ambient_light_energy = 0.5
+tonemap_mode = 4
+tonemap_exposure = 1.05
+tonemap_white = 12.0
+ssr_enabled = true
+ssr_max_steps = 48
+ssr_fade_in = 0.15
+ssr_fade_out = 2.0
+ssr_depth_tolerance = 0.6
+ssao_enabled = true
+ssao_radius = 1.6
+ssao_intensity = 2.0
+ssao_power = 1.6
+ssao_detail = 0.7
+ssao_light_affect = 0.2
+ssil_enabled = true
+ssil_radius = 6.0
+ssil_intensity = 1.0
+sdfgi_enabled = true
+sdfgi_use_occlusion = true
+sdfgi_read_sky_light = true
+sdfgi_cascades = 4
+sdfgi_min_cell_size = 0.5
+sdfgi_y_scale = 1
+sdfgi_energy = 0.7
+glow_enabled = true
+glow_intensity = 0.35
+glow_strength = 0.9
+glow_bloom = 0.04
+glow_blend_mode = 2
+glow_hdr_threshold = 1.3
+fog_enabled = true
+fog_light_color = Color(1, 0.87, 0.82, 1)
+fog_light_energy = 1.0
+fog_sun_scatter = 0.3
+fog_density = 0.00028
+fog_aerial_perspective = 0.45
+fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_contrast = 1.08
+adjustment_saturation = 1.15

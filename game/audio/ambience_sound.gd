@@ -6,6 +6,9 @@ extends Node
 ##   CYBER_CITY    pluie (souffle aigu, gouttes) et rumeur grave de la ville ;
 ##   PLAYA_DEL_SOL deux vagues par boucle qui montent, deferlent et
 ##                 ecument, et le vent.
+##   SAKURA        brise dans les cerisiers (bruissement par rafales),
+##                 clochettes a vent de verre (furin), chant de bouscarle,
+##                 et une cloche de temple au loin (bonsho).
 ## Une boucle par theme, synthetisee une fois (aucun asset externe,
 ## CLAUDE.md §8), sans claquement au raccord : bruit filtre circulairement et
 ## modulations a un nombre entier de periodes par boucle. Gouttes placees
@@ -54,7 +57,10 @@ func _process(delta: float) -> void:
 
 ## Une boucle de LOOP_S secondes (mono, RATE Hz, crete 0,8).
 static func build(id: int) -> PackedFloat32Array:
-	return _build_playa() if id == TrackTheme.Id.PLAYA_DEL_SOL else _build_city()
+	match id:
+		TrackTheme.Id.PLAYA_DEL_SOL: return _build_playa()
+		TrackTheme.Id.SAKURA: return _build_sakura()
+	return _build_city()
 
 
 static func _build_city() -> PackedFloat32Array:
@@ -104,6 +110,51 @@ static func _build_playa() -> PackedFloat32Array:
 		# vent en fond, bien sous la houle (il la masquait a force egale)
 		out[i] = (deep[i] * 9.0 * swell + (bright[i] - dull[i]) * 1.1 * foam) * which \
 				+ wind[i] * 3.0 * gust
+	return _normalize(out)
+
+
+static func _build_sakura() -> PackedFloat32Array:
+	var n := roundi(RATE * LOOP_S)
+	var leaves := TruckAudio._looped_noise(n, 606, 0.35)
+	var leaves_low := TruckAudio._looped_noise(n, 606, 0.06)
+	var breeze := TruckAudio._looped_noise(n, 707, 0.012)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / RATE
+		# rafales : trois par boucle, le bruissement des feuilles les suit
+		var gust := 0.55 + 0.45 * pow(0.5 - 0.5 * cos(TAU * 3.0 * t / LOOP_S), 1.5)
+		out[i] = breeze[i] * 3.5 * gust + (leaves[i] - leaves_low[i]) * 0.55 * gust * gust
+	# cloche de temple au loin : fondamentale grave et partiels inharmoniques,
+	# longue extinction (elle deborde sur la boucle suivante : raccord continu)
+	var bell_at := roundi(RATE * 0.6)
+	for j in n:
+		var u := float(j) / RATE
+		var env := exp(-u * 0.55) * minf(u * 60.0, 1.0)
+		var v := sin(TAU * 98.0 * u) + 0.6 * sin(TAU * 98.0 * 2.76 * u) * exp(-u * 0.8) \
+				+ 0.35 * sin(TAU * 98.0 * 5.4 * u) * exp(-u * 1.6)
+		out[(bell_at + j) % n] += v * env * 0.22
+	# clochettes de verre : tintements aigus inharmoniques, par grappes
+	var lcg := 8128
+	for k in 9:
+		lcg = (lcg * 1103515245 + 12345) & 0x7fffffff
+		var start := lcg % n
+		lcg = (lcg * 1103515245 + 12345) & 0x7fffffff
+		var f := 1900.0 + float(lcg % 900)
+		for j in roundi(RATE * 1.4):
+			var u := float(j) / RATE
+			var v := sin(TAU * f * u) + 0.4 * sin(TAU * f * 2.71 * u) + 0.2 * sin(TAU * f * 4.16 * u)
+			out[(start + j) % n] += v * exp(-u * 3.2) * minf(u * 400.0, 1.0) * 0.07
+	# bouscarle (uguisu) : longue note tenue puis trille qui monte
+	var bird_at := roundi(RATE * 4.7)
+	var phase := 0.0
+	for j in roundi(RATE * 1.3):
+		var u := float(j) / RATE
+		var f := 1150.0 if u < 0.65 else lerpf(1500.0, 2900.0, (u - 0.65) / 0.65)
+		f += 25.0 * sin(TAU * 7.0 * u)
+		phase += f / RATE
+		var env := minf(u * 30.0, 1.0) * (1.0 if u < 0.6 else 0.2) if u < 0.65 else sin(PI * (u - 0.65) / 0.65)
+		out[(bird_at + j) % n] += sin(TAU * phase) * env * 0.06
 	return _normalize(out)
 
 
