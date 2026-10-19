@@ -64,7 +64,7 @@ const MAX_OBJECTS := 40
 ## Un obstacle immobile est quand meme renvoye tous les KEYFRAME_TICKS ticks.
 const KEYFRAME_TICKS := 30
 ## Evenements de jeu (_event), du host vers les clients.
-enum Ev { WRECK, RESPAWN, TRAILER_EXPLODED, DROP, OBJECT_HIT, OBJECT_GONE, BARREL, SIGN, IMPACT, LEFT }
+enum Ev { WRECK, RESPAWN, TRAILER_EXPLODED, DROP, OBJECT_HIT, OBJECT_GONE, BARREL, SIGN, IMPACT, LEFT, POWER }
 
 var race_scene: Node
 var players: Array = []
@@ -420,6 +420,11 @@ func _hook_host_events() -> void:
 				_send_event(Ev.WRECK, [i, _register(w), _register(t) if t != null else -1]))
 			health.respawned.connect(func() -> void: _send_event(Ev.RESPAWN, [i]))
 			health.trailer_destroyed.connect(func(at: Vector3) -> void: _send_event(Ev.TRAILER_EXPLODED, [i, at]))
+		# pouvoirs : emplacement et cible du missile, rejoues chez les clients
+		var powers := TruckPowers.of(truck)
+		if powers != null:
+			powers.fired.connect(func(slot: int, _p: int) -> void:
+				_send_event(Ev.POWER, [i, slot, _index_of(powers.last_target)]))
 		var cargo := truck.get_node_or_null(^"Cargo") as TruckCargo
 		if cargo != null:
 			cargo.dropped.connect(func(t: DetachedTrailer) -> void: _send_event(Ev.DROP, [i, _register(t)]))
@@ -730,6 +735,10 @@ func _event(kind: int, data: Array) -> void:
 			var k := int(data[0]) if data.size() == 1 else -1
 			if k >= 0 and k < players.size():
 				race_scene.call("mark_abandoned", k)
+		Ev.POWER:
+			var powers := TruckPowers.of(_truck_at(data, 0))
+			if powers != null and data.size() == 3:
+				powers.net_fire(int(data[1]), _truck_at(data, 2))
 		Ev.IMPACT:
 			var truck := _truck_at(data, 0)
 			if truck == null or data.size() != 6 or not truck.is_net_puppet():

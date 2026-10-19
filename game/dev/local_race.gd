@@ -378,8 +378,8 @@ func _add_player(i: int) -> Player:
 	# cibles des pouvoirs : tous les camions de la course ; pouvoirs choisis
 	# sur la page de selection (hors ligne), simules sur la machine qui fait foi
 	t.add_to_group(TruckPowers.TARGETS)
-	if is_authority():
-		TruckPowers.setup(t, p.power_left, p.power_right)
+	# client en ligne : pouvoirs en miroir (effets et recharges du host)
+	TruckPowers.setup(t, p.power_left, p.power_right, not is_authority())
 	race.watch(t)
 	# client en ligne : NetRace predit le camion de ce PC et pose les autres sur
 	# l'etat du host ; la remise en piste et les PV sont l'affaire du host
