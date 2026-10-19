@@ -145,7 +145,13 @@ func set_visual(v: Node3D) -> void:
 	add_child(v)
 
 
+## Obstacles laisses sur la route (remorques larguees, carcasses) : les bots
+## les evitent (BotInputSource).
+const OBSTACLES := &"road_obstacles"
+
+
 func _ready() -> void:
+	add_to_group(OBSTACLES)
 	mass = trailer_mass
 	hp = max_hp if initial_hp < 0.0 else clampf(initial_hp, 1.0, max_hp)
 	var center := _shape.position

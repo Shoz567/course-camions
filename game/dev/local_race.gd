@@ -125,6 +125,9 @@ const TRAILER_STEER_THRESHOLD := 0.6
 
 
 @export_range(1, 6) var player_count: int = 2
+## Bots hors ligne, apres les joueurs (BotInputSource) : ni vue ni HUD.
+@export_range(0, 5) var bot_count: int = 0
+@export_range(0, 2) var bot_level: int = 1
 ## Vrai : le nombre de joueurs choisi dans le menu remplace `player_count`.
 @export var players_from_menu: bool = false
 ## Sas READY avant le compte a rebours. Faux : compte a rebours tout de suite
@@ -201,6 +204,9 @@ func _ready() -> void:
 		ready_gate = true
 	elif players_from_menu and GameState.requested_players > 0:
 		player_count = clampi(GameState.requested_players, 1, MAX_PLAYERS)
+		bot_count = GameState.bot_count
+		bot_level = GameState.bot_level
+	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
 	_apply_graphics()
@@ -229,12 +235,13 @@ func _ready() -> void:
 	add_child(music)
 	RaceMusic.prepare()
 	split = null if NetSession.is_online() else _build_split_screen()
-	for i in player_count:
+	for i in player_count + bot_count:
 		players.append(_add_player(i))
 	if split != null and (player_count == 3 or player_count == 5):
 		_add_leader_view()
-	for i in player_count:
-		ready_flags.append(false)
+	for i in players.size():
+		# un bot est toujours pret
+		ready_flags.append(is_bot(i))
 		_square_was.append(false)
 		_steer_was.append(0)
 	# carrosseries deformables preparees pendant le chargement (~0,5 s par
@@ -277,13 +284,22 @@ func slot_of(i: int) -> int:
 
 ## Le joueur `i` joue-t-il sur cette machine ?
 func is_local(i: int) -> bool:
+	if is_bot(i):
+		return false
 	return not NetSession.is_online() or slot_of(i) == NetSession.local_slot()
+
+
+## Le joueur `i` est-il un bot (hors ligne, apres les joueurs) ?
+func is_bot(i: int) -> bool:
+	return i >= player_count and not NetSession.is_online()
 
 
 ## Nom affiche : J1 AZUR... hors ligne, nom du lobby en ligne.
 func player_name(i: int) -> String:
 	if NetSession.is_online():
 		return NetSession.name_of_slot(slot_of(i))
+	if is_bot(i):
+		return "BOT %d %s" % [i - player_count + 1, COLOR_NAMES[i]]
 	return NAMES[i]
 
 
@@ -369,6 +385,12 @@ func _add_player(i: int) -> Player:
 		choice = int(m.get("trailer", GameState.trailer_choice[0] if mine else 0))
 		p.power_left = int(m.get("power_left", -1))
 		p.power_right = int(m.get("power_right", -1))
+	elif is_bot(i):
+		# bot : remorque et pouvoirs selon son numero (deterministe)
+		var b := i - player_count
+		choice = posmod(3 * b + 1, TrailerCatalog.count())
+		p.power_left = posmod(b + 1, PowerCatalog.count())
+		p.power_right = posmod(b + 2, PowerCatalog.count())
 	else:
 		if i < GameState.trailer_choice.size():
 			choice = GameState.trailer_choice[i]
@@ -395,6 +417,14 @@ func _add_player(i: int) -> Player:
 	var health := TruckHealth.of(t)
 	if health != null and is_authority():
 		health.respawn_provider = race.respawn_transform
+	if is_bot(i):
+		# bot : il conduit seul, sans camera ni HUD
+		var bot := BotInputSource.new()
+		bot.name = "Bot%d" % (i - player_count + 1)
+		bot.setup(track, t, bot_level, i - player_count)
+		add_child(bot)
+		p.input = bot
+		return p
 	if online and not mine:
 		# joueur d'une autre machine : ses inputs arrivent par le reseau (host),
 		# ou ne servent pas (client) ; ni camera ni HUD ici
@@ -987,8 +1017,8 @@ func _process(delta: float) -> void:
 					else "\nen attente des autres"
 			if state == State.FINISHED and NetSession.is_client():
 				more = "\nle host relance la course   Create / Echap : quitter la partie"
-			var place := ("%de" % rank) if player_count > 1 else "ARRIVEE"
-			if player_count > 1 and rank == 1:
+			var place := ("%de" % rank) if players.size() > 1 else "ARRIVEE"
+			if players.size() > 1 and rank == 1:
 				place = "1er !"
 			p.hud.set_center_message("%s\n%s   meilleur tour %s%s" % [place,
 				RaceHud.chrono(r.finish_ticks), RaceHud.chrono(r.best_lap), more], Color.WHITE)
