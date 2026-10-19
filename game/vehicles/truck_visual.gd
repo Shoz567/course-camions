@@ -773,6 +773,15 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	if _templates.has(path):
 		return _templates[path]
 	_templates[path] = null
+	var packed := _build_template(path, strip, exclude, wheel_prefix, trailer_prefix)
+	_templates[path] = packed
+	return packed
+
+
+## Gabarit d'un modele de camion, sans le cache : appelable hors du thread
+## principal (ecran de chargement, build_templates).
+static func _build_template(path: String, strip: PackedStringArray, exclude: PackedStringArray,
+		wheel_prefix: String, trailer_prefix: String) -> PackedScene:
 	if not FileAccess.file_exists(path):
 		return null
 	var doc := GLTFDocument.new()
@@ -808,7 +817,6 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 	var packed := PackedScene.new()
 	packed.pack(fitted)
 	fitted.free()
-	_templates[path] = packed
 	return packed
 
 
@@ -867,6 +875,13 @@ static func _trailer_template(path: String) -> PackedScene:
 	if _templates.has(path):
 		return _templates[path]
 	_templates[path] = null
+	var packed := _build_trailer_template(path)
+	_templates[path] = packed
+	return packed
+
+
+## Gabarit d'une remorque du catalogue, sans le cache (hors du thread principal).
+static func _build_trailer_template(path: String) -> PackedScene:
 	if not FileAccess.file_exists(path):
 		return null
 	var doc := GLTFDocument.new()
@@ -894,9 +909,18 @@ static func _trailer_template(path: String) -> PackedScene:
 	var packed := PackedScene.new()
 	packed.pack(trailer)
 	trailer.free()
-	_templates[path] = packed
 	return packed
 
+
+## Ecran de chargement (2026-10-17) : gabarit du modele de camion (`trailer`
+## faux) ou de remorque du catalogue (vrai) a ce chemin relatif a
+## asset_base(), lu au besoin et mis en cache - reglages d'ajustement de
+## truck.tscn. Thread principal.
+static func template_for(relative: String, trailer: bool) -> PackedScene:
+	var p := asset_base().path_join(relative).simplify_path()
+	if trailer:
+		return _trailer_template(p)
+	return _template(p, PackedStringArray(), PackedStringArray(["Remorque"]), "Roue", "Remorque")
 
 ## Construit un Node3D dans le repere du camion : corps ajuste, pivots de roue,
 ## pivot de remorque a la sellette.

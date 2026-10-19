@@ -387,4 +387,4 @@ func _launch(track: int, speed_class: int, send_ticks: int, data: Array) -> void
 	members = _unpack(data)
 	race_launched.emit()
 	if auto_change_scene:
-		get_tree().change_scene_to_file(GameStateNode.track_scene(GameState.selected_track))
+		LoadingScreen.go(get_tree(), GameStateNode.track_scene(GameState.selected_track))
