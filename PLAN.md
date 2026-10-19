@@ -763,7 +763,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 | 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, `crowd_sound_test`) - `[x]`) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires (en attente : tracé et ambiance à décider par l'équipe, 2026-10-17) | track-designer |
-| 7.6 | Profilage et optimisation (`[~]` passes du 2026-10-09 et du 2026-10-17 ci-dessous) | godot-qa |
+| 7.6 | Profilage et optimisation (`[x]` passes du 2026-10-09, du 2026-10-17 et du 2026-10-18 ci-dessous : plus de gel au-delà de 50 ms en course à 4 joueurs) | godot-qa |
 | 7.7 | Export Windows/Linux, test sur machine vierge (`[~]` 2026-10-17 : `make export` produit les deux en 16 s, modèles copiés à côté ; Windows lancé sur la machine de référence : menu, page de sélection et course Cyber City avec les modèles de l'équipe ; reste : Linux et une machine vierge) | godot-qa |
 
 **Optimisation, passe 1** (2026-10-09, « gros problèmes de performance sur
@@ -823,8 +823,16 @@ fusionné) : 56,5 → 59,1 images/s, 1 % bas 7,5 → 18, pire image 370 → 92 m
   (`wreck_dent_spread_test`).
 - **Copie de la carrosserie préparée au chargement** (`BodyDamage.prewarm`
   `own`) : ~70 ms et 15 Mo par camion, −45 ms au premier choc dur.
-- Reste (`[~]`) : un choc dur contre un mur coûte encore 40 à 90 ms (calcul
-  du creux, déjà réparti sur les cœurs) ; piste : calcul asynchrone.
+- **Passe 4 (2026-10-18) : creux asynchrones** (`BodyDamage.async_dents`, en
+  jeu seulement) : les deux passes d'un creux (forme, normales) tournent sur
+  la moitié des cœurs pendant que le jeu dessine ; la pièce prend sa forme 1
+  à 3 images plus tard, au sommet près comme en synchrone, deux creux de la
+  même pièce enchaînés (`async_dent_test`). Choc dur sur la cabine : 37 ms
+  bloqués + 74 ms à l'image suivante → 14 à 19 ms + 30 à 55 ms. Course à
+  4 joueurs, mêmes conditions : pire image 120 → 48 ms, 1 % bas 12,8 →
+  22,4 images/s.
+- Reste : la collecte des cellules d'un creux (GDScript, thread principal,
+  ~4 ms par pièce touchée).
 
 ---
 
