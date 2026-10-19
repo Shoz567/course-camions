@@ -139,6 +139,8 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @onready var auto_reset: AutoReset = $AutoReset
 
 var players: Array[Player] = []
+## Qualite appliquee a cette course (choisie, ou budget de l'ecran partage).
+var quality: int = GraphicsSettings.Quality.MEDIUM
 ## Etat de la course : celui de RaceManager (tache 3.1), memes valeurs.
 var state: State:
 	get:
@@ -234,6 +236,9 @@ func _ready() -> void:
 	# modele) : le sas READY ne prepare plus que les remorques changees, sans
 	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
 	_prewarm_bodies()
+	# shaders des explosions, etincelles, fumees compiles avant le depart
+	# (tache 7.6 : la premiere explosion figeait l'image 370 ms a 4 joueurs)
+	FxWarmup.start(self, quality)
 	# hors ligne, remorques et pouvoirs deja choisis au menu (page de selection) :
 	# pas de sas, compte a rebours tout de suite. En ligne, le sas READY reste
 	var gate := ready_gate and (NetSession.is_online() or not GameState.loadout_locked)
@@ -304,12 +309,14 @@ func _build_split_screen() -> Container:
 func _apply_graphics() -> void:
 	# en ligne : une seule vue, celle du joueur de cette machine
 	var views := 1 if NetSession.is_online() else player_count + (1 if player_count == 3 or player_count == 5 else 0)
+	# ecran partage sur puce integree : budget du spike V3
+	quality = GraphicsSettings.split_quality(GameState.graphics_quality, views)
 	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world != null:
-		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, views)
+		GraphicsSettings.apply_environment(world.environment, quality, views)
 	for n in find_children("*", "DirectionalLight3D", false, false):
-		GraphicsSettings.apply_sun(n as DirectionalLight3D, views)
-	GraphicsSettings.apply_viewport(get_viewport(), GameState.graphics_quality)
+		GraphicsSettings.apply_sun(n as DirectionalLight3D, views, quality)
+	GraphicsSettings.apply_viewport(get_viewport(), quality)
 
 
 ## Une case de l'ecran partage : SubViewportContainer etire + SubViewport.
@@ -322,7 +329,7 @@ func _new_view(view_name: String, listener: bool) -> SubViewport:
 	var vp := SubViewport.new()
 	vp.name = view_name
 	vp.audio_listener_enable_3d = listener
-	GraphicsSettings.apply_viewport(vp, GameState.graphics_quality)
+	GraphicsSettings.apply_viewport(vp, quality)
 	container.add_child(vp)
 	return vp
 
@@ -403,6 +410,7 @@ func _add_player(i: int) -> Player:
 	var cam := ChaseCamera.new()
 	cam.name = "Camera%d" % (i + 1)
 	cam.target = t
+	cam.quality = quality
 	view_parent.add_child(cam)
 	cam.snap()
 	p.camera = cam
@@ -476,9 +484,13 @@ func player_tag(i: int) -> String:
 
 
 ## Carrosseries deformables preparees avant le depart, pas au premier choc.
+## Avec la copie propre de chaque camion (BodyDamage.prewarm `own` : ~70 ms et
+## 15 Mo par camion au chargement, -45 ms au premier gros choc) ; pas en
+## headless (tests : rien a l'ecran, chargement plus court).
 func _prewarm_bodies() -> void:
+	var own := DisplayServer.get_name() != "headless"
 	for p in players:
-		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D)
+		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D, own)
 
 
 func all_ready() -> bool:
@@ -532,6 +544,7 @@ func _add_leader_view() -> void:
 	var vp := _new_view("View%d" % (player_count + 1), false)
 	var cam := ChaseCamera.new()
 	cam.name = "LeaderCamera"
+	cam.quality = quality
 	cam.distance = 45.0
 	cam.focus_height = 6.0
 	cam.pitch_deg = 20.0

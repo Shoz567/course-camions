@@ -67,6 +67,11 @@ var _level: int = DamageFx.Smoke.NONE
 ## Hauteur de la route sous le camion (repere du camion), lue aux roues.
 var _ground_y: float = 0.0
 var _flicker: float = 0.0
+## Bosses de la destruction, une par image (tache 7.6 : les quatre d'un coup
+## figeaient l'image ~190 ms a 4 joueurs) : [point, poussee] dans le repere
+## du camion, appliquees avec son transform du moment.
+var _pending_dents: Array[PackedVector3Array] = []
+const WRECK_DENT_RADIUS := 1.6
 
 
 ## Niveau de fumee pour ces PV (DamageFx.Smoke).
@@ -136,6 +141,10 @@ func _process(delta: float) -> void:
 	refresh()
 	if _truck == null:
 		return
+	if not _pending_dents.is_empty() and _visual != null:
+		var d: PackedVector3Array = _pending_dents.pop_front()
+		var xf := _truck.global_transform
+		BodyDamage.dent(_visual.mark_parent(false), xf * d[0], xf.basis * d[1], WRECK_DENT_RADIUS)
 	_read_ground()
 	if _fire_light != null and _fire_light.visible:
 		# flamme qui vacille (visuel seulement)
@@ -372,7 +381,7 @@ func _on_destroyed() -> void:
 		var at := TruckSpec.CAB_CENTER + side * (TruckSpec.CAB_SIZE / 2.0)
 		add_mark(xf * at, xf.basis * side, 1.0, false)
 		if _visual != null:
-			BodyDamage.dent(_visual.mark_parent(false), xf * at, xf.basis * -side * 0.35, 1.6)
+			_pending_dents.append(PackedVector3Array([at, -side * 0.35]))
 	if _visual != null:
 		var world := _truck.get_parent()
 		var c := xf * TruckSpec.CAB_CENTER
@@ -409,6 +418,7 @@ func clear_trailer_marks() -> void:
 ## Camion neuf (reapparition) : plus aucune trace, aucune bosse, toutes ses
 ## pieces, plus de fumee.
 func clear_all() -> void:
+	_pending_dents.clear()
 	for d in _marks:
 		if is_instance_valid(d):
 			d.queue_free()
