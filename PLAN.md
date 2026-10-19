@@ -703,6 +703,27 @@ rayons). Le maillage est **purement visuel** et suit `docs/VEHICLE_SPEC.md`.
 | 5.5 | Intégration : le camion texturé remplace les boîtes, roues animées d'après les rayons | vehicle-physics-engineer |
 | 5.6 | Non-régression : **tous** les tests de la phase 1 passent inchangés | godot-qa |
 
+**État au 2026-10-17.** La phase a été prise par un autre chemin que le tableau
+ci-dessus, par décision de l'équipe (`docs/ART_PIPELINE.md` §4 bis à 4 quater) :
+
+- 5.1, 5.2, 5.5 : les camions sont les **modèles de l'équipe**
+  (`Assets_Visuels/`, Git LFS depuis le 2026-10-02), recalés sur
+  `VEHICLE_SPEC` en jeu par `TruckVisual`. `make vehicules` en dérive le
+  catalogue de remorques et les versions réalistes
+  (`catalogue_tete_commune.py`, `realisme_vehicules.py`) ;
+  `build_truck.py` n'a donc pas été écrit ;
+- 5.3, 5.4 : les pistes et le décor sont **générés par le code dans Godot**
+  (`track_blockout.gd`, `race_decor.gd`, `city_builder.gd`) ; aucune
+  piste Blender ;
+- 5.6 : les tests de conduite passent inchangés (`make test` : 66/66).
+
+Mesuré le 2026-10-17 sur la machine de référence : `make assets` 30 s (rien à
+générer, `build_all.py` est vide) + `make vehicules` 92 s = **2 min 2 s**, à la limite de la cible (< 2 min ; les 30 s sont surtout le démarrage de Blender),
+sans erreur (un avertissement de Blender 6.0 : `mat.use_nodes` déprécié).
+Les `.glb` versionnés sont ceux de l'équipe, par Git LFS (exception de
+`CLAUDE.md` §8). Reste ouvert : faut-il que `make assets` appelle
+`make vehicules` (il réécrirait alors les binaires LFS à chaque passage) ?
+Question pour l'équipe.
 **Critères de sortie**
 - `make assets` régénère tout l'art depuis zéro en < 2 min.
 - Les tests de conduite passent sans qu'aucun seuil ait été touché.
