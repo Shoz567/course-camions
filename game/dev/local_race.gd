@@ -241,6 +241,9 @@ func _ready() -> void:
 	# modele) : le sas READY ne prepare plus que les remorques changees, sans
 	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
 	_prewarm_bodies()
+	# creux de carrosserie calcules sans figer l'image (pas en headless : les
+	# tests lisent le creux des le retour de dent)
+	BodyDamage.async_dents = DisplayServer.get_name() != "headless"
 	# shaders des explosions, etincelles, fumees compiles avant le depart
 	# (tache 7.6 : la premiere explosion figeait l'image 370 ms a 4 joueurs)
 	_warmup = FxWarmup.start(self, quality)
@@ -519,7 +522,12 @@ func release_start() -> void:
 func _prewarm_bodies() -> void:
 	var own := DisplayServer.get_name() != "headless"
 	for p in players:
-		BodyDamage.prewarm(p.truck.get_node_or_null(^"Visual") as Node3D, own)
+		var visual := p.truck.get_node_or_null(^"Visual") as TruckVisual
+		BodyDamage.prewarm(visual, own)
+		if visual != null:
+			# pieces deformables de la tete et de la remorque (recherche d'un creux)
+			BodyDamage.warm_candidates(visual.mark_parent(false))
+			BodyDamage.warm_candidates(visual.mark_parent(true))
 
 
 func all_ready() -> bool:

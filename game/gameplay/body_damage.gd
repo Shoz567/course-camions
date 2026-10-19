@@ -78,9 +78,8 @@ static func dent(root: Node3D, point: Vector3, push: Vector3, radius: float) -> 
 	if root == null or radius <= 0.0 or push.length_squared() < 1e-6:
 		return 0
 	var moved := 0
-	for n in root.find_children("*", "MeshInstance3D", true, false):
-		var mi := n as MeshInstance3D
-		if mi.mesh == null or not mi.is_visible_in_tree() or _skipped(mi, root):
+	for mi: MeshInstance3D in _candidates(root):
+		if mi.mesh == null or not mi.is_visible_in_tree():
 			continue
 		var xf := mi.global_transform
 		var box := (xf * mi.get_aabb()).grow(radius)
@@ -99,6 +98,40 @@ static func dent(root: Node3D, point: Vector3, push: Vector3, radius: float) -> 
 		moved += _dent_instance(mi, p, inv.basis * push * k, r * (1.0 + FATIGUE_SPREAD * minf(n_prev, 4.0)))
 	return moved
 
+
+## Pieces deformables sous oot (ni sautees, ni sans maillage), gardees par
+## carrosserie : chercher parmi la centaine de pieces d'une cabine et
+## comparer leurs noms aux prefixes sautes coutait ~27 ms a chaque creux
+## (2026-10-18, tache 7.6). La liste ne change pas en course (une piece
+## arrachee est cachee, pas retiree) ; une piece liberee en est otee.
+static var _candidate_cache: Dictionary = {}
+
+
+## Prepare la liste des pieces deformables de `root` (chargement).
+static func warm_candidates(root: Node3D) -> void:
+	if root != null:
+		_candidates(root)
+
+
+static func _candidates(root: Node3D) -> Array[MeshInstance3D]:
+	var id := root.get_instance_id()
+	var list: Array[MeshInstance3D] = []
+	if _candidate_cache.has(id):
+		list = _candidate_cache[id]
+		var valid := true
+		for mi in list:
+			if not is_instance_valid(mi):
+				valid = false
+				break
+		if valid:
+			return list
+		list = []
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh != null and not _skipped(mi, root):
+			list.append(mi)
+	_candidate_cache[id] = list
+	return list
 
 ## Coups deja recus par `mi` a moins de `r` du point local `p` (avant celui-
 ## ci), puis ce coup compte : le plus proche est renforce, sinon un nouveau.
@@ -190,6 +223,7 @@ static func prewarm_mesh(mesh: Mesh) -> void:
 static func restore(root: Node3D) -> void:
 	if root == null:
 		return
+	_cancel_flights(root)
 	for n in root.find_children("*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D
 		if mi.has_meta(META_PRISTINE):
@@ -226,6 +260,10 @@ static func _skipped(node: Node, root: Node) -> bool:
 
 
 static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: float) -> int:
+	if _flights.has(mi):
+		# un creux de cette piece est en calcul : celui-ci part apres lui
+		(_flights[mi] as DentFlight).pending.append([p, push, r])
+		return 0
 	var surfaces := _own(mi)
 	if surfaces.is_empty():
 		return 0
@@ -304,7 +342,7 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 	if total == 0:
 		return 0
 	# lots de taille voisine, cellules voisines ensemble
-	var lots := clampi(total / JOB_VERTICES, 1, maxi(OS.get_processor_count() - 1, 1))
+	var lots := clampi(total / JOB_VERTICES, 1, _max_lots())
 	var lot_surf := PackedInt32Array()
 	var lot_cells: Array[PackedInt32Array] = []
 	var filled := 0
@@ -331,12 +369,34 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 	job.squash = squash
 	job.r2 = r2
 	job.far2 = far2
+	if async_dents:
+		var fl := DentFlight.new()
+		fl.mi = mi
+		fl.surfaces = surfaces
+		fl.job = job
+		job.start(job.dent_lot)
+		_flights[mi] = fl
+		_ensure_pump()
+		return total
 	job.run(job.dent_lot)
-	var moved := job.apply(job.verts)
+	var moved := _creux_done(job)
 	if moved == 0:
 		return 0
-	job.split_moved(clampi(moved / JOB_NORMALS, 1, maxi(OS.get_processor_count() - 1, 1)))
 	job.run(job.normal_lot)
+	_normals_done(mi, surfaces, job)
+	return moved
+
+
+## Creux calcule : sommets reportes, normales a recalculer decoupees en lots.
+static func _creux_done(job: DentJob) -> int:
+	var moved := job.apply(job.verts)
+	if moved > 0:
+		job.split_moved(clampi(moved / JOB_NORMALS, 1, _max_lots()))
+	return moved
+
+
+## Normales calculees : la piece prend sa nouvelle forme.
+static func _normals_done(mi: MeshInstance3D, surfaces: Array, job: DentJob) -> void:
 	job.apply(job.nrm)
 	for s in surfaces.size():
 		var arrays: Array = surfaces[s]
@@ -344,7 +404,85 @@ static func _dent_instance(mi: MeshInstance3D, p: Vector3, push: Vector3, r: flo
 		if not job.nrm[s].is_empty():
 			arrays[Mesh.ARRAY_NORMAL] = job.nrm[s]
 	_commit(mi, surfaces)
-	return moved
+
+
+# --- creux asynchrones -------------------------------------------------------------
+
+## Vrai en jeu (LocalRace, pas en headless) : un creux ne fige plus l'image.
+## Ses deux passes (forme, normales) tournent sur les coeurs pendant que le
+## jeu continue, et la piece prend sa forme 1 a 3 images plus tard (2026-10-18,
+## tache 7.6 : un choc dur figeait 40 a 90 ms). Meme resultat qu'en
+## synchrone ; deux creux sur la meme piece s'enchainent dans l'ordre. Faux par
+## defaut (tests : le creux est la des le retour de dent).
+static var async_dents: bool = false
+
+
+## Lots d'un creux : tous les coeurs sauf un en synchrone ; la moitie en
+## asynchrone (le jeu dessine pendant ce temps).
+static func _max_lots() -> int:
+	var cores := OS.get_processor_count()
+	return maxi(cores / 2 if async_dents else cores - 1, 1)
+
+
+static var _flights: Dictionary = {}
+static var _pumping: bool = false
+
+
+## Un creux en cours de calcul sur une piece, et ceux qui attendent derriere.
+class DentFlight:
+	var mi: MeshInstance3D
+	var surfaces: Array
+	var job: DentJob
+	var stage: int = 0
+	var pending: Array = []
+
+
+static func _ensure_pump() -> void:
+	if _pumping:
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	tree.process_frame.connect(pump)
+	_pumping = true
+
+
+## Fait avancer les creux en vol (a chaque image) : forme calculee -> normales
+## lancees ; normales calculees -> piece posee, creux suivant de la piece.
+static func pump() -> void:
+	for mi: Variant in _flights.keys():
+		var fl := _flights[mi] as DentFlight
+		if not is_instance_valid(fl.mi):
+			fl.job.finish()
+			_flights.erase(mi)
+			continue
+		if not fl.job.done():
+			continue
+		fl.job.finish()
+		if fl.stage == 0:
+			if _creux_done(fl.job) > 0:
+				fl.stage = 1
+				fl.job.start(fl.job.normal_lot)
+				continue
+		else:
+			_normals_done(fl.mi, fl.surfaces, fl.job)
+		_flights.erase(mi)
+		for d: Array in fl.pending:
+			_dent_instance(fl.mi, d[0], d[1], d[2])
+
+
+## Creux encore en calcul (tests).
+static func dents_in_flight() -> int:
+	return _flights.size()
+
+
+## Abandonne les creux en vol sous oot (remise a neuf).
+static func _cancel_flights(root: Node) -> void:
+	for mi: Variant in _flights.keys():
+		var fl := _flights[mi] as DentFlight
+		if not is_instance_valid(fl.mi) or root.is_ancestor_of(fl.mi):
+			fl.job.finish()
+			_flights.erase(mi)
 
 
 ## Copie propre de l'instance (subdivisee), tableaux de surfaces en cache.
@@ -447,6 +585,23 @@ class DentJob:
 			return
 		var group := WorkerThreadPool.add_group_task(task, out_ids.size(), -1, true, "BodyDamage")
 		WorkerThreadPool.wait_for_group_task_completion(group)
+
+	## Comme run, sans attendre (async_dents) : done() dit si c'est fini,
+	## finish() recupere la tache.
+	var _group: int = -1
+
+	func start(task: Callable) -> void:
+		# toujours sur le pool, meme un seul lot, et sans priorite : le thread
+		# principal et le rendu continuent pendant le calcul
+		_group = WorkerThreadPool.add_group_task(task, out_ids.size(), -1, false, "BodyDamage")
+
+	func done() -> bool:
+		return _group < 0 or WorkerThreadPool.is_group_task_completed(_group)
+
+	func finish() -> void:
+		if _group >= 0:
+			WorkerThreadPool.wait_for_group_task_completion(_group)
+			_group = -1
 
 	func resize_out(count: int) -> void:
 		out_surf.resize(count)
