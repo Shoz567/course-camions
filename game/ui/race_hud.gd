@@ -30,6 +30,10 @@ var _hp_bar: ProgressBar
 var _trailer_hp_label: Label
 var _trailer_hp_bar: ProgressBar
 var _center: Label
+## Bandeau du haut, pour un joueur encore en course apres la premiere arrivee
+## (« 1er : J2  ·  FIN DANS 28 s ») : rien ne lui cache la route.
+var _ticker: Label
+var _ticker_card: PanelContainer
 var _help: Label
 var _standings: Label
 var _standings_card: PanelContainer
@@ -187,6 +191,18 @@ func _build_cards(k: float) -> void:
 		l.position = Vector2.ZERO
 		card.add_child(l)
 		card.visible = false
+	_ticker_card = _card(UiKit.GOLD, k)
+	_ticker_card.name = "Ticker"
+	_ticker_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_ticker_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ticker_card.offset_top = 18 * k
+	_ticker_card.visible = false
+	add_child(_ticker_card)
+	_ticker = _label(22, Vector2.ZERO)
+	remove_child(_ticker)
+	_ticker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ticker.add_theme_color_override("font_color", UiKit.GOLD)
+	_ticker_card.add_child(_ticker)
 	_center.add_theme_font_override("font", UiKit.font(900))
 	_center.add_theme_font_size_override("font_size", maxi(10, roundi(54 * ui_scale)))
 	for bar: ProgressBar in [_boost_bar, _cargo_bar, _hp_bar, _trailer_hp_bar]:
@@ -217,6 +233,22 @@ func set_standings(text: String) -> void:
 	_standings.text = text
 	if _standings_card != null:
 		_standings_card.visible = text != ""
+
+
+## Bandeau du haut (une ligne, vide pour l'effacer).
+func set_ticker(text: String) -> void:
+	if _ticker == null:
+		return
+	_ticker.text = text
+	_ticker_card.visible = text != ""
+
+
+func ticker_text() -> String:
+	return _ticker.text if _ticker != null and _ticker_card.visible else ""
+
+
+func standings_visible() -> bool:
+	return _standings_card != null and _standings_card.visible
 
 
 ## Message central (vide pour l'effacer).
