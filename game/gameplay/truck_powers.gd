@@ -11,12 +11,14 @@ extends Node3D
 ##              en material_overlay sur ses pieces, remorque exclue) ;
 ##   MISSILE  : PowerMissile vers le camion le plus proche devant (cone et
 ##              portee de PowerCatalog), tout droit s'il n'y en a pas ;
-##   LASER    : rayon droit devant pendant LASER_TICKS, LASER_DAMAGE_PER_TICK
-##              au camion touche (le premier obstacle arrete le rayon) ;
+##   LASER    : rayon pendant LASER_TICKS, LASER_DAMAGE_PER_TICK au camion
+##              touche (le premier obstacle arrete le rayon) ;
 ##   Tous : PV de la partie touchee, tete ou remorque, et degats visuels
 ##              (strike, 2026-10-20) ;
-##   MITRAILLEUSE : rafale de GUN_TICKS, une balle (rayon droit devant) tous
-##              les GUN_INTERVAL ticks, GUN_DAMAGE au camion touche ;
+##   MITRAILLEUSE : rafale de GUN_TICKS, une balle (rayon) tous les
+##              GUN_INTERVAL ticks, GUN_DAMAGE au camion touche ;
+##   Laser et mitrailleuse visent seuls le camion le plus proche devant
+##              (aim_direction, 2026-10-20), droit devant sans cible ;
 ##   SCIE     : SAW_TICKS de lames a plat sur les flancs, a hauteur des pneus ;
 ##              un camion a cote (zone de SAW_REACH_M au-dela du flanc, sur
 ##              tout le flanc du tracteur) perd SAW_DAMAGE_PER_TICK, ses pneus
@@ -328,7 +330,7 @@ func target_ahead() -> Truck:
 
 func _laser_tick() -> void:
 	var from := _truck.global_transform * LASER_ORIGIN
-	var fwd := -_truck.global_basis.z
+	var fwd := aim_direction(from)
 	var q := PhysicsRayQueryParameters3D.create(from, from + fwd * PowerCatalog.LASER_RANGE_M,
 		(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)), [_truck.get_rid()])
 	var hit := _truck.get_world_3d().direct_space_state.intersect_ray(q)
@@ -345,14 +347,14 @@ func _laser_tick() -> void:
 	if _beam != null:
 		_beam.visible = true
 		(_beam.mesh as CylinderMesh).height = length
-		_beam.transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), LASER_ORIGIN + Vector3(0.0, 0.0, -length / 2.0))
+		_beam.transform = _ray_transform(fwd, length)
 
 
-## Une balle : rayon droit devant depuis la face avant ; GUN_DAMAGE au camion
+## Une balle : rayon vise depuis la face avant ; GUN_DAMAGE au camion
 ## touche (pas en miroir), trainee et etincelles.
 func _gun_shot() -> void:
 	var from := _truck.global_transform * LASER_ORIGIN
-	var fwd := -_truck.global_basis.z
+	var fwd := aim_direction(from)
 	var q := PhysicsRayQueryParameters3D.create(from, from + fwd * PowerCatalog.GUN_RANGE_M,
 		(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)), [_truck.get_rid()])
 	var hit := _truck.get_world_3d().direct_space_state.intersect_ray(q)
@@ -372,7 +374,25 @@ func _gun_shot() -> void:
 		_tracer.visible = true
 		_tracer_ticks = 2
 		(_tracer.mesh as CylinderMesh).height = length
-		_tracer.transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), LASER_ORIGIN + Vector3(0.0, 0.0, -length / 2.0))
+		_tracer.transform = _ray_transform(fwd, length)
+
+
+## Visee automatique (2026-10-20 : « que ca vise la personne la plus proche
+## devant soi, qu'il n'y ait pas a viser ») : direction monde de `from` vers
+## le camion vise (target_ahead : le plus proche devant, dans le cone du
+## missile) ; droit devant s'il n'y en a pas.
+func aim_direction(from: Vector3) -> Vector3:
+	var t := target_ahead()
+	if t == null:
+		return -_truck.global_basis.z
+	return (t.global_position + Vector3.UP * 1.5 - from).normalized()
+
+
+## Rayon (cylindre d'axe Y) de LASER_ORIGIN sur `length` m dans la direction
+## monde `dir`, repere du camion.
+func _ray_transform(dir: Vector3, length: float) -> Transform3D:
+	var local := (_truck.global_basis.inverse() * dir).normalized()
+	return Transform3D(Basis(Quaternion(Vector3.UP, local)), LASER_ORIGIN + local * length / 2.0)
 
 
 ## Scies : un camion dont le flanc du chassis ou un pneu tombe dans la zone
