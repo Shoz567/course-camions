@@ -25,6 +25,10 @@ var _slow: Dictionary = {}
 var _top_ticks := 0
 var _boost_ticks := 0
 var _vmax := 0.0
+## Trace par tranche de 100 m (5e argument « trace ») : vitesse, profil, ecart
+## a la ligne, braquage, du 1er bot, apres son 1er tour.
+var _sect: Dictionary = {}
+var _last_blk: Node3D = null
 
 
 func _ready() -> void:
@@ -81,6 +85,31 @@ func _physics_process(_d: float) -> void:
 			if t.is_boosting():
 				_boost_ticks += 1
 			_vmax = maxf(_vmax, t.linear_velocity.length() * 3.6)
+			if _args.size() > 4 and t == trucks[0] and (laps.get(t, []) as Array).size() >= 1:
+				var bt: BotInputSource = null
+				for p: Object in ps:
+					if p.get("truck") == t:
+						bt = p.get("input") as BotInputSource
+				var tk := scene.get("track") as TrackBlockout
+				var bin := int(tk.sample_s(bt.index) / 100.0)
+				if _args.size() > 6 and ticks % 15 == 0 and tk.sample_s(bt.index) >= float(_args[5]) and tk.sample_s(bt.index) <= float(_args[6]):
+					print("FINE s=%.0f v=%.0f prof=%.0f tgt=%.0f lat=%.1f line=%.1f aim=%.1f steer=%.2f thr=%.2f brk=%.2f k=%.4f" % [tk.sample_s(bt.index),
+						t.linear_velocity.length() * 3.6, bt._profile[bt.index] * 3.6, bt.target_speed * 3.6,
+						bt._lateral_of(t.global_position, bt.index), bt.line.offset[bt.index], bt._lat_now, bt.frame.steer,
+						bt.frame.throttle, bt.frame.brake, bt.line.curvature[bt.index]])
+				var acc: Array = _sect.get(bin, [0, 0.0, 0.0, 0.0, 0.0, 0.0])
+				acc[0] += 1
+				acc[1] += t.linear_velocity.length()
+				acc[2] += bt._profile[bt.index]
+				acc[3] += absf(bt._lateral_of(t.global_position, bt.index) - bt.line.offset[bt.index])
+				acc[4] += absf(bt.frame.steer)
+				acc[5] += bt.frame.brake
+				_sect[bin] = acc
+				if bt.blocked_by != _last_blk:
+					_last_blk = bt.blocked_by
+					if _last_blk != null:
+						print("BLK s=%.0f %s me_lat=%.1f line=%.1f v=%.0f" % [tk.sample_s(bt.index), _last_blk.name,
+							bt._lateral_of(t.global_position, bt.index), bt.line.offset[bt.index], t.linear_velocity.length() * 3.6])
 			# lent (< 20 km/h) plus de 3 s : ou et pourquoi
 			var slow := t.linear_velocity.length() * 3.6 < 20.0 and not t.is_wrecked()
 			_slow[t] = int(_slow.get(t, 0)) + 1 if slow else 0
@@ -114,4 +143,10 @@ func _physics_process(_d: float) -> void:
 		print("BENCH track=%s level=%s bots=%s laps=%s crashes=%d resets=%d contacts=%d top=%d%% boost=%d%% vmax=%.0f" % [_args[0],
 			_args[1], _args[2], str(out), crashes, resets, contacts, 100 * _top_ticks / maxi(_race_ticks, 1),
 			100 * _boost_ticks / maxi(_race_ticks, 1), _vmax])
+		var keys := _sect.keys()
+		keys.sort()
+		for k: int in keys:
+			var a: Array = _sect[k]
+			var n := float(a[0])
+			print("SECT s=%4d v=%3.0f prof=%3.0f laterr=%4.1f steer=%.2f brake=%.2f" % [k * 100, a[1] / n * 3.6, a[2] / n * 3.6, a[3] / n, a[4] / n, a[5] / n])
 		get_tree().quit()

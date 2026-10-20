@@ -11,8 +11,8 @@ extends RefCounted
 ##     local (4 (P-1 + P+1) - (P-2 + P+2)) / 6, ramene dans ses bornes), du
 ##     grossier au fin (LEVELS) : les grandes ondulations convergent vite en
 ##     grossier, le fin precise ;
-##   - pads de boost : la ligne passe dessus ; sauts et flaques : elle passe a
-##     cote, du cote faisable le plus proche ; seulement pour un petit detour
+##   - pads de boost : la ligne passe dessus ; sauts, flaques et barils : elle
+##     passe a cote, du cote faisable le plus proche ; seulement pour un petit detour
 ##     (DETOUR_M) ;
 ##   - courbure de la trajectoire (cercle par trois points, a plat) et profil
 ##     de vitesse (speed_profile) : vitesse de virage sqrt(a / k), plafonnee,
@@ -24,7 +24,7 @@ extends RefCounted
 
 ## Marge laterale de chaque mur (m) : demi-largeur d'un ensemble, remorque qui
 ## deborde en virage, murs inclines.
-const MARGIN_M := 6.5
+const MARGIN_M := 5.5
 ## Niveaux de calcul de la courbure minimale : [pas en echantillons, passes].
 const LEVELS := [[16, 500], [8, 300], [4, 150]]
 ## Reprise apres pose des contournements.
@@ -41,6 +41,18 @@ const DETOUR_M := 8.0
 const PAD_RUN_M := 150.0
 const PAD_TOP_MS := 150.0 / 3.6
 const PAD_LATERAL := 1.145 * 0.9 * 9.81
+## Ligne la plus rapide, pas la plus lisse (2026-10-20 : « il ne coupe pas un
+## virage en passant a l'interieur, il respecte trop le circuit ») : presque
+## tous les virages se prennent a fond, la longueur compte donc autant que la
+## courbure. Chaque ligne essayee minimise longueur + (SMOOTH_M / pas)^2 x
+## courbure (un ressort qui tend la ligne vers la corde, lisse sur SMOOTH_M) ;
+## 0 : courbure seule. Gardee : celle du meilleur tour estime (_lap_time),
+## aux reglages du bot dur.
+const SMOOTH_M := [0.0, 160.0, 110.0, 75.0, 50.0]
+const EST_LATERAL := 1.145 * 0.95 * 9.81
+const EST_BRAKE := 9.9 * 0.95
+const EST_ACCEL := 3.0
+const EST_TOP := 150.0 / 3.6
 ## Demi-base de la courbure (points du dernier niveau) : cercle par i - K, i, i + K.
 const CURV_K := 2
 
@@ -51,6 +63,9 @@ var track: TrackBlockout
 var offset: PackedFloat32Array = []
 var curvature: PackedFloat32Array = []
 var _profiles: Dictionary = {}
+## Lissage retenu (SMOOTH_M) et tour estime de chaque essai (s).
+var smooth_m: float = 0.0
+var lap_estimates: PackedFloat32Array = []
 ## Bornes laterales par echantillon de la piste.
 var _lo: PackedFloat32Array = []
 var _hi: PackedFloat32Array = []
@@ -75,8 +90,18 @@ func _build(t: TrackBlockout) -> void:
 	_lo.fill(-lim)
 	_hi.fill(lim)
 	var o := PackedFloat32Array()
-	for level: Array in LEVELS:
-		o = _solve(o, level)
+	var best_lap := INF
+	for sm: float in SMOOTH_M:
+		var c := PackedFloat32Array()
+		for level: Array in LEVELS:
+			c = _solve(c, level, sm)
+		var lap := _lap_time(c)
+		lap_estimates.append(lap)
+		if lap < best_lap:
+			best_lap = lap
+			o = c
+			smooth_m = sm
+	# _base / _right du dernier niveau : memes pour chaque essai
 	# pads de boost : passer dessus ; sauts et flaques : a cote, du cote
 	# faisable le plus proche. Seulement si le detour reste petit
 	# (DETOUR_M) : un grand crochet coute plus qu'il ne rapporte
@@ -96,7 +121,16 @@ func _build(t: TrackBlockout) -> void:
 		zones.append(Vector4(j.x, t.jump_length / 2.0 + 4.0, j.y, t.jump_width / 2.0))
 	for p: Vector3 in t._puddles:
 		zones.append(Vector4(p.x, p.z + 4.0, p.y, p.z))
-	for z in zones:
+	# barils explosifs (2026-10-20 : « ils foncent dedans ») : zone de
+	# declenchement, toujours contourne (quel que soit le detour)
+	var first_barrel := zones.size()
+	# (zone elargie : le bot le voit sur sa route a moins de sa demi-largeur
+	# plus une marge, BotInputSource.CLEAR_M)
+	var barrel_r := ExplosiveBarrel.BARREL_RADIUS + 1.0 + 1.5
+	for b: Vector2 in t._barrels:
+		zones.append(Vector4(b.x, barrel_r + 4.0, b.y, barrel_r))
+	for zi in zones.size():
+		var z := zones[zi]
 		var at := _line_at(o, z.x)
 		var c := t.index_at_s(z.x)
 		var best := INF
@@ -110,7 +144,7 @@ func _build(t: TrackBlockout) -> void:
 			if reach < best:
 				best = reach
 				best_side = side
-		if best_side == 0.0 or best > DETOUR_M:
+		if best_side == 0.0 or (best > DETOUR_M and zi < first_barrel):
 			continue
 		var e := z.z + best_side * (z.w + AVOID_CLEAR_M)
 		if best_side > 0.0:
@@ -120,7 +154,7 @@ func _build(t: TrackBlockout) -> void:
 		changed = true
 	if changed:
 		for level: Array in REFINE:
-			o = _solve(o, level)
+			o = _solve(o, level, smooth_m)
 	var m := o.size()
 	var kc := _curvatures(o)
 	offset.resize(n)
@@ -167,7 +201,7 @@ func _bound_zone(s: float, half_len: float, lo: float, hi: float) -> void:
 
 ## Un niveau de calcul : `level` = [pas en echantillons, passes], depart `from`
 ## (vide : ligne dessinee).
-func _solve(from: PackedFloat32Array, level: Array) -> PackedFloat32Array:
+func _solve(from: PackedFloat32Array, level: Array, smooth: float) -> PackedFloat32Array:
 	var t := track
 	var n := t.sample_count()
 	var stride: int = level[0]
@@ -203,11 +237,46 @@ func _solve(from: PackedFloat32Array, level: Array) -> PackedFloat32Array:
 		o[c] = clampf(start, a, b)
 	_base = base
 	_right = right
+	# poids de la courbure face au ressort : (lissage / pas)^2 ; 0 : courbure seule
+	var mu := 0.0
+	if smooth > 0.0:
+		var h := t.length() / m
+		mu = (smooth / h) * (smooth / h)
 	for _p in int(level[1]):
 		for c in m:
-			var target := (4.0 * (_pt(o, c - 1) + _pt(o, c + 1)) - (_pt(o, c - 2) + _pt(o, c + 2))) / 6.0
+			var near := _pt(o, c - 1) + _pt(o, c + 1)
+			var bend := 4.0 * near - (_pt(o, c - 2) + _pt(o, c + 2))
+			var target := bend / 6.0 if smooth <= 0.0 else (near + mu * bend) / (2.0 + 6.0 * mu)
 			o[c] = clampf((target - base[c]).dot(right[c]), lo[c], hi[c])
 	return o
+
+
+## Tour estime (s) de la ligne `o` (dernier niveau) : vitesse de virage
+## sqrt(a / k) plafonnee, freinage avant chaque virage, acceleration en
+## sortie (EST_*).
+func _lap_time(o: PackedFloat32Array) -> float:
+	var m := o.size()
+	var k := _curvatures(o)
+	var v := PackedFloat32Array()
+	var d := PackedFloat32Array()
+	v.resize(m)
+	d.resize(m)
+	for c in m:
+		var kk := absf(k[c])
+		v[c] = EST_TOP if kk < 1e-5 else minf(EST_TOP, sqrt(EST_LATERAL / kk))
+		d[c] = _flat(_pt(o, c)).distance_to(_flat(_pt(o, c + 1)))
+	for _lap in 2:
+		for c in range(m - 1, -1, -1):
+			var nxt := v[(c + 1) % m]
+			v[c] = minf(v[c], sqrt(nxt * nxt + 2.0 * EST_BRAKE * d[c]))
+		for c in m:
+			var cur := v[c]
+			var j := (c + 1) % m
+			v[j] = minf(v[j], sqrt(cur * cur + 2.0 * EST_ACCEL * d[c]))
+	var time := 0.0
+	for c in m:
+		time += d[c] / maxf((v[c] + v[(c + 1) % m]) / 2.0, 1.0)
+	return time
 
 
 ## Courbure en chaque point d'une ligne du dernier niveau resolu.

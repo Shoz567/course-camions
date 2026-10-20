@@ -1,4 +1,4 @@
-﻿class_name BotInputSource
+class_name BotInputSource
 extends InputSource
 
 ## Pilote d'un bot (2026-10-19, hors ligne : solo et ecran partage). Il
@@ -18,6 +18,12 @@ extends InputSource
 ##   - depart : la voie de grille s'efface sur les premiers metres, pour ne
 ##     pas tous se rabattre ensemble au 1er virage ;
 ##   - nitro quand rien ne demande de freiner devant (moyen, dur) ;
+## Repris le 2026-10-20 (« il ne coupe pas les virages ; il fonce dans les
+## barils et les remorques larguees ») : ligne la plus rapide (RacingLine,
+## qui contourne aussi les barils) ; profil sans plafond (il garde l'elan
+## d'un pad ou de la nitro, ne freine que pour un virage) ; chaque obstacle a
+## son gabarit (remorque en travers, zone d'un baril), juge la ou sa ligne
+## passera, et il ralentit s'il n'a plus le temps de se decaler ;
 ##   - pouvoirs : missile ou laser sur un camion devant, bouclier quand ses PV
 ##     baissent, apres un temps de reaction propre au niveau ;
 ##   - bloque (moins de 5 km/h pendant STUCK_TICKS en course) : reset.
@@ -57,10 +63,18 @@ const HALF_WIDTH_M := 1.8
 ## place de doubler.
 const LOOK_AHEAD_M := 70.0
 const PASS_GAP_M := 5.5
+## Marge laterale entre deux gabarits au passage (m) ; acceleration laterale
+## d'un decalage (m/s2) et reaction (s) : il faut sqrt(4 d / a) + reaction pour
+## se decaler de d. Portee : au moins LOOK_AHEAD_S secondes devant.
+const CLEAR_M := 1.2
+const SHIFT_ACCEL := 5.0
+const SHIFT_REACT_S := 0.35
+const LOOK_AHEAD_S := 3.0
+## En deca de NEAR_S secondes, un obstacle dans son couloir actuel compte
+## aussi (meme si la ligne s'en ecarte).
+const NEAR_S := 0.6
 const FOLLOW_GAP_M := 6.0
-## Metres d'avance par metre de decalage lateral (depassement), et vitesse au
-## pas pour contourner un obstacle arrete.
-const SHIFT_PER_M := 2.5
+## Vitesse au pas pour contourner un obstacle arrete.
 const CREEP_MS := 4.0
 ## En travers (cap a plus de ~50 deg de la piste) et lent : il repart en
 ## braquant, sans plafond du trafic.
@@ -73,6 +87,8 @@ const START_BLEND_M := 250.0
 ## Ecart (m) vers l'exterieur, direction en butee, qui fait lever le pied.
 const SATURATION_DRIFT_M := 1.5
 const STUCK_TICKS := 180
+## Plafond du profil de vitesse (m/s) : au-dela de toute vitesse atteinte.
+const PROFILE_CEILING_MS := 90.0
 const SHIELD_HP := 55.0
 
 var track: TrackBlockout
@@ -86,6 +102,8 @@ var target_speed: float = 0.0
 var blocked_by: Node3D = null
 var line: RacingLine
 var _profile: PackedFloat32Array = []
+## Vitesse max du niveau (m/s) : au-dessus, il ne remet pas les gaz.
+var _top: float = 0.0
 var _lat_now: float = 0.0
 var _pass_side: float = 0.0
 var _pass_target: Node3D = null
@@ -108,9 +126,11 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 	_phase = number * 37
 	_power_wait = int(REACTION_TICKS[level]) + _phase
 	line = RacingLine.of(t)
-	var top := tr.tuning.top_speed_kmh / 3.6 * float(SPEED[level])
+	_top = tr.tuning.top_speed_kmh / 3.6 * float(SPEED[level])
+	# profil sans plafond de vitesse : il ne freine que pour un virage (au-dessus
+	# de sa vitesse max, apres un pad ou la nitro, il garde son elan)
 	_profile = line.speed_profile(BOT_LATERAL_G * float(GRIP[level]) * TruckSpec.GRAVITY,
-		BOT_BRAKE * float(BRAKE[level]), top)
+		BOT_BRAKE * float(BRAKE[level]), PROFILE_CEILING_MS)
 	index = t.closest_sample(tr.global_position)
 	_lat_now = _lateral_of(tr.global_position, index)
 
@@ -179,6 +199,11 @@ func _s_gap(from_i: int, to_i: int) -> float:
 
 ## Ce qui roule ou traine autour : ecart lateral voulu (absolu, m) et vitesse
 ## plafond (m/s, INF si rien), et si la voie est libre devant (nitro).
+## Chaque obstacle a son gabarit le long de la piste (avant, arriere) et en
+## travers (demi-largeur) : une remorque larguee en travers barre 7 m, un baril
+## sa zone de declenchement. Passage : decale de nos deux demi-largeurs plus
+## CLEAR_M ; il freine s'il n'a plus le temps de se decaler (SHIFT_ACCEL), et
+## garde son cote jusqu'a ce que sa remorque ait passe l'obstacle.
 func _traffic(v: float) -> Dictionary:
 	var me_lat := _lateral_of(truck.global_position, index)
 	var start := clampf(1.0 - _driven_m / START_BLEND_M, 0.0, 1.0)
@@ -188,33 +213,49 @@ func _traffic(v: float) -> Dictionary:
 	var clear := true
 	var half := track.width / 2.0 - 4.0
 	var my_v := truck.linear_velocity.dot(track.sample_forward(index))
+	var look := maxf(LOOK_AHEAD_M, v * LOOK_AHEAD_S)
 	var blocker: Node3D = null
-	var blocker_gap := INF
+	var blocker_room := INF
 	var blocker_lat := 0.0
 	var blocker_v := 0.0
+	var blocker_reach := 0.0
+	var blocker_path := 0.0
+	var holding := false
+	var hold_lat := 0.0
+	var hold_reach := 0.0
 	var push := 0.0
 	for o: Dictionary in _others():
 		var node := o["node"] as Node3D
+		var at: Vector3 = o["at"]
 		# echantillon de chacun, suivi d'un tick a l'autre (recherche locale)
-		var oi := _sample_of(node.global_position, int(_hints.get(node, -1)))
+		var oi := _sample_of(at, int(_hints.get(node, -1)))
 		_hints[node] = oi
 		var gap := _s_gap(index, oi)
-		var lat := _lateral_of(node.global_position, oi)
+		var lat := _lateral_of(at, oi)
 		var ov := float(o["v"])
-		var tail := float(o["tail"])
-		# a cote (son gabarit chevauche le mien le long de la piste, de son nez
-		# a l'arriere de sa remorque) : garder ses distances
-		if gap - tail < NOSE_M + 1.0 and gap + NOSE_M > -TAIL_M:
+		var front := float(o["front"])
+		var back := float(o["back"])
+		var reach := float(o["half"]) + HALF_WIDTH_M + CLEAR_M
+		# a cote (son gabarit chevauche le mien le long de la piste) : garder
+		# ses distances ; l'obstacle qu'on double : garder son cote
+		if gap - back < NOSE_M + 1.0 and gap + front > -TAIL_M:
+			if node == _pass_target and _pass_side != 0.0:
+				holding = true
+				hold_lat = lat
+				hold_reach = reach
 			var dl := me_lat - lat
-			if absf(dl) < PASS_GAP_M:
-				push += signf(dl if absf(dl) > 0.1 else -lat) * (PASS_GAP_M - absf(dl))
+			if absf(dl) < reach:
+				push += signf(dl if absf(dl) > 0.1 else -lat) * (reach - absf(dl))
 			continue
-		if gap <= 0.0 or gap - tail > LOOK_AHEAD_M:
+		var room := gap - back - NOSE_M
+		if room <= -1.0 or room > look:
 			continue
-		var room := gap - tail - NOSE_M
-		# sur ma route : dans mon couloir actuel ou vise
-		var in_lane := absf(lat - me_lat) < PASS_GAP_M or absf(lat - want) < PASS_GAP_M
-		if not in_lane:
+		# sur ma route : la ou ma ligne passera a sa hauteur, ou dans mon
+		# couloir actuel s'il est tout pres (la ligne s'ecarte d'elle-meme d'un
+		# baril encore loin)
+		var path_lat := _line_at(oi) + lane * start
+		var near := room < NEAR_S * v + 5.0
+		if absf(lat - path_lat) >= reach and (not near or absf(lat - me_lat) >= reach):
 			continue
 		if room < 40.0:
 			clear = false
@@ -222,33 +263,42 @@ func _traffic(v: float) -> Dictionary:
 		var closing := my_v - ov
 		if closing <= 0.5 and room > FOLLOW_GAP_M * 2.0:
 			continue
-		if room < blocker_gap:
-			blocker_gap = room
+		if room < blocker_room:
+			blocker_room = room
 			blocker = node
 			blocker_lat = lat
 			blocker_v = ov
+			blocker_reach = reach
+			blocker_path = path_lat
 	blocked_by = blocker
 	if blocker != null:
 		if blocker != _pass_target:
 			_pass_target = blocker
-			_pass_side = _choose_side(blocker_lat, want, half)
+			_pass_side = _choose_side(blocker_lat, blocker_reach, blocker_path, half)
 		if _pass_side != 0.0:
-			var side_lat := blocker_lat + _pass_side * PASS_GAP_M * 1.25
-			# reste dans la chaussee ; sinon, il suit
+			var side_lat := blocker_lat + _pass_side * (blocker_reach + 0.5)
 			if absf(side_lat) <= half:
-				want = side_lat
+				# deja de ce cote, plus loin que la ligne : il y reste
+				if (want - side_lat) * _pass_side < 0.0:
+					want = side_lat
 			else:
 				_pass_side = 0.0
-		# freine seulement s'il n'a plus la place de se decaler : il faut
-		# environ SHIFT_PER_M metres d'avance par metre de decalage
-		var shift := absf(want - me_lat)
-		var need := FOLLOW_GAP_M + (shift * SHIFT_PER_M if _pass_side != 0.0 else INF)
-		if blocker_gap < need:
-			var follow := maxf(blocker_v, 0.0) + maxf(0.0, blocker_gap - FOLLOW_GAP_M) * 0.35
-			# un obstacle arrete se contourne au pas, jamais d'arret derriere
-			if _pass_side != 0.0 and blocker_v < 1.0:
-				follow = maxf(follow, CREEP_MS)
-			cap = minf(cap, follow)
+		# temps pour se decaler (aller-retour du braquage : y = a t^2 / 4) ;
+		# s'il arrive trop vite pour l'avoir, il ralentit
+		var closing := maxf(my_v - maxf(blocker_v, 0.0), 0.1)
+		if _pass_side != 0.0:
+			var shift := maxf(0.0, (blocker_lat + _pass_side * blocker_reach - me_lat) * _pass_side)
+			var t_need := sqrt(4.0 * shift / SHIFT_ACCEL) + SHIFT_REACT_S
+			if blocker_room < closing * t_need:
+				var ok := maxf(blocker_v, 0.0) + maxf(blocker_room, 0.0) / t_need
+				# un obstacle arrete se contourne au pas, jamais d'arret derriere
+				cap = minf(cap, maxf(ok, CREEP_MS))
+		elif blocker_room < FOLLOW_GAP_M + closing * 1.5:
+			cap = minf(cap, maxf(blocker_v, 0.0) + maxf(0.0, blocker_room - FOLLOW_GAP_M) * 0.35)
+	elif holding:
+		var keep := hold_lat + _pass_side * (hold_reach + 0.5)
+		if (want - keep) * _pass_side < 0.0:
+			want = keep
 	else:
 		_pass_target = null
 		_pass_side = 0.0
@@ -258,11 +308,11 @@ func _traffic(v: float) -> Dictionary:
 
 ## Cote du depassement : celui qui garde la place dans la chaussee et colle le
 ## mieux a la ligne visee (-1 gauche, +1 droite, 0 aucun).
-func _choose_side(other_lat: float, want: float, half: float) -> float:
+func _choose_side(other_lat: float, reach: float, want: float, half: float) -> float:
 	var best := 0.0
 	var best_cost := INF
 	for side: float in [-1.0, 1.0]:
-		var lat := other_lat + side * PASS_GAP_M * 1.25
+		var lat := other_lat + side * (reach + 0.5)
 		if absf(lat) > half:
 			continue
 		var cost := absf(lat - want)
@@ -272,25 +322,42 @@ func _choose_side(other_lat: float, want: float, half: float) -> float:
 	return best
 
 
-## Camions (pas soi), epaves, remorques larguees, barils : noeud, vitesse le
-## long de la piste, longueur derriere son centre (m).
+## Camions (pas soi), epaves, remorques larguees, barils : noeud, centre,
+## vitesse, gabarit le long de la piste (avant et arriere du centre) et demi-
+## largeur en travers (m).
 func _others() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var tree := truck.get_tree()
 	for n in tree.get_nodes_in_group(TruckPowers.TARGETS):
 		var t := n as Truck
-		if t == null or t == truck or not t.is_inside_tree():
+		# epave : cache, sans collision (sa carcasse est un obstacle a part)
+		if t == null or t == truck or not t.is_inside_tree() or t.is_wrecked():
 			continue
-		var vel := 0.0 if t.is_wrecked() else t.linear_velocity.length()
-		out.append({"node": t, "v": vel, "tail": TAIL_M})
+		var vel := t.linear_velocity.length()
+		var tail := NOSE_M if t.is_trailer_detached() else TAIL_M
+		out.append({"node": t, "at": t.global_position, "v": vel, "front": NOSE_M, "back": tail, "half": HALF_WIDTH_M})
 	for n in tree.get_nodes_in_group(DetachedTrailer.OBSTACLES):
-		var b := n as Node3D
-		if b != null and b.is_inside_tree():
-			out.append({"node": b, "v": 0.0, "tail": 8.0})
+		var d := n as DetachedTrailer
+		if d == null or not d.is_inside_tree():
+			continue
+		# boite orientee projetee sur la piste
+		var xf := d.global_transform
+		var c := xf * d.box_center
+		var i := _sample_of(c, int(_hints.get(d, -1)))
+		var f := track.sample_forward(i)
+		var r := track.sample_right(i)
+		var hx := d.box_size.x / 2.0
+		var hz := d.box_size.z / 2.0
+		var along := absf(f.dot(xf.basis.x)) * hx + absf(f.dot(xf.basis.z)) * hz
+		var across := absf(r.dot(xf.basis.x)) * hx + absf(r.dot(xf.basis.z)) * hz
+		out.append({"node": d, "at": c, "v": maxf(0.0, d.linear_velocity.dot(f)), "front": along, "back": along,
+			"half": across})
+	var barrel_r := ExplosiveBarrel.BARREL_RADIUS + 1.0
 	for k in track.barrel_count():
 		var barrel := track.barrel_node(k)
-		if barrel != null and is_instance_valid(barrel) and barrel.is_inside_tree() and barrel.visible:
-			out.append({"node": barrel, "v": 0.0, "tail": 1.0})
+		if barrel != null and is_instance_valid(barrel) and barrel.is_inside_tree() and barrel.visible 				and not barrel.exploded_state:
+			out.append({"node": barrel, "at": barrel.global_position, "v": 0.0, "front": barrel_r, "back": barrel_r,
+				"half": barrel_r})
 	return out
 
 
@@ -321,8 +388,6 @@ func _speed(v: float, cap: float) -> void:
 		var p := _profile[track.sample_ahead(index, lead + d)]
 		target_speed = minf(target_speed, sqrt(p * p + 2.0 * brake * d))
 		d += PLAN_STEP_M
-	if not truck.is_boosting():
-		target_speed = minf(target_speed, _profile[index])
 	# en travers apres un accrochage : repartir, quoi qu'il y ait devant
 	var astray := (-truck.global_basis.z).dot(track.sample_forward(index)) < ASTRAY_DOT and v < ASTRAY_MS
 	target_speed = minf(target_speed, ASTRAY_MS if astray else cap)
@@ -335,6 +400,9 @@ func _speed(v: float, cap: float) -> void:
 	var err := target_speed - v
 	frame.throttle = clampf(err / 1.5, 0.0, 1.0)
 	frame.brake = clampf(-err / 2.0, 0.0, 1.0)
+	# au-dessus de sa vitesse max (niveau) sans virage devant : roue libre
+	if float(SPEED[level]) < 1.0 and v > _top and frame.brake == 0.0:
+		frame.throttle = 0.0 if not truck.is_boosting() else frame.throttle
 
 
 func _boost(clear: bool) -> void:

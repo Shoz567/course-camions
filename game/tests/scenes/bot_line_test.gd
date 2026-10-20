@@ -5,6 +5,8 @@ extends PhysicsTest
 ##   A. la ligne reste dans la chaussee, a MARGIN_M des murs ;
 ##   B. elle passe sur des pads de boost (ceux a un petit detour), et evite
 ##      au moins la moitie des sauts et des flaques ;
+##   B2. elle passe a cote de chaque baril explosif (2026-10-20) : le centre
+##      de la ligne a plus de zone de declenchement + demi-largeur du camion ;
 ##   C. elle est lisse : rayon d'au moins 40 m partout (pas d'angle) ;
 ##   D. le profil de vitesse laisse toujours freiner a temps (v2 <= v1^2 +
 ##      2 a d) et reste sous la vitesse max ;
@@ -54,6 +56,13 @@ func _line_checks(k: int, t: TrackBlockout) -> void:
 		avoided += 1 if absf(l.offset[t.index_at_s(j.x)] - j.y) >= t.jump_width / 2.0 + 2.0 else 0
 	for p: Vector3 in t._puddles:
 		avoided += 1 if absf(l.offset[t.index_at_s(p.x)] - p.y) >= p.z + 2.0 else 0
+	var barrels_ok := true
+	var barrel_min := INF
+	for b: Vector2 in t._barrels:
+		var clear := absf(l.offset[t.index_at_s(b.x)] - b.y)
+		barrel_min = minf(barrel_min, clear)
+		barrels_ok = barrels_ok and clear >= ExplosiveBarrel.BARREL_RADIUS + 1.0 + BotInputSource.HALF_WIDTH_M + 1.0
+	_seen["barrels%d" % k] = [barrels_ok, barrel_min]
 	var pads := on_pads >= 1
 	var avoid := avoided * 2 >= t._jumps.size() + t._puddles.size()
 	var top := 150.0 / 3.6
@@ -100,6 +109,8 @@ func _test_finish() -> void:
 		var d: String = _seen.get("detail%d" % k, "")
 		check("%s : ligne dans la chaussee, a %.1f m des murs" % [names[k], RacingLine.MARGIN_M], r.size() == 5 and r[0], d)
 		check("%s : sur les pads de boost, a cote des sauts et des flaques (petits detours)" % names[k], r.size() == 5 and r[1] and r[2], d)
+		var br: Array = _seen.get("barrels%d" % k, [false, 0.0])
+		check("%s : a cote de chaque baril" % names[k], br[0], "au plus pres %.1f m" % br[1])
 		check("%s : ligne lisse, rayon de 40 m au moins" % names[k], r.size() == 5 and r[3], d)
 		check("%s : profil de vitesse freinable et sous la vitesse max" % names[k], r.size() == 5 and r[4], d)
 	check("zone touchee, centre sur la route : pas d'explosion", _seen.get("on_road", []) == [0, false],
