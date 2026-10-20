@@ -8,9 +8,18 @@ extends RigidBody3D
 ## `hazard` (VEHICLE_SPEC §7) : les camions la percutent, les rayons de
 ## suspension et les zones de la piste l'ignorent.
 ##
-## 50 PV : chaque choc d'un camion lui en retire selon l'energie du choc
-## (carre de la vitesse d'approche, le long de la normale de contact) ; a 0,
-## elle explose et disparait. Un camion adverse qui la percute est ralenti et
+## PV : ceux de la remorque choisie fois ROAD_HP_MULT (2026-10-20 : « augmenter
+## leur PV ») ; chaque choc d'un camion lui en retire selon l'energie du choc
+## (carre de la vitesse d'approche, le long de la normale de contact), et les
+## pouvoirs aussi (power_hit : missile, laser, mitrailleuse, scie, boomerang,
+## « au meme titre que les remorques attelees »). Elle se casse en morceaux
+## avant d'exploser (2026-10-20) : tous les BREAK_STEP de PV perdus, des
+## panneaux de tole se detachent au point touche ; sous BREACH_RATIO de ses PV,
+## un camion qui la percute a plus de BREACH_SPEED_MS la traverse (trou
+## d'entree, tole sortie de l'autre cote), il s'y abime et y perd des PV comme
+## a tout choc. Un choc de camion lui retire au plus MAX_HIT_SHARE de ses PV :
+## le premier gros choc la perce, le deuxieme aussi, le troisieme la fait
+## sauter. A 0 PV, elle explose et disparait. Un camion adverse qui la percute est ralenti et
 ## deporte (Truck.cargo_hit) ; un nouveau choc compte apres hit_gap_ticks sans
 ## contact avec ce camion. Le camion qui l'a larguee la traverse pendant
 ## owner_pass_ticks (le temps de s'en eloigner), puis elle devient un obstacle
@@ -38,11 +47,27 @@ signal destroyed
 signal struck(at: Vector3, normal: Vector3, amount: float, approach_ms: float)
 
 const HAZARD_LAYER := 5
+## PV sur la route : ceux de la remorque choisie (TrailerType.dropped_hp)
+## multiplies d'autant ; une remorque deja abimee sur le camion garde sa part.
+const ROAD_HP_MULT := 2.0
+## Morceaux : un palier tous les BREAK_STEP de PV perdus (part de max_hp),
+## BREAK_PANELS panneaux arraches a chaque palier.
+const BREAK_STEP := 0.2
+const BREAK_PANELS := 3
+## Trou : sous BREACH_RATIO de ses PV, un choc a BREACH_SPEED_MS ou plus
+## (~36 km/h) la traverse ; elle ne bloque plus ce camion pendant
+## BREACH_PASS_TICKS (puis des qu'il en est sorti).
+const BREACH_RATIO := 0.6
+## Un choc de camion lui retire au plus cette part de max_hp : foncer dedans
+## la perce (deux fois), il faut un troisieme choc pour la faire sauter.
+const MAX_HIT_SHARE := 0.45
+const BREACH_SPEED_MS := 10.0
+const BREACH_PASS_TICKS := 45
 
 @export var trailer_mass: float = 9000.0
 ## Ticks pendant lesquels le camion qui l'a larguee la traverse (~1 s).
 @export var owner_pass_ticks: int = 60
-@export var max_hp: float = 50.0
+@export var max_hp: float = 100.0
 ## Choc qui retire tous les PV d'un coup (vitesse d'approche le long de la
 ## normale, m/s) : 33 m/s, ~120 km/h de face. Les degats suivent le carre de
 ## la vitesse (l'energie) : de face a 100 km/h, ~35 PV ; a 60 km/h, ~13.
@@ -80,6 +105,12 @@ var _smoke: GPUParticles3D
 var _sparks: GPUParticles3D
 ## Etat visible : 0 neuve, 1 abimee (< 60 %), 2 en ruine (< 30 %).
 var damage_stage: int = 0
+## Paliers de morceaux deja arraches, trous perces (tests, effets).
+var breaks: int = 0
+var breaches: int = 0
+## Camion qui l'a traversee -> tick (age_ticks) ou il peut de nouveau la heurter.
+var _passing: Dictionary = {}
+var _pass_query: PhysicsShapeQueryParameters3D
 var _marks: Array[Node3D] = []
 ## En ligne, chez un client (NetRace) : posee par le host, qui fait foi. Gelee
 ## en cinematique (sa pose arrive par les snapshots), elle ne compte aucun
@@ -125,7 +156,7 @@ func configure(type: TrailerType) -> void:
 	box_size = type.box_size
 	box_center = type.box_center
 	trailer_mass = type.dropped_mass_kg
-	max_hp = type.dropped_hp
+	max_hp = type.dropped_hp * ROAD_HP_MULT
 	_shape_box()
 
 
@@ -153,7 +184,7 @@ const OBSTACLES := &"road_obstacles"
 func _ready() -> void:
 	add_to_group(OBSTACLES)
 	mass = trailer_mass
-	hp = max_hp if initial_hp < 0.0 else clampf(initial_hp, 1.0, max_hp)
+	hp = max_hp if initial_hp < 0.0 else clampf(initial_hp * ROAD_HP_MULT, 1.0, max_hp)
 	var center := _shape.position
 	_smoke = DamageFx.make_smoke()
 	_smoke.position = center + Vector3(0.0, 2.0, 0.0)
@@ -174,7 +205,7 @@ func _ready() -> void:
 func damage_for(approach_ms: float) -> float:
 	if approach_ms < min_damage_speed_ms:
 		return 0.0
-	return max_hp * pow(approach_ms / full_damage_speed_ms, 2.0)
+	return max_hp * minf(pow(approach_ms / full_damage_speed_ms, 2.0), MAX_HIT_SHARE)
 
 
 ## Contacts du pas : pour chaque camion qui la touche, vitesse d'approche le
@@ -205,6 +236,8 @@ func _physics_process(_delta: float) -> void:
 	_vel_hist[0] = linear_velocity
 	if _owner_query != null and age_ticks >= owner_pass_ticks:
 		_update_owner_collision()
+	if not _passing.is_empty():
+		_update_passing()
 	for key: Variant in _pending:
 		if is_instance_valid(key):
 			_on_truck_hit(key as Truck, float(_pending[key]), _pending_at.get(key, []))
@@ -254,8 +287,92 @@ func _on_truck_hit(truck: Truck, approach_ms: float, contact: Array) -> void:
 			n = -n
 		struck.emit(at, n, amount, approach_ms)
 		_hit_effects(at, n, amount, approach_ms)
+		if hp > 0.0 and hp < max_hp * BREACH_RATIO and approach_ms >= BREACH_SPEED_MS \
+				and not _passing.has(truck) and not net_mirror:
+			_breach(truck, at, n)
 	else:
 		_update_damage_stage()
+
+
+## Coup d'un pouvoir (TruckPowers) : `amount` PV en `at` (monde), porte dans
+## le sens `dir` ; trace, tole enfoncee et morceaux comme un choc a
+## `visual_ms` (0 : PV seulement, laser entre deux marques). Sur la machine
+## qui fait foi ; les clients le recoivent par struck (NetRace).
+func power_hit(amount: float, at: Vector3, dir: Vector3, visual_ms: float) -> void:
+	if net_mirror or hp <= 0.0 or amount <= 0.0:
+		return
+	hp = maxf(0.0, hp - amount)
+	damaged.emit(amount, hp)
+	if visual_ms <= 0.0:
+		return
+	var n := -dir.normalized() if dir.length_squared() > 1e-6 else Vector3.UP
+	struck.emit(at, n, amount, visual_ms)
+	_hit_effects(at, n, amount, visual_ms)
+
+
+## Distance (m) du point monde `p` a sa caisse (0 dedans).
+func distance_to_point(p: Vector3) -> float:
+	var local := _shape.global_transform.affine_inverse() * p
+	var half := (_shape.shape as BoxShape3D).size / 2.0
+	return (local - local.clamp(-half, half)).length()
+
+
+## Trou : le camion passe a travers (plus de collision avec lui un moment) ;
+## creux et panneaux arraches a l'entree, tole sortie a l'oppose.
+func _breach(truck: Truck, at: Vector3, n: Vector3) -> void:
+	breaches += 1
+	add_collision_exception_with(truck)
+	_passing[truck] = age_ticks + BREACH_PASS_TICKS
+	var dir := Vector3(truck.linear_velocity.x, 0.0, truck.linear_velocity.z)
+	dir = dir.normalized() if dir.length_squared() > 1.0 else -n
+	var exit := at + dir * box_size.x
+	BodyDamage.dent(_visual, at, dir * BodyDamage.MAX_DISPLACEMENT, 2.6)
+	BodyDamage.dent(_visual, exit, dir * BodyDamage.MAX_DISPLACEMENT, 2.2)
+	_add_mark(at, n, 1.0)
+	_add_mark(exit, dir, 1.0)
+	_break_panels(at, -dir, BREAK_PANELS + 2)
+	_break_panels(exit, dir, BREAK_PANELS)
+
+
+## Rend la collision aux camions qui l'ont traversee, une fois sortis de son
+## volume (jamais tant qu'ils sont dedans : le solveur les separerait d'un coup).
+func _update_passing() -> void:
+	if _pass_query == null:
+		_pass_query = PhysicsShapeQueryParameters3D.new()
+		_pass_query.shape = _shape.shape
+		_pass_query.collision_mask = 1 << (TruckSpec.LAYER_VEHICLE - 1)
+		_pass_query.exclude = [get_rid()]
+	for key: Variant in _passing.keys():
+		if not is_instance_valid(key):
+			_passing.erase(key)
+			continue
+		if age_ticks < int(_passing[key]):
+			continue
+		_pass_query.transform = _shape.global_transform
+		var inside := false
+		for h: Dictionary in get_world_3d().direct_space_state.intersect_shape(_pass_query, 8):
+			inside = inside or h["collider"] == key
+		if inside:
+			continue
+		_passing.erase(key)
+		# le proprietaire encore dans sa traversee du largage la garde
+		if key != dropped_by or _owner_query == null:
+			remove_collision_exception_with(key as Truck)
+
+
+## Panneaux de tole arraches en `at`, projetes vers `out` (larges plaques,
+## pas des eclats).
+func _break_panels(at: Vector3, out: Vector3, count: int) -> void:
+	var world := get_parent()
+	if world == null:
+		return
+	var mat := BodyDamage.nearest_material(_visual, at)
+	for k in count:
+		var h := fposmod(sin(float(age_ticks * 7 + k * 13 + breaks * 5) * 12.9898) * 43758.5453, 1.0)
+		var h2 := fposmod(sin(float(age_ticks * 3 + k * 29 + breaks * 11) * 78.233) * 12543.21, 1.0)
+		var dir := (out + Vector3(h - 0.5, 0.5 + h2 * 0.8, h2 - 0.5)).normalized()
+		var size := Vector3(lerpf(0.9, 1.8, h), 0.06, lerpf(0.6, 1.3, h2))
+		Debris.shard(world, at + dir * 0.6, size, mat, linear_velocity + dir * lerpf(5.0, 10.0, h))
 
 
 ## Trace au point touche, tole enfoncee, eclats, fumee selon les PV (visuel).
@@ -267,6 +384,12 @@ func _hit_effects(at: Vector3, n: Vector3, amount: float, approach_ms: float) ->
 	if severity > 0.35:
 		BodyDamage.shards(get_parent(), at, n, roundi(severity * 6.0), linear_velocity, 6.0 + 8.0 * severity,
 			BodyDamage.nearest_material(_visual, at), age_ticks)
+	# morceaux : un palier tous les BREAK_STEP de PV perdus
+	var steps := floori((1.0 - hp / maxf(max_hp, 1.0)) / BREAK_STEP + 1e-4)
+	while breaks < steps and hp > 0.0:
+		breaks += 1
+		BodyDamage.dent(_visual, at, -n * BodyDamage.MAX_DISPLACEMENT, 2.0)
+		_break_panels(at, n, BREAK_PANELS)
 	_update_damage_stage()
 
 

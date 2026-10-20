@@ -1,13 +1,13 @@
 extends PhysicsTest
 
-## Remorque larguee persistante a 50 PV (2026-10-02) :
+## Remorque larguee persistante (2026-10-02 ; 100 PV et morceaux, 2026-10-20) :
 ##   - O largue a l'arret puis s'en va (recharge par defaut, 30 s) ; a 32 s,
 ##     une nouvelle remorque est sur O et l'ancienne est toujours la ;
 ##   - a 61,7 s (au-dela des 60 s d'avant), elle est toujours sur la piste ;
 ##   - R1 la percute par l'arriere a 30 m/s : elle perd des PV selon l'energie
-##     du choc (la majeure partie, pas tout), R1 est ralenti ;
-##   - R2 la percute de flanc a 20 m/s : 0 PV, elle explose (effet) et
-##     disparait ; R2 n'est pas penalise au-dela du choc.
+##     du choc, au plus MAX_HIT_SHARE (elle tient), R1 est ralenti ;
+##   - R2 la percute de flanc a 20 m/s : elle cede (sous BREACH_RATIO : il la
+##     perce et la traverse) ; R2 n'est pas penalise au-dela du choc.
 ## Vitesses posees au tick 0 et aux ticks de lancement (CLAUDE.md §10 b).
 
 const DROP_AT := 5
@@ -82,10 +82,11 @@ func _test_finish() -> void:
 	check("32 s apres le largage : nouvelle remorque sur O, l'ancienne toujours la", _fresh_at_32s == [true, true],
 		str(_fresh_at_32s))
 	check("61,7 s apres le largage : toujours sur la piste (plus de disparition)", _alive_at_61s)
-	check("R1 a 30 m/s : la remorque perd la majeure partie de ses 50 PV, pas tout",
-		_hp_after_r1 > 0.0 and _hp_after_r1 < 25.0, "%.1f PV" % _hp_after_r1)
+	check("R1 a 30 m/s : la remorque perd %d %% de ses PV au plus, elle tient"
+		% roundi(DetachedTrailer.MAX_HIT_SHARE * 100.0), _hp_after_r1 > 0.0
+		and absf(_hp_after_r1 - 100.0 * (1.0 - DetachedTrailer.MAX_HIT_SHARE)) < 0.01, "%.1f PV" % _hp_after_r1)
 	check("R1 ralenti par le choc", _r1_slowed)
-	check("R2 de flanc : 0 PV, elle explose et disparait", _destroyed == 1 and _explosion
-		and (_trailer == null or not is_instance_valid(_trailer)), "%d" % _destroyed)
+	check("R2 de flanc : elle cede (percee, ou detruite)", _destroyed == 1
+		or (_trailer != null and is_instance_valid(_trailer) and _trailer.breaches >= 1), "%d" % _destroyed)
 	check("R2 passe : la remorque ne fait plus barrage", _r2.global_position.x < _r2_x0 - 30.0,
 		"%.1f m" % (_r2_x0 - _r2.global_position.x))

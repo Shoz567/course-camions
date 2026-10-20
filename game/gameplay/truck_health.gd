@@ -12,8 +12,8 @@ extends Node
 ##     ce qui encombre la route (respawn_provider, RaceLaps.respawn_transform
 ##     en course) ;
 ##   - la REMORQUE attelee : trailer_max_hp, ceux de la remorque choisie
-##     (TrailerType.dropped_hp : les memes PV attelee ou larguee). Ce qu'elle
-##     encaisse ne touche JAMAIS la tete. A 0 : elle explose et disparait, et
+##     (TrailerType.dropped_hp ; larguee : DetachedTrailer.ROAD_HP_MULT fois
+##     plus). Ce qu'elle encaisse ne touche JAMAIS la tete. A 0 : elle explose et disparait, et
 ##     c'est l'explosion qui blesse la tete (TRAILER_EXPLOSION_DAMAGE) ; le
 ##     tracteur roule seul jusqu'a sa nouvelle remorque (TruckCargo).
 ##

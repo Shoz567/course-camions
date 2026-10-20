@@ -69,9 +69,13 @@ func _physics_process(delta: float) -> void:
 	if shooter != null and is_instance_valid(shooter):
 		exclude.append(shooter.get_rid())
 	var q := PhysicsRayQueryParameters3D.create(global_position, global_position + step,
-		(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)), exclude)
+		TruckPowers.RAY_MASK, exclude)
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if not hit.is_empty():
+		# remorque larguee sur la route : elle prend le missile comme une attelee
+		if not mirror and hit["collider"] is DetachedTrailer:
+			(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.MISSILE_DAMAGE, hit["position"], direction,
+				PowerCatalog.MISSILE_HIT_MS)
 		_explode(hit["position"], hit["collider"] as Truck)
 		return
 	global_position += step

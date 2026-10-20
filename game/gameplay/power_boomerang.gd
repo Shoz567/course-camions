@@ -106,6 +106,14 @@ func _steer(want: Vector3, max_deg: float) -> void:
 
 func _strike() -> void:
 	var seen := _hit_back if returning else _hit_out
+	if not mirror:
+		# remorques larguees sur son trajet : touchees une fois par passage
+		for n in get_tree().get_nodes_in_group(DetachedTrailer.OBSTACLES):
+			var d := n as DetachedTrailer
+			if d == null or seen.has(d) or d.distance_to_point(global_position) > PowerCatalog.BOOMERANG_RADIUS_M:
+				continue
+			seen[d] = true
+			d.power_hit(PowerCatalog.BOOMERANG_DAMAGE, global_position, direction, PowerCatalog.BOOMERANG_HIT_MS)
 	for n in get_tree().get_nodes_in_group(TruckPowers.TARGETS):
 		var t := n as Truck
 		if t == null or t == shooter or t.is_wrecked() or seen.has(t):
