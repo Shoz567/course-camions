@@ -95,7 +95,7 @@ func _test_finish() -> void:
 	dropped.configure(tank)
 	var box := (dropped.get_child(0) as CollisionShape3D).shape as BoxShape3D
 	check("larguee : PV et masse de la remorque",
-		dropped.max_hp == tank.dropped_hp and dropped.trailer_mass == tank.dropped_mass_kg,
+		dropped.max_hp == tank.dropped_hp * DetachedTrailer.ROAD_HP_MULT and dropped.trailer_mass == tank.dropped_mass_kg,
 		"%s PV, %s kg" % [dropped.max_hp, dropped.trailer_mass])
 	check("larguee : boite a la largeur et a la longueur de la remorque",
 		is_equal_approx(box.size.x, tank.box_size.x) and is_equal_approx(box.size.z, tank.box_size.z), str(box.size))

@@ -172,7 +172,8 @@ func _test_finish() -> void:
 	check("C l'obstacle perd des PV", not is_instance_valid(_obstacle) or _obstacle.hp < _obstacle_hp0)
 
 	check("D carcasse laissee sur la route", _d_wreck != null)
-	check("D remorque laissee avec ses PV restants (31)", _d_trailer != null and _d_trailer_hp == 31.0,
+	check("D remorque laissee avec ses PV restants (31, x%s sur la route)" % DetachedTrailer.ROAD_HP_MULT,
+		_d_trailer != null and _d_trailer_hp == 31.0 * DetachedTrailer.ROAD_HP_MULT,
 		"%.0f" % _d_trailer_hp)
 	check("D camion cache et sans collision pendant l'attente", _d_hidden and _d_layer == 0)
 	print("  INFO   D apres : %s" % [_d_after])

@@ -958,6 +958,14 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   tracte ; elle encaisse les PV de chaque coup, la tête touchée n'en prend que
   20 % (`TOWING_CAB_SHARE`). Sans remorque : tout sur la tête
   (`power_trailer_test`).
+- [x] **Remorques larguées** (2026-10-20, « des dégâts au même titre que les
+  attelées, même visuels ; augmenter leurs PV ; se casser en morceaux, faire
+  un trou en rentrant dedans ; très abîmée, elle explose ») : PV ×2
+  (`ROAD_HP_MULT`) ; missile, laser, mitrailleuse, scie et boomerang les
+  touchent (PV, traces, creux) ; panneaux arrachés tous les 20 % de PV
+  perdus ; un choc de camion retire au plus 45 % ; sous 60 % un camion qui
+  fonce dedans la perce et la traverse ; à 0, elle explose
+  (`road_trailer_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

@@ -66,6 +66,10 @@ var mirror: bool = false
 ## (dans PREDICT_TICKS) ne le rejoue pas. Les degats restent ceux du host.
 var predict: bool = false
 const PREDICT_TICKS := 90
+## Rayons des pouvoirs (laser, balles, missile) : decor, camions, et les
+## obstacles de la route (remorques larguees, carcasses), qui les arretent.
+const RAY_MASK := (1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)) \
+		| (1 << (DetachedTrailer.HAZARD_LAYER - 1))
 ## Lames de la scie : echelle du modele, ancrage du bras (dans le chassis) et
 ## hauteur (repere du camion) ; la lame (rayon 1,18 m au modele) finit a
 ## SAW_REACH_M au-dela du flanc et passe dans le haut des pneus.
@@ -372,7 +376,7 @@ func _laser_tick() -> void:
 	var from := _truck.global_transform * LASER_ORIGIN
 	var fwd := aim_direction(from)
 	var q := PhysicsRayQueryParameters3D.create(from, from + fwd * PowerCatalog.LASER_RANGE_M,
-		(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)), [_truck.get_rid()])
+		RAY_MASK, [_truck.get_rid()])
 	var hit := _truck.get_world_3d().direct_space_state.intersect_ray(q)
 	var length := PowerCatalog.LASER_RANGE_M
 	laser_hit = null
@@ -384,6 +388,10 @@ func _laser_tick() -> void:
 			var mark := laser_ticks % PowerCatalog.LASER_HIT_INTERVAL == 0
 			strike(other, hit["position"], fwd, PowerCatalog.LASER_DAMAGE_PER_TICK, &"laser",
 				PowerCatalog.LASER_HIT_MS if mark else 0.0, mirror)
+		elif not mirror and hit["collider"] is DetachedTrailer:
+			var mark := laser_ticks % PowerCatalog.LASER_HIT_INTERVAL == 0
+			(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.LASER_DAMAGE_PER_TICK, hit["position"], fwd,
+				PowerCatalog.LASER_HIT_MS if mark else 0.0)
 	if _beam != null:
 		_beam.visible = true
 		(_beam.mesh as CylinderMesh).height = length
@@ -396,7 +404,7 @@ func _gun_shot() -> void:
 	var from := _truck.global_transform * LASER_ORIGIN
 	var fwd := aim_direction(from)
 	var q := PhysicsRayQueryParameters3D.create(from, from + fwd * PowerCatalog.GUN_RANGE_M,
-		(1 << (TruckSpec.LAYER_WORLD - 1)) | (1 << (TruckSpec.LAYER_VEHICLE - 1)), [_truck.get_rid()])
+		RAY_MASK, [_truck.get_rid()])
 	var hit := _truck.get_world_3d().direct_space_state.intersect_ray(q)
 	var length := PowerCatalog.GUN_RANGE_M
 	if not hit.is_empty():
@@ -407,6 +415,9 @@ func _gun_shot() -> void:
 			gun_hits += 1
 			strike(other, hit["position"], fwd, PowerCatalog.GUN_DAMAGE, &"mitrailleuse",
 				PowerCatalog.GUN_HIT_MS, mirror)
+		elif not mirror and hit["collider"] is DetachedTrailer:
+			(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.GUN_DAMAGE, hit["position"], fwd,
+				PowerCatalog.GUN_HIT_MS)
 		if _hit_sparks != null:
 			_hit_sparks.global_position = hit["position"]
 			_hit_sparks.restart()
@@ -502,6 +513,29 @@ func _saw_tick() -> void:
 			strike(t, xw * trailer_at, push, PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie", ms, mirror)
 		if not mirror:
 			t.apply_central_force(push * PowerCatalog.SAW_PUSH_MS2 * t.mass)
+	if not mirror:
+		_saw_obstacles(inv, cut)
+
+
+## Scies contre les remorques larguees : la ou la zone des lames (milieu, cinq
+## points par cote) touche leur caisse, PV a chaque tick et entailles a chaque
+## coup de lame.
+func _saw_obstacles(inv: Transform3D, cut: bool) -> void:
+	var mid := TruckSpec.CHASSIS_SIZE.x / 2.0 + PowerCatalog.SAW_REACH_M / 2.0
+	var xw := _truck.global_transform
+	for n in get_tree().get_nodes_in_group(DetachedTrailer.OBSTACLES):
+		var d := n as DetachedTrailer
+		if d == null or (inv * d.global_position).length() > 40.0:
+			continue
+		for i in 10:
+			var side := 1.0 if i < 5 else -1.0
+			var p := xw * Vector3(side * mid, SAW_HEIGHT_M, lerpf(-PowerCatalog.SAW_HALF_LENGTH_M,
+				PowerCatalog.SAW_HALF_LENGTH_M, (i % 5) / 4.0))
+			if d.distance_to_point(p) > PowerCatalog.SAW_REACH_M / 2.0:
+				continue
+			d.power_hit(PowerCatalog.SAW_DAMAGE_PER_TICK, p, _truck.global_basis.x * side,
+				PowerCatalog.SAW_HIT_MS if cut else 0.0)
+			break
 
 
 ## Coup d'un pouvoir sur `victim` en `at` (monde), porte dans le sens `dir` :
