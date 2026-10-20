@@ -3,15 +3,17 @@ extends PhysicsTest
 ## Degats visuels gardes ou ajoutes (2026-10-20) :
 ##   A. bouclier : un choc violent contre un mur (signale) ne laisse ni trace
 ##      ni pneu use ; le meme choc sur un camion temoin, si ;
-##   B. coller un mur (« ne pas desagreger le camion, les pneus ») : un camion
-##      qui longe un mur en braquant dedans pendant 5 s le touche plusieurs
-##      fois : des eraflures au plus, ni creux dans la tole ni usure de pneu ;
+##   B. coller un mur sous bouclier (« ne pas desagreger le camion, les
+##      pneus ») : un camion qui longe un mur en braquant dedans pendant 5 s le
+##      touche plusieurs fois, sans trace, creux ni usure de pneu ; son temoin
+##      sans bouclier, lui, s'abime comme avant ;
 ##   C. baril explosif : le camion qui le fait sauter garde une trace et des
 ##      sommets enfonces du cote du baril ; sous bouclier, rien.
 
 var _shielded: Truck
 var _plain: Truck
 var _hugger: Truck
+var _hugger_plain: Truck
 var _barrel_hit: Truck
 var _barrel_shield: Truck
 var _hug_hits: int = 0
@@ -26,16 +28,25 @@ func _test_setup() -> void:
 	_plain = TruckTestUtil.spawn_truck(self, Vector3(30.0, 0.0, 0.0))
 	TruckHealth.of(_shielded).shield_ticks = 100000
 	# B : mur a gauche, le long de la course (-Z), camion qui braque dedans
-	_wall(Vector3(1.0, 4.0, 400.0), Vector3(93.0, 2.0, -150.0))
-	_hugger = TruckTestUtil.spawn_truck(self, Vector3(100.0, 0.0, 0.0), Vector3(0.0, 4.0, 0.0))
-	_hugger.linear_velocity = -_hugger.global_basis.z * 26.0
 	_hug_in.throttle = 1.0
 	_hug_in.steer = -0.25
-	_hugger.set_input(_hug_in)
+	_wall(Vector3(1.0, 4.0, 400.0), Vector3(93.0, 2.0, -150.0))
+	_hugger = _hug(100.0)
+	TruckHealth.of(_hugger).shield_ticks = 100000
+	_wall(Vector3(1.0, 4.0, 400.0), Vector3(293.0, 2.0, -150.0))
+	_hugger_plain = _hug(300.0)
 	_hugger.wall_impact_at.connect(func(_s: float, _t: bool, _p: Vector3, _n: Vector3) -> void: _hug_hits += 1)
 	_barrel_hit = TruckTestUtil.spawn_truck(self, Vector3(200.0, 0.0, 0.0))
 	_barrel_shield = TruckTestUtil.spawn_truck(self, Vector3(230.0, 0.0, 0.0))
 	TruckHealth.of(_barrel_shield).shield_ticks = 100000
+
+
+## Camion qui longe le mur a sa gauche (x - 7 m) en braquant dedans.
+func _hug(x: float) -> Truck:
+	var t := TruckTestUtil.spawn_truck(self, Vector3(x, 0.0, 0.0), Vector3(0.0, 4.0, 0.0))
+	t.linear_velocity = -t.global_basis.z * 26.0
+	t.set_input(_hug_in)
+	return t
 
 
 func _wall(size: Vector3, pos: Vector3) -> void:
@@ -102,8 +113,12 @@ func _test_finish() -> void:
 	check("A bouclier : ni trace ni pneu use", s[0] == 0 and s[1] == 0.0, "traces %d, usure %.1f" % [s[0], s[1]])
 	check("A temoin sans bouclier : trace et pneu use", p[0] > 0 and p[1] > 0.0, "traces %d, usure %.1f" % [p[0], p[1]])
 	check("B longe le mur : plusieurs contacts", _hug_hits >= 2, "%d contacts" % _hug_hits)
-	check("B longe le mur : ni creux ni pneu use", _dents(_hugger) == 0 and _wear(_hugger) == 0.0,
-		"pieces creusees %d, usure %.1f" % [_dents(_hugger), _wear(_hugger)])
+	check("B longe le mur sous bouclier : ni trace, ni creux, ni pneu use",
+		_fx(_hugger).marks().size() == 0 and _dents(_hugger) == 0 and _wear(_hugger) == 0.0,
+		"traces %d, pieces creusees %d, usure %.1f" % [_fx(_hugger).marks().size(), _dents(_hugger), _wear(_hugger)])
+	check("B temoin sans bouclier : la tole s'abime comme avant",
+		_fx(_hugger_plain).marks().size() > 0 and _dents(_hugger_plain) > 0,
+		"traces %d, pieces creusees %d" % [_fx(_hugger_plain).marks().size(), _dents(_hugger_plain)])
 	check("C baril : trace et tole creusee", int(_seen.get("barrel", 0)) > 0 and int(_seen.get("barrel_dents", 0)) > 0,
 		"traces %s, pieces creusees %s" % [_seen.get("barrel"), _seen.get("barrel_dents")])
 	check("C baril sous bouclier : rien", int(_seen.get("barrel_shield", -1)) == 0, str(_seen.get("barrel_shield")))

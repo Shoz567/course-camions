@@ -911,8 +911,8 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   (avant : jusqu'à 11 sur Sakura).
 - [x] **Retours d'essai** (2026-10-20) :
   - aide qui rabattait un camion en l'air vers la piste retirée (`air_return_test`) ;
-  - bouclier : plus de creux, de pièces arrachées ni d'usure des pneus ;
-  - longer un mur : éraflures seulement (`Truck.is_wall_rub`) ;
+  - bouclier : plus de creux, de pièces arrachées ni d'usure des pneus, même
+    en collant un mur (sans bouclier : inchangé) ;
   - baril : tôle enfoncée du côté de l'explosion (`damage_guard_test`) ;
   - bots : ligne la plus rapide (tour estimé, `RacingLine.SMOOTH_M`), qui
     contourne les barils ; ils gardent l'élan des pads ; esquive des remorques

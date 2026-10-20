@@ -122,7 +122,7 @@ func _ready() -> void:
 	_truck = get_parent() as Truck
 	if _truck == null:
 		return
-	_truck.wall_impact_at.connect(_on_wall_impact)
+	_truck.wall_impact_at.connect(_on_impact.bind(INF))
 	_truck.body_impact.connect(_on_impact.bind(MAX_HIT_HEIGHT_M))
 	_truck.tire_burst.connect(_on_tire_burst)
 	_truck.trailer_detached.connect(_on_trailer_detached)
@@ -145,12 +145,6 @@ func _ready() -> void:
 				FxKit.spark_param(_spark_fx[w], &"box_extents", Vector3(0.1, 0.02, 1.3))
 				_spark_fx[w].amount = 160
 			add_child(_spark_fx[w])
-
-
-## Mur : un frottement (on longe le mur) n'use pas les pneus.
-func _on_wall_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3) -> void:
-	if not _truck.is_wall_rub(on_trailer):
-		_on_impact(speed, on_trailer, point, normal, INF)
 
 
 func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3, max_height: float) -> void:

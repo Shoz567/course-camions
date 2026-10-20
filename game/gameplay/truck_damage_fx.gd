@@ -51,8 +51,6 @@ const PART_SPEED := 9.0
 const TRAILER_DENT_MULT := 1.6
 ## Baril explose : choc equivalent (m/s), creux profond et pieces arrachees.
 const BARREL_HIT_MS := 16.0
-## Frottement contre un mur : eraflure legere au plus.
-const RUB_MARK_MAX := 0.35
 ## Pieces exterieures arrachees par une explosion ; celles qui fument.
 const EXPLOSION_PARTS := 24
 const EXPLOSION_TRAILS := 6
@@ -288,8 +286,8 @@ func marks(on_trailer: bool = false) -> Array[Node3D]:
 
 
 ## Bouclier actif (2026-10-20 : « on ne prend pas de PV mais des degats
-## physiques ») : ni trace, ni creux, ni piece arrachee ; les etincelles
-## restent.
+## physiques », y compris en collant un mur) : ni trace, ni creux, ni piece
+## arrachee ; les etincelles restent.
 func _protected() -> bool:
 	return _health != null and _health.is_shielded()
 
@@ -298,10 +296,6 @@ func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3)
 	if _protected():
 		if speed >= BURST_MS:
 			spark_burst.call_deferred(point, normal, speed)
-		return
-	if _truck.is_wall_rub(on_trailer):
-		# frottement le long du mur : eraflure de peinture, sans creux
-		add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.1, RUB_MARK_MAX), on_trailer)
 		return
 	add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.1, 1.0), on_trailer)
 	crush(point, normal, speed, on_trailer)
