@@ -936,6 +936,10 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   aimanté sur le camion visé à l'aller ; il le traverse, fait demi-tour et
   repasse dessus (2 coups), puis revient (`boomerang_test` : cible à 60 m,
   tous deux à 126 km/h ; l'ancien ne la touchait pas).
+- [x] **Visée automatique** (2026-10-20, « que ça vise la personne la plus
+  proche devant soi ») : laser et mitrailleuse visent seuls le camion le plus
+  proche devant (cône du missile), comme missile et boomerang ; droit devant
+  sans cible (`auto_aim_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille
