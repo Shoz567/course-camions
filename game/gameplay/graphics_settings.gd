@@ -14,7 +14,8 @@ extends RefCounted
 ##
 ##   HAUTE    tout, MSAA 2x + SMAA (lisse aussi les nervures des
 ##            conteneurs, sans trainee sur la pluie comme le TAA) ;
-##            l'eclairage global est coupe au-dela de SDFGI_MAX_VIEWS vues,
+##            l'eclairage global est coupe au-dela de SDFGI_MAX_VIEWS vues
+##            et sur une puce Intel (sdfgi_supported),
 ##            le volumetrique au-dela de VOLUMETRIC_MAX_VIEWS, l'eclairage
 ##            indirect proche au-dela de SSIL_MAX_VIEWS
 ##   MOYENNE  SSAO seul, MSAA 2x
@@ -59,6 +60,15 @@ static func default_quality(adapter: int = RenderingServer.get_video_adapter_typ
 	return Quality.HIGH
 
 
+## Eclairage global (SDFGI) sur une puce Intel (2026-10-16, « le noir devient
+## blanc ») : sur Iris Xe (pilote 31.0.101.4032), il blanchit et rosit la route
+## et les portiques noirs de Cyber City, meme seul sur la qualite moyenne ;
+## SSIL, SSR, volumetrique et SMAA n'y sont pour rien. Coupe sur Intel, meme
+## en qualite haute.
+static func sdfgi_supported(vendor: String = RenderingServer.get_video_adapter_vendor()) -> bool:
+	return not vendor.to_lower().contains("intel")
+
+
 ## Regle les effets de `env` pour la qualite et le nombre de vues 3D a
 ## l'ecran. L'environnement est une ressource partagee : a rappeler a chaque
 ## entree de scene (menu, course).
@@ -72,7 +82,7 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 	# eclairage global et volumetrique : seulement si l'environnement en decrit
 	if env.has_meta(&"sdfgi") or env.sdfgi_enabled:
 		env.set_meta(&"sdfgi", true)
-		env.sdfgi_enabled = high and views <= SDFGI_MAX_VIEWS
+		env.sdfgi_enabled = high and views <= SDFGI_MAX_VIEWS and sdfgi_supported()
 	if env.has_meta(&"volumetric") or env.volumetric_fog_enabled:
 		env.set_meta(&"volumetric", true)
 		env.volumetric_fog_enabled = high and views <= VOLUMETRIC_MAX_VIEWS
