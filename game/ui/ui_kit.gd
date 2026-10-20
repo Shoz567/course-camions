@@ -243,6 +243,13 @@ static func box(fill: Color, border: Color = Color(0, 0, 0, 0), border_width: in
 	sb.skew = Vector2(SKEW if skew < 0.0 else skew, 0.0)
 	sb.shadow_color = glow
 	sb.shadow_size = glow_size
+	# halo lumineux : neon seulement (2026-10-20, « sur Sakura et Playa,
+	# quand c'est selectionne, pas vraiment d'effet neon ») ; ailleurs une
+	# ombre portee sombre et courte, comme une tuile posee
+	if skin != Look.NEON and glow_size > 0:
+		sb.shadow_color = Color(0, 0, 0, 0.32 if glow.a > 0.0 else 0.0)
+		sb.shadow_size = mini(glow_size, 6)
+		sb.shadow_offset = Vector2(0, 3)
 	sb.set_content_margin_all(12)
 	sb.anti_aliasing = true
 	return sb
@@ -311,6 +318,9 @@ static func style_choice(b: Button, font_size: int, selected: Color = Color(-1, 
 static func focus_box() -> StyleBoxFlat:
 	var f := box(Color(0, 0, 0, 0), CYAN, 3, -1.0, -1, Color(CYAN, 0.5), 8)
 	f.draw_center = false
+	# cadre seul : pas d'ombre hors neon (elle salirait la tuile en dessous)
+	if skin != Look.NEON:
+		f.shadow_size = 0
 	f.expand_margin_left = 3
 	f.expand_margin_right = 3
 	f.expand_margin_top = 3
@@ -346,6 +356,8 @@ static func style_icon(b: Button, font_size: int) -> void:
 	b.add_theme_stylebox_override("hover_pressed", box(TILE_HOVER, Color(CYAN, 0.6), 1, 0.0, 28))
 	var f := box(Color(0, 0, 0, 0), CYAN, 3, 0.0, 28, Color(CYAN, 0.5), 8)
 	f.draw_center = false
+	if skin != Look.NEON:
+		f.shadow_size = 0
 	b.add_theme_stylebox_override("focus", f)
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(c, TEXT)
