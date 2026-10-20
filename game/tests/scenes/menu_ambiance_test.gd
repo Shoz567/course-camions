@@ -13,7 +13,8 @@ extends PhysicsTest
 ##   - les decors n'ajoutent aucun corps physique (le plateau seul) ;
 ##   - (2026-10-20) dans chaque habillage, PRET et sa note tiennent au-dessus
 ##     de la barre d'aide ; le bois des boutons des joueurs est le bois gris
-##     teinte a leur couleur ; Sakura a une police a chiffres alignes
+##     teinte a leur couleur, un choix en bois teinte de sa couleur (la
+##     texture reste) ; Sakura a une police a chiffres alignes
 ##     (Cambria) quand Yu Mincho manque.
 
 var _menu: MainMenu
@@ -76,7 +77,11 @@ func _fits() -> Array:
 	var sb := _menu.player_buttons[0].get_theme_stylebox("normal")
 	var tinted := not sb is StyleBoxTexture or ((sb as StyleBoxTexture).texture == UiKit.tint_texture
 		and (sb as StyleBoxTexture).modulate_color.is_equal_approx(UiKit.PLAYER_COLORS[0]))
-	return [fits, tinted]
+	# choisi (vitesse) : bois gris teinte de la couleur du choix, texture gardee
+	var sel := _menu.speed_buttons[0].get_theme_stylebox("pressed")
+	var sel_wood := sel is StyleBoxFlat if UiKit.tile_texture == null else (sel is StyleBoxTexture
+		and (sel as StyleBoxTexture).texture == UiKit.tint_texture and (sel as StyleBoxTexture).modulate_color.is_equal_approx(UiKit.PINK))
+	return [fits, tinted, sel_wood]
 
 
 func _ui_count() -> int:
@@ -127,8 +132,8 @@ func _test_finish() -> void:
 		_seen.get("sakura", []) == [UiKit.Look.SAKURA, [false, false, true], true, true, true, true], str(_seen.get("sakura")))
 	check("panneau des parametres garde ouvert au changement de circuit",
 		_seen.get("panel", []) == [UiKit.Look.NEON, true, false, 1], str(_seen.get("panel")))
-	check("PRET et sa note au-dessus de la barre d'aide, bois gris teinte au bleu du J1 (neon, Playa, Sakura)",
-		[_seen.get("fit0"), _seen.get("fit1"), _seen.get("fit2")] == [[true, true], [true, true], [true, true]],
+	check("PRET et sa note au-dessus de la barre d'aide, bois gris teinte au bleu du J1, choisi en bois teinte (neon, Playa, Sakura)",
+		[_seen.get("fit0"), _seen.get("fit1"), _seen.get("fit2")] == [[true, true, true], [true, true, true], [true, true, true]],
 		str([_seen.get("fit0"), _seen.get("fit1"), _seen.get("fit2")]))
 	UiKit.apply_skin(UiKit.Look.SAKURA)
 	var cambria := UiKit.FONT_NAMES.find("Cambria")

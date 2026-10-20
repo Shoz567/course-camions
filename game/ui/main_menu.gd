@@ -373,6 +373,10 @@ static func paint_player_button(b: Button, i: int, lit: bool) -> void:
 		if lit:
 			b.add_theme_stylebox_override("normal", UiKit.tile_box(c, true))
 			b.add_theme_stylebox_override("hover", UiKit.tile_box(c.lightened(0.2), true))
+		# choisi : meme bois teinte (style_choice) ; texte sombre sur le jaune
+		if c.get_luminance() > 0.55:
+			for k: String in ["font_pressed_color", "font_hover_pressed_color"]:
+				b.add_theme_color_override(k, UiKit.BTN_TEXT)
 		return
 	b.add_theme_stylebox_override("pressed", UiKit.box(c, Color(1, 1, 1, 0.95), 3, UiKit.SKEW, 3, Color(c, 0.7), 14))
 	b.add_theme_stylebox_override("hover_pressed", UiKit.box(c.lightened(0.1), Color.WHITE, 3, UiKit.SKEW, 3, Color(c, 0.8), 16))

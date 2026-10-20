@@ -234,7 +234,8 @@ static func font(weight: int = 800, italic: bool = true) -> Font:
 ## Boite de l'habillage : fond, liseré, halo (ombre coloree sans decalage).
 ## `skew` / `radius` < 0 : ceux de l'habillage.
 static func box(fill: Color, border: Color = Color(0, 0, 0, 0), border_width: int = 0,
-		skew: float = -1.0, radius: int = -1, glow: Color = Color(0, 0, 0, 0), glow_size: int = 0) -> StyleBoxFlat:
+		skew: float = -1.0, radius: int = -1, glow: Color = Color(0, 0, 0, 0), glow_size: int = 0,
+		keep_glow: bool = false) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = fill
 	sb.border_color = border
@@ -245,8 +246,9 @@ static func box(fill: Color, border: Color = Color(0, 0, 0, 0), border_width: in
 	sb.shadow_size = glow_size
 	# halo lumineux : neon seulement (2026-10-20, « sur Sakura et Playa,
 	# quand c'est selectionne, pas vraiment d'effet neon ») ; ailleurs une
-	# ombre portee sombre et courte, comme une tuile posee
-	if skin != Look.NEON and glow_size > 0:
+	# ombre portee sombre et courte, comme une tuile posee. `keep_glow` : le
+	# halo dans tous les habillages (page Choix du convoi, neon partout)
+	if skin != Look.NEON and glow_size > 0 and not keep_glow:
 		sb.shadow_color = Color(0, 0, 0, 0.32 if glow.a > 0.0 else 0.0)
 		sb.shadow_size = mini(glow_size, 6)
 		sb.shadow_offset = Vector2(0, 3)
@@ -287,7 +289,8 @@ static func label(text: String, size: int, color: Color = Color(-1, -1, -1), wei
 
 
 ## Bouton de choix : tuile (bois texture selon l'habillage), choisi a la
-## couleur PINK, liseré de focus.
+## couleur PINK (en bois : le bois gris teinte de cette couleur, la texture
+## reste), liseré de focus.
 static func style_choice(b: Button, font_size: int, selected: Color = Color(-1, -1, -1)) -> void:
 	var sel := PINK if selected.r < 0.0 else selected
 	b.focus_mode = Control.FOCUS_ALL
@@ -302,10 +305,13 @@ static func style_choice(b: Button, font_size: int, selected: Color = Color(-1, 
 		b.add_theme_stylebox_override("normal", box(TILE, Color(1, 1, 1, 0.07), 1))
 		b.add_theme_stylebox_override("hover", box(TILE_HOVER, Color(CYAN, 0.45), 1))
 		b.add_theme_stylebox_override("disabled", box(Color(TILE, 0.5), Color(1, 1, 1, 0.04), 1))
-	var sel_border := GOLD if skin == Look.SAKURA else (Color(1, 1, 1, 0.9) if skin == Look.PLAYA else Color(1, 1, 1, 0.25))
-	b.add_theme_stylebox_override("pressed", box(sel, sel_border, 2 if skin != Look.NEON else 1, -1.0, -1, Color(sel, 0.45), 10))
-	b.add_theme_stylebox_override("hover_pressed", box(sel.lightened(0.1), sel_border.lightened(0.2), 2 if skin != Look.NEON else 1,
-		-1.0, -1, Color(sel, 0.55), 12))
+	if textured:
+		b.add_theme_stylebox_override("pressed", tile_box(sel, true))
+		b.add_theme_stylebox_override("hover_pressed", tile_box(sel.lightened(0.15), true))
+	else:
+		b.add_theme_stylebox_override("pressed", box(sel, Color(1, 1, 1, 0.25), 1, -1.0, -1, Color(sel, 0.45), 10))
+		b.add_theme_stylebox_override("hover_pressed", box(sel.lightened(0.1), Color(1, 1, 1, 0.45), 1,
+			-1.0, -1, Color(sel, 0.55), 12))
 	b.add_theme_stylebox_override("focus", focus_box())
 	for c: String in ["font_color", "font_hover_color", "font_focus_color"]:
 		b.add_theme_color_override(c, BTN_TEXT)

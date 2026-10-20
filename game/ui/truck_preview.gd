@@ -38,8 +38,7 @@ func _ready() -> void:
 	env.ambient_light_color = Color(0.55, 0.6, 0.8)
 	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	# halo du socle : neon seulement (Playa, Sakura : pas d'effet neon)
-	env.glow_enabled = UiKit.skin == UiKit.Look.NEON
+	env.glow_enabled = true
 	env.glow_intensity = 0.5
 	var we := WorldEnvironment.new()
 	we.environment = env
@@ -79,7 +78,7 @@ func _ready() -> void:
 	_ring.mesh = torus
 	var rm := StandardMaterial3D.new()
 	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.albedo_color = accent * (2.2 if UiKit.skin == UiKit.Look.NEON else 1.0)
+	rm.albedo_color = accent * 2.2
 	_ring.material_override = rm
 	_ring.position.y = 0.02
 	_pivot.add_child(_ring)
