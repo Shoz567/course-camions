@@ -12,6 +12,12 @@ extends Node
 ## Verrou de depart : pendant first_seconds_lock_ticks (5 s) apres le GO
 ## (start_race_lock, appele par la course), largage interdit - pas de bouchon
 ## monstre sur la grille. Comptes en ticks physiques. Prete des le depart.
+## Limites (2026-10-20 : « limiter le nombre de largages par joueur, le
+## choisir au debut d'une course, entre 0 et 5 ; une fois la remorque
+## revenue, un delai d'une vingtaine de secondes avant de pouvoir la
+## larguer ») : drops_left largages dans la course (GameState.trailer_drops,
+## pose par la course ; -1 : illimite), et rearm_ticks apres le retour d'une
+## remorque.
 
 signal dropped(trailer: DetachedTrailer)
 ## Une nouvelle remorque vient d'apparaitre sur le camion.
@@ -24,11 +30,17 @@ signal reattached
 ## Au-dela, la nouvelle remorque apparait meme si sa place n'est pas libre
 ## (caisse sans collision tant que la place est prise : Truck._trailer_ghost).
 @export var reattach_timeout_ticks: int = 120
+## Delai apres le retour d'une remorque avant de pouvoir la larguer (20 s).
+@export var rearm_ticks: int = 1200
+
+## Largages qui restent dans la course (-1 : illimite).
+var drops_left: int = -1
 
 var _truck: Truck
 var _cooldown: int = 0
 var _lock: int = 0
 var _waiting: int = 0
+var _rearm: int = 0
 var last_trailer: DetachedTrailer
 ## En ligne, chez un client (NetRace) : le host decide du largage et du
 ## raccrochage ; la recharge affichee arrive du host (net_set_charge).
@@ -51,6 +63,8 @@ func _physics_process(_delta: float) -> void:
 		_lock -= 1
 	if _cooldown > 0:
 		_cooldown -= 1
+	if _rearm > 0 and _truck != null and not _truck.is_trailer_detached():
+		_rearm -= 1
 	if net_mirror:
 		return
 	if _truck == null or not _truck.is_trailer_detached() or _cooldown > 0 or _truck.is_wrecked():
@@ -59,11 +73,13 @@ func _physics_process(_delta: float) -> void:
 	_waiting += 1
 	if _truck.reattach_trailer(_waiting >= reattach_timeout_ticks):
 		_waiting = 0
+		_rearm = rearm_ticks
 		reattached.emit()
 
 
 func is_ready() -> bool:
-	return _cooldown == 0 and _lock == 0 and _truck != null and not _truck.is_trailer_detached()
+	return _cooldown == 0 and _lock == 0 and _rearm == 0 and drops_left != 0 and _truck != null \
+			and not _truck.is_trailer_detached()
 
 
 func is_locked() -> bool:
@@ -74,6 +90,10 @@ func is_locked() -> bool:
 func get_charge() -> float:
 	if _lock > 0:
 		return 1.0 - float(_lock) / maxf(first_seconds_lock_ticks, 1)
+	if drops_left == 0 and _truck != null and not _truck.is_trailer_detached():
+		return 0.0
+	if _rearm > 0 and _truck != null and not _truck.is_trailer_detached():
+		return 1.0 - float(_rearm) / maxf(rearm_ticks, 1)
 	return 1.0 - float(_cooldown) / maxf(cooldown_ticks, 1)
 
 
@@ -85,6 +105,11 @@ func lock_seconds_left() -> int:
 	return ceili(_lock / 60.0)
 
 
+## Secondes avant de pouvoir larguer la remorque revenue.
+func rearm_seconds_left() -> int:
+	return ceili(_rearm / 60.0)
+
+
 ## Etat pour le HUD.
 func status_text() -> String:
 	if _lock > 0:
@@ -93,6 +118,12 @@ func status_text() -> String:
 		return "nouvelle remorque %d s" % maxi(seconds_left(), 1)
 	if _cooldown > 0:
 		return "remorque %d s" % seconds_left()
+	if drops_left == 0:
+		return "PLUS DE LARGAGE"
+	if _rearm > 0:
+		return "largage dans %d s" % rearm_seconds_left()
+	if drops_left > 0:
+		return "REMORQUE PRETE · %d largage%s" % [drops_left, "s" if drops_left > 1 else ""]
 	return "REMORQUE PRETE"
 
 
@@ -101,8 +132,14 @@ func net_set_charge(charge: float, locked: bool) -> void:
 	if locked:
 		_lock = maxi(roundi((1.0 - charge) * first_seconds_lock_ticks), 1)
 		_cooldown = 0
+	elif _truck != null and not _truck.is_trailer_detached():
+		# remorque sur le camion : la charge est le delai avant le largage
+		_lock = 0
+		_cooldown = 0
+		_rearm = roundi((1.0 - clampf(charge, 0.0, 1.0)) * rearm_ticks)
 	else:
 		_lock = 0
+		_rearm = 0
 		_cooldown = roundi((1.0 - clampf(charge, 0.0, 1.0)) * cooldown_ticks)
 
 
@@ -128,6 +165,8 @@ func drop() -> DetachedTrailer:
 	# elle roule encore un peu, puis tient la place (amortie)
 	trailer.linear_velocity = _truck.linear_velocity * 0.5
 	_cooldown = cooldown_ticks
+	if drops_left > 0:
+		drops_left -= 1
 	_waiting = 0
 	last_trailer = trailer
 	dropped.emit(trailer)

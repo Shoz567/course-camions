@@ -740,6 +740,8 @@ func _simulate(tick: int) -> void:
 				var cargo := p.truck.get_node_or_null(^"Cargo") as TruckCargo
 				if cargo != null:
 					cargo.start_race_lock()
+					# largages de la course, choisis au menu (en ligne : ceux du host)
+					cargo.drops_left = GameState.trailer_drops
 		return
 	# temps limite apres la premiere arrivee (une course se termine toujours)
 	_check_all_finished()

@@ -966,6 +966,13 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   perdus ; un choc de camion retire au plus 45 % ; sous 60 % un camion qui
   fonce dedans la perce et la traverse ; à 0, elle explose
   (`road_trailer_test`).
+- [x] **Largages limités** (2026-10-20, « limiter le nombre de largages par
+  joueur, le choisir au début d'une course, entre 0 et 5 ; un délai d'une
+  vingtaine de secondes une fois la remorque revenue ») : ligne LARGAGES du
+  menu (0 à 5, 3 par défaut, `GameState.trailer_drops`, envoyée par le host en
+  ligne) ; `TruckCargo.drops_left` posé au GO ; 20 s (`rearm_ticks`) après
+  le retour d'une remorque ; HUD « largage dans N s », « PLUS DE LARGAGE »
+  (`trailer_drops_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

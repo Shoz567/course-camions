@@ -54,6 +54,7 @@ var player_buttons: Array[Button] = []
 ## Bots hors ligne : nombre (0 a 5) et niveau (facile, moyen, dur).
 var bot_buttons: Array[Button] = []
 var bot_level_buttons: Array[Button] = []
+var drop_buttons: Array[Button] = []
 const BOT_LEVELS: PackedStringArray = ["FACILE", "MOYEN", "DUR"]
 var speed_buttons: Array[Button] = []
 var track_buttons: Array[Button] = []
@@ -322,6 +323,7 @@ func _restyle() -> void:
 	player_buttons.clear()
 	bot_buttons.clear()
 	bot_level_buttons.clear()
+	drop_buttons.clear()
 	speed_buttons.clear()
 	track_buttons.clear()
 	_join_slots.clear()
@@ -403,6 +405,16 @@ func select_bots(n: int, save: bool = true) -> void:
 		bot_buttons[k].disabled = k > room
 	for k in bot_level_buttons.size():
 		bot_level_buttons[k].disabled = GameState.bot_count == 0
+
+
+## Largages de remorque par joueur et par course (0 a 5).
+func select_drops(n: int, save: bool = true) -> void:
+	GameState.trailer_drops = clampi(n, 0, GameStateNode.MAX_TRAILER_DROPS)
+	if save and is_node_ready():
+		GameState.save_settings()
+		MenuSound.play_select()
+	for k in drop_buttons.size():
+		drop_buttons[k].set_pressed_no_signal(k == GameState.trailer_drops)
 
 
 func select_bot_level(k: int, save: bool = true) -> void:
@@ -1205,6 +1217,24 @@ func _build_ui() -> void:
 	column.add_child(bots_row)
 	select_bots(GameState.bot_count, false)
 	select_bot_level(GameState.bot_level, false)
+	# largages de remorque par joueur dans la course (2026-10-20)
+	column.add_child(_column_gap(6))
+	var drops_row := _row("Drops")
+	var drops_label := _label("LARGAGES", 18, 0)
+	drops_label.custom_minimum_size.x = 112
+	drops_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	drops_row.add_child(drops_label)
+	var drops_group := ButtonGroup.new()
+	for k in GameStateNode.MAX_TRAILER_DROPS + 1:
+		var db := _choice("Drops%d" % k, str(k), drops_group, 20)
+		db.custom_minimum_size.y = 44
+		db.tooltip_text = "Aucun largage de remorque" if k == 0 \
+				else "%d largage%s de remorque par joueur et par course" % [k, "s" if k > 1 else ""]
+		db.pressed.connect(select_drops.bind(k))
+		drops_row.add_child(db)
+		drop_buttons.append(db)
+	column.add_child(drops_row)
+	select_drops(GameState.trailer_drops, false)
 	# manettes detectees a gauche ; salle d'attente (chacun rejoint avec SA
 	# manette ou son jeu de touches) a droite, sur la meme ligne
 	var pads_row := HBoxContainer.new()
