@@ -40,6 +40,9 @@ const TRACKS: Array[Dictionary] = [
 		"image": "res://ui/loading/sakura.jpg"},
 ]
 
+## Arenes stock-car (2026-10-20), une par habillage de circuit.
+const ARENAS: PackedStringArray = ["res://dev/arena.tscn", "res://dev/arena_playa.tscn", "res://dev/arena_sakura.tscn"]
+
 ## Circuit choisi dans le menu (garde entre deux courses).
 var selected_track: int = 0
 
@@ -123,6 +126,9 @@ var game_mode: int = GameMode.RACE
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
 static func track_scene(index: int) -> String:
+	# arene : celle de l'habillage du circuit choisi
+	if GameState != null and GameState.game_mode == GameMode.ARENA:
+		return ARENAS[clampi(index, 0, ARENAS.size() - 1)]
 	return TRACKS[clampi(index, 0, TRACKS.size() - 1)]["scene"]
 
 

@@ -1,0 +1,40 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://dev/local_race.gd" id="1"]
+[ext_resource type="PackedScene" path="res://tracks/arena_02.tscn" id="2"]
+[ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="3"]
+[ext_resource type="Script" path="res://gameplay/race_laps.gd" id="4"]
+[ext_resource type="Script" path="res://gameplay/pad_effects.gd" id="pads"]
+[ext_resource type="Environment" path="res://tracks/playa_sun.tres" id="env"]
+
+[node name="RacePlaya" type="Node3D"]
+script = ExtResource("1")
+player_count = 2
+players_from_menu = true
+game_mode = 3
+track_path = NodePath("Track02")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.819, -0.383, 0.427, 0, 0.744, 0.668, -0.574, -0.547, 0.609, 0, 60, 0)
+light_color = Color(1, 0.93, 0.78, 1)
+light_energy = 1.1
+shadow_enabled = true
+directional_shadow_max_distance = 220.0
+light_angular_distance = 0.5
+
+[node name="Track02" parent="." instance=ExtResource("2")]
+
+[node name="RaceLaps" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("4")
+track = NodePath("../Track02")
+
+[node name="AutoReset" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("3")
+track = NodePath("../Track02")
+
+[node name="PadEffects" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("pads")
+track = NodePath("../Track02")

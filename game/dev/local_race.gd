@@ -132,6 +132,9 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @export var players_from_menu: bool = false
 ## Mode de jeu (GameStateNode.GameMode) ; repris du menu avec players_from_menu.
 @export var game_mode: int = GameStateNode.GameMode.RACE
+## Arene : vies par camion et duree de la manche (ticks).
+@export var arena_lives: int = 3
+@export var arena_limit_ticks: int = 14400
 ## Elimination : premiere a ce tick de course, puis toutes les elim_every_ticks.
 @export var elim_first_ticks: int = 1800
 @export var elim_every_ticks: int = 1200
@@ -194,7 +197,10 @@ var _abandoned: Array[int] = []
 var eliminated: Array[int] = []
 ## Contre-la-montre : record et fantome du joueur (TimeTrial).
 var time_trial: TimeTrial
+## Arene : vies restantes par joueur.
+var lives: Array[int] = []
 var _next_elim: int = -1
+var _arena_over: bool = false
 ## Annonce passagere (« X a quitte la partie »), jusqu'au tick indique.
 var _notice: String = ""
 var _notice_until: int = 0
@@ -227,6 +233,10 @@ func _ready() -> void:
 		# seul contre le chrono et son fantome : ni bots, ni pouvoirs, ni largages
 		player_count = 1
 		bot_count = 0
+	if game_mode == GameStateNode.GameMode.ARENA:
+		# pas de tours ni de sens de course : le dernier debout gagne
+		race.total_laps = 999
+		race.wrong_way_enabled = false
 	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
@@ -261,6 +271,15 @@ func _ready() -> void:
 	split = null if NetSession.is_online() else _build_split_screen()
 	for i in player_count + bot_count:
 		players.append(_add_player(i))
+	if game_mode == GameStateNode.GameMode.ARENA:
+		for i in players.size():
+			lives.append(arena_lives)
+			var h := TruckHealth.of(players[i].truck)
+			if h != null:
+				h.destroyed.connect(_on_arena_destroyed.bind(i))
+			var bot := players[i].input as BotInputSource
+			if bot != null:
+				bot.arena = true
 	if game_mode == GameStateNode.GameMode.TIME_TRIAL:
 		time_trial = TimeTrial.new()
 		time_trial.name = "TimeTrial"
@@ -787,6 +806,8 @@ func _simulate(tick: int) -> void:
 		return
 	if game_mode == GameStateNode.GameMode.ELIMINATION:
 		_elimination_tick(tick)
+	if game_mode == GameStateNode.GameMode.ARENA:
+		_arena_tick(tick)
 	# temps limite apres la premiere arrivee (une course se termine toujours)
 	_check_all_finished()
 	for p in players:
@@ -914,6 +935,21 @@ func _on_connection_lost(reason: String) -> void:
 ## Joueurs par position courante (1er d'abord).
 func ranking() -> Array[Player]:
 	var order := players.duplicate()
+	if game_mode == GameStateNode.GameMode.ARENA and not lives.is_empty():
+		# vivants par (vies, PV), puis les sortis du dernier au premier
+		order.sort_custom(func(a: Player, b: Player) -> bool:
+			var ia := players.find(a)
+			var ib := players.find(b)
+			var ea := eliminated.find(ia)
+			var eb := eliminated.find(ib)
+			if ea < 0 and eb < 0:
+				return _arena_score(ia) > _arena_score(ib)
+			if ea < 0 or eb < 0:
+				return ea < 0
+			return ea > eb)
+		var arena_typed: Array[Player] = []
+		arena_typed.assign(order)
+		return arena_typed
 	order.sort_custom(func(a: Player, b: Player) -> bool:
 		return race.progress(a.truck) > race.progress(b.truck))
 	var typed: Array[Player] = []
@@ -930,6 +966,13 @@ func still_racing(r: RaceLaps.Racer) -> bool:
 ## l'annonce du moment (un joueur parti).
 func ticker_text() -> String:
 	var parts := PackedStringArray()
+	var arena_left := arena_seconds_left()
+	if arena_left >= 0:
+		var hearts := PackedStringArray()
+		for p in ranking():
+			var i := players.find(p)
+			hearts.append("%s %s" % [player_name(i), "♥".repeat(lives[i]) if lives[i] > 0 else "✖"])
+		parts.append("ARÈNE  ·  %d:%02d  ·  %s" % [arena_left / 60, arena_left % 60, "  ".join(hearts)])
 	var elim := elimination_seconds_left()
 	if elim >= 0 and _alive().size() > 1:
 		var last := ranking()
@@ -972,6 +1015,9 @@ func standings_text() -> String:
 			time = "éliminé"
 		elif game_mode == GameStateNode.GameMode.ELIMINATION and r.finished:
 			time = "vainqueur"
+		elif game_mode == GameStateNode.GameMode.ARENA and not lives.is_empty():
+			var li := lives[players.find(p)]
+			time = ("vainqueur  ·  " if rank == 1 else "") + ("%d vie%s" % [li, "s" if li > 1 else ""])
 		elif state == State.FINISHED and not r.finished:
 			time = "non classé"
 		lines.append("%d. %s   %s" % [rank, player_name(players.find(p)), time])
@@ -1041,7 +1087,11 @@ func _process(delta: float) -> void:
 		# encore en course apres la premiere arrivee : pas de carte au milieu
 		# de sa route, un bandeau en haut (le classement complet attend la fin)
 		var still := still_racing(r)
-		var elim_on := elimination_seconds_left() >= 0
+		var elim_on := elimination_seconds_left() >= 0 or arena_seconds_left() >= 0
+		if game_mode == GameStateNode.GameMode.ARENA and not lives.is_empty():
+			p.hud.lap_override = "VIES %s" % ("♥".repeat(lives[i]) if lives[i] > 0 else "✖")
+		elif game_mode == GameStateNode.GameMode.ELIMINATION:
+			p.hud.lap_override = "ÉLIMINATION  ·  TOUR %d" % race.display_lap(p.truck)
 		p.hud.set_standings("" if still or (elim_on and state == State.RACING) else standings)
 		p.hud.set_ticker(ticker_text() if still or elim_on else "")
 		if time_trial != null and state == State.RACING:
@@ -1163,6 +1213,56 @@ func _elimination_tick(tick: int) -> void:
 	_notice_until = tick + 120
 	if _alive().size() == 1:
 		race.finish_now(_alive()[0].truck)
+
+
+## Arene (2026-10-20 : « une arene fermee, sans tours : on se detruit avec les
+## pouvoirs et les remorques, le dernier debout gagne ») : arena_lives vies ;
+## detruit, un camion en perd une, et sans vie il sort (son epave reste).
+## Le dernier debout gagne ; au bout de arena_limit_ticks, le plus de vies
+## puis de PV. Classement : vivants (vies, PV), puis sortis du dernier au
+## premier.
+func _on_arena_destroyed(i: int) -> void:
+	if eliminated.has(i):
+		return
+	lives[i] = maxi(lives[i] - 1, 0)
+	if lives[i] == 0:
+		var h := TruckHealth.of(players[i].truck)
+		if h != null:
+			h.no_respawn = true
+		eliminated.append(i)
+		_notice = "%s ÉLIMINÉ" % player_name(i)
+		_notice_until = Engine.get_physics_frames() + 120
+
+
+func _arena_tick(tick: int) -> void:
+	if state != State.RACING:
+		return
+	var alive := _alive()
+	if alive.size() <= 1 and players.size() > 1:
+		if alive.size() == 1:
+			race.finish_now(alive[0].truck)
+		return
+	if tick - _state_tick >= arena_limit_ticks:
+		# temps ecoule : les vivants dans l'ordre (vies, PV), le premier gagne
+		var order := ranking()
+		for p in order:
+			if not eliminated.has(players.find(p)):
+				race.finish_now(p.truck)
+		_arena_over = true
+
+
+## Valeur d'un camion vivant en arene : vies, puis PV (tete et remorque).
+func _arena_score(i: int) -> float:
+	var h := TruckHealth.of(players[i].truck)
+	var hp := (h.hp + h.trailer_hp) if h != null else 0.0
+	return lives[i] * 1000.0 + hp
+
+
+## Secondes avant la fin de la manche d'arene (-1 hors arene).
+func arena_seconds_left() -> int:
+	if game_mode != GameStateNode.GameMode.ARENA or state != State.RACING:
+		return -1
+	return maxi(ceili((arena_limit_ticks - (Engine.get_physics_frames() - _state_tick)) / 60.0), 0)
 
 
 ## Joueurs encore en course (elimination) : ni elimines, ni partis.

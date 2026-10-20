@@ -21,6 +21,8 @@ signal wrong_way_changed(truck: Truck, wrong: bool)
 ## Tours d'une course (2026-10-20 : 3, circuits rallonges a 4,6-4,8 km).
 const DEFAULT_LAPS := 3
 @export var total_laps: int = DEFAULT_LAPS
+## Detection du mauvais sens (faux en arene : pas de sens de course).
+@export var wrong_way_enabled: bool = true
 ## Mauvais sens : vitesse a contre-sens (m/s) tenue pendant ce nombre de ticks.
 @export var wrong_way_speed_ms: float = 2.0
 @export var wrong_way_ticks: int = 45
@@ -132,7 +134,7 @@ func _physics_process(_delta: float) -> void:
 			r.wrong_count += 1
 		elif along > wrong_way_speed_ms:
 			r.wrong_count = 0
-		var wrong := r.wrong_count >= wrong_way_ticks
+		var wrong := wrong_way_enabled and r.wrong_count >= wrong_way_ticks
 		if wrong != r.wrong_way:
 			r.wrong_way = wrong
 			wrong_way_changed.emit(t, wrong)

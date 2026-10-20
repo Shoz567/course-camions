@@ -1,0 +1,90 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://tracks/track_blockout.gd" id="1"]
+[ext_resource type="Script" path="res://tracks/playa_backdrop.gd" id="2"]
+[ext_resource type="Script" path="res://tracks/race_decor.gd" id="3"]
+
+[node name="Track02" type="Node3D"]
+script = ExtResource("1")
+segments = Array[Dictionary]([{
+"arch": 4.0,
+"arch_label": "ARÈNE",
+"length": 10.0,
+"name": "Arene (depart)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"barrels": [[50.0, 20.0]],
+"boost": [[30.0, 40.0]],
+"jump": 70.0,
+"jump_offset": -40.0,
+"name": "Arene (quart nord-ouest)",
+"pickups": [[110.0, "power"]],
+"radius": 90.0,
+"type": "arc"
+}, {
+"auto": true,
+"name": "Arene (cote ouest)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"barrels": [[100.0, -50.0]],
+"boost": [[120.0, 40.0]],
+"name": "Arene (quart sud-ouest)",
+"pickups": [[30.0, "repair"]],
+"puddle": [[70.0, -30.0, 12.0]],
+"radius": 90.0,
+"type": "arc"
+}, {
+"auto": true,
+"name": "Arene (cote sud)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"barrels": [[40.0, -20.0]],
+"boost": [[20.0, -40.0]],
+"jump": 70.0,
+"jump_offset": 40.0,
+"name": "Arene (quart sud-est)",
+"pickups": [[110.0, "power"]],
+"radius": 90.0,
+"type": "arc"
+}, {
+"length": 20.0,
+"name": "Arene (cote est)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"barrels": [[100.0, 50.0]],
+"name": "Arene (quart nord-est)",
+"pickups": [[30.0, "repair"]],
+"puddle": [[70.0, 30.0, 12.0]],
+"radius": 90.0,
+"type": "arc"
+}, {
+"length": 10.0,
+"name": "Arene (depart, fin)",
+"type": "straight"
+}])
+width = 160.0
+checkpoint_count = 4
+bank_blend_length = 120.0
+theme_id = 1
+wall_height = 2.8
+wall_friction = 0.5
+jump_length = 14.0
+jump_angle_deg = 7.0
+jump_width = 14.0
+jump_offset = 12.0
+boost_pad_size = Vector2(12, 8)
+grid_row_spacing = 20.0
+grid_lateral = PackedFloat32Array(-10, 10, -30, 30)
+grid_back_lateral = PackedFloat32Array(-20, 20)
+
+[node name="PlayaBackdrop" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="RaceDecor" type="Node3D" parent="."]
+script = ExtResource("3")
+sky_beams = false
+night = false
