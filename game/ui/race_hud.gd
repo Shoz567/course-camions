@@ -48,6 +48,24 @@ var _center_text: String = ""
 var _center_color: Color = Color.WHITE
 var _slots: Array[Dictionary] = [{}, {}]
 var _reticle: TargetReticle
+## Retour de coup (2026-10-20) : chiffres de degats qui montent de la cible,
+## son de touche, bip au changement de cible.
+var _powers_seen: TruckPowers
+var _last_target: Truck
+var _beep_cool: float = 0.0
+var _numbers: Array[Label] = []
+var _sound: AudioStreamPlayer
+static var _hit_stream: AudioStreamWAV
+static var _beep_stream: AudioStreamWAV
+## Chiffres a l'ecran (tests) et derniers sons joues.
+var hit_numbers_shown: int = 0
+var beeps: int = 0
+var hit_sounds: int = 0
+## Un chiffre qui vient d'apparaitre absorbe les coups suivants pendant
+## MERGE_S (rafale, laser) ; il monte de NUMBER_RISE px en NUMBER_S.
+const MERGE_S := 0.35
+const NUMBER_S := 0.8
+const NUMBER_RISE := 60.0
 
 ## Couleur du joueur (bordure de la carte, nom).
 @export var accent: Color = UiKit.CYAN
@@ -98,6 +116,13 @@ func _ready() -> void:
 	_reticle.name = "Reticle"
 	_reticle.ui_scale = k
 	add_child(_reticle)
+	if DisplayServer.get_name() != "headless":
+		if _hit_stream == null:
+			_hit_stream = MenuSound.build_tone(1500.0, 900.0, 0.05, 0.35)
+			_beep_stream = MenuSound.build_tone(880.0, 1180.0, 0.06, 0.25)
+		_sound = AudioStreamPlayer.new()
+		_sound.name = "HitSound"
+		add_child(_sound)
 
 
 ## Carte du haut a gauche, inclinee comme les menus : « 2e/4 » en grand a
@@ -300,7 +325,9 @@ func _process(_delta: float) -> void:
 		d["active"] = powers.active(k)
 		d["effect"] = powers.active_fraction(k)
 		d["effect_left"] = powers.active_seconds(k)
+	_watch_hits(powers)
 	_place_reticle(powers)
+	_age_numbers(_delta)
 	_dial.set_state(roundi(absf(truck.get_speed_kmh())), charge, truck.is_boosting(), boost_label, cargo, _slots)
 	if _health != null:
 		var ratio := _health.hp / maxf(_health.max_hp, 1.0)
@@ -337,17 +364,22 @@ func _process(_delta: float) -> void:
 ## mitrailleuse (TruckPowers.target_ahead), si un de ces pouvoirs est monte.
 func _place_reticle(powers: TruckPowers) -> void:
 	_reticle.visible = false
+	_beep_cool = maxf(0.0, _beep_cool - get_process_delta_time())
 	if powers == null or camera == null or truck.is_wrecked():
+		_last_target = null
 		return
 	var armed := false
-	var live := false
 	for k in 2:
-		if TruckPowers.aims_at(powers.slots[k]):
-			armed = true
-			live = live or powers.cooldown[k] == 0
-	if not armed:
-		return
-	var t := powers.target_ahead()
+		armed = armed or TruckPowers.aims_at(powers.slots[k])
+	var t := powers.target_ahead() if armed else null
+	if t != _last_target:
+		_last_target = t
+		if t != null:
+			_reticle.pulse()
+			if _beep_cool <= 0.0:
+				_beep_cool = 0.1
+				beeps += 1
+				_play(_beep_stream)
 	if t == null:
 		return
 	# sur la remorque s'il tracte (la ou partent les pouvoirs), sinon la tete
@@ -356,7 +388,89 @@ func _place_reticle(powers: TruckPowers) -> void:
 		at += Vector3.UP * 0.7
 	if camera.is_position_behind(at):
 		return
-	_reticle.place(camera.unproject_position(at), truck.global_position.distance_to(at), live)
+	# portee : par emplacement, fleche allumee si pret et a portee
+	var dist := truck.global_position.distance_to(TruckPowers.aim_point(t))
+	var lit := PackedInt32Array([-1, -1])
+	var any_ready := false
+	var reach := false
+	for k in 2:
+		var p := powers.slots[k]
+		if not TruckPowers.aims_at(p):
+			continue
+		var ready_k := powers.cooldown[k] == 0
+		var in_range := dist <= TruckPowers.power_range(p)
+		any_ready = any_ready or ready_k
+		reach = reach or (ready_k and in_range)
+		lit[k] = 1 if ready_k and in_range else 0
+	var state := TargetReticle.State.READY if reach else (TargetReticle.State.OUT_OF_RANGE if any_ready
+		else TargetReticle.State.RECHARGING)
+	_reticle.place(camera.unproject_position(at), dist, state, lit)
+
+
+## Coups de nos pouvoirs (TruckPowers.hit_landed) : chiffre, croix, son.
+func _watch_hits(powers: TruckPowers) -> void:
+	if powers == _powers_seen:
+		return
+	if _powers_seen != null and is_instance_valid(_powers_seen) and _powers_seen.hit_landed.is_connected(_on_hit):
+		_powers_seen.hit_landed.disconnect(_on_hit)
+	_powers_seen = powers
+	if powers != null:
+		powers.hit_landed.connect(_on_hit)
+
+
+func _on_hit(at: Vector3, amount: float, blocked: bool) -> void:
+	_reticle.flash()
+	hit_sounds += 1
+	_play(_hit_stream)
+	if camera == null or camera.is_position_behind(at):
+		return
+	var pos := camera.unproject_position(at)
+	# rafale ou laser : le dernier chiffre encore frais additionne les coups
+	if not _numbers.is_empty():
+		var last := _numbers[-1]
+		if float(last.get_meta(&"age")) < MERGE_S and bool(last.get_meta(&"blocked")) == blocked:
+			last.set_meta(&"amount", float(last.get_meta(&"amount")) + amount)
+			last.set_meta(&"age", 0.0)
+			last.text = _number_text(float(last.get_meta(&"amount")), blocked)
+			return
+	var l := _label(30, pos)
+	l.text = _number_text(amount, blocked)
+	l.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0) if blocked else UiKit.GOLD)
+	l.set_meta(&"amount", amount)
+	l.set_meta(&"age", 0.0)
+	l.set_meta(&"blocked", blocked)
+	l.set_meta(&"origin", pos)
+	_numbers.append(l)
+	hit_numbers_shown += 1
+
+
+static func _number_text(amount: float, blocked: bool) -> String:
+	return "BLOQUÉ" if blocked else "-%d" % maxi(ceili(amount - 1e-3), 1)
+
+
+## Les chiffres montent et s'effacent, puis disparaissent.
+func _age_numbers(delta: float) -> void:
+	for i in range(_numbers.size() - 1, -1, -1):
+		var l := _numbers[i]
+		var age := float(l.get_meta(&"age")) + delta
+		var total := float(l.get_meta(&"total", 0.0)) + delta
+		l.set_meta(&"age", age)
+		l.set_meta(&"total", total)
+		if total >= NUMBER_S + MERGE_S:
+			l.queue_free()
+			_numbers.remove_at(i)
+			continue
+		var u := clampf(total / (NUMBER_S + MERGE_S), 0.0, 1.0)
+		var o := l.get_meta(&"origin") as Vector2
+		# au-dessus du viseur, puis il monte
+		l.position = o + Vector2(-l.size.x / 2.0, -(NUMBER_RISE * u + 70.0) * ui_scale)
+		l.modulate.a = 1.0 - pow(u, 3.0)
+
+
+func _play(stream: AudioStreamWAV) -> void:
+	if _sound != null and stream != null:
+		_sound.stream = stream
+		_sound.play()
 
 
 ## Viseur visible (tests).

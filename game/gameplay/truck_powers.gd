@@ -34,6 +34,11 @@ extends Node3D
 ## client rejoue alors recharge, aura, rayon et missile, pour l'affichage.
 
 signal fired(slot: int, power: int)
+## Un pouvoir de ce camion a touche (2026-10-20 : retour de coup au HUD :
+## chiffre, marque, son) : en `at` (monde), `amount` PV ; `blocked` : un
+## bouclier a tout pris. Le laser et les scies cumulent leurs PV par tick et
+## les annoncent a chaque marque (land).
+signal hit_landed(at: Vector3, amount: float, blocked: bool)
 
 ## Les camions de la course (cibles du missile, du laser) sont dans ce groupe.
 const TARGETS := &"race_trucks"
@@ -61,6 +66,11 @@ var saw_ticks: int = 0
 var saw_hit: Truck
 ## Client en ligne : effets seulement, le host decide (net_fire).
 var mirror: bool = false
+## PV des coups continus (laser, scies) pas encore annonces (land).
+var _acc: float = 0.0
+var _acc_hits: int = 0
+var _acc_blocked: int = 0
+var _acc_at: Vector3
 ## Client en ligne, son propre camion (2026-10-19) : un appui joue le tir ici
 ## tout de suite, sans attendre l'aller-retour ; l'annonce du host qui suit
 ## (dans PREDICT_TICKS) ne le rejoue pas. Les degats restent ceux du host.
@@ -388,10 +398,13 @@ func _laser_tick() -> void:
 			var mark := laser_ticks % PowerCatalog.LASER_HIT_INTERVAL == 0
 			strike(other, hit["position"], fwd, PowerCatalog.LASER_DAMAGE_PER_TICK, &"laser",
 				PowerCatalog.LASER_HIT_MS if mark else 0.0, mirror)
-		elif not mirror and hit["collider"] is DetachedTrailer:
+			land(hit["position"], PowerCatalog.LASER_DAMAGE_PER_TICK, shielded(other), mark)
+		elif hit["collider"] is DetachedTrailer:
 			var mark := laser_ticks % PowerCatalog.LASER_HIT_INTERVAL == 0
-			(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.LASER_DAMAGE_PER_TICK, hit["position"], fwd,
-				PowerCatalog.LASER_HIT_MS if mark else 0.0)
+			if not mirror:
+				(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.LASER_DAMAGE_PER_TICK, hit["position"], fwd,
+					PowerCatalog.LASER_HIT_MS if mark else 0.0)
+			land(hit["position"], PowerCatalog.LASER_DAMAGE_PER_TICK, false, mark)
 	if _beam != null:
 		_beam.visible = true
 		(_beam.mesh as CylinderMesh).height = length
@@ -415,9 +428,12 @@ func _gun_shot() -> void:
 			gun_hits += 1
 			strike(other, hit["position"], fwd, PowerCatalog.GUN_DAMAGE, &"mitrailleuse",
 				PowerCatalog.GUN_HIT_MS, mirror)
-		elif not mirror and hit["collider"] is DetachedTrailer:
-			(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.GUN_DAMAGE, hit["position"], fwd,
-				PowerCatalog.GUN_HIT_MS)
+			land(hit["position"], PowerCatalog.GUN_DAMAGE, shielded(other))
+		elif hit["collider"] is DetachedTrailer:
+			if not mirror:
+				(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.GUN_DAMAGE, hit["position"], fwd,
+					PowerCatalog.GUN_HIT_MS)
+			land(hit["position"], PowerCatalog.GUN_DAMAGE, false)
 		if _hit_sparks != null:
 			_hit_sparks.global_position = hit["position"]
 			_hit_sparks.restart()
@@ -509,8 +525,10 @@ func _saw_tick() -> void:
 		var ms := PowerCatalog.SAW_HIT_MS if cut else 0.0
 		if cab:
 			strike(t, xw * cab_at, push, PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie", ms, mirror)
+			land(xw * cab_at, PowerCatalog.SAW_DAMAGE_PER_TICK, shielded(t), cut)
 		if trailer:
 			strike(t, xw * trailer_at, push, PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie", ms, mirror)
+			land(xw * trailer_at, PowerCatalog.SAW_DAMAGE_PER_TICK, shielded(t), cut)
 		if not mirror:
 			t.apply_central_force(push * PowerCatalog.SAW_PUSH_MS2 * t.mass)
 	if not mirror:
@@ -535,7 +553,46 @@ func _saw_obstacles(inv: Transform3D, cut: bool) -> void:
 				continue
 			d.power_hit(PowerCatalog.SAW_DAMAGE_PER_TICK, p, _truck.global_basis.x * side,
 				PowerCatalog.SAW_HIT_MS if cut else 0.0)
+			land(p, PowerCatalog.SAW_DAMAGE_PER_TICK, false, cut)
 			break
+
+
+## Un coup de ce camion : `amount` PV en `at` ; annonce tout de suite, ou
+## cumule (`flush` faux : laser et scies entre deux marques) jusqu'au suivant.
+func land(at: Vector3, amount: float, blocked: bool, flush: bool = true) -> void:
+	_acc_hits += 1
+	_acc_at = at
+	if blocked:
+		_acc_blocked += 1
+	else:
+		_acc += amount
+	if not flush:
+		return
+	hit_landed.emit(_acc_at, _acc, _acc_blocked == _acc_hits)
+	_acc = 0.0
+	_acc_hits = 0
+	_acc_blocked = 0
+
+
+## Un bouclier protege `t` (le coup ne lui retire rien).
+static func shielded(t: Truck) -> bool:
+	var h := TruckHealth.of(t)
+	return h != null and h.is_shielded()
+
+
+## Portee (m) d'un pouvoir qui vise : la cible au-dela, il ne l'atteint pas
+## (le viseur du HUD le montre) ; INF pour les autres.
+static func power_range(p: int) -> float:
+	match p:
+		PowerCatalog.Id.MISSILE:
+			return PowerCatalog.MISSILE_RANGE_M
+		PowerCatalog.Id.BOOMERANG:
+			return PowerCatalog.BOOMERANG_RANGE_M
+		PowerCatalog.Id.LASER:
+			return PowerCatalog.LASER_RANGE_M
+		PowerCatalog.Id.GUN:
+			return PowerCatalog.GUN_RANGE_M
+	return INF
 
 
 ## Coup d'un pouvoir sur `victim` en `at` (monde), porte dans le sens `dir` :

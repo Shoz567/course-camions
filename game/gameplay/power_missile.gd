@@ -73,9 +73,11 @@ func _physics_process(delta: float) -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	if not hit.is_empty():
 		# remorque larguee sur la route : elle prend le missile comme une attelee
-		if not mirror and hit["collider"] is DetachedTrailer:
-			(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.MISSILE_DAMAGE, hit["position"], direction,
-				PowerCatalog.MISSILE_HIT_MS)
+		if hit["collider"] is DetachedTrailer:
+			if not mirror:
+				(hit["collider"] as DetachedTrailer).power_hit(PowerCatalog.MISSILE_DAMAGE, hit["position"], direction,
+					PowerCatalog.MISSILE_HIT_MS)
+			_land(hit["position"], false)
 		_explode(hit["position"], hit["collider"] as Truck)
 		return
 	global_position += step
@@ -85,11 +87,19 @@ func _physics_process(delta: float) -> void:
 		_explode(global_position, null)
 
 
+## Coup annonce au tireur (retour au HUD).
+func _land(at: Vector3, blocked: bool) -> void:
+	var p := TruckPowers.of(shooter) if shooter != null and is_instance_valid(shooter) else null
+	if p != null:
+		p.land(at, PowerCatalog.MISSILE_DAMAGE, blocked)
+
+
 func _explode(at: Vector3, victim: Truck) -> void:
 	if victim != null:
 		# PV de la partie touchee (tete ou remorque) et tole enfoncee
 		TruckPowers.strike(victim, at, direction, PowerCatalog.MISSILE_DAMAGE, &"missile",
 			PowerCatalog.MISSILE_HIT_MS, mirror)
+		_land(at, TruckPowers.shielded(victim))
 	if victim != null and not mirror:
 		var flat := Vector3(direction.x, 0.0, direction.z).normalized()
 		victim.apply_central_impulse((Vector3.UP * PowerCatalog.MISSILE_KICK_UP_MS

@@ -106,14 +106,17 @@ func _steer(want: Vector3, max_deg: float) -> void:
 
 func _strike() -> void:
 	var seen := _hit_back if returning else _hit_out
-	if not mirror:
-		# remorques larguees sur son trajet : touchees une fois par passage
-		for n in get_tree().get_nodes_in_group(DetachedTrailer.OBSTACLES):
-			var d := n as DetachedTrailer
-			if d == null or seen.has(d) or d.distance_to_point(global_position) > PowerCatalog.BOOMERANG_RADIUS_M:
-				continue
-			seen[d] = true
+	var owner_powers := TruckPowers.of(shooter) if shooter != null and is_instance_valid(shooter) else null
+	# remorques larguees sur son trajet : touchees une fois par passage
+	for n in get_tree().get_nodes_in_group(DetachedTrailer.OBSTACLES):
+		var d := n as DetachedTrailer
+		if d == null or seen.has(d) or d.distance_to_point(global_position) > PowerCatalog.BOOMERANG_RADIUS_M:
+			continue
+		seen[d] = true
+		if not mirror:
 			d.power_hit(PowerCatalog.BOOMERANG_DAMAGE, global_position, direction, PowerCatalog.BOOMERANG_HIT_MS)
+		if owner_powers != null:
+			owner_powers.land(global_position, PowerCatalog.BOOMERANG_DAMAGE, false)
 	for n in get_tree().get_nodes_in_group(TruckPowers.TARGETS):
 		var t := n as Truck
 		if t == null or t == shooter or t.is_wrecked() or seen.has(t):
@@ -131,6 +134,8 @@ func _strike() -> void:
 			at += (global_position - at).limit_length(TruckSpec.CHASSIS_SIZE.x / 2.0)
 		TruckPowers.strike(t, at, direction, PowerCatalog.BOOMERANG_DAMAGE, &"boomerang",
 			PowerCatalog.BOOMERANG_HIT_MS, mirror)
+		if owner_powers != null:
+			owner_powers.land(at, PowerCatalog.BOOMERANG_DAMAGE, TruckPowers.shielded(t))
 		if t == target and not returning:
 			# il traverse la cible, puis revient sur elle
 			target = null
