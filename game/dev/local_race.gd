@@ -130,6 +130,11 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @export_range(0, 2) var bot_level: int = 1
 ## Vrai : le nombre de joueurs choisi dans le menu remplace `player_count`.
 @export var players_from_menu: bool = false
+## Mode de jeu (GameStateNode.GameMode) ; repris du menu avec players_from_menu.
+@export var game_mode: int = GameStateNode.GameMode.RACE
+## Elimination : premiere a ce tick de course, puis toutes les elim_every_ticks.
+@export var elim_first_ticks: int = 1800
+@export var elim_every_ticks: int = 1200
 ## Sas READY avant le compte a rebours. Faux : compte a rebours tout de suite
 ## (tests qui ne portent pas sur le sas).
 @export var ready_gate: bool = true
@@ -185,6 +190,9 @@ var music: RaceMusic
 var net: NetRace
 ## En ligne : joueurs partis en cours de route (classes « abandon »).
 var _abandoned: Array[int] = []
+## Elimination : joueurs elimines, dans l'ordre.
+var eliminated: Array[int] = []
+var _next_elim: int = -1
 ## Annonce passagere (« X a quitte la partie »), jusqu'au tick indique.
 var _notice: String = ""
 var _notice_until: int = 0
@@ -206,6 +214,13 @@ func _ready() -> void:
 		player_count = clampi(GameState.requested_players, 1, MAX_PLAYERS)
 		bot_count = GameState.bot_count
 		bot_level = GameState.bot_level
+		game_mode = GameState.game_mode
+	# les modes ne se jouent pas encore en ligne
+	if NetSession.is_online():
+		game_mode = GameStateNode.GameMode.RACE
+	if game_mode == GameStateNode.GameMode.ELIMINATION:
+		# pas de ligne d'arrivee : le dernier en piste gagne
+		race.total_laps = 99
 	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
@@ -748,6 +763,8 @@ func _simulate(tick: int) -> void:
 					# largages de la course, choisis au menu (en ligne : ceux du host)
 					cargo.drops_left = GameState.trailer_drops
 		return
+	if game_mode == GameStateNode.GameMode.ELIMINATION:
+		_elimination_tick(tick)
 	# temps limite apres la premiere arrivee (une course se termine toujours)
 	_check_all_finished()
 	for p in players:
@@ -891,6 +908,14 @@ func still_racing(r: RaceLaps.Racer) -> bool:
 ## l'annonce du moment (un joueur parti).
 func ticker_text() -> String:
 	var parts := PackedStringArray()
+	var elim := elimination_seconds_left()
+	if elim >= 0 and _alive().size() > 1:
+		var last := ranking()
+		var names := PackedStringArray()
+		for p in last:
+			if not eliminated.has(players.find(p)):
+				names.append(player_name(players.find(p)))
+		parts.append("ÉLIMINATION DANS %d s  ·  dernier : %s" % [elim, names[-1] if not names.is_empty() else "?"])
 	if _notice != "" and Engine.get_physics_frames() < _notice_until:
 		parts.append(_notice.replace("\n", "  "))
 	if not _finish_order.is_empty():
@@ -921,6 +946,10 @@ func standings_text() -> String:
 		var time := RaceHud.chrono(r.finish_ticks) if r.finished else "en course"
 		if _abandoned.has(players.find(p)) and not r.finished:
 			time = "abandon"
+		elif eliminated.has(players.find(p)):
+			time = "éliminé"
+		elif game_mode == GameStateNode.GameMode.ELIMINATION and r.finished:
+			time = "vainqueur"
 		elif state == State.FINISHED and not r.finished:
 			time = "non classé"
 		lines.append("%d. %s   %s" % [rank, player_name(players.find(p)), time])
@@ -990,8 +1019,16 @@ func _process(delta: float) -> void:
 		# encore en course apres la premiere arrivee : pas de carte au milieu
 		# de sa route, un bandeau en haut (le classement complet attend la fin)
 		var still := still_racing(r)
-		p.hud.set_standings("" if still else standings)
-		p.hud.set_ticker(ticker_text() if still else "")
+		var elim_on := elimination_seconds_left() >= 0
+		p.hud.set_standings("" if still or (elim_on and state == State.RACING) else standings)
+		p.hud.set_ticker(ticker_text() if still or elim_on else "")
+		if eliminated.has(i) and state == State.RACING:
+			p.hud.set_center_message("ÉLIMINÉ\n%de" % (players.size() - eliminated.find(i)), Color(1.0, 0.4, 0.2))
+			# sa vue suit le premier
+			if p.camera != null and p.camera.target != ranking()[0].truck:
+				p.camera.target = ranking()[0].truck
+				p.camera.snap()
+			continue
 		if _lost_reason != "":
 			p.hud.set_center_message("CONNEXION PERDUE\n%s\nretour au menu..." % _lost_reason, Color(1.0, 0.4, 0.3))
 			continue
@@ -1069,11 +1106,62 @@ func _on_lap_completed(truck: Truck, lap: int, _lap_ticks: int) -> void:
 			return
 
 
+## Elimination (2026-10-20) : a elim_first_ticks de course, puis toutes les
+## elim_every_ticks, le dernier encore en piste saute et sort de la course
+## (son epave reste, plus de reapparition ; sa vue suit le premier). Quand il
+## n'en reste qu'un, il gagne. Le classement suit la progression : un elimine
+## a toujours moins avance que ceux qui restent.
+func _elimination_tick(tick: int) -> void:
+	if state != State.RACING:
+		return
+	if _next_elim < 0:
+		_next_elim = _state_tick + elim_first_ticks
+	var alive := _alive()
+	if alive.size() <= 1:
+		if alive.size() == 1:
+			race.finish_now(alive[0].truck)
+		return
+	if tick < _next_elim:
+		return
+	_next_elim = tick + elim_every_ticks
+	var last: Player = alive[0]
+	for p in alive:
+		if race.progress(p.truck) < race.progress(last.truck):
+			last = p
+	var i := players.find(last)
+	eliminated.append(i)
+	var h := TruckHealth.of(last.truck)
+	if h != null:
+		h.no_respawn = true
+		if not last.truck.is_wrecked():
+			h.crash(&"elimination")
+	_notice = "%s ÉLIMINÉ" % player_name(i)
+	_notice_until = tick + 120
+	if _alive().size() == 1:
+		race.finish_now(_alive()[0].truck)
+
+
+## Joueurs encore en course (elimination) : ni elimines, ni partis.
+func _alive() -> Array[Player]:
+	var out: Array[Player] = []
+	for i in players.size():
+		if not eliminated.has(i) and not _abandoned.has(i):
+			out.append(players[i])
+	return out
+
+
+## Secondes avant la prochaine elimination (-1 hors elimination).
+func elimination_seconds_left() -> int:
+	if game_mode != GameStateNode.GameMode.ELIMINATION or state != State.RACING or _next_elim < 0:
+		return -1
+	return maxi(ceili((_next_elim - Engine.get_physics_frames()) / 60.0), 0)
+
+
 ## Tous arrives (ou partis, en ligne), ou temps limite ecoule apres la
 ## premiere arrivee : resultats. Le client attend le host (apply_net_state).
 func _check_all_finished() -> void:
 	var tick := Engine.get_physics_frames()
-	if is_authority() and RaceManager.should_finish(tick, players.size(), _abandoned.size()):
+	if is_authority() and RaceManager.should_finish(tick, players.size(), _abandoned.size() + eliminated.size()):
 		RaceManager.finish(tick, RaceManager.deadline_left(tick) == 0 \
 				and _finish_order.size() + _abandoned.size() < players.size())
 		music.fade_out()

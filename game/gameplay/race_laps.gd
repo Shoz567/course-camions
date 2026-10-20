@@ -164,6 +164,17 @@ func apply_remote(truck: Truck, lap: int, next_cp: int, last_cp: int, lap_start_
 		race_finished.emit(truck, finish_ticks)
 
 
+## Arrivee decidee par le mode de jeu (vainqueur d'une elimination) : le
+## camion finit maintenant.
+func finish_now(truck: Truck) -> void:
+	var r := racer(truck)
+	if r == null or r.finished:
+		return
+	r.finished = true
+	r.finish_ticks = Engine.get_physics_frames() - start_tick
+	race_finished.emit(truck, r.finish_ticks)
+
+
 func racer_count() -> int:
 	return _racers.size()
 

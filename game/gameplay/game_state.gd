@@ -113,6 +113,12 @@ var bot_level: int = 1
 ## choisi au menu ; TruckCargo.drops_left).
 const MAX_TRAILER_DROPS := 5
 var trailer_drops: int = 3
+## Mode de jeu (2026-10-20) : course, elimination (le dernier saute toutes les
+## 20 s), contre-la-montre (seul, fantome du meilleur tour), arene (stock-car,
+## le dernier debout gagne).
+enum GameMode { RACE, ELIMINATION, TIME_TRIAL, ARENA }
+const MODE_NAMES: PackedStringArray = ["COURSE", "ÉLIMINATION", "CONTRE-LA-MONTRE", "ARÈNE"]
+var game_mode: int = GameMode.RACE
 
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
@@ -179,6 +185,7 @@ func write_settings(path: String) -> Error:
 	cfg.set_value("race", "trailers", trailer_choice)
 	cfg.set_value("race", "bots", bot_count)
 	cfg.set_value("race", "trailer_drops", trailer_drops)
+	cfg.set_value("race", "mode", game_mode)
 	cfg.set_value("race", "bot_level", bot_level)
 	for a: String in PadBindings.ACTIONS:
 		cfg.set_value("pad", a, pad_bindings[a])
@@ -203,6 +210,7 @@ func read_settings(path: String) -> Error:
 	speed_class = clampi(int(cfg.get_value("race", "speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
 	bot_count = clampi(int(cfg.get_value("race", "bots", bot_count)), 0, 5)
 	trailer_drops = clampi(int(cfg.get_value("race", "trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
+	game_mode = clampi(int(cfg.get_value("race", "mode", game_mode)), 0, MODE_NAMES.size() - 1)
 	bot_level = clampi(int(cfg.get_value("race", "bot_level", bot_level)), 0, 2)
 	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
 	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():
