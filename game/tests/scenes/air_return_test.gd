@@ -1,48 +1,30 @@
 extends PhysicsTest
 
-## Plus dur de sortir de route (2026-10-19), piste n°1 : deux camions lances
-## en l'air vers le mur droit, 8 m en deca, a 30 m/s le long de la piste et
-## 14 m/s en travers, 4 m au-dessus de la chaussee (ils passeraient au-dessus
-## du mur de 2,8 m) :
-##   A. avec l'aide en l'air (AutoReset.air_return) : rabattu, il retombe sur
-##      la chaussee et n'explose pas ;
-##   B. sans l'aide (temoin) : il passe le mur, tombe et explose (chute) ;
-##   C. un camion en l'air qui revient deja vers la piste n'est pas pousse :
-##      meme vitesse en travers que son jumeau sans l'aide.
+## Sortie de route en l'air, piste n°1 : un camion lance en l'air vers le mur
+## droit, 8 m en deca, a 30 m/s le long de la piste et 14 m/s en travers, 4 m
+## au-dessus de la chaussee (il passe au-dessus du mur de 2,8 m). L'aide qui
+## le rabattait vers la piste est retiree (2026-10-20 : « elle rabat trop, ca
+## se voit trop ») :
+##   A. rien ne le pousse : sa vitesse en travers reste la sienne ;
+##   B. il passe le mur, tombe et explose (chute).
 
 var _track: TrackBlockout
-var _a: Truck
 var _b: Truck
-var _c: Truck
-var _c2: Truck
 var _crashed: Array = []
-var _landed_lat: float = INF
-var _seen: Dictionary = {}
+var _v0: float = 0.0
+var _v20: float = 0.0
 
 
 func _test_setup() -> void:
 	duration_ticks = 240
 	_track = (load("res://tracks/track_01_blockout.tscn") as PackedScene).instantiate() as TrackBlockout
 	add_child(_track)
-	var with_aid := _reset(true)
-	var without := _reset(false)
-	_a = _launch(100.0, 14.0)
-	_b = _launch(_track.length() - 500.0, 14.0)
-	_c = _launch(200.0, -6.0)
-	_c2 = _launch(215.0, -6.0)
-	with_aid.watch(_a)
-	with_aid.watch(_c)
-	without.watch(_b)
-	without.watch(_c2)
-
-
-func _reset(aid: bool) -> AutoReset:
 	var r := AutoReset.new()
 	r.track = _track
-	r.air_return = aid
 	add_child(r)
 	r.truck_crashed.connect(func(t: Truck) -> void: _crashed.append(t))
-	return r
+	_b = _launch(_track.length() - 500.0, 14.0)
+	r.watch(_b)
 
 
 func _launch(s: float, v_side: float) -> Truck:
@@ -57,26 +39,24 @@ func _launch(s: float, v_side: float) -> Truck:
 	return t
 
 
+func _side_speed(t: Truck) -> float:
+	var i := _track.closest_sample(t.global_position)
+	return t.linear_velocity.dot(_track.sample_right(i))
+
+
 func _lat(t: Truck) -> float:
 	var i := _track.closest_sample(t.global_position)
 	return (t.global_position - _track.sample_position(i)).dot(_track.sample_right(i))
 
 
 func _test_tick(t: int) -> void:
+	if t == 2:
+		_v0 = _side_speed(_b)
 	if t == 20:
-		for pair: Array in [["c_v", _c], ["c2_v", _c2]]:
-			var tr := pair[1] as Truck
-			var i := _track.closest_sample(tr.global_position)
-			_seen[pair[0]] = tr.linear_velocity.dot(_track.sample_right(i))
-	if _landed_lat == INF and t > 5 and _a.wheels_on_ground() >= 2:
-		_landed_lat = _lat(_a)
+		_v20 = _side_speed(_b)
 
 
 func _test_finish() -> void:
-	check("A avec l'aide : retombe sur la chaussee", absf(_landed_lat) < _track.width / 2.0,
-		"travers %.1f m (bord %.1f)" % [_landed_lat, _track.width / 2.0])
-	check("A avec l'aide : n'explose pas", not _crashed.has(_a))
-	check("B sans l'aide (temoin) : passe le mur et explose", _crashed.has(_b), "travers %.1f m" % _lat(_b))
-	check("C revient deja vers la piste : pas pousse (comme son jumeau)",
-		absf(float(_seen.get("c_v", 0.0)) - float(_seen.get("c2_v", 9.0))) < 0.3,
-		"%.2f / %.2f m/s" % [float(_seen.get("c_v", 0.0)), float(_seen.get("c2_v", 0.0))])
+	check("A pas rabattu : vitesse en travers gardee", _v20 > _v0 - 1.0,
+		"%.1f -> %.1f m/s" % [_v0, _v20])
+	check("B passe le mur et explose", _crashed.has(_b), "travers %.1f m" % _lat(_b))
