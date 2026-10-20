@@ -55,14 +55,30 @@ const GUN_TICKS := 120
 const GUN_INTERVAL := 6
 const GUN_RANGE_M := 90.0
 const GUN_DAMAGE := 1.2
-## Scie geante : duree (ticks) ; portee au-dela du flanc (m) et longueur
-## couverte autour du centre du camion (m) ; degats par tick a un camion
-## dans la zone, et acceleration qui l'ecarte (m/s2, force continue).
+## Scie geante : duree (ticks). 2026-10-20 (« elle n'a pas vraiment de
+## portee... rotation de 90 degres pour qu'elle soit parallele a la route...
+## crever les pneus ») : les lames sortent a plat, a hauteur des pneus, de
+## chaque cote du tracteur. Zone touchee : de SAW_REACH_M au-dela du flanc,
+## sur SAW_HALF_LENGTH_M de part et d'autre du centre du tracteur (tout son
+## flanc). Degats par tick a la tete d'un camion dans la zone (sa remorque :
+## par son train de roues), et un coup de lame tous les SAW_TIRE_INTERVAL
+## ticks a chaque pneu dans la zone (TruckTires : il eclate au 3e, ~0,4 s).
 const SAW_TICKS := 240
-const SAW_REACH_M := 2.6
-const SAW_HALF_LENGTH_M := 7.0
+## Degats visuels des pouvoirs (2026-10-20 : « tout ce qui est capacite
+## puisse endommager les remorques et les camions, en plus des PV de maniere
+## visuelle ») : chaque coup marque la tole, tete ou remorque, comme un choc
+## a cette vitesse (m/s ; TruckDamageFx.crush : creux des 2,5, pieces
+## arrachees des 9). Laser : un coup tous les LASER_HIT_INTERVAL ticks.
+const MISSILE_HIT_MS := 18.0
+const BOOMERANG_HIT_MS := 12.0
+const SAW_HIT_MS := 10.0
+const LASER_HIT_MS := 7.0
+const LASER_HIT_INTERVAL := 15
+const GUN_HIT_MS := 4.0
+const SAW_REACH_M := 2.7
+const SAW_HALF_LENGTH_M := 3.6
 const SAW_DAMAGE_PER_TICK := 0.12
-## Au-dela de l'adherence laterale des pneus (~11 m/s2) : il glisse vraiment.
+const SAW_TIRE_INTERVAL := 12
 const SAW_PUSH_MS2 := 16.0
 ## Boomerang : vitesse (m/s), ticks a l'aller avant le demi-tour (net, vers le
 ## tireur : il repasse sur son trajet), duree de vie, virage au retour pour

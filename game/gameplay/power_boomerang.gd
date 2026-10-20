@@ -5,8 +5,9 @@ extends Node3D
 ## BOOMERANG_SPEED_MS tout droit pendant BOOMERANG_OUT_TICKS, fait demi-tour
 ## vers lui, puis le suit en tournant d'au plus BOOMERANG_TURN_DEG par tick ; il disparait
 ## en le rejoignant, ou au bout de BOOMERANG_LIFE_TICKS. Chaque camion a moins
-## de BOOMERANG_RADIUS_M de lui est touche une fois a l'aller et une fois au
-## retour : BOOMERANG_DAMAGE PV et un coup de cote. Il traverse les camions
+## de BOOMERANG_RADIUS_M de lui (tete ou caisse de la remorque) est touche une
+## fois a l'aller et une fois au retour : BOOMERANG_DAMAGE PV a la partie
+## touchee, tole marquee (TruckPowers.strike) et un coup de cote. Il traverse les camions
 ## et passe au-dessus des murs (il vole). En miroir (client en ligne) : rien
 ## que l'image. Aucun tirage aleatoire.
 
@@ -82,14 +83,20 @@ func _strike() -> void:
 		var t := n as Truck
 		if t == null or t == shooter or t.is_wrecked() or seen.has(t):
 			continue
-		if (t.global_position + Vector3.UP * 1.5).distance_to(global_position) > PowerCatalog.BOOMERANG_RADIUS_M + 1.5:
+		# la tete (autour du tracteur) ou la caisse de la remorque
+		var reach := PowerCatalog.BOOMERANG_RADIUS_M
+		var near_cab := (t.global_position + Vector3.UP * 1.5).distance_to(global_position) <= reach + 1.5
+		if not near_cab and TruckPowers.trailer_distance(t, global_position) > reach:
 			continue
 		seen[t] = true
 		struck.emit(t)
+		var at := global_position
+		if near_cab:
+			at = t.global_position + Vector3.UP * 1.5
+			at += (global_position - at).limit_length(TruckSpec.CHASSIS_SIZE.x / 2.0)
+		TruckPowers.strike(t, at, direction, PowerCatalog.BOOMERANG_DAMAGE, &"boomerang",
+			PowerCatalog.BOOMERANG_HIT_MS, mirror)
 		if mirror:
 			continue
-		var h := TruckHealth.of(t)
-		if h != null:
-			h.damage(PowerCatalog.BOOMERANG_DAMAGE, &"boomerang")
 		var side := direction.cross(Vector3.UP).normalized()
 		t.apply_central_impulse(side * PowerCatalog.BOOMERANG_KICK_MS * t.mass)

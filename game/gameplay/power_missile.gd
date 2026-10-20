@@ -4,7 +4,8 @@ extends Node3D
 ## Missile du pouvoir MISSILE (tache 4.5.8) : part du toit du tireur a
 ## MISSILE_SPEED_MS, tourne vers sa cible d'au plus MISSILE_TURN_DEG par tick,
 ## et avance par segments testes contre le monde et les camions (jamais de
-## traversee, meme a 70 m/s). Au contact d'un camion : MISSILE_DAMAGE PV,
+## traversee, meme a 70 m/s). Au contact d'un camion : MISSILE_DAMAGE PV a la
+## partie touchee (tete ou remorque), tole enfoncee (TruckPowers.strike),
 ## secousse (vitesse ajoutee proportionnelle a la masse) et explosion ; contre
 ## un mur : explosion seule ; au bout de MISSILE_LIFE_TICKS : explosion en
 ## l'air. Aucun tirage aleatoire.
@@ -81,10 +82,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _explode(at: Vector3, victim: Truck) -> void:
+	if victim != null:
+		# PV de la partie touchee (tete ou remorque) et tole enfoncee
+		TruckPowers.strike(victim, at, direction, PowerCatalog.MISSILE_DAMAGE, &"missile",
+			PowerCatalog.MISSILE_HIT_MS, mirror)
 	if victim != null and not mirror:
-		var h := TruckHealth.of(victim)
-		if h != null:
-			h.damage(PowerCatalog.MISSILE_DAMAGE, &"missile")
 		var flat := Vector3(direction.x, 0.0, direction.z).normalized()
 		victim.apply_central_impulse((Vector3.UP * PowerCatalog.MISSILE_KICK_UP_MS
 			+ flat * PowerCatalog.MISSILE_KICK_MS) * victim.mass)

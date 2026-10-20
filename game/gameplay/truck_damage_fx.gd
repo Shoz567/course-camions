@@ -402,6 +402,20 @@ func barrel_blast(at: Vector3) -> void:
 	crush(point, n, BARREL_HIT_MS, on_trailer)
 
 
+## Coup d'un pouvoir (TruckPowers.strike) en `at`, porte dans le sens `dir`
+## (vers le camion) : trace, creux et pieces arrachees comme un choc a `speed`,
+## sur la tete ou la remorque. Rien sous bouclier ni sur une epave.
+func power_hit(at: Vector3, dir: Vector3, speed: float, on_trailer: bool) -> void:
+	if _truck == null or _protected() or _truck.is_wrecked():
+		return
+	on_trailer = on_trailer and not _truck.is_trailer_detached()
+	var n := dir.normalized() if dir.length_squared() > 1e-6 else -_truck.global_basis.z
+	add_mark(_on_body(at, n, on_trailer), -n, clampf((speed - 1.0) / 16.0, 0.15, 1.0), on_trailer)
+	crush(at, n, speed, on_trailer)
+	if speed >= BURST_MS:
+		spark_burst.call_deferred(at, n, speed)
+
+
 ## Destruction : la cabine est noircie de toutes parts, enfoncee, et les
 ## pieces exterieures volent avec des eclats de tole.
 func _on_destroyed() -> void:

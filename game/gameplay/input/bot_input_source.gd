@@ -431,7 +431,8 @@ func _beside() -> Truck:
 		if t == null or t == truck:
 			continue
 		var local := inv * t.global_position
-		if absf(local.z) < PowerCatalog.SAW_HALF_LENGTH_M and absf(local.x) < TruckSpec.CAB_SIZE.x + PowerCatalog.SAW_REACH_M:
+		local.x -= signf(local.x) * TruckSpec.CHASSIS_SIZE.x / 2.0
+		if TruckPowers.saw_side(local) != 0.0:
 			return t
 	return null
 

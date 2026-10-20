@@ -4,8 +4,9 @@ extends PhysicsTest
 ##   A. catalogue : BOUCLIER, MISSILE, LASER, recharges ; InputFrame transporte
 ##      les deux fronts (6 octets) ; profil manette : fleches gauche / droite ;
 ##   B. MISSILE : vise le camion devant (pas celui de derriere), le touche :
-##      -20 PV, souleve ; un second appui pendant la recharge ne tire rien ;
+##      -20 PV (pris par derriere : sur sa remorque, 2026-10-20), souleve ; un second appui pendant la recharge ne tire rien ;
 ##   C. LASER : 90 ticks a 0,4 PV sur le camion devant (-36 PV), pas derriere ;
+##      sa remorque, touchee, garde des traces (degats visuels) ;
 ##   D. BOUCLIER : 300 ticks sans degats, puis les degats reprennent ;
 ##   E. emplacement vide : rien ; une epave ne tire pas.
 ## Tireur A en (0, 0, 0) face a -Z, cible B 40 m devant, C 40 m derriere ;
@@ -31,6 +32,9 @@ func _test_setup() -> void:
 	_d = TruckTestUtil.spawn_truck(self, Vector3(300.0, 0.0, 0.0))
 	for t in [_a, _b, _c, _d]:
 		(t as Truck).add_to_group(TruckPowers.TARGETS)
+	# remorque de B solide : missile et laser (56 PV) ne la font pas sauter
+	TruckHealth.of(_b).trailer_max_hp = 200.0
+	TruckHealth.of(_b).trailer_hp = 200.0
 	_pa = TruckPowers.setup(_a, PowerCatalog.Id.MISSILE, PowerCatalog.Id.LASER)
 	_pd = TruckPowers.setup(_d, PowerCatalog.Id.SHIELD, -1)
 	child_entered_tree.connect(func(n: Node) -> void:
@@ -52,20 +56,23 @@ func _test_tick(t: int) -> void:
 	_press(_d, t == 30 or t == 40, t == 30)
 	match t:
 		29:
-			_hp_b0 = TruckHealth.of(_b).hp
+			_hp_b0 = _total(_b)
 			_seen["target"] = _pa.target_ahead()
 		31:
 			_seen["cool"] = _pa.seconds_left(0)
 		50:
 			_seen["missiles_after_spam"] = _missiles
 		110:
-			_seen["hp_b_missile"] = TruckHealth.of(_b).hp
+			_seen["hp_b_missile"] = _total(_b)
 			_seen["hp_c_missile"] = TruckHealth.of(_c).hp
 			_seen["b_up"] = _b.global_position.y
 		128:
-			_seen["hp_b_before_laser"] = TruckHealth.of(_b).hp
+			_seen["hp_b_before_laser"] = _total(_b)
 		225:
-			_seen["hp_b_laser"] = TruckHealth.of(_b).hp
+			_seen["hp_b_laser"] = _total(_b)
+			var fx := _b.get_node(^"DamageFx") as TruckDamageFx
+			_seen["b_trailer"] = [TruckHealth.of(_b).trailer_hp < TruckHealth.of(_b).trailer_max_hp,
+				fx.marks(true).size() > 0]
 			_seen["hp_c_laser"] = TruckHealth.of(_c).hp
 			_seen["laser_hit"] = _pa.laser_hit
 			_seen["laser_done"] = _pa.laser_ticks
@@ -84,6 +91,12 @@ func _test_tick(t: int) -> void:
 		352:
 			var pc := TruckPowers.setup(_c, PowerCatalog.Id.MISSILE, -1)
 			_seen["wreck_fire"] = pc.use(0)
+
+
+## PV de la tete et de la remorque : un pouvoir touche l'une ou l'autre.
+func _total(t: Truck) -> float:
+	var h := TruckHealth.of(t)
+	return h.hp + h.trailer_hp
 
 
 func _test_finish() -> void:
@@ -111,6 +124,8 @@ func _test_finish() -> void:
 	check("laser : -36 PV sur B en 90 ticks, C intact, rayon eteint", absf(lost - 36.0) < 0.5
 		and _seen.get("laser_hit") == _b and is_equal_approx(float(_seen.get("hp_c_laser", 0.0)), 100.0)
 		and int(_seen.get("laser_done", 1)) == 0, "%.1f PV" % lost)
+	check("missile et laser : la remorque de B perd des PV et garde des traces", _seen.get("b_trailer") == [true, true],
+		str(_seen.get("b_trailer")))
 	check("bouclier : aucun degat pendant 5 s", is_equal_approx(float(_seen.get("shielded_hp", 0.0)), 100.0),
 		str(_seen.get("shielded_hp")))
 	check("bouclier : les degats reprennent apres", is_equal_approx(float(_seen.get("after_shield_hp", 0.0)), 90.0),
