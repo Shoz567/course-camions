@@ -8,8 +8,9 @@ extends PhysicsTest
 ##      tous devant le joueur immobile ;
 ##   C. ils restent sur la piste : aucun detruit par une chute, au plus une
 ##      remise en piste a eux trois ;
-##   D. le niveau compte : adherence visee, vitesse visee et reaction aux
-##      pouvoirs progressent de facile a dur.
+##   D. le niveau compte : adherence visee, vitesse visee, freinage, part de
+##      la ligne de course et reaction aux pouvoirs progressent de facile a
+##      dur.
 
 const TICKS := 1400
 
@@ -77,7 +78,9 @@ func _test_finish() -> void:
 	var g := BotInputSource.GRIP
 	var sp := BotInputSource.SPEED
 	var re := BotInputSource.REACTION_TICKS
+	var br := BotInputSource.BRAKE
+	var li := BotInputSource.LINE
 	check("niveaux : facile < moyen < dur", g[0] < g[1] and g[1] < g[2] and sp[0] < sp[1] and sp[1] <= sp[2]
-		and re[0] > re[1] and re[1] > re[2])
+		and re[0] > re[1] and re[1] > re[2] and br[0] < br[1] and br[1] < br[2] and li[0] < li[1] and li[1] <= li[2])
 	check("bots : aucun tombe de la piste", _crashes == 0, "%d chute(s)" % _crashes)
 	check("bots : au plus une remise en piste", _resets <= 1, "%d" % _resets)

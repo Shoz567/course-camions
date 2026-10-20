@@ -899,6 +899,16 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   `track_01_reset_test`).
 - [x] **Bots** hors ligne, 0 à 5, facile / moyen / dur (`BotInputSource`,
   `bot_race_test`).
+- [x] **Bots plus forts** (2026-10-20, « même en dur ils sont faciles à
+  battre ») : ligne de course calculée à courbure minimale, sur les pads
+  utiles et à côté des sauts et flaques (`RacingLine`, `bot_line_test`) ;
+  profil de vitesse freinable ; trafic : dépassement du côté libre, suivi,
+  côte à côte, contournement des obstacles arrêtés, relance en travers.
+  Corrigé au passage : une remorque au-dessus du mur intérieur faisait
+  exploser un camion resté sur la route (`AutoReset._past_wall`). Banc :
+  `dev/bot_bench.tscn`. Dur seul, tour lancé : Cyber City 78,7 → 73,8 s,
+  Playa 68,9 → 63,7 s, Sakura 75,7 → 67,8 s ; à 5 bots, plus aucune chute
+  (avant : jusqu'à 11 sur Sakura).
 - [x] **Pouvoirs, 2e série** : mitrailleuse, scie géante, boomerang aimanté
   (`powers2_test`).
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

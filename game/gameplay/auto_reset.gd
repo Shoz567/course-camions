@@ -108,7 +108,7 @@ func _physics_process(_delta: float) -> void:
 			_flipped[t] = 0
 			continue
 		_air_return(t)
-		var off: bool = _zones[t] > 0 or is_off_track(t)
+		var off: bool = (_zones[t] > 0 and _past_wall(t)) or is_off_track(t)
 		var health := TruckHealth.of(t)
 		if health != null:
 			health.off_track = off
@@ -155,6 +155,21 @@ func _air_return(t: Truck) -> void:
 	var need := (ahead - edge) / air_return_horizon_s
 	var a := minf(need / air_return_horizon_s, air_return_accel)
 	t.apply_central_force(-right * signf(lateral) * a * t.mass)
+
+
+## Zone de reset touchee : ne compte que si le centre du camion a passe le
+## mur (2026-10-20 : a la corde d'un virage serre ou en portefeuille dans une
+## bousculade, la remorque passe au-dessus du mur interieur, dans la zone,
+## la tete sur la route : le camion explosait comme tombe).
+func _past_wall(t: Truck) -> bool:
+	if track == null:
+		return true
+	var p := t.global_position
+	var i := track.closest_sample(p, int(_hint.get(t, -1)))
+	if track.sample_position(i).distance_to(p) > 60.0:
+		i = track.closest_sample(p)
+	_hint[t] = i
+	return absf((p - track.sample_position(i)).dot(track.sample_right(i))) > track.width / 2.0
 
 
 ## Vrai si le camion est au-dela des murs ou sous la chaussee.
