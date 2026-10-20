@@ -6,11 +6,13 @@ extends InputSource
 ## reference) : Z Q S D sur AZERTY = W A S D sur QWERTY.
 ##
 ##   ZQSD    : Z Q S D, Espace drift, Maj gauche boost, E cargo, H klaxon,
-##             C camera, B regarder derriere (tenu), R reset, F / G pouvoirs
+##             C camera, B regarder derriere (tenu), R reset, F / G pouvoirs,
+##             T cible suivante
 ##   FLECHES : fleches, Ctrl droit drift, Maj droite boost, touche a gauche de
 ##             Maj droite (! en AZERTY) klaxon, la suivante (: en AZERTY)
 ##             camera, encore la suivante (; en AZERTY) cargo, Retour arriere
-##             reset, K / L pouvoirs, Fin regarder derriere (tenu)
+##             reset, K / L pouvoirs, J cible suivante, Fin regarder derriere
+##             (tenu)
 ##   LES DEUX: les deux jeux de touches (joueur seul)
 ##   AUCUN   : pas de clavier (J3 et J4, manette seulement)
 ##
@@ -37,6 +39,7 @@ var _honk_pending: bool = false
 var _cargo_pending: bool = false
 var _power_left_pending: bool = false
 var _power_right_pending: bool = false
+var _target_pending: bool = false
 
 
 func _input(event: InputEvent) -> void:
@@ -100,6 +103,11 @@ func _input(event: InputEvent) -> void:
 			if arrows and p: _power_left_pending = true
 		KEY_L:
 			if arrows and p: _power_right_pending = true
+		# cible suivante (2026-10-20) : T (ZQSD), J (fleches)
+		KEY_T:
+			if zqsd and p: _target_pending = true
+		KEY_J:
+			if arrows and p: _target_pending = true
 
 
 ## Touche « regarder derriere » tenue (local, lu par la camera).
@@ -121,6 +129,8 @@ func poll(tick: int) -> InputFrame:
 	frame.cargo = _cargo_pending
 	frame.power_left = _power_left_pending
 	frame.power_right = _power_right_pending
+	frame.target_next = _target_pending
+	_target_pending = false
 	_reset_pending = false
 	_honk_pending = false
 	_cargo_pending = false

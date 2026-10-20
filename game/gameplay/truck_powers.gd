@@ -49,6 +49,8 @@ var cooldown: PackedInt32Array = PackedInt32Array([0, 0])
 var laser_ticks: int = 0
 ## Dernier camion touche par le laser (tests, HUD).
 var laser_hit: Truck
+## Cible choisie au cycle (cycle_target) ; null : la plus proche devant.
+var picked: Truck
 ## Camion vise par le dernier missile (annonce aux clients).
 var last_target: Truck
 ## Mitrailleuse et scie : ticks restants ; derniers camions touches (tests).
@@ -198,6 +200,8 @@ func _physics_process(_delta: float) -> void:
 				_predicted[k] -= 1
 		if predict:
 			var g := _truck.get_input()
+			if g.target_next:
+				cycle_target()
 			for k in 2:
 				var pressed := g.power_left if k == 0 else g.power_right
 				if pressed and slots[k] >= 0 and cooldown[k] == 0 and not _truck.is_wrecked():
@@ -205,6 +209,8 @@ func _physics_process(_delta: float) -> void:
 					_predicted[k] = PREDICT_TICKS
 		return
 	var f := _truck.get_input()
+	if f.target_next:
+		cycle_target()
 	if f.power_left:
 		use(0)
 	if f.power_right:
@@ -258,6 +264,12 @@ static func _aims(p: int) -> bool:
 	return p == PowerCatalog.Id.MISSILE or p == PowerCatalog.Id.BOOMERANG
 
 
+## Pouvoir qui touche le camion vise (missile, boomerang, laser, mitrailleuse) :
+## le HUD pose son viseur dessus.
+static func aims_at(p: int) -> bool:
+	return _aims(p) or p == PowerCatalog.Id.LASER or p == PowerCatalog.Id.GUN
+
+
 ## L'effet de l'emplacement `k` dure encore (laser, rafale, scies, bouclier).
 func active(k: int) -> bool:
 	match slots[k]:
@@ -306,26 +318,54 @@ func seconds_left(k: int) -> int:
 	return ceili(cooldown[k] / 60.0)
 
 
-## Camion vise : le plus proche devant, dans le cone et a portee ; null sinon.
+## Camion vise (2026-10-20 : « une petite cible rouge sur la personne qui va
+## prendre le missile, une touche pour changer, une personne devant nous, en
+## cycle ») : celui choisi par cycle_target tant qu'il reste devant (cone et
+## portee du missile), sinon le plus proche devant ; null s'il n'y en a pas.
 func target_ahead() -> Truck:
-	var from := _truck.global_transform * MUZZLE
-	var fwd := -_truck.global_basis.z
+	if picked != null and (not is_instance_valid(picked) or _sight(picked) < 0.0):
+		picked = null
+	if picked != null:
+		return picked
+	return _next_after(-1.0)
+
+
+## Cible suivante (InputFrame.target_next) : le camion devant juste plus loin
+## que la cible actuelle, et apres le plus lointain, de nouveau le plus proche.
+func cycle_target() -> void:
+	var cur := target_ahead()
+	if cur == null:
+		return
+	var nxt := _next_after(_sight(cur))
+	picked = nxt if nxt != null else _next_after(-1.0)
+
+
+## Le plus proche des camions devant a plus de `beyond` m (null : aucun).
+func _next_after(beyond: float) -> Truck:
 	var best: Truck = null
 	var best_d := INF
 	for n in get_tree().get_nodes_in_group(TARGETS):
 		var t := n as Truck
-		if t == null or t == _truck or t.is_wrecked():
-			continue
-		var to := t.global_position + Vector3.UP * 1.5 - from
-		var d := to.length()
-		if d > PowerCatalog.MISSILE_RANGE_M or d < 1.0:
-			continue
-		if rad_to_deg(fwd.angle_to(to)) > PowerCatalog.MISSILE_CONE_DEG:
-			continue
-		if d < best_d:
+		var d := _sight(t)
+		if d > beyond and d < best_d:
 			best_d = d
 			best = t
 	return best
+
+
+## Distance (m) au camion `t` s'il est devant, dans le cone et a portee du
+## missile ; -1 sinon (lui-meme, une epave, derriere, trop loin).
+func _sight(t: Truck) -> float:
+	if t == null or t == _truck or t.is_wrecked():
+		return -1.0
+	var from := _truck.global_transform * MUZZLE
+	var to := t.global_position + Vector3.UP * 1.5 - from
+	var d := to.length()
+	if d > PowerCatalog.MISSILE_RANGE_M or d < 1.0:
+		return -1.0
+	if rad_to_deg((-_truck.global_basis.z).angle_to(to)) > PowerCatalog.MISSILE_CONE_DEG:
+		return -1.0
+	return d
 
 
 func _laser_tick() -> void:

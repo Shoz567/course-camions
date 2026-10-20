@@ -85,7 +85,7 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
 	},
 ]
-const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L3 klaxon, stick droit regard, L1 derriere, R3 camera, Options reset, croix gauche / droite pouvoirs.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, B derriere, R reset, F / G pouvoirs.   Echap : menu"
+const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L3 klaxon, stick droit regard, L1 derriere, R3 camera, Options reset, croix gauche / droite pouvoirs, croix haut cible.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, B derriere, R reset, F / G pouvoirs, T cible.   Echap : menu"
 const HELP_SPLIT: PackedStringArray = [
 	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset), K / L (pouvoirs)",
 	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset), F / G (pouvoirs)",
@@ -495,6 +495,7 @@ func _add_player(i: int) -> Player:
 	hud.accent = UiKit.PLAYER_COLORS[slot_of(i)]
 	hud.help_text = HELP_SOLO if split == null else HELP_SPLIT[i]
 	hud.ui_scale = HUD_SCALE[0 if split == null else player_count - 1]
+	hud.camera = cam.get_camera()
 	view_parent.add_child(hud)
 	p.hud = hud
 	return p

@@ -945,6 +945,12 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   stick droit, 30° de cap et 10° d'inclinaison au plus, amorti ; L1 tenu
   (clavier : B / Fin) retourne la vue. Le klaxon passe de L1 à L3 (un ancien
   profil réaffecté migre seul). Local, hors `InputFrame` (`camera_look_test`).
+- [x] **Cible au choix** (2026-10-20, « une petite cible rouge sur la personne
+  qui va prendre le missile, une touche pour changer, en cycle ») : viseur
+  rouge sur le camion visé (`TargetReticle`, vif si un pouvoir qui vise est
+  prêt) ; flèche haut de la croix (clavier T / J) : cible suivante parmi les
+  camions devant, du plus proche au plus loin puis retour. Bit `target_next`
+  de l'`InputFrame` : le host vise le même camion (`target_cycle_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

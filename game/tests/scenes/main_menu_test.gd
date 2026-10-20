@@ -285,7 +285,8 @@ func _test_finish() -> void:
 		"Croix": "Frein à main / dérapage (drift)", "R1": "Frein à main / dérapage (drift)",
 		"Carré": "Nitro boost (recharge 6 s)",
 		"Triangle": "Largage de remorque (recharge 30 s)", "L1": "Regarder derrière (tenu)",
-		"Stick gauche / L3": "Diriger · L3 : klaxon", "Stick droit / R3": "Regarder autour · R3 : vue", "Options": "Reset sur la piste",
+		"Stick gauche / L3": "Diriger · L3 : klaxon",
+		"Croix directionnelle": "◄ ► pouvoirs · ▲ cible", "Stick droit / R3": "Regarder autour · R3 : vue", "Options": "Reset sur la piste",
 		"Create / pavé tactile": "Reset sur la piste"}
 	var missing := []
 	for k: String in wanted:

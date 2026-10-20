@@ -15,6 +15,8 @@ extends CanvasLayer
 @export_multiline var help_text: String = ""
 ## Echelle du HUD : 1 en plein ecran, moins dans une vue d'ecran partage.
 @export var ui_scale: float = 1.0
+## Camera du joueur : projette le viseur des pouvoirs (null : pas de viseur).
+var camera: Camera3D
 
 var _lap: Label
 var _lap_time: Label
@@ -45,6 +47,7 @@ var _center_card: PanelContainer
 var _center_text: String = ""
 var _center_color: Color = Color.WHITE
 var _slots: Array[Dictionary] = [{}, {}]
+var _reticle: TargetReticle
 
 ## Couleur du joueur (bordure de la carte, nom).
 @export var accent: Color = UiKit.CYAN
@@ -91,6 +94,10 @@ func _ready() -> void:
 	_standings.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_standings.offset_top = 150 * k
 	_build_cards(k)
+	_reticle = TargetReticle.new()
+	_reticle.name = "Reticle"
+	_reticle.ui_scale = k
+	add_child(_reticle)
 
 
 ## Carte du haut a gauche, inclinee comme les menus : « 2e/4 » en grand a
@@ -293,6 +300,7 @@ func _process(_delta: float) -> void:
 		d["active"] = powers.active(k)
 		d["effect"] = powers.active_fraction(k)
 		d["effect_left"] = powers.active_seconds(k)
+	_place_reticle(powers)
 	_dial.set_state(roundi(absf(truck.get_speed_kmh())), charge, truck.is_boosting(), boost_label, cargo, _slots)
 	if _health != null:
 		var ratio := _health.hp / maxf(_health.max_hp, 1.0)
@@ -325,6 +333,34 @@ func _process(_delta: float) -> void:
 
 
 ## Etat des deux emplacements de pouvoir (vide : rien).
+## Viseur sur le camion que prendraient missile, boomerang, laser ou
+## mitrailleuse (TruckPowers.target_ahead), si un de ces pouvoirs est monte.
+func _place_reticle(powers: TruckPowers) -> void:
+	_reticle.visible = false
+	if powers == null or camera == null or truck.is_wrecked():
+		return
+	var armed := false
+	var live := false
+	for k in 2:
+		if TruckPowers.aims_at(powers.slots[k]):
+			armed = true
+			live = live or powers.cooldown[k] == 0
+	if not armed:
+		return
+	var t := powers.target_ahead()
+	if t == null:
+		return
+	var at := t.get_global_transform_interpolated().origin + Vector3.UP * 2.2
+	if camera.is_position_behind(at):
+		return
+	_reticle.place(camera.unproject_position(at), truck.global_position.distance_to(at), live)
+
+
+## Viseur visible (tests).
+func reticle_visible() -> bool:
+	return _reticle != null and _reticle.visible
+
+
 static func powers_text(p: TruckPowers) -> String:
 	var parts := PackedStringArray()
 	for k in 2:
