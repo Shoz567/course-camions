@@ -243,8 +243,17 @@ var _cargo_hit_from: Vector3 = Vector3.ZERO
 ## contact, separement pour le tracteur et pour la remorque. Vitesse avant les
 ## derniers pas (le choc a deja freine le camion quand le contact est lu).
 const WALL_IMPACT_GAP_TICKS := 12
-var _front_wall_gap: int = WALL_IMPACT_GAP_TICKS + 1
-var _trailer_wall_gap: int = WALL_IMPACT_GAP_TICKS + 1
+## Frottement (2026-10-20 : « ne pas desagreger le camion, les pneus, quand on
+## colle un mur ») : un impact est un frottement s'il suit un autre contact de
+## moins de WALL_RUB_GAP_TICKS (on longe le mur, le contact clignote), ou s'il
+## est rasant (vitesse vers le mur sous WALL_RUB_GLANCE fois la vitesse). Il
+## ne creuse pas la tole et n'use pas les pneus (TruckDamageFx, TruckTires).
+const WALL_RUB_GAP_TICKS := 45
+const WALL_RUB_GLANCE := 0.3
+var _front_wall_gap: int = WALL_RUB_GAP_TICKS + 1
+var _trailer_wall_gap: int = WALL_RUB_GAP_TICKS + 1
+var _front_rub: bool = false
+var _trailer_rub: bool = false
 var _vel_hist: PackedVector3Array = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3.ZERO])
 ## Contacts avec des corps mobiles : id du corps -> dernier pas de contact.
 var _body_contacts: Dictionary = {}
@@ -575,6 +584,13 @@ func get_wall_contact_ticks() -> int:
 
 ## Mur touche au dernier pas physique : normale (vers le camion, ZERO si
 ## aucun) et point de contact (monde).
+## Le dernier impact mur de cette partie (remorque, ou tracteur) etait un
+## frottement (WALL_RUB_GAP_TICKS, WALL_RUB_GLANCE) : a lire dans
+## wall_impact_at.
+func is_wall_rub(on_trailer: bool) -> bool:
+	return _trailer_rub if on_trailer else _front_rub
+
+
 func get_wall_normal() -> Vector3:
 	return _wall_normal
 
@@ -883,10 +899,13 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			front_at = at
 			front_n = n
 	_wall_normal = n_sum.normalized() if n_sum.length_squared() > 1e-6 else Vector3.ZERO
+	var glance := linear_velocity.length() * WALL_RUB_GLANCE
 	if front >= 0.0 and _front_wall_gap > WALL_IMPACT_GAP_TICKS:
+		_front_rub = _front_wall_gap <= WALL_RUB_GAP_TICKS or front < glance
 		wall_impact.emit(front, false)
 		wall_impact_at.emit(front, false, front_at, front_n)
 	if rear >= 0.0 and _trailer_wall_gap > WALL_IMPACT_GAP_TICKS:
+		_trailer_rub = _trailer_wall_gap <= WALL_RUB_GAP_TICKS or rear < glance
 		wall_impact.emit(rear, true)
 		wall_impact_at.emit(rear, true, rear_at, rear_n)
 	_front_wall_gap = 0 if front >= 0.0 else _front_wall_gap + 1

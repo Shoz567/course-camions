@@ -49,6 +49,10 @@ const HARD_SPEED := 20.0
 const PART_SPEED := 9.0
 ## Creux d'une paroi de remorque, rapporte a celui de la cabine.
 const TRAILER_DENT_MULT := 1.6
+## Baril explose : choc equivalent (m/s), creux profond et pieces arrachees.
+const BARREL_HIT_MS := 16.0
+## Frottement contre un mur : eraflure legere au plus.
+const RUB_MARK_MAX := 0.35
 ## Pieces exterieures arrachees par une explosion ; celles qui fument.
 const EXPLOSION_PARTS := 24
 const EXPLOSION_TRAILS := 6
@@ -111,7 +115,6 @@ func _ready() -> void:
 	_truck.body_impact.connect(_on_body_impact)
 	_truck.trailer_reattached.connect(clear_trailer_marks)
 	if _health != null:
-		_health.damaged.connect(_on_damaged)
 		_health.destroyed.connect(_on_destroyed)
 		_health.trailer_destroyed.connect(_on_trailer_destroyed)
 		_health.respawned.connect(clear_all)
@@ -284,7 +287,22 @@ func marks(on_trailer: bool = false) -> Array[Node3D]:
 	return _trailer_marks if on_trailer else _marks
 
 
+## Bouclier actif (2026-10-20 : « on ne prend pas de PV mais des degats
+## physiques ») : ni trace, ni creux, ni piece arrachee ; les etincelles
+## restent.
+func _protected() -> bool:
+	return _health != null and _health.is_shielded()
+
+
 func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3) -> void:
+	if _protected():
+		if speed >= BURST_MS:
+			spark_burst.call_deferred(point, normal, speed)
+		return
+	if _truck.is_wall_rub(on_trailer):
+		# frottement le long du mur : eraflure de peinture, sans creux
+		add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.1, RUB_MARK_MAX), on_trailer)
+		return
 	add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.1, 1.0), on_trailer)
 	crush(point, normal, speed, on_trailer)
 	if speed >= BURST_MS:
@@ -292,6 +310,10 @@ func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3)
 
 
 func _on_body_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3) -> void:
+	if _protected():
+		if speed >= BURST_MS:
+			spark_burst.call_deferred(point, normal, speed)
+		return
 	if speed >= MIN_BODY_MARK_SPEED:
 		add_mark(_on_body(point, normal, on_trailer), -normal, clampf((speed - 1.0) / 16.0, 0.15, 1.0), on_trailer)
 		crush(point, normal, speed, on_trailer)
@@ -366,11 +388,24 @@ func add_mark(point: Vector3, outward: Vector3, severity: float, on_trailer: boo
 	return d
 
 
-## Baril : brulure sur le bas de caisse avant.
-func _on_damaged(_amount: float, source: StringName) -> void:
-	if source == &"baril":
-		var xf := _truck.global_transform
-		add_mark(xf * Vector3(0.0, 1.0, -3.6), xf.basis * Vector3(0.0, -0.2, -1.0), 0.8, false)
+## Baril explose contre le camion, centre en `at` (2026-10-20 : « que les
+## barils explosifs infligent des degats visuels ») : du cote du baril, sur
+## le tracteur ou la remorque (la plus proche), brulure, creux et pieces
+## arrachees comme un choc a BARREL_HIT_MS. Rien sous bouclier.
+func barrel_blast(at: Vector3) -> void:
+	if _truck == null or _protected() or _truck.is_wrecked():
+		return
+	var on_trailer := false
+	if not _truck.is_trailer_detached() and _health != null:
+		var cab := _truck.global_transform * TruckSpec.CAB_CENTER
+		on_trailer = at.distance_to(_health.trailer_center()) < at.distance_to(cab)
+	var center := _health.trailer_center() if on_trailer else _truck.global_transform * TruckSpec.CAB_CENTER
+	var n := center - at
+	n.y = 0.0
+	n = n.normalized() if n.length_squared() > 1e-4 else _truck.global_basis.z
+	var point := Vector3(at.x, center.y, at.z) + n * ExplosiveBarrel.BARREL_RADIUS
+	add_mark(_on_body(point, n, on_trailer), -n, 1.0, on_trailer)
+	crush(point, n, BARREL_HIT_MS, on_trailer)
 
 
 ## Destruction : la cabine est noircie de toutes parts, enfoncee, et les

@@ -191,6 +191,11 @@ func damage_trailer(amount: float, source: StringName = &"") -> void:
 		_trailer_pending = true
 
 
+## Bouclier actif : ni PV, ni tole, ni pneus.
+func is_shielded() -> bool:
+	return shield_ticks > 0
+
+
 func is_wrecked() -> bool:
 	return _wreck_left > 0 or _dead_pending
 

@@ -60,6 +60,7 @@ static var _bang_stream: AudioStreamWAV
 static var _rubber: StandardMaterial3D
 
 var _truck: Truck
+var _health: TruckHealth
 var _bang: AudioStreamPlayer3D
 ## Usure de chaque pneu (ordre de Truck : FL, FR, RL, RR, remorque G, D).
 var _wear: PackedFloat32Array = PackedFloat32Array([0, 0, 0, 0, 0, 0])
@@ -121,13 +122,13 @@ func _ready() -> void:
 	_truck = get_parent() as Truck
 	if _truck == null:
 		return
-	_truck.wall_impact_at.connect(_on_impact.bind(INF))
+	_truck.wall_impact_at.connect(_on_wall_impact)
 	_truck.body_impact.connect(_on_impact.bind(MAX_HIT_HEIGHT_M))
 	_truck.tire_burst.connect(_on_tire_burst)
 	_truck.trailer_detached.connect(_on_trailer_detached)
-	var health := TruckHealth.of(_truck)
-	if health != null:
-		health.respawned.connect(_on_respawned)
+	_health = TruckHealth.of(_truck)
+	if _health != null:
+		_health.respawned.connect(_on_respawned)
 	if DisplayServer.get_name() != "headless":
 		if _bang_stream == null:
 			_bang_stream = _build_bang_stream()
@@ -146,8 +147,16 @@ func _ready() -> void:
 			add_child(_spark_fx[w])
 
 
+## Mur : un frottement (on longe le mur) n'use pas les pneus.
+func _on_wall_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3) -> void:
+	if not _truck.is_wall_rub(on_trailer):
+		_on_impact(speed, on_trailer, point, normal, INF)
+
+
 func _on_impact(speed: float, on_trailer: bool, point: Vector3, normal: Vector3, max_height: float) -> void:
 	if _truck.is_wrecked():
+		return
+	if _health != null and _health.is_shielded():
 		return
 	var i := -1
 	if on_trailer:
