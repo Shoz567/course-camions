@@ -85,7 +85,7 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
 	},
 ]
-const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L1 klaxon, R3 camera, Options reset, croix gauche / droite pouvoirs.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, R reset, F / G pouvoirs.   Echap : menu"
+const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L3 klaxon, stick droit regard, L1 derriere, R3 camera, Options reset, croix gauche / droite pouvoirs.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, B derriere, R reset, F / G pouvoirs.   Echap : menu"
 const HELP_SPLIT: PackedStringArray = [
 	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset), K / L (pouvoirs)",
 	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset), F / G (pouvoirs)",
@@ -480,6 +480,7 @@ func _add_player(i: int) -> Player:
 	if track.theme_id == TrackTheme.Id.SAKURA and DisplayServer.get_name() != "headless":
 		view_parent.add_child(SakuraPetals.make(cam.get_camera(), view))
 	input.camera_toggle_requested.connect(cam.toggle_view)
+	cam.look_source = input
 	if health != null:
 		health.respawned.connect(cam.snap)
 	# secousse de camera aux chocs de SON camion (tache 3.5)

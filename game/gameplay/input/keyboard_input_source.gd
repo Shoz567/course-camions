@@ -6,11 +6,11 @@ extends InputSource
 ## reference) : Z Q S D sur AZERTY = W A S D sur QWERTY.
 ##
 ##   ZQSD    : Z Q S D, Espace drift, Maj gauche boost, E cargo, H klaxon,
-##             C camera, R reset, F / G pouvoirs
+##             C camera, B regarder derriere (tenu), R reset, F / G pouvoirs
 ##   FLECHES : fleches, Ctrl droit drift, Maj droite boost, touche a gauche de
 ##             Maj droite (! en AZERTY) klaxon, la suivante (: en AZERTY)
 ##             camera, encore la suivante (; en AZERTY) cargo, Retour arriere
-##             reset, K / L pouvoirs
+##             reset, K / L pouvoirs, Fin regarder derriere (tenu)
 ##   LES DEUX: les deux jeux de touches (joueur seul)
 ##   AUCUN   : pas de clavier (J3 et J4, manette seulement)
 ##
@@ -31,6 +31,7 @@ var _up: bool = false
 var _down: bool = false
 var _handbrake: bool = false
 var _boost: bool = false
+var _look_back: bool = false
 var _reset_pending: bool = false
 var _honk_pending: bool = false
 var _cargo_pending: bool = false
@@ -76,6 +77,10 @@ func _input(event: InputEvent) -> void:
 			if arrows and p: _honk_pending = true
 		KEY_C:
 			if zqsd and p: camera_toggle_requested.emit()
+		KEY_B:
+			if zqsd: _look_back = p
+		KEY_END:
+			if arrows: _look_back = p
 		KEY_PERIOD:
 			if arrows and p: camera_toggle_requested.emit()
 		KEY_E:
@@ -95,6 +100,11 @@ func _input(event: InputEvent) -> void:
 			if arrows and p: _power_left_pending = true
 		KEY_L:
 			if arrows and p: _power_right_pending = true
+
+
+## Touche « regarder derriere » tenue (local, lu par la camera).
+func looking_back() -> bool:
+	return _look_back
 
 
 func poll(tick: int) -> InputFrame:

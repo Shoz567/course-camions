@@ -940,6 +940,11 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   proche devant soi ») : laser et mitrailleuse visent seuls le camion le plus
   proche devant (cône du missile), comme missile et boomerang ; droit devant
   sans cible (`auto_aim_test`).
+- [x] **Caméra : regard** (2026-10-20, « bouger légèrement la caméra avec le
+  joystick droit... pas une énorme amplitude ; L1 pour regarder derrière ») :
+  stick droit, 30° de cap et 10° d'inclinaison au plus, amorti ; L1 tenu
+  (clavier : B / Fin) retourne la vue. Le klaxon passe de L1 à L3 (un ancien
+  profil réaffecté migre seul). Local, hors `InputFrame` (`camera_look_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

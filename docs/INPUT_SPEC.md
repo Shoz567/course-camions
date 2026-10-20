@@ -95,8 +95,10 @@ position. Chaque action est une **liste** de boutons exportée par
 | `handbrake` (frein à main, drift) | **Croix** ou **R1** | Ctrl droit | Espace |
 | `boost` (nitro) ; **READY** dans le sas avant le départ | **Carré** (1,5 s, recharge 6 s) | Maj droite | Maj gauche |
 | `cargo` (largage de la remorque ; nouvelle remorque après 30 s ; verrouillé 5 s après le GO) | **Triangle** | deux touches à gauche de Maj droite (;) | E |
-| `honk` (klaxon) | **L1** | touche à gauche de Maj droite (!) | H |
-| caméra 1re / 3e personne | **R3**, ou un coup franc du stick droit (local, hors `InputFrame`) | touche suivante (:) | C |
+| `honk` (klaxon) | **L3** (L1 jusqu'au 2026-10-20) | touche à gauche de Maj droite (!) | H |
+| caméra 1re / 3e personne | **R3** (local, hors `InputFrame`) | touche suivante (:) | C |
+| regard autour (petite amplitude : 30° de cap, 10° d'inclinaison) | **stick droit** (local, hors `InputFrame`) | — | — |
+| regarder derrière (tant que c'est tenu) | **L1** (local, hors `InputFrame`) | Fin | B |
 | `reset` | **Options**, **Create** ou **pavé tactile** | Retour arrière | R |
 | rejouer après l'arrivée | Options | Entrée | Entrée |
 | revenir au menu après l'arrivée | Create | Échap | Échap |

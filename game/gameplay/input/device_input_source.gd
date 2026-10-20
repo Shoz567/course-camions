@@ -20,8 +20,10 @@ extends InputSource
 ##   frein a main     Croix ou R1 (derapage)
 ##   nitro boost      Carre (1,5 s, recharge 6 s)
 ##   largage remorque Triangle (recharge 30 s)
-##   klaxon           L1
-##   camera           R3, ou un coup franc du stick droit : signal local
+##   klaxon           L3 (L1 jusqu'au 2026-10-20)
+##   camera           R3 : signal local
+##   regard           stick droit (petite amplitude) et L1 maintenu : regarder
+##                    derriere ; local, hors InputFrame (look, looking_back)
 ##   reset            Options, Create ou pave tactile
 ##   pouvoirs         fleches gauche / droite de la croix (4.5.8)
 
@@ -36,15 +38,19 @@ signal camera_toggle_requested
 @export_range(1.0, 3.0, 0.05) var steer_exponent: float = 1.5
 ## Au-dela, une gachette ou un stick compte comme enfonce (fronts).
 @export_range(0.0, 1.0, 0.01) var trigger_press_threshold: float = 0.5
-## Coup de stick droit (vertical) qui change la vue.
+## Coup de stick (axis_camera) qui change la vue.
 @export_range(0.0, 1.0, 0.01) var camera_flick_threshold: float = 0.85
+## Zone morte radiale du stick droit (regard).
+@export_range(0.0, 0.5, 0.01) var look_deadzone: float = 0.15
 
 @export_group("Affectations")
 @export var buttons_accelerate: Array[JoyButton] = []
 @export var buttons_brake: Array[JoyButton] = []
 @export var buttons_handbrake: Array[JoyButton] = [JOY_BUTTON_A, JOY_BUTTON_RIGHT_SHOULDER]
 @export var buttons_boost: Array[JoyButton] = [JOY_BUTTON_X]
-@export var buttons_honk: Array[JoyButton] = [JOY_BUTTON_LEFT_SHOULDER]
+@export var buttons_honk: Array[JoyButton] = [JOY_BUTTON_LEFT_STICK]
+## Regarder derriere, tant que le bouton est tenu (2026-10-20).
+@export var buttons_look_back: Array[JoyButton] = [JOY_BUTTON_LEFT_SHOULDER]
 @export var buttons_cargo: Array[JoyButton] = [JOY_BUTTON_Y]
 ## Pouvoirs (tache 4.5.8) : fleches gauche / droite de la croix.
 @export var buttons_power_left: Array[JoyButton] = [JOY_BUTTON_DPAD_LEFT]
@@ -57,8 +63,9 @@ signal camera_toggle_requested
 @export var axis_brake: JoyAxis = JOY_AXIS_TRIGGER_LEFT
 ## Gachette de largage (au franchissement du seuil) : aucune par defaut.
 @export var axis_cargo: JoyAxis = JOY_AXIS_INVALID
-## Axe du coup de stick qui change la vue.
-@export var axis_camera: JoyAxis = JOY_AXIS_RIGHT_Y
+## Axe du coup de stick qui change la vue : aucun par defaut depuis que le
+## stick droit oriente le regard (2026-10-20).
+@export var axis_camera: JoyAxis = JOY_AXIS_INVALID
 
 var connected: bool = false
 ## Debranchee en cours de route, pas encore rebranchee (INPUT_SPEC §6 : la vue
@@ -74,6 +81,9 @@ var _accel_held: int = 0
 var _brake_held: int = 0
 var _handbrake_held: int = 0
 var _boost_held: int = 0
+var _look_back_held: int = 0
+var _rx: float = 0.0
+var _ry: float = 0.0
 var _reset_pending: bool = false
 var _honk_pending: bool = false
 var _cargo_pending: bool = false
@@ -94,6 +104,10 @@ func _input(event: InputEvent) -> void:
 		var a := motion.axis
 		if a == JOY_AXIS_LEFT_X:
 			_axis_x = motion.axis_value
+		if a == JOY_AXIS_RIGHT_X:
+			_rx = motion.axis_value
+		if a == JOY_AXIS_RIGHT_Y:
+			_ry = motion.axis_value
 		if a == axis_accelerate:
 			_rt = motion.axis_value
 		if a == axis_brake:
@@ -123,6 +137,8 @@ func _input(event: InputEvent) -> void:
 		_handbrake_held = maxi(0, _handbrake_held + step)
 	if buttons_boost.has(b):
 		_boost_held = maxi(0, _boost_held + step)
+	if buttons_look_back.has(b):
+		_look_back_held = maxi(0, _look_back_held + step)
 	if not button.pressed:
 		return
 	if buttons_honk.has(b):
@@ -161,6 +177,21 @@ func poll(tick: int) -> InputFrame:
 	return frame
 
 
+## Regard du stick droit (-1..1 ; x vers la droite, y vers le bas), zone
+## morte radiale puis remise a l'echelle. Local : lu par la camera.
+func look() -> Vector2:
+	var v := Vector2(_rx, _ry)
+	var a := v.length()
+	if a <= look_deadzone:
+		return Vector2.ZERO
+	return v / a * clampf((a - look_deadzone) / (1.0 - look_deadzone), 0.0, 1.0)
+
+
+## Bouton « regarder derriere » tenu.
+func looking_back() -> bool:
+	return _look_back_held > 0
+
+
 ## Zone morte axiale puis courbe de reponse, signe conserve.
 func shape_steer(x: float) -> float:
 	var a := absf(x)
@@ -186,6 +217,9 @@ func _on_joy_connection_changed(device: int, is_connected: bool) -> void:
 		_brake_held = 0
 		_handbrake_held = 0
 		_boost_held = 0
+		_look_back_held = 0
+		_rx = 0.0
+		_ry = 0.0
 		_reset_pending = false
 		_honk_pending = false
 		_cargo_pending = false

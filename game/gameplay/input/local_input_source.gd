@@ -58,6 +58,15 @@ func _pick_pad() -> void:
 		pad.connected = true
 
 
+## Regard libre et regarder derriere (camera ; local, hors InputFrame).
+func look() -> Vector2:
+	return pad.look()
+
+
+func looking_back() -> bool:
+	return pad.looking_back() or keyboard.looking_back()
+
+
 func poll(tick: int) -> InputFrame:
 	var k := keyboard.poll(tick)
 	var p := pad.poll(tick)

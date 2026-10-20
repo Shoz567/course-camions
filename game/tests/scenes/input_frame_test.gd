@@ -2,7 +2,8 @@ extends PhysicsTest
 
 ## InputFrame (format 6 octets, groupement par 3), ScriptedInputSource,
 ## DeviceInputSource (isolation par device, zone morte, disposition Forza
-## Horizon sur DualSense, fronts de reset, de klaxon et de cargo, camera hors InputFrame,
+## Horizon sur DualSense, fronts de reset, de klaxon et de cargo, camera et regard
+## (stick droit, L1 derriere, 2026-10-20) hors InputFrame,
 ## debranchement), KeyboardInputSource (touches de cargo par jeu de touches).
 ## docs/INPUT_SPEC.md.
 
@@ -128,11 +129,16 @@ func _test_device() -> void:
 	var c2 := _pad0.poll(10).cargo
 	_send_button(0, JOY_BUTTON_Y, false)
 	check("Triangle : largage de remorque, un seul tick", c1 and not c2, "%s puis %s" % [c1, c2])
-	_send_button(0, JOY_BUTTON_LEFT_SHOULDER, true)
+	_send_button(0, JOY_BUTTON_LEFT_STICK, true)
 	var h1 := _pad0.poll(11).honk
 	var h2 := _pad0.poll(12).honk
+	_send_button(0, JOY_BUTTON_LEFT_STICK, false)
+	check("L3 : klaxon, un seul tick", h1 and not h2, "%s puis %s" % [h1, h2])
+	_send_button(0, JOY_BUTTON_LEFT_SHOULDER, true)
+	var back := [_pad0.looking_back(), _pad0.poll(12).honk]
 	_send_button(0, JOY_BUTTON_LEFT_SHOULDER, false)
-	check("L1 : klaxon, un seul tick", h1 and not h2, "%s puis %s" % [h1, h2])
+	back.append(_pad0.looking_back())
+	check("L1 tenu : regarder derriere (hors InputFrame), relache : fini", back == [true, false, false], str(back))
 	var resets := 0
 	for b: JoyButton in [JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]:
 		_send_button(0, b, true)
@@ -152,10 +158,16 @@ func _test_device() -> void:
 	_send_button(0, JOY_BUTTON_RIGHT_STICK, false)
 	check("R3 : changement de camera, hors InputFrame",
 		toggles[0] == 1 and not fc.reset and not fc.honk, "signaux=%d" % toggles[0])
+	_send_axis(0, JOY_AXIS_RIGHT_X, 0.1)
+	var dead := _pad0.look()
+	_send_axis(0, JOY_AXIS_RIGHT_X, 1.0)
 	_send_axis(0, JOY_AXIS_RIGHT_Y, -1.0)
-	_send_axis(0, JOY_AXIS_RIGHT_Y, -0.95)
+	var full := _pad0.look()
+	_send_axis(0, JOY_AXIS_RIGHT_X, 0.0)
 	_send_axis(0, JOY_AXIS_RIGHT_Y, 0.0)
-	check("coup de stick droit : un seul changement de vue", toggles[0] == 2, "signaux=%d" % toggles[0])
+	check("stick droit : regard (zone morte, plein = 1), sans changer de vue", dead == Vector2.ZERO
+		and absf(full.length() - 1.0) < 0.01 and full.x > 0.0 and full.y < 0.0 and toggles[0] == 1,
+		"%s %s signaux=%d" % [dead, full, toggles[0]])
 	_pad0._on_joy_connection_changed(0, false)
 	var fu := _pad0.poll(18)
 	check("manette debranchee : neutre", fu.throttle == 0.0 and fu.steer == 0.0 and not _pad0.connected)
