@@ -4,7 +4,8 @@ extends PhysicsTest
 ## l'equipe encore libres) :
 ##   A. catalogue : 6 pouvoirs, la scie a une arme gauche et une droite ;
 ##   B. MITRAILLEUSE : 20 balles en 2 s sur le camion devant, 24 PV ;
-##   C. SCIE : un camion contre le flanc perd des PV et est ecarte ; un
+##   C. SCIE : un camion contre le flanc perd des PV, ses pneus de ce cote
+##      eclatent (lames a plat, 2026-10-20), il est ecarte ; un
 ##      camion loin derriere n'est pas touche ;
 ##   D. BOOMERANG : touche le camion devant a l'aller et au retour (30 PV),
 ##      puis revient au tireur et disparait ;
@@ -75,6 +76,8 @@ func _test_tick(t: int) -> void:
 		_seen["hp_side"] = TruckHealth.of(_saw_side).hp
 		_seen["hp_far"] = TruckHealth.of(_saw_far).hp
 		_seen["side_moved"] = _saw_side.global_position.x - _side_x0
+		_seen["tires"] = [_saw_side.is_tire_burst(0), _saw_side.is_tire_burst(2),
+			_saw_side.is_tire_burst(1), _saw_side.is_tire_burst(3)]
 		_seen["hp_boom"] = TruckHealth.of(_boom_target).hp
 		_seen["hp_mirror"] = TruckHealth.of(_mirror_target).hp
 		_seen["left"] = get_tree().get_nodes_in_group(&"__none").size()
@@ -97,6 +100,8 @@ func _test_finish() -> void:
 		"%s balles, %s PV" % [_seen.get("gun_hits"), _seen.get("hp_gun")])
 	check("scie : le camion contre le flanc perd des PV et est ecarte", float(_seen.get("hp_side", 100.0)) < 95.0
 		and float(_seen.get("side_moved", 0.0)) > 0.5, "%s PV, %.2f m" % [_seen.get("hp_side"), float(_seen.get("side_moved", 0.0))])
+	check("scie : pneus du flanc tranches, pas ceux de l'autre cote", _seen.get("tires") == [true, true, false, false],
+		str(_seen.get("tires")))
 	check("scie : un camion loin derriere intact", is_equal_approx(float(_seen.get("hp_far", 0.0)), 100.0))
 	check("boomerang : touche a l'aller et au retour (30 PV)",
 		is_equal_approx(float(_seen.get("hp_boom", 0.0)), 100.0 - 2.0 * PowerCatalog.BOOMERANG_DAMAGE), str(_seen.get("hp_boom")))

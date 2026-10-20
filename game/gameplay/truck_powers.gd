@@ -15,9 +15,10 @@ extends Node3D
 ##              au camion touche (le premier obstacle arrete le rayon) ;
 ##   MITRAILLEUSE : rafale de GUN_TICKS, une balle (rayon droit devant) tous
 ##              les GUN_INTERVAL ticks, GUN_DAMAGE au camion touche ;
-##   SCIE     : SAW_TICKS de scies sur les flancs ; un camion a cote (zone de
-##              SAW_REACH_M au-dela du flanc) perd SAW_DAMAGE_PER_TICK et est
-##              ecarte ;
+##   SCIE     : SAW_TICKS de lames a plat sur les flancs, a hauteur des pneus ;
+##              un camion a cote (zone de SAW_REACH_M au-dela du flanc, sur
+##              tout le flanc du tracteur) perd SAW_DAMAGE_PER_TICK, ses pneus
+##              dans la zone se font trancher (crevaison) et il est ecarte ;
 ##   BOOMERANG : PowerBoomerang, aller tout droit puis retour aimante vers le
 ##              tireur, touche chaque camion une fois par passage.
 ## Recharge par emplacement, comptee en ticks des l'activation. Rien ne part
@@ -58,6 +59,12 @@ var mirror: bool = false
 ## (dans PREDICT_TICKS) ne le rejoue pas. Les degats restent ceux du host.
 var predict: bool = false
 const PREDICT_TICKS := 90
+## Lames de la scie : echelle du modele, ancrage du bras (dans le chassis) et
+## hauteur (repere du camion) ; la lame (rayon 1,18 m au modele) finit a
+## SAW_REACH_M au-dela du flanc et passe dans le haut des pneus.
+const SAW_MODEL_SCALE := 1.3
+const SAW_MOUNT_X := 0.6
+const SAW_HEIGHT_M := 1.0
 var _predicted: PackedInt32Array = PackedInt32Array([0, 0])
 
 var _truck: Truck
@@ -65,7 +72,12 @@ var _health: TruckHealth
 var _beam: MeshInstance3D
 var _tracer: MeshInstance3D
 var _tracer_ticks: int = 0
-var _discs: Array[MeshInstance3D] = []
+## Lames de la scie sorties (gauche, droite) : modele de l'equipe, lame a plat.
+var _saws: Array[Node3D] = []
+var _blades: Array[Node3D] = []
+var _saw_spin: float = 0.0
+## Armes du toit par emplacement (la scie du toit s'efface quand elle sort).
+var _roof: Array[Node3D] = [null, null]
 var _hit_sparks: GPUParticles3D
 ## Aura du bouclier : posee sur les pieces de la tete (material_overlay), et
 ## l'overlay qu'elles avaient avant (rendu a la fin).
@@ -104,6 +116,7 @@ func _ready() -> void:
 		if m != null:
 			m.position = ROOF + Vector3(-0.7 if k == 0 else 0.7, 0.0, 0.3)
 			add_child(m)
+			_roof[k] = m
 	_beam = MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.12
@@ -125,22 +138,19 @@ func _ready() -> void:
 	_tracer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_tracer.visible = false
 	add_child(_tracer)
-	# scies : un disque lumineux qui tourne de chaque cote de la cabine
-	for side in [-1.0, 1.0]:
-		var d := MeshInstance3D.new()
-		var disc := CylinderMesh.new()
-		disc.top_radius = 1.0
-		disc.bottom_radius = 1.0
-		disc.height = 0.08
-		disc.radial_segments = 12
-		d.mesh = disc
-		d.material_override = _glow(Color(1.0, 0.55, 0.15), 3.0, 0.75)
-		d.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		d.position = Vector3(side * (TruckSpec.CAB_SIZE.x / 2.0 + 0.5), 0.9, TruckSpec.CAB_CENTER.z)
-		d.rotation = Vector3(0.0, 0.0, PI / 2.0)
-		d.visible = false
-		add_child(d)
-		_discs.append(d)
+	# scies : la lame de chaque modele, couchee a plat (disque horizontal), au
+	# bas du flanc ; le bras reste dans le chassis
+	if slots[0] == PowerCatalog.Id.SAW or slots[1] == PowerCatalog.Id.SAW:
+		for side in 2:
+			var m := _weapon(PowerCatalog.model(PowerCatalog.Id.SAW, side))
+			if m == null:
+				continue
+			m.scale = Vector3.ONE * SAW_MODEL_SCALE
+			m.position = Vector3(SAW_MOUNT_X * (-1.0 if side == 0 else 1.0), SAW_HEIGHT_M, 0.0)
+			m.visible = false
+			add_child(m)
+			_saws.append(m)
+			_blades.append(m.find_child("*Lame*", true, false) as Node3D)
 	_hit_sparks = FxKit.make_sparks(18, 0.35)
 	_hit_sparks.one_shot = true
 	_hit_sparks.top_level = true
@@ -173,10 +183,8 @@ func _physics_process(_delta: float) -> void:
 	if saw_ticks > 0:
 		saw_ticks -= 1
 		_saw_tick()
-	for d in _discs:
-		d.visible = saw_ticks > 0
-		if d.visible:
-			d.rotate_object_local(Vector3.UP, 0.6)
+	if not _saws.is_empty():
+		_show_saws(saw_ticks > 0)
 	if DisplayServer.get_name() != "headless":
 		_set_aura(_health != null and _health.shield_ticks > 0)
 	if mirror:
@@ -360,29 +368,92 @@ func _gun_shot() -> void:
 		_tracer.transform = Transform3D(Basis(Vector3.RIGHT, -PI / 2.0), LASER_ORIGIN + Vector3(0.0, 0.0, -length / 2.0))
 
 
-## Scies : chaque camion dont le centre est a cote de la cabine, dans la zone
-## des lames, perd des PV et est ecarte (pas en miroir).
+## Scies : un camion dont le flanc du chassis ou un pneu tombe dans la zone
+## des lames perd des PV (tete ; remorque par ses roues), ses pneus dans la
+## zone prennent un coup tous les SAW_TIRE_INTERVAL ticks, et il est ecarte
+## (pas en miroir).
 func _saw_tick() -> void:
 	var inv := _truck.global_transform.affine_inverse()
-	var reach := TruckSpec.CAB_SIZE.x + PowerCatalog.SAW_REACH_M
+	var cut := saw_ticks % PowerCatalog.SAW_TIRE_INTERVAL == 0
+	var hw := TruckSpec.CHASSIS_SIZE.x / 2.0
+	var hl := TruckSpec.CHASSIS_SIZE.z / 2.0
 	for n in get_tree().get_nodes_in_group(TARGETS):
 		var t := n as Truck
 		if t == null or t == _truck or t.is_wrecked():
 			continue
-		var local := inv * t.global_position
-		if absf(local.z - TruckSpec.CAB_CENTER.z) > PowerCatalog.SAW_HALF_LENGTH_M or absf(local.x) > reach:
+		var xf := inv * t.global_transform
+		if xf.origin.length() > 30.0:
+			continue
+		# tete : les flancs de son chassis (5 points par cote)
+		var side := 0.0
+		for i in 10:
+			var p := xf * Vector3(hw if i < 5 else -hw, TruckSpec.CHASSIS_CENTER.y, lerpf(-hl, hl, (i % 5) / 4.0))
+			side = saw_side(p)
+			if side != 0.0:
+				break
+		var at := Vector3.ZERO
+		var cab := side != 0.0
+		var trailer := false
+		var tires: TruckTires
+		for w in 6:
+			if w >= Truck.TRAILER_LEFT and t.is_trailer_detached():
+				break
+			var hub := t.trailer_wheel_local(w) + Vector3(0.0, TruckSpec.WHEEL_RADIUS, 0.0) 					if w >= Truck.TRAILER_LEFT else TruckSpec.hub_rest_position(w)
+			var p := xf * hub
+			var s := saw_side(p)
+			if s == 0.0:
+				continue
+			side = s
+			at = p
+			trailer = trailer or w >= Truck.TRAILER_LEFT
+			if cut and not mirror:
+				if tires == null:
+					tires = t.get_node_or_null(^"Tires") as TruckTires
+				var h := TruckHealth.of(t)
+				if tires != null and (h == null or not h.is_shielded()):
+					tires.take_hit(w, TruckTires.BURST_SPEED_MS)
+		if side == 0.0:
 			continue
 		saw_hit = t
 		if _hit_sparks != null and (Engine.get_physics_frames() % 6) == 0:
-			_hit_sparks.global_position = (_truck.global_position + t.global_position) / 2.0 + Vector3.UP
+			if at == Vector3.ZERO:
+				at = Vector3(side * (hw + 0.4), SAW_HEIGHT_M, 0.0)
+			_hit_sparks.global_position = _truck.global_transform * at
 			_hit_sparks.restart()
 		if mirror:
 			continue
 		var h := TruckHealth.of(t)
 		if h != null:
-			h.damage(PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie")
-		var away := _truck.global_basis.x * signf(local.x)
-		t.apply_central_force(away * PowerCatalog.SAW_PUSH_MS2 * t.mass)
+			if cab:
+				h.damage(PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie")
+			if trailer:
+				h.damage_trailer(PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie")
+		t.apply_central_force(_truck.global_basis.x * side * PowerCatalog.SAW_PUSH_MS2 * t.mass)
+
+
+## Cote de la zone des lames (-1 gauche, 1 droite, 0 dehors) ou tombe `p`
+## (repere du camion) : de SAW_REACH_M au-dela du flanc, le long du tracteur.
+static func saw_side(p: Vector3) -> float:
+	var ax := absf(p.x)
+	var flank := TruckSpec.CHASSIS_SIZE.x / 2.0
+	if ax < flank - 0.3 or ax > flank + PowerCatalog.SAW_REACH_M 			or absf(p.z) > PowerCatalog.SAW_HALF_LENGTH_M or p.y < -0.5 or p.y > 3.0:
+		return 0.0
+	return signf(p.x)
+
+
+## Lames sorties a plat qui tournent, scie du toit effacee ; ou rangees.
+func _show_saws(on: bool) -> void:
+	for k in 2:
+		if _roof[k] != null and slots[k] == PowerCatalog.Id.SAW:
+			_roof[k].visible = not on
+	if on:
+		_saw_spin = fmod(_saw_spin + 0.6, TAU)
+	for i in _saws.size():
+		_saws[i].visible = on
+		if on and _blades[i] != null:
+			# disque de la lame dans le plan YZ du modele : couche a plat,
+			# puis tourne sur son axe (devenu vertical)
+			_blades[i].basis = Basis(Vector3.BACK, PI / 2.0) * Basis(Vector3.RIGHT, _saw_spin)
 
 
 ## Aura du bouclier sur les pieces visibles de la tete (pas la remorque, ni

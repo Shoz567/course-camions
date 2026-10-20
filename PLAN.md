@@ -921,6 +921,12 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     Sakura 67,8 → 66 s.
 - [x] **Pouvoirs, 2e série** : mitrailleuse, scie géante, boomerang aimanté
   (`powers2_test`).
+  - Scie (2026-10-20, « pas vraiment de portée ») : lames à plat à hauteur des
+    pneus, ~2,7 m au-delà du flanc, sur tout le flanc du tracteur ; elles
+    tranchent les pneus d'à côté (éclatés en ~0,4 s) et la remorque par son
+    train de roues.
+- [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
+  l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille
   (`menu_players_test`).
 - [x] **HUD de course** : cadran façon arcade (vitesse, nitro, cargo, recharges
