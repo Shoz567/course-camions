@@ -55,7 +55,7 @@ func _ready() -> void:
 	_frame = Panel.new()
 	_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_frame.add_theme_stylebox_override("panel", UiKit.box(Color(UiKit.PANEL, 0.93), Color(accent, 0.55), 2, 0.0, 10,
-		Color(0, 0, 0, 0.5), 18))
+		Color(0, 0, 0, 0.5), 18, true))
 	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_frame)
 	_build_header()
@@ -78,7 +78,8 @@ func _build_header() -> void:
 	var badge := Panel.new()
 	badge.position = Vector2(22, 10)
 	badge.size = Vector2(86, 44)
-	badge.add_theme_stylebox_override("panel", UiKit.box(accent, Color(1, 1, 1, 0.5), 1, UiKit.SKEW, 3, Color(accent, 0.6), 10))
+	badge.add_theme_stylebox_override("panel", UiKit.box(accent, Color(1, 1, 1, 0.5), 1, UiKit.SKEW, 3, Color(accent, 0.6), 10,
+		true))
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(badge)
 	var jn := UiKit.label("J%d" % (player + 1), 30, UiKit.NIGHT, 900)
@@ -171,7 +172,7 @@ func _build_ready_banner() -> void:
 	_ready_banner.position = Vector2(-10, 190)
 	_ready_banner.size = Vector2(DESIGN.x + 20, 110)
 	_ready_banner.add_theme_stylebox_override("panel", UiKit.box(Color(UiKit.GOOD, 0.92), Color(1, 1, 1, 0.7), 2,
-		UiKit.SKEW, 4, Color(UiKit.GOOD, 0.5), 22))
+		UiKit.SKEW, 4, Color(UiKit.GOOD, 0.5), 22, true))
 	_ready_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ready_banner.pivot_offset = _ready_banner.size / 2.0
 	add_child(_ready_banner)
@@ -232,7 +233,7 @@ func refresh() -> void:
 	(_bars["hp"] as StatBar).value = clampf(type.dropped_hp / 80.0, 0.0, 1.0)
 	_ready_banner.visible = confirmed
 	_frame.add_theme_stylebox_override("panel", UiKit.box(Color(UiKit.PANEL, 0.93),
-		Color(UiKit.GOOD if confirmed else accent, 0.9 if confirmed else 0.55), 3 if confirmed else 2, 0.0, 10, Color(0, 0, 0, 0.5), 18))
+		Color(UiKit.GOOD if confirmed else accent, 0.9 if confirmed else 0.55), 3 if confirmed else 2, 0.0, 10, Color(0, 0, 0, 0.5), 18, true))
 
 
 ## Barre de stat a segments : `value` 0..1, le repere du milieu = reference.
@@ -257,7 +258,8 @@ class StatBar:
 			var r := Rect2(k * (w + gap), 0, w, size.y)
 			var on := k < lit
 			var col := accent.lerp(UiKit.TEXT, float(k) / SEGMENTS * 0.35) if on else Color(1, 1, 1, 0.1)
-			var sb := UiKit.box(col, Color(0, 0, 0, 0), 0, 0.35, 1)
+			# segments penches en neon seulement, droits ailleurs
+			var sb := UiKit.box(col, Color(0, 0, 0, 0), 0, 0.35 if UiKit.SKEW > 0.0 else 0.0, mini(UiKit.RADIUS, 3))
 			sb.set_content_margin_all(0)
 			draw_style_box(sb, r)
 		var mid := size.x / 2.0

@@ -142,7 +142,7 @@ func _draw() -> void:
 
 
 func _tile(r: Rect2, fill: Color, border: Color, bw: int, glow: int) -> void:
-	var sb := UiKit.box(fill, border, bw, UiKit.SKEW * 0.6, 4, Color(UiKit.CYAN, 0.45), glow)
+	var sb := UiKit.box(fill, border, bw, UiKit.SKEW * 0.6, 4, Color(UiKit.CYAN, 0.45), glow, true)
 	draw_style_box(sb, r)
 
 

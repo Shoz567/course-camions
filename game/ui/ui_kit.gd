@@ -11,10 +11,10 @@ extends RefCounted
 ##          principale ; parallelogrammes et texte gras penche ;
 ##   PLAYA  (Playa Del Sol) bord de mer : tuiles de bois flotte, lagon
 ##          turquoise pour le choix, corail pour le focus, bouton soleil ;
-##          formes arrondies, texte droit et rond ;
+##          parallelogrammes (comme partout), texte droit et rond ;
 ##   SAKURA (Sakura) Japon : cases de bois de miel cadrees de bois sombre,
 ##          laque vermillon pour le choix, rose cerisier pour le focus, plaque
-##          de laque noire a lettres d'or pour l'action ; angles droits,
+##          de laque noire a lettres d'or pour l'action ; parallelogrammes,
 ##          police a empattements (Mincho).
 ## Les couleurs sont des variables (apply_skin) : un menu se reconstruit
 ## pour changer d'habillage. Le texte courant reste clair dans les trois
@@ -58,8 +58,13 @@ static var RADIUS := 3
 ## Police : familles, penchee ou non.
 static var FONT_NAMES := PackedStringArray(["Bahnschrift", "Segoe UI", "Arial", "sans-serif"])
 static var ITALIC := true
-## Tuiles texturees (bois) : null = a plat (TILE).
+## Tuiles texturees (bois) : null = a plat (TILE). `tint_texture` : le meme
+## bois en gris, a teinter (boutons des joueurs) : la couleur du joueur y
+## reste franche, la ou le bois de miel la virerait au brun ou au vert.
 static var tile_texture: Texture2D = null
+static var tint_texture: Texture2D = null
+## Couleur du cadre des tuiles (trait lisse du bord des parallelogrammes).
+static var tile_edge := Color(0, 0, 0, 0)
 
 static var _fonts: Dictionary = {}
 static var _textures: Dictionary = {}
@@ -97,11 +102,15 @@ static func apply_skin(s: int) -> void:
 			LOGO_TOP = Color(1.0, 1.0, 1.0)
 			LOGO_BOTTOM = Color(1.0, 0.82, 0.25)
 			LOGO_SHADOW = Color(0.0, 0.55, 0.62)
-			SKEW = 0.0
-			RADIUS = 16
+			# parallelogrammes comme Cyber City (2026-10-20, « garder la meme
+			# forme de parallelogramme dans tous les menus »)
+			SKEW = 0.2
+			RADIUS = 3
+			tile_edge = Color(0.98, 0.97, 0.93)
 			FONT_NAMES = PackedStringArray(["Segoe UI", "Arial", "sans-serif"])
 			ITALIC = false
 			tile_texture = plank_texture(Color(0.86, 0.81, 0.72), Color(0.66, 0.6, 0.52), Color(0.98, 0.97, 0.93), 3)
+			tint_texture = plank_texture(Color(1.0, 1.0, 1.0), Color(0.76, 0.76, 0.76), Color(1.0, 1.0, 1.0), 3)
 		Look.SAKURA:
 			NIGHT = Color(0.075, 0.04, 0.028)
 			PANEL = Color(0.11, 0.065, 0.042, 0.94)
@@ -121,11 +130,17 @@ static func apply_skin(s: int) -> void:
 			LOGO_TOP = Color(0.99, 0.95, 0.87)
 			LOGO_BOTTOM = Color(0.86, 0.16, 0.08)
 			LOGO_SHADOW = Color(0.03, 0.02, 0.02)
-			SKEW = 0.0
+			SKEW = 0.2
 			RADIUS = 2
-			FONT_NAMES = PackedStringArray(["Yu Mincho", "MS Mincho", "Georgia", "serif"])
+			tile_edge = Color(0.2, 0.11, 0.06)
+			# Cambria avant Georgia (2026-10-20) : sans Yu Mincho (option du
+			# japonais sous Windows), Georgia ecrit les chiffres a l'ancienne
+			# (« o manette », « J1 » bas) et elargit les legendes ; Cambria a
+			# des chiffres alignes et tient dans les cases
+			FONT_NAMES = PackedStringArray(["Yu Mincho", "MS Mincho", "Cambria", "Georgia", "serif"])
 			ITALIC = false
 			tile_texture = plank_texture(Color(0.72, 0.5, 0.29), Color(0.52, 0.33, 0.17), Color(0.2, 0.11, 0.06), 7)
+			tint_texture = plank_texture(Color(1.0, 1.0, 1.0), Color(0.7, 0.7, 0.7), Color(0.2, 0.11, 0.06), 7)
 		_:
 			skin = Look.NEON
 			NIGHT = Color(0.025, 0.03, 0.075)
@@ -148,9 +163,11 @@ static func apply_skin(s: int) -> void:
 			LOGO_SHADOW = PINK
 			SKEW = 0.2
 			RADIUS = 3
+			tile_edge = Color(0, 0, 0, 0)
 			FONT_NAMES = PackedStringArray(["Bahnschrift", "Segoe UI", "Arial", "sans-serif"])
 			ITALIC = true
 			tile_texture = null
+			tint_texture = null
 
 
 ## Planches de bois (une case) : veinage etire dans la longueur, cernes,
@@ -224,7 +241,8 @@ static func font(weight: int = 800, italic: bool = true) -> Font:
 ## Boite de l'habillage : fond, liseré, halo (ombre coloree sans decalage).
 ## `skew` / `radius` < 0 : ceux de l'habillage.
 static func box(fill: Color, border: Color = Color(0, 0, 0, 0), border_width: int = 0,
-		skew: float = -1.0, radius: int = -1, glow: Color = Color(0, 0, 0, 0), glow_size: int = 0) -> StyleBoxFlat:
+		skew: float = -1.0, radius: int = -1, glow: Color = Color(0, 0, 0, 0), glow_size: int = 0,
+		keep_glow: bool = false) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = fill
 	sb.border_color = border
@@ -233,23 +251,30 @@ static func box(fill: Color, border: Color = Color(0, 0, 0, 0), border_width: in
 	sb.skew = Vector2(SKEW if skew < 0.0 else skew, 0.0)
 	sb.shadow_color = glow
 	sb.shadow_size = glow_size
+	# halo lumineux : neon seulement (2026-10-20, « sur Sakura et Playa,
+	# quand c'est selectionne, pas vraiment d'effet neon ») ; ailleurs une
+	# ombre portee sombre et courte, comme une tuile posee. `keep_glow` : le
+	# halo dans tous les habillages (page Choix du convoi, neon partout)
+	if skin != Look.NEON and glow_size > 0 and not keep_glow:
+		sb.shadow_color = Color(0, 0, 0, 0.32 if glow.a > 0.0 else 0.0)
+		sb.shadow_size = mini(glow_size, 6)
+		sb.shadow_offset = Vector2(0, 3)
 	sb.set_content_margin_all(12)
 	sb.anti_aliasing = true
 	return sb
 
 
 ## Case texturee (bois) de l'habillage, teintee par `tint` ; null sans texture.
-static func tile_box(tint: Color = Color.WHITE) -> StyleBox:
+## `grey` : le bois gris (tint_texture), pour une teinte franche.
+static func tile_box(tint: Color = Color.WHITE, grey: bool = false) -> StyleBox:
 	if tile_texture == null:
 		return null
-	var sb := StyleBoxTexture.new()
-	sb.texture = tile_texture
-	sb.texture_margin_left = 6
-	sb.texture_margin_right = 6
-	sb.texture_margin_top = 6
-	sb.texture_margin_bottom = 6
-	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	# parallelogramme comme les boites a plat (SkewTileBox)
+	var sb := SkewTileBox.new()
+	sb.texture = tint_texture if grey and tint_texture != null else tile_texture
 	sb.modulate_color = tint
+	sb.skew = SKEW
+	sb.edge = tile_edge
 	sb.set_content_margin_all(12)
 	return sb
 
@@ -269,7 +294,8 @@ static func label(text: String, size: int, color: Color = Color(-1, -1, -1), wei
 
 
 ## Bouton de choix : tuile (bois texture selon l'habillage), choisi a la
-## couleur PINK, liseré de focus.
+## couleur PINK (en bois : le bois gris teinte de cette couleur, la texture
+## reste), liseré de focus.
 static func style_choice(b: Button, font_size: int, selected: Color = Color(-1, -1, -1)) -> void:
 	var sel := PINK if selected.r < 0.0 else selected
 	b.focus_mode = Control.FOCUS_ALL
@@ -284,10 +310,13 @@ static func style_choice(b: Button, font_size: int, selected: Color = Color(-1, 
 		b.add_theme_stylebox_override("normal", box(TILE, Color(1, 1, 1, 0.07), 1))
 		b.add_theme_stylebox_override("hover", box(TILE_HOVER, Color(CYAN, 0.45), 1))
 		b.add_theme_stylebox_override("disabled", box(Color(TILE, 0.5), Color(1, 1, 1, 0.04), 1))
-	var sel_border := GOLD if skin == Look.SAKURA else (Color(1, 1, 1, 0.9) if skin == Look.PLAYA else Color(1, 1, 1, 0.25))
-	b.add_theme_stylebox_override("pressed", box(sel, sel_border, 2 if skin != Look.NEON else 1, -1.0, -1, Color(sel, 0.45), 10))
-	b.add_theme_stylebox_override("hover_pressed", box(sel.lightened(0.1), sel_border.lightened(0.2), 2 if skin != Look.NEON else 1,
-		-1.0, -1, Color(sel, 0.55), 12))
+	if textured:
+		b.add_theme_stylebox_override("pressed", tile_box(sel, true))
+		b.add_theme_stylebox_override("hover_pressed", tile_box(sel.lightened(0.15), true))
+	else:
+		b.add_theme_stylebox_override("pressed", box(sel, Color(1, 1, 1, 0.25), 1, -1.0, -1, Color(sel, 0.45), 10))
+		b.add_theme_stylebox_override("hover_pressed", box(sel.lightened(0.1), Color(1, 1, 1, 0.45), 1,
+			-1.0, -1, Color(sel, 0.55), 12))
 	b.add_theme_stylebox_override("focus", focus_box())
 	for c: String in ["font_color", "font_hover_color", "font_focus_color"]:
 		b.add_theme_color_override(c, BTN_TEXT)
@@ -300,6 +329,9 @@ static func style_choice(b: Button, font_size: int, selected: Color = Color(-1, 
 static func focus_box() -> StyleBoxFlat:
 	var f := box(Color(0, 0, 0, 0), CYAN, 3, -1.0, -1, Color(CYAN, 0.5), 8)
 	f.draw_center = false
+	# cadre seul : pas d'ombre hors neon (elle salirait la tuile en dessous)
+	if skin != Look.NEON:
+		f.shadow_size = 0
 	f.expand_margin_left = 3
 	f.expand_margin_right = 3
 	f.expand_margin_top = 3
@@ -335,6 +367,8 @@ static func style_icon(b: Button, font_size: int) -> void:
 	b.add_theme_stylebox_override("hover_pressed", box(TILE_HOVER, Color(CYAN, 0.6), 1, 0.0, 28))
 	var f := box(Color(0, 0, 0, 0), CYAN, 3, 0.0, 28, Color(CYAN, 0.5), 8)
 	f.draw_center = false
+	if skin != Look.NEON:
+		f.shadow_size = 0
 	b.add_theme_stylebox_override("focus", f)
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(c, TEXT)
@@ -500,3 +534,112 @@ static func style_field(e: LineEdit) -> void:
 	e.add_theme_color_override("font_placeholder_color", Color(DIM, 0.75))
 	e.add_theme_color_override("caret_color", CYAN)
 	e.add_theme_color_override("selection_color", Color(PINK, 0.45))
+
+
+## Interrupteur (CheckButton : son, FPS...) : texte de l'habillage, pastille
+## dessinee a ses couleurs (eteinte : tuile ; allumee : couleur du choix),
+## survol en tuile claire, cadre de focus.
+static func style_toggle(b: CheckButton, font_size: int) -> void:
+	b.add_theme_font_override("font", font(600, false))
+	b.add_theme_font_size_override("font_size", font_size)
+	var empty := box(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 0, 0.0)
+	var hover := box(Color(TILE_HOVER, 0.6), Color(0, 0, 0, 0), 0, 0.0)
+	for sb: StyleBoxFlat in [empty, hover]:
+		sb.content_margin_left = 6
+		sb.content_margin_top = 6
+		sb.content_margin_bottom = 6
+	for st: String in ["normal", "pressed", "disabled"]:
+		b.add_theme_stylebox_override(st, empty)
+	for st: String in ["hover", "hover_pressed"]:
+		b.add_theme_stylebox_override(st, hover)
+	b.add_theme_stylebox_override("focus", focus_box())
+	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(c, TEXT)
+	b.add_theme_color_override("font_disabled_color", Color(TEXT, 0.45))
+	for on: bool in [true, false]:
+		var icon := switch_icon(on)
+		var key := "checked" if on else "unchecked"
+		for suffix: String in ["", "_mirrored", "_disabled", "_disabled_mirrored"]:
+			b.add_theme_icon_override(key + suffix, icon)
+
+
+## Pastille d'interrupteur 48 x 26 : piste arrondie, bouton rond ; allumee a
+## la couleur du choix (PINK), bouton a droite. Mise en cache par couleurs.
+static func switch_icon(on: bool) -> Texture2D:
+	var track := PINK if on else Color(TILE.lightened(0.12), 1.0)
+	var knob := Color.WHITE if on else DIM
+	var key := "switch%s%s%s" % [on, track, knob]
+	if _textures.has(key):
+		return _textures[key]
+	var w := 48
+	var h := 26
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var r := h / 2.0
+	var kx := (w - r) if on else r
+	for y in h:
+		for x in w:
+			var p := Vector2(x + 0.5, y + 0.5)
+			# piste : capsule ; bouton : disque un peu plus petit
+			var d := p.distance_to(Vector2(clampf(p.x, r, w - r), r))
+			var c := Color(track, clampf(r - d, 0.0, 1.0))
+			c = c.blend(Color(knob, clampf(r - 3.0 - p.distance_to(Vector2(kx, r)), 0.0, 1.0)))
+			img.set_pixel(x, y, c)
+	var tex := ImageTexture.create_from_image(img)
+	_textures[key] = tex
+	return tex
+
+
+## Liste deroulante (qualite graphique) : tuile de l'habillage, texte droit,
+## liste deroulee sur un panneau de l'habillage.
+static func style_option(o: OptionButton, font_size: int) -> void:
+	o.add_theme_font_override("font", font(600, false))
+	o.add_theme_font_size_override("font_size", font_size)
+	o.add_theme_stylebox_override("normal", box(TILE, Color(1, 1, 1, 0.1), 1))
+	o.add_theme_stylebox_override("hover", box(TILE_HOVER, Color(CYAN, 0.45), 1))
+	o.add_theme_stylebox_override("pressed", box(TILE_HOVER, Color(CYAN, 0.6), 1))
+	o.add_theme_stylebox_override("focus", focus_box())
+	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		o.add_theme_color_override(c, TEXT)
+	var popup := o.get_popup()
+	popup.add_theme_font_override("font", font(600, false))
+	popup.add_theme_font_size_override("font_size", font_size)
+	popup.add_theme_stylebox_override("panel", box(Color(PANEL, 0.98), Color(CYAN, 0.5), 1, 0.0))
+	popup.add_theme_stylebox_override("hover", box(Color(PINK, 0.85), Color(0, 0, 0, 0), 0, 0.0))
+	popup.add_theme_color_override("font_color", TEXT)
+	popup.add_theme_color_override("font_hover_color", SEL_TEXT)
+
+
+## Curseur (volume) : piste de tuile, partie remplie a la couleur du choix,
+## bouton rond blanc cerne de cette couleur.
+static func style_slider(s: HSlider) -> void:
+	var track := box(Color(TILE.lightened(0.12), 1.0), Color(0, 0, 0, 0), 0, 0.0, 4)
+	var fill := box(PINK, Color(0, 0, 0, 0), 0, 0.0, 4)
+	for sb: StyleBoxFlat in [track, fill]:
+		sb.content_margin_top = 3
+		sb.content_margin_bottom = 3
+	s.add_theme_stylebox_override("slider", track)
+	s.add_theme_stylebox_override("grabber_area", fill)
+	s.add_theme_stylebox_override("grabber_area_highlight", fill)
+	s.add_theme_stylebox_override("focus", focus_box())
+	var knob := knob_icon()
+	s.add_theme_icon_override("grabber", knob)
+	s.add_theme_icon_override("grabber_highlight", knob)
+
+
+## Bouton rond 22 px du curseur.
+static func knob_icon() -> Texture2D:
+	var key := "knob%s" % PINK
+	if _textures.has(key):
+		return _textures[key]
+	var n := 22
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var r := n / 2.0
+	for y in n:
+		for x in n:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(Vector2(r, r))
+			var c := Color(PINK, clampf(r - d, 0.0, 1.0))
+			c = c.blend(Color(Color.WHITE, clampf(r - 3.0 - d, 0.0, 1.0)))
+			img.set_pixel(x, y, c)
+	var tex := ImageTexture.create_from_image(img)
+	_textures[key] = tex
+	return tex

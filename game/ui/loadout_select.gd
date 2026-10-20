@@ -369,7 +369,7 @@ func _build_chrome() -> void:
 	_all_ready.offset_top = -60
 	_all_ready.offset_bottom = 60
 	_all_ready.add_theme_stylebox_override("panel", UiKit.box(UiKit.GOLD, Color(1, 1, 1, 0.8), 3, UiKit.SKEW, 4,
-		Color(UiKit.GOLD, 0.55), 30))
+		Color(UiKit.GOLD, 0.55), 30, true))
 	_all_ready.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_all_ready)
 	var go := UiKit.label("TOUS PRÊTS !  EN PISTE", 58, UiKit.NIGHT, 900)

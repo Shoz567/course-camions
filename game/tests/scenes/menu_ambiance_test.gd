@@ -10,7 +10,12 @@ extends PhysicsTest
 ##     Mincho), jardin japonais, ciel sakura_day ;
 ##   - un panneau ouvert (parametres) le reste quand le circuit change ;
 ##   - chaque circuit a son image d'ecran de chargement (1920 x 1080) ;
-##   - les decors n'ajoutent aucun corps physique (le plateau seul).
+##   - les decors n'ajoutent aucun corps physique (le plateau seul) ;
+##   - (2026-10-20) dans chaque habillage, PRET et sa note tiennent au-dessus
+##     de la barre d'aide ; le bois des boutons des joueurs est le bois gris
+##     teinte a leur couleur, un choix en bois teinte de sa couleur (la
+##     texture reste) ; Sakura a une police a chiffres alignes
+##     (Cambria) quand Yu Mincho manque.
 
 var _menu: MainMenu
 var _seen: Dictionary = {}
@@ -64,6 +69,21 @@ func _sets() -> Array:
 	return out
 
 
+## PRET et sa note au-dessus de la barre d'aide (64 px du bas), et bois gris
+## teinte au bleu du J1 (habillages a tuiles).
+func _fits() -> Array:
+	var hint := _menu.find_child("NextHint", true, false) as Control
+	var fits := hint != null and hint.get_global_rect().end.y <= 1080.0 - 64.0
+	var sb := _menu.player_buttons[0].get_theme_stylebox("normal")
+	var tinted := not sb is SkewTileBox or ((sb as SkewTileBox).texture == UiKit.tint_texture
+		and (sb as SkewTileBox).modulate_color.is_equal_approx(UiKit.PLAYER_COLORS[0]))
+	# choisi (vitesse) : bois gris teinte de la couleur du choix, texture gardee
+	var sel := _menu.speed_buttons[0].get_theme_stylebox("pressed")
+	var sel_wood := sel is StyleBoxFlat if UiKit.tile_texture == null else (sel is SkewTileBox
+		and (sel as SkewTileBox).texture == UiKit.tint_texture and (sel as SkewTileBox).modulate_color.is_equal_approx(UiKit.PINK))
+	return [fits, tinted, sel_wood]
+
+
 func _ui_count() -> int:
 	var n := 0
 	for c in _menu.get_children():
@@ -75,23 +95,26 @@ func _ui_count() -> int:
 func _test_tick(t: int) -> void:
 	match t:
 		3:
+			_seen["fit0"] = _fits()
 			_seen["neon"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("cyber_night.tres"),
 				_menu.player_buttons[0].get_theme_stylebox("normal") is StyleBoxFlat]
 			_menu.select_players(3)
 			_menu.select_speed(2)
 		6: _click(_menu.track_buttons[1])
 		12:
+			_seen["fit1"] = _fits()
 			var moon := _menu.get_node("Moon") as DirectionalLight3D
 			_seen["playa"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("playa_sun.tres"), moon.light_energy > 0.8,
-				_menu.player_buttons[0].get_theme_stylebox("normal") is StyleBoxTexture,
+				_menu.player_buttons[0].get_theme_stylebox("normal") is SkewTileBox,
 				(_menu.start_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color.is_equal_approx(UiKit.PRIMARY_FILL)]
 			_seen["kept"] = [_ui_count(), _menu.track_buttons[1].button_pressed, _menu.player_buttons[2].button_pressed,
 				_menu.speed_buttons[2].button_pressed, _menu.selected_players, GameState.speed_class]
 		14: _key(KEY_T)
 		20:
+			_seen["fit2"] = _fits()
 			_seen["sakura"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("sakura_day.tres"),
 				UiKit.FONT_NAMES.has("Yu Mincho"), _menu.track_buttons[2].button_pressed,
-				_menu.player_buttons[0].get_theme_stylebox("normal") is StyleBoxTexture]
+				_menu.player_buttons[0].get_theme_stylebox("normal") is SkewTileBox]
 			_menu.toggle_settings()
 		22: _menu.select_track(0)
 		28:
@@ -109,6 +132,14 @@ func _test_finish() -> void:
 		_seen.get("sakura", []) == [UiKit.Look.SAKURA, [false, false, true], true, true, true, true], str(_seen.get("sakura")))
 	check("panneau des parametres garde ouvert au changement de circuit",
 		_seen.get("panel", []) == [UiKit.Look.NEON, true, false, 1], str(_seen.get("panel")))
+	check("PRET et sa note au-dessus de la barre d'aide, bois gris teinte au bleu du J1, choisi en bois teinte (neon, Playa, Sakura)",
+		[_seen.get("fit0"), _seen.get("fit1"), _seen.get("fit2")] == [[true, true, true], [true, true, true], [true, true, true]],
+		str([_seen.get("fit0"), _seen.get("fit1"), _seen.get("fit2")]))
+	UiKit.apply_skin(UiKit.Look.SAKURA)
+	var cambria := UiKit.FONT_NAMES.find("Cambria")
+	check("Sakura : Cambria (chiffres alignes) avant Georgia", cambria > 0 and cambria < UiKit.FONT_NAMES.find("Georgia"),
+		str(UiKit.FONT_NAMES))
+	UiKit.apply_skin(UiKit.Look.NEON)
 	var images := true
 	for k in GameStateNode.TRACKS.size():
 		var img := LoadingScreen.track_image(k)
