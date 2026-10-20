@@ -369,7 +369,7 @@ static func paint_player_button(b: Button, i: int, lit: bool) -> void:
 	# habillage a tuiles (bois de Playa, de Sakura) : le bois, en gris teinte
 	# a la couleur du joueur (le bois de miel virait le bleu au vert) ; neon :
 	# aplat de sa couleur
-	if b.get_theme_stylebox("normal") is StyleBoxTexture:
+	if b.get_theme_stylebox("normal") is SkewTileBox:
 		if lit:
 			b.add_theme_stylebox_override("normal", UiKit.tile_box(c, true))
 			b.add_theme_stylebox_override("hover", UiKit.tile_box(c.lightened(0.2), true))

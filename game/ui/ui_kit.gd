@@ -11,10 +11,10 @@ extends RefCounted
 ##          principale ; parallelogrammes et texte gras penche ;
 ##   PLAYA  (Playa Del Sol) bord de mer : tuiles de bois flotte, lagon
 ##          turquoise pour le choix, corail pour le focus, bouton soleil ;
-##          formes arrondies, texte droit et rond ;
+##          parallelogrammes (comme partout), texte droit et rond ;
 ##   SAKURA (Sakura) Japon : cases de bois de miel cadrees de bois sombre,
 ##          laque vermillon pour le choix, rose cerisier pour le focus, plaque
-##          de laque noire a lettres d'or pour l'action ; angles droits,
+##          de laque noire a lettres d'or pour l'action ; parallelogrammes,
 ##          police a empattements (Mincho).
 ## Les couleurs sont des variables (apply_skin) : un menu se reconstruit
 ## pour changer d'habillage. Le texte courant reste clair dans les trois
@@ -63,6 +63,8 @@ static var ITALIC := true
 ## reste franche, la ou le bois de miel la virerait au brun ou au vert.
 static var tile_texture: Texture2D = null
 static var tint_texture: Texture2D = null
+## Couleur du cadre des tuiles (trait lisse du bord des parallelogrammes).
+static var tile_edge := Color(0, 0, 0, 0)
 
 static var _fonts: Dictionary = {}
 static var _textures: Dictionary = {}
@@ -100,8 +102,11 @@ static func apply_skin(s: int) -> void:
 			LOGO_TOP = Color(1.0, 1.0, 1.0)
 			LOGO_BOTTOM = Color(1.0, 0.82, 0.25)
 			LOGO_SHADOW = Color(0.0, 0.55, 0.62)
-			SKEW = 0.0
-			RADIUS = 16
+			# parallelogrammes comme Cyber City (2026-10-20, « garder la meme
+			# forme de parallelogramme dans tous les menus »)
+			SKEW = 0.2
+			RADIUS = 3
+			tile_edge = Color(0.98, 0.97, 0.93)
 			FONT_NAMES = PackedStringArray(["Segoe UI", "Arial", "sans-serif"])
 			ITALIC = false
 			tile_texture = plank_texture(Color(0.86, 0.81, 0.72), Color(0.66, 0.6, 0.52), Color(0.98, 0.97, 0.93), 3)
@@ -125,8 +130,9 @@ static func apply_skin(s: int) -> void:
 			LOGO_TOP = Color(0.99, 0.95, 0.87)
 			LOGO_BOTTOM = Color(0.86, 0.16, 0.08)
 			LOGO_SHADOW = Color(0.03, 0.02, 0.02)
-			SKEW = 0.0
+			SKEW = 0.2
 			RADIUS = 2
+			tile_edge = Color(0.2, 0.11, 0.06)
 			# Cambria avant Georgia (2026-10-20) : sans Yu Mincho (option du
 			# japonais sous Windows), Georgia ecrit les chiffres a l'ancienne
 			# (« o manette », « J1 » bas) et elargit les legendes ; Cambria a
@@ -157,6 +163,7 @@ static func apply_skin(s: int) -> void:
 			LOGO_SHADOW = PINK
 			SKEW = 0.2
 			RADIUS = 3
+			tile_edge = Color(0, 0, 0, 0)
 			FONT_NAMES = PackedStringArray(["Bahnschrift", "Segoe UI", "Arial", "sans-serif"])
 			ITALIC = true
 			tile_texture = null
@@ -262,14 +269,12 @@ static func box(fill: Color, border: Color = Color(0, 0, 0, 0), border_width: in
 static func tile_box(tint: Color = Color.WHITE, grey: bool = false) -> StyleBox:
 	if tile_texture == null:
 		return null
-	var sb := StyleBoxTexture.new()
+	# parallelogramme comme les boites a plat (SkewTileBox)
+	var sb := SkewTileBox.new()
 	sb.texture = tint_texture if grey and tint_texture != null else tile_texture
-	sb.texture_margin_left = 6
-	sb.texture_margin_right = 6
-	sb.texture_margin_top = 6
-	sb.texture_margin_bottom = 6
-	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
 	sb.modulate_color = tint
+	sb.skew = SKEW
+	sb.edge = tile_edge
 	sb.set_content_margin_all(12)
 	return sb
 
@@ -589,9 +594,9 @@ static func switch_icon(on: bool) -> Texture2D:
 static func style_option(o: OptionButton, font_size: int) -> void:
 	o.add_theme_font_override("font", font(600, false))
 	o.add_theme_font_size_override("font_size", font_size)
-	o.add_theme_stylebox_override("normal", box(TILE, Color(1, 1, 1, 0.1), 1, 0.0))
-	o.add_theme_stylebox_override("hover", box(TILE_HOVER, Color(CYAN, 0.45), 1, 0.0))
-	o.add_theme_stylebox_override("pressed", box(TILE_HOVER, Color(CYAN, 0.6), 1, 0.0))
+	o.add_theme_stylebox_override("normal", box(TILE, Color(1, 1, 1, 0.1), 1))
+	o.add_theme_stylebox_override("hover", box(TILE_HOVER, Color(CYAN, 0.45), 1))
+	o.add_theme_stylebox_override("pressed", box(TILE_HOVER, Color(CYAN, 0.6), 1))
 	o.add_theme_stylebox_override("focus", focus_box())
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		o.add_theme_color_override(c, TEXT)

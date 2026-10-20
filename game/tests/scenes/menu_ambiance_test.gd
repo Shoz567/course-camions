@@ -75,12 +75,12 @@ func _fits() -> Array:
 	var hint := _menu.find_child("NextHint", true, false) as Control
 	var fits := hint != null and hint.get_global_rect().end.y <= 1080.0 - 64.0
 	var sb := _menu.player_buttons[0].get_theme_stylebox("normal")
-	var tinted := not sb is StyleBoxTexture or ((sb as StyleBoxTexture).texture == UiKit.tint_texture
-		and (sb as StyleBoxTexture).modulate_color.is_equal_approx(UiKit.PLAYER_COLORS[0]))
+	var tinted := not sb is SkewTileBox or ((sb as SkewTileBox).texture == UiKit.tint_texture
+		and (sb as SkewTileBox).modulate_color.is_equal_approx(UiKit.PLAYER_COLORS[0]))
 	# choisi (vitesse) : bois gris teinte de la couleur du choix, texture gardee
 	var sel := _menu.speed_buttons[0].get_theme_stylebox("pressed")
-	var sel_wood := sel is StyleBoxFlat if UiKit.tile_texture == null else (sel is StyleBoxTexture
-		and (sel as StyleBoxTexture).texture == UiKit.tint_texture and (sel as StyleBoxTexture).modulate_color.is_equal_approx(UiKit.PINK))
+	var sel_wood := sel is StyleBoxFlat if UiKit.tile_texture == null else (sel is SkewTileBox
+		and (sel as SkewTileBox).texture == UiKit.tint_texture and (sel as SkewTileBox).modulate_color.is_equal_approx(UiKit.PINK))
 	return [fits, tinted, sel_wood]
 
 
@@ -105,7 +105,7 @@ func _test_tick(t: int) -> void:
 			_seen["fit1"] = _fits()
 			var moon := _menu.get_node("Moon") as DirectionalLight3D
 			_seen["playa"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("playa_sun.tres"), moon.light_energy > 0.8,
-				_menu.player_buttons[0].get_theme_stylebox("normal") is StyleBoxTexture,
+				_menu.player_buttons[0].get_theme_stylebox("normal") is SkewTileBox,
 				(_menu.start_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color.is_equal_approx(UiKit.PRIMARY_FILL)]
 			_seen["kept"] = [_ui_count(), _menu.track_buttons[1].button_pressed, _menu.player_buttons[2].button_pressed,
 				_menu.speed_buttons[2].button_pressed, _menu.selected_players, GameState.speed_class]
@@ -114,7 +114,7 @@ func _test_tick(t: int) -> void:
 			_seen["fit2"] = _fits()
 			_seen["sakura"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("sakura_day.tres"),
 				UiKit.FONT_NAMES.has("Yu Mincho"), _menu.track_buttons[2].button_pressed,
-				_menu.player_buttons[0].get_theme_stylebox("normal") is StyleBoxTexture]
+				_menu.player_buttons[0].get_theme_stylebox("normal") is SkewTileBox]
 			_menu.toggle_settings()
 		22: _menu.select_track(0)
 		28:
