@@ -80,6 +80,11 @@ func _check_lighting() -> void:
 			gi.append(e.sdfgi_enabled)
 	check("eclairage global : haute a 1-2 vues, coupe a 3 vues et en moyenne, sur les deux circuits",
 		gi == [true, true, false, false, true, true, true, false, false, true], str(gi))
+	# ... sauf sur une puce Intel (2026-10-16, Iris Xe : le noir devient blanc)
+	var vendors := ["Intel", "Intel Corporation", "NVIDIA", "AMD", ""].map(
+		func(v: String) -> bool: return GraphicsSettings.sdfgi_supported(v))
+	check("eclairage global : coupe sur une puce Intel, garde ailleurs",
+		vendors == [false, false, true, true, true], str(vendors))
 	var vp := SubViewport.new()
 	GraphicsSettings.apply_viewport(vp, GraphicsSettings.Quality.HIGH)
 	var high := vp.msaa_3d == Viewport.MSAA_2X and vp.screen_space_aa == Viewport.SCREEN_SPACE_AA_SMAA
