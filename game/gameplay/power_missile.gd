@@ -57,7 +57,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_life -= 1
 	if target != null and is_instance_valid(target) and not target.is_wrecked():
-		var want := (target.global_position + Vector3.UP * 1.5 - global_position).normalized()
+		var want := (TruckPowers.aim_point(target) - global_position).normalized()
 		var angle := direction.angle_to(want)
 		var turn := deg_to_rad(PowerCatalog.MISSILE_TURN_DEG)
 		if angle > 1e-4:

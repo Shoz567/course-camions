@@ -350,7 +350,10 @@ func _place_reticle(powers: TruckPowers) -> void:
 	var t := powers.target_ahead()
 	if t == null:
 		return
-	var at := t.get_global_transform_interpolated().origin + Vector3.UP * 2.2
+	# sur la remorque s'il tracte (la ou partent les pouvoirs), sinon la tete
+	var at := TruckPowers.aim_point(t) + t.get_global_transform_interpolated().origin - t.global_position
+	if t.is_trailer_detached():
+		at += Vector3.UP * 0.7
 	if camera.is_position_behind(at):
 		return
 	_reticle.place(camera.unproject_position(at), truck.global_position.distance_to(at), live)

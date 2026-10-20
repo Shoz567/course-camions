@@ -75,6 +75,12 @@ const SAW_HIT_MS := 10.0
 const LASER_HIT_MS := 7.0
 const LASER_HIT_INTERVAL := 15
 const GUN_HIT_MS := 4.0
+## Camion qui tracte (2026-10-20 : « que le pouvoir vise en priorite la
+## remorque, pour penaliser les joueurs qui n'en ont pas ; ca diminue
+## fortement les degats faits aux camions qui tractent ») : les pouvoirs
+## visent sa remorque, elle prend les PV de chaque coup, et la tete n'en prend
+## que cette part quand c'est elle qui est touchee.
+const TOWING_CAB_SHARE := 0.2
 const SAW_REACH_M := 2.7
 const SAW_HALF_LENGTH_M := 3.6
 const SAW_DAMAGE_PER_TICK := 0.12

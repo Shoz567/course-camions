@@ -359,7 +359,7 @@ func _sight(t: Truck) -> float:
 	if t == null or t == _truck or t.is_wrecked():
 		return -1.0
 	var from := _truck.global_transform * MUZZLE
-	var to := t.global_position + Vector3.UP * 1.5 - from
+	var to := aim_point(t) - from
 	var d := to.length()
 	if d > PowerCatalog.MISSILE_RANGE_M or d < 1.0:
 		return -1.0
@@ -420,12 +420,12 @@ func _gun_shot() -> void:
 ## Visee automatique (2026-10-20 : « que ca vise la personne la plus proche
 ## devant soi, qu'il n'y ait pas a viser ») : direction monde de `from` vers
 ## le camion vise (target_ahead : le plus proche devant, dans le cone du
-## missile) ; droit devant s'il n'y en a pas.
+## missile ; sa remorque s'il tracte) ; droit devant s'il n'y en a pas.
 func aim_direction(from: Vector3) -> Vector3:
 	var t := target_ahead()
 	if t == null:
 		return -_truck.global_basis.z
-	return (t.global_position + Vector3.UP * 1.5 - from).normalized()
+	return (aim_point(t) - from).normalized()
 
 
 ## Rayon (cylindre d'axe Y) de LASER_ORIGIN sur `length` m dans la direction
@@ -505,24 +505,36 @@ func _saw_tick() -> void:
 
 
 ## Coup d'un pouvoir sur `victim` en `at` (monde), porte dans le sens `dir` :
-## PV de la tete, ou de la remorque si c'est elle qui est touchee (pas en
-## miroir : le host decide), et degats visuels comme un choc a `visual_ms`
-## (TruckDamageFx.power_hit ; 0 : aucun). Vrai si la remorque est touchee.
+## PV (pas en miroir : le host decide) a la tete ; s'il tracte, a sa remorque,
+## et la tete touchee n'en prend que TOWING_CAB_SHARE. Degats visuels a la
+## partie touchee comme un choc a `visual_ms` (TruckDamageFx.power_hit ; 0 :
+## aucun). Vrai si la remorque est touchee.
 static func strike(victim: Truck, at: Vector3, dir: Vector3, amount: float, source: StringName,
 		visual_ms: float, is_mirror: bool) -> bool:
 	var on_trailer := trailer_distance(victim, at) <= 0.5
 	if not is_mirror:
 		var h := TruckHealth.of(victim)
 		if h != null:
-			if on_trailer:
-				h.damage_trailer(amount, source)
-			else:
+			if victim.is_trailer_detached():
 				h.damage(amount, source)
+			else:
+				# il tracte : la remorque encaisse, la tete n'en prend qu'une part
+				h.damage_trailer(amount, source)
+				if not on_trailer:
+					h.damage(amount * PowerCatalog.TOWING_CAB_SHARE, source)
 	if visual_ms > 0.0:
 		var fx := victim.get_node_or_null(^"DamageFx") as TruckDamageFx
 		if fx != null:
 			fx.power_hit(at, dir, visual_ms, on_trailer)
 	return on_trailer
+
+
+## Point vise sur `t` : le milieu de sa remorque s'il tracte (2026-10-20 :
+## « vise en priorite la remorque »), sinon sa tete.
+static func aim_point(t: Truck) -> Vector3:
+	if t.is_trailer_detached():
+		return t.global_position + Vector3.UP * 1.5
+	return t.global_transform * Truck.trailer_local_transform(t.get_trailer_angle(), t.trailer_box_center).origin
 
 
 ## Distance (m) du point monde `at` a la caisse de la remorque de `t` (0
