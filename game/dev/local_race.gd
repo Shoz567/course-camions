@@ -498,6 +498,11 @@ func _add_player(i: int) -> Player:
 	hud.camera = cam.get_camera()
 	view_parent.add_child(hud)
 	p.hud = hud
+	# bonus pris par ce camion : un mot a l'ecran (2026-10-20)
+	track.pickup_taken.connect(func(tr: Truck, kind: int, _k: int) -> void:
+		if tr == t:
+			hud.flash("RÉPARATION" if kind == TrackPickup.Kind.REPAIR else "POUVOIR RECHARGÉ",
+				TrackPickup.color_of(kind as TrackPickup.Kind)))
 	return p
 
 ## Secousse de camera (0 .. 1) pour un choc a cette vitesse (m/s) : rien sous

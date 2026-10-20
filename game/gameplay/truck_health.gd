@@ -36,6 +36,8 @@ signal respawned
 signal trailer_damaged(amount: float, source: StringName)
 ## Elle vient d'exploser, centree en `at` (monde).
 signal trailer_destroyed(at: Vector3)
+## Bonus de reparation : `cab` PV rendus a la tete, `trailer` a la remorque.
+signal repaired(cab: float, trailer: float)
 ## Carcasse et remorque laissees sur la route a la destruction.
 signal wreck_left(wreck: TruckWreck, trailer: DetachedTrailer)
 
@@ -189,6 +191,21 @@ func damage_trailer(amount: float, source: StringName = &"") -> void:
 	trailer_damaged.emit(amount, source)
 	if trailer_hp <= 0.0:
 		_trailer_pending = true
+
+
+## Bonus de reparation (TrackPickup, 2026-10-20) : PV rendus a la tete et a
+## la remorque attelee, sans depasser leur maximum ; rien sur une epave ni
+## chez un client en ligne (les PV viennent du host).
+func repair(cab: float, trailer: float) -> void:
+	if net_mirror or is_wrecked() or _dead_pending:
+		return
+	var c := minf(cab, max_hp - hp)
+	hp += c
+	var tr := 0.0
+	if not _truck.is_trailer_detached():
+		tr = minf(trailer, trailer_max_hp - trailer_hp)
+		trailer_hp += tr
+	repaired.emit(c, tr)
 
 
 ## Bouclier actif : ni PV, ni tole, ni pneus.

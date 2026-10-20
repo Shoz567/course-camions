@@ -28,6 +28,8 @@ extends Node3D
 ##   "boost": [[m, lateral], ...]  plaques de boost (distance, decalage).
 ##   "puddle": [[m, lateral, rayon], ...]  flaques d'eau (ralentissement).
 ##   "signs": [[m, lateral], ...]  panneaux ejectables (vitesse / 2).
+##   "pickups": [[m, "repair" | "power"], ...]  rangee de trois bonus en travers
+##                  (TrackPickup : reparation, recharge d'un pouvoir).
 ##   "arch": m      arche lumineuse au-dessus de la piste a cette distance ;
 ##   "arch_label": texte de son enseigne.
 ##   "bridge": 1 | 2  pont en beton (1) ou en bois (2) : la ou la chaussee est
@@ -80,12 +82,16 @@ signal puddle_entered(truck: Node3D, index: int)
 signal sign_hit(truck: Node3D, index: int)
 ## Un camion percute le baril explosif `index`.
 signal barrel_hit(truck: Truck, index: int)
+## Un camion prend le bonus `index` (TrackPickup.Kind).
+signal pickup_taken(truck: Truck, kind: int, index: int)
 
 const ROAD_LAYER := 1          # couche 1 `world` (VEHICLE_SPEC §7)
 const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
 const CHECKPOINT_LAYER := 3    # couche 3 `checkpoint`
 const VEHICLE_LAYER := 2
 const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
+## Rangee de bonus : decalages lateraux, en part de la largeur.
+const PICKUP_LANES: Array[float] = [-0.28, 0.0, 0.28]
 ## En deca de cet ecart d'abscisse (m), deux echantillons sont la meme portion
 ## de piste ; au-dela, une autre (circuit en 8 : l'autre branche).
 const SAME_SECTION_M := 160.0
@@ -207,6 +213,7 @@ var _branch_barrels: Array[Transform3D] = []
 var _puddles: Array[Vector3] = []       # (s, decalage, rayon)
 var _signs: Array[Vector2] = []         # (s, decalage)
 var _barrels: Array[Vector2] = []       # (s, decalage)
+var _pickups: Array[Vector3] = []       # (s, decalage, TrackPickup.Kind)
 var _auto_lengths: PackedFloat32Array = []
 ## Habillage resolu a la construction.
 var theme: TrackTheme
@@ -440,6 +447,15 @@ func sign_node(k: int) -> RoadsideSign:
 	return get_node_or_null("Signs/Sign%d" % k) as RoadsideSign
 
 
+func pickup_count() -> int:
+	_ensure_built()
+	return _pickups.size()
+
+
+func pickup_node(k: int) -> TrackPickup:
+	return get_node_or_null("Pickups/Pickup%d" % k) as TrackPickup
+
+
 func barrel_count() -> int:
 	_ensure_built()
 	return _barrels.size()
@@ -548,6 +564,7 @@ func _build_centerline() -> bool:
 	_puddles.clear()
 	_signs.clear()
 	_barrels.clear()
+	_pickups.clear()
 	var seg_start := 0.0
 	for k in segments.size():
 		var seg: Dictionary = segments[k]
@@ -563,6 +580,10 @@ func _build_centerline() -> bool:
 			_signs.append(Vector2(seg_start + float(sg[0]), float(sg[1])))
 		for br: Array in seg.get("barrels", []):
 			_barrels.append(Vector2(seg_start + float(br[0]), float(br[1])))
+		for pk: Array in seg.get("pickups", []):
+			var kind := TrackPickup.Kind.REPAIR if String(pk[1]) == "repair" else TrackPickup.Kind.POWER
+			for lane: float in PICKUP_LANES:
+				_pickups.append(Vector3(seg_start + float(pk[0]), lane * width, kind))
 		if seg.has("arch"):
 			_arches.append({"s": seg_start + float(seg["arch"]), "label": String(seg.get("arch_label", ""))})
 		seg_start += lengths[k]
@@ -828,6 +849,16 @@ func _build_geometry() -> void:
 	for k in _puddles.size():
 		_build_puddle(pads, _puddles[k], k)
 	_build_branch_hazards(pads, barrels)
+
+	var pickups := _group("Pickups")
+	for k in _pickups.size():
+		var pk := TrackPickup.new()
+		pk.name = "Pickup%d" % k
+		pk.kind = int(_pickups[k].z) as TrackPickup.Kind
+		pk.index = k
+		pk.transform = frame_at(index_at_s(_pickups[k].x), _pickups[k].y, 0.0)
+		pk.taken.connect(func(t: Truck, p: TrackPickup) -> void: pickup_taken.emit(t, int(p.kind), p.index))
+		pickups.add_child(pk)
 
 	_build_reset_zones(zones)
 	_build_checkpoints(checkpoints)

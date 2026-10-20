@@ -58,6 +58,7 @@ segments = Array[Dictionary]([{
 "auto": true,
 "boost": [[20.0, -14.0]],
 "climb": 26.0,
+"pickups": [[150.0, "power"]],
 "name": "Corniche (longueur calculee)",
 "type": "straight"
 }, {
@@ -79,6 +80,7 @@ segments = Array[Dictionary]([{
 "climb": -20.0,
 "jump": 150.0,
 "jump_offset": -14.0,
+"pickups": [[250.0, "repair"]],
 "name": "Descente des falaises (longueur calculee)",
 "type": "straight"
 }, {
@@ -131,6 +133,7 @@ segments = Array[Dictionary]([{
 "jump_offset": 12.0,
 "length": 160.0,
 "line": 12.0,
+"pickups": [[30.0, "power"]],
 "name": "Plage",
 "puddle": [[120.0, 20.0, 8.0]],
 "type": "straight"
@@ -140,6 +143,7 @@ segments = Array[Dictionary]([{
 "barrels": [[300.0, -12.0]],
 "boost": [[150.0, -10.0], [450.0, 12.0]],
 "bridge": 1,
+"pickups": [[380.0, "repair"]],
 "name": "Grand pont de la baie",
 "radius": 200.0,
 "signs": [[200.0, 32.0], [420.0, 32.0]],

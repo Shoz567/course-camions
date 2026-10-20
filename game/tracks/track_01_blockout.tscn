@@ -34,6 +34,7 @@ segments = Array[Dictionary]([{
 "jump": 60.0,
 "jump_offset": -18.0,
 "length": 240.0,
+"pickups": [[180.0, "power"]],
 "name": "Grande montee",
 "type": "straight"
 }, {
@@ -102,6 +103,7 @@ segments = Array[Dictionary]([{
 "auto": true,
 "boost": [[40.0, 0.0]],
 "climb": -14.0,
+"pickups": [[50.0, "repair"]],
 "name": "Diagonale de la chicane (longueur calculee)",
 "type": "straight"
 }, {
@@ -126,6 +128,7 @@ segments = Array[Dictionary]([{
 }, {
 "angle": 180.0,
 "bank": 9.0,
+"pickups": [[250.0, "repair"]],
 "name": "Epingle relevee (drift)",
 "puddle": [[220.0, -26.0, 8.0]],
 "radius": 140.0,
@@ -174,6 +177,7 @@ segments = Array[Dictionary]([{
 "climb": -6.0,
 "jump": 120.0,
 "jump_offset": -14.0,
+"pickups": [[450.0, "power"]],
 "name": "Ligne droite des stands (longueur calculee)",
 "type": "straight"
 }, {

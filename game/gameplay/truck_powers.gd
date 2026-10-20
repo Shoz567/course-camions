@@ -231,6 +231,16 @@ func _physics_process(_delta: float) -> void:
 		use(1)
 
 
+## Bonus de recharge (TrackPickup, 2026-10-20) : l'emplacement qui a le plus
+## de recharge devant lui redevient pret. Vrai s'il y en avait une.
+func refill_one() -> bool:
+	var k := 0 if cooldown[0] >= cooldown[1] else 1
+	if slots[k] < 0 or cooldown[k] == 0:
+		return false
+	cooldown[k] = 0
+	return true
+
+
 ## Declenche l'emplacement `k` (0 gauche, 1 droite) ; faux s'il est vide, en
 ## recharge, ou si le camion est une epave.
 func use(k: int) -> bool:

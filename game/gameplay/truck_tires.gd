@@ -188,6 +188,12 @@ func rim_sparking(wheel: int) -> bool:
 
 
 func _on_respawned() -> void:
+	repair()
+
+
+## Pneus neufs : usure a zero, crevaisons reparees (reapparition, bonus de
+## reparation).
+func repair() -> void:
 	_wear.fill(0.0)
 	_truck.repair_tires()
 
