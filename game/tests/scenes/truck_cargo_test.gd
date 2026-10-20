@@ -72,6 +72,9 @@ func _test_setup() -> void:
 	_defaults = [a_cargo.cooldown_ticks, a_cargo.first_seconds_lock_ticks]
 	a_cargo.cooldown_ticks = COOLDOWN_A
 	(_e.get_node("Cargo") as TruckCargo).cooldown_ticks = 400
+	# le delai apres le retour (rearm_ticks, 20 s) a son test : trailer_drops_test
+	a_cargo.rearm_ticks = 0
+	(_e.get_node("Cargo") as TruckCargo).rearm_ticks = 0
 	(_f.get_node("Cargo") as TruckCargo).start_race_lock()
 	for t: Truck in [_a, _b, _c, _d, _e, _f]:
 		_drops[t] = 0

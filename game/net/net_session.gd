@@ -431,12 +431,12 @@ func launch_race() -> void:
 		return
 	var data := _pack(members)
 	for id in _guest_peers():
-		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data)
-	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data)
+		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops)
+	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _launch(track: int, speed_class: int, send_ticks: int, data: Array) -> void:
+func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3) -> void:
 	# chargement de la course : chacun peut se figer quelques secondes
 	for m in members:
 		var id := int(m["peer"])
@@ -447,6 +447,7 @@ func _launch(track: int, speed_class: int, send_ticks: int, data: Array) -> void
 	snapshot_ticks = clampi(send_ticks, 1, SNAPSHOT_TICKS_LOW_BANDWIDTH)
 	GameState.selected_track = clampi(track, 0, GameStateNode.TRACKS.size() - 1)
 	GameState.speed_class = clampi(speed_class, 0, GameStateNode.SPEED_CLASSES.size() - 1)
+	GameState.trailer_drops = clampi(drops, 0, GameStateNode.MAX_TRAILER_DROPS)
 	members = _unpack(data)
 	race_launched.emit()
 	if auto_change_scene:

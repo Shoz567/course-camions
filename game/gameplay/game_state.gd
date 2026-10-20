@@ -109,6 +109,10 @@ var loadout_locked: bool = false
 ## (BotInputSource.Level).
 var bot_count: int = 0
 var bot_level: int = 1
+## Largages de remorque par joueur et par course (2026-10-20 : de 0 a 5,
+## choisi au menu ; TruckCargo.drops_left).
+const MAX_TRAILER_DROPS := 5
+var trailer_drops: int = 3
 
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
@@ -174,6 +178,7 @@ func write_settings(path: String) -> Error:
 	cfg.set_value("race", "speed_class", speed_class)
 	cfg.set_value("race", "trailers", trailer_choice)
 	cfg.set_value("race", "bots", bot_count)
+	cfg.set_value("race", "trailer_drops", trailer_drops)
 	cfg.set_value("race", "bot_level", bot_level)
 	for a: String in PadBindings.ACTIONS:
 		cfg.set_value("pad", a, pad_bindings[a])
@@ -197,6 +202,7 @@ func read_settings(path: String) -> Error:
 	selected_track = clampi(int(cfg.get_value("race", "track", selected_track)), 0, TRACKS.size() - 1)
 	speed_class = clampi(int(cfg.get_value("race", "speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
 	bot_count = clampi(int(cfg.get_value("race", "bots", bot_count)), 0, 5)
+	trailer_drops = clampi(int(cfg.get_value("race", "trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
 	bot_level = clampi(int(cfg.get_value("race", "bot_level", bot_level)), 0, 2)
 	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
 	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():
