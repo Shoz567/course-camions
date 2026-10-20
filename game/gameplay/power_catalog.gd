@@ -28,7 +28,7 @@ const POWERS: Array[Dictionary] = [
 	{"id": "scie", "name": "SCIE GÉANTE", "short": "SCIE", "tagline": "scies sur les flancs 4 s · recharge 16 s", "cooldown": 960,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/scie_geante_g.glb",
 		"model_right": "../Assets_Visuels/Armes_et_camions/armes/scie_geante_d.glb"},
-	{"id": "boomerang", "name": "BOOMERANG", "short": "BOOMER.", "tagline": "aller-retour aimanté · 15 PV par passage · recharge 15 s", "cooldown": 900,
+	{"id": "boomerang", "name": "BOOMERANG", "short": "BOOMER.", "tagline": "fonce sur le camion devant, aller-retour · 15 PV par passage · recharge 15 s", "cooldown": 900,
 		"model": "../Assets_Visuels/Armes_et_camions/armes/boomerang_aimante.glb"},
 ]
 
@@ -80,14 +80,21 @@ const SAW_HALF_LENGTH_M := 3.6
 const SAW_DAMAGE_PER_TICK := 0.12
 const SAW_TIRE_INTERVAL := 12
 const SAW_PUSH_MS2 := 16.0
-## Boomerang : vitesse (m/s), ticks a l'aller avant le demi-tour (net, vers le
-## tireur : il repasse sur son trajet), duree de vie, virage au retour pour
-## suivre le tireur (deg par tick), degats et coup par camion touche (une fois
-## a l'aller, une fois au retour), rayon de contact (m).
-const BOOMERANG_SPEED_MS := 55.0
-const BOOMERANG_OUT_TICKS := 50
-const BOOMERANG_LIFE_TICKS := 200
-const BOOMERANG_TURN_DEG := 6.0
+## Boomerang (2026-10-20 : « il ne va pas tres loin, il revient sans faire
+## grand-chose ») : vitesse par rapport au tireur (m/s, il garde son avance a
+## toute allure) ; a l'aller il fonce sur le camion vise (cone et portee du
+## missile) en tournant d'au plus BOOMERANG_SEEK_DEG par tick, le traverse et
+## fait demi-tour BOOMERANG_PASS_TICKS apres l'avoir touche (il repasse
+## dessus), ou a BOOMERANG_RANGE_M du tireur ; au retour
+## il le rejoint en tournant d'au plus BOOMERANG_TURN_DEG. Duree de vie
+## (ticks), degats et coup par camion touche (une fois a l'aller, une fois au
+## retour), rayon de contact (m).
+const BOOMERANG_SPEED_MS := 50.0
+const BOOMERANG_RANGE_M := 85.0
+const BOOMERANG_SEEK_DEG := 4.0
+const BOOMERANG_PASS_TICKS := 15
+const BOOMERANG_LIFE_TICKS := 360
+const BOOMERANG_TURN_DEG := 8.0
 const BOOMERANG_DAMAGE := 15.0
 const BOOMERANG_KICK_MS := 3.0
 const BOOMERANG_RADIUS_M := 2.2

@@ -462,7 +462,7 @@ func _powers() -> void:
 				use = t != null and truck.global_position.distance_to(t.global_position) < PowerCatalog.GUN_RANGE_M * 0.6
 			PowerCatalog.Id.BOOMERANG:
 				var t := powers.target_ahead()
-				use = t != null and truck.global_position.distance_to(t.global_position) < 40.0
+				use = t != null and truck.global_position.distance_to(t.global_position) < PowerCatalog.BOOMERANG_RANGE_M * 0.8
 			PowerCatalog.Id.SAW:
 				use = _beside() != null
 		if use:
