@@ -24,7 +24,9 @@ var boosting: bool = false
 var boost_text: String = ""
 var cargo: float = -1.0
 ## Par pouvoir : {"name": String, "ready": float 0..1, "left": int (s),
-## "active": bool} ; vide si l'emplacement est libre.
+## "active": bool, "effect": float 0..1 (part de l'effet qui reste),
+## "effect_left": int (s)} ; vide si l'emplacement est libre. Pouvoir actif :
+## anneau vert qui se vide avec l'effet, puis la recharge reprend.
 var powers: Array[Dictionary] = [{}, {}]
 
 var _font: Font
@@ -102,11 +104,15 @@ func _badge(c: Vector2, r: float, slot: int, p: Dictionary) -> void:
 		return
 	var ready := float(p.get("ready", 0.0))
 	var active := bool(p.get("active", false))
-	var col := UiKit.PINK if active else (UiKit.GOOD if ready >= 1.0 else UiKit.CYAN)
+	var effect := float(p.get("effect", 0.0))
+	var col := UiKit.GOOD if active or ready >= 1.0 else UiKit.CYAN
+	var fill := effect if active and effect > 0.0 else ready
 	draw_arc(c, r - 4.0 * k, 0.0, TAU, 40, Color(1, 1, 1, 0.08), 6.0 * k, true)
-	if ready > 0.0:
-		draw_arc(c, r - 4.0 * k, -PI / 2.0, -PI / 2.0 + TAU * ready, 40, col, 6.0 * k, true)
-	var mid := "ON" if active else ("GO" if ready >= 1.0 else str(int(p.get("left", 0))))
+	if fill > 0.0:
+		draw_arc(c, r - 4.0 * k, -PI / 2.0, -PI / 2.0 + TAU * fill, 40, col, 6.0 * k, true)
+	var mid := "GO" if ready >= 1.0 else str(int(p.get("left", 0)))
+	if active:
+		mid = str(int(p.get("effect_left", 0))) if effect > 0.0 else "ON"
 	var mf := maxi(10, roundi(26 * k))
 	var mw := _font.get_string_size(mid, HORIZONTAL_ALIGNMENT_LEFT, -1, mf).x
 	_text(_font, mid, c + Vector2(-mw / 2.0, mf * 0.36), mf, col)

@@ -12,7 +12,8 @@ extends RigidBody3D
 ##   - Yeet physique leger sur le camion (impulsion de rebond vers le haut et l'exterieur) ;
 ##   - Le baril lui-meme est projete en l'air en tournoyant ;
 ##   - Respawn a sa position d'origine apres respawn_ticks.
-## Degats : -15 PV au camion qui le fait sauter (PadEffects, TruckHealth).
+## Degats : -15 PV au camion qui le fait sauter (PadEffects, TruckHealth), et
+## sa tole enfoncee du cote du baril (TruckDamageFx.barrel_blast).
 ## Habillage selon le circuit (apply_style, 2026-10-19) : fut industriel
 ## rouge, ou tonneau de sake (Sakura : paille, cordes, bandeau laque rouge
 ## marque 爆 « explosion »). Le gyrophare reste : un danger se lit pareil
@@ -354,6 +355,10 @@ func explode(truck: Truck) -> void:
 	var shove_dir := to_truck.normalized() if to_truck.length() > 0.1 else -truck.global_transform.basis.z
 	var impulse := (shove_dir * yeet_out_speed + Vector3.UP * yeet_up_speed) * truck.mass
 	truck.apply_central_impulse(impulse)
+	# tole enfoncee, pieces arrachees du cote du baril (visuel)
+	var fx := truck.get_node_or_null(^"DamageFx") as TruckDamageFx
+	if fx != null:
+		fx.barrel_blast(global_position + Vector3.UP * BARREL_HEIGHT * 0.5)
 	_blast(shove_dir)
 
 

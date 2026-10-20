@@ -291,6 +291,8 @@ func _process(_delta: float) -> void:
 		d["ready"] = 1.0 - float(powers.cooldown[k]) / maxf(float(PowerCatalog.cooldown_ticks(p)), 1.0)
 		d["left"] = powers.seconds_left(k)
 		d["active"] = powers.active(k)
+		d["effect"] = powers.active_fraction(k)
+		d["effect_left"] = powers.active_seconds(k)
 	_dial.set_state(roundi(absf(truck.get_speed_kmh())), charge, truck.is_boosting(), boost_label, cargo, _slots)
 	if _health != null:
 		var ratio := _health.hp / maxf(_health.max_hp, 1.0)

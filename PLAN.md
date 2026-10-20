@@ -899,6 +899,26 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   `track_01_reset_test`).
 - [x] **Bots** hors ligne, 0 à 5, facile / moyen / dur (`BotInputSource`,
   `bot_race_test`).
+- [x] **Bots plus forts** (2026-10-20, « même en dur ils sont faciles à
+  battre ») : ligne de course calculée à courbure minimale, sur les pads
+  utiles et à côté des sauts et flaques (`RacingLine`, `bot_line_test`) ;
+  profil de vitesse freinable ; trafic : dépassement du côté libre, suivi,
+  côte à côte, contournement des obstacles arrêtés, relance en travers.
+  Corrigé au passage : une remorque au-dessus du mur intérieur faisait
+  exploser un camion resté sur la route (`AutoReset._past_wall`). Banc :
+  `dev/bot_bench.tscn`. Dur seul, tour lancé : Cyber City 78,7 → 73,8 s,
+  Playa 68,9 → 63,7 s, Sakura 75,7 → 67,8 s ; à 5 bots, plus aucune chute
+  (avant : jusqu'à 11 sur Sakura).
+- [x] **Retours d'essai** (2026-10-20) :
+  - aide qui rabattait un camion en l'air vers la piste retirée (`air_return_test`) ;
+  - bouclier : plus de creux, de pièces arrachées ni d'usure des pneus, même
+    en collant un mur (sans bouclier : inchangé) ;
+  - baril : tôle enfoncée du côté de l'explosion (`damage_guard_test`) ;
+  - bots : ligne la plus rapide (tour estimé, `RacingLine.SMOOTH_M`), qui
+    contourne les barils ; ils gardent l'élan des pads ; esquive des remorques
+    larguées et des épaves selon leur gabarit (`bot_avoid_test`).
+  - Dur seul, tour lancé : Cyber City 73,8 → 68,4 s, Playa 63,7 → 58,5 s,
+    Sakura 67,8 → 66 s.
 - [x] **Pouvoirs, 2e série** : mitrailleuse, scie géante, boomerang aimanté
   (`powers2_test`).
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

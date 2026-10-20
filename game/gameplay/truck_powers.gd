@@ -254,6 +254,33 @@ func active(k: int) -> bool:
 	return false
 
 
+## Part de l'effet de l'emplacement `k` qui reste : 1 a l'activation, 0 quand
+## il s'arrete (0 aussi pour un pouvoir sans duree, missile ou boomerang).
+func active_fraction(k: int) -> float:
+	var t := _effect_ticks(k)
+	return t.x / maxf(t.y, 1.0)
+
+
+## Secondes d'effet qui restent a l'emplacement `k` (0 : inactif).
+func active_seconds(k: int) -> int:
+	return ceili(_effect_ticks(k).x / 60.0)
+
+
+## (ticks restants, duree totale) de l'effet de l'emplacement `k`.
+func _effect_ticks(k: int) -> Vector2:
+	match slots[k]:
+		PowerCatalog.Id.LASER:
+			return Vector2(laser_ticks, PowerCatalog.LASER_TICKS)
+		PowerCatalog.Id.GUN:
+			return Vector2(gun_ticks, PowerCatalog.GUN_TICKS)
+		PowerCatalog.Id.SAW:
+			return Vector2(saw_ticks, PowerCatalog.SAW_TICKS)
+		PowerCatalog.Id.SHIELD:
+			if _health != null:
+				return Vector2(_health.shield_ticks, PowerCatalog.SHIELD_TICKS)
+	return Vector2.ZERO
+
+
 ## Secondes avant que l'emplacement `k` soit pret (0 : pret ; -1 : vide).
 func seconds_left(k: int) -> int:
 	if slots[k] < 0:
