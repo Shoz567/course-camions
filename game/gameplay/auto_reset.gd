@@ -116,6 +116,9 @@ func _past_wall(t: Truck) -> bool:
 	if track == null:
 		return true
 	var p := t.global_position
+	# sur un raccourci : sur la piste
+	if track.on_branch(p) >= 0:
+		return false
 	var i := track.closest_sample(p, int(_hint.get(t, -1)))
 	if track.sample_position(i).distance_to(p) > 60.0:
 		i = track.closest_sample(p)
@@ -128,6 +131,8 @@ func is_off_track(t: Truck) -> bool:
 	if track == null:
 		return false
 	var p := t.global_position
+	if track.on_branch(p, track.wall_thickness + track.wall_lean + off_track_margin) >= 0:
+		return false
 	var i := track.closest_sample(p, int(_hint.get(t, -1)))
 	if track.sample_position(i).distance_to(p) > 60.0:
 		i = track.closest_sample(p)    # teleporte : recherche complete

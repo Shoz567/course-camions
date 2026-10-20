@@ -140,6 +140,13 @@ segments = Array[Dictionary]([{
 "name": "Grille de depart (a plat)",
 "type": "straight"
 }])
+branches = Array[Dictionary]([{
+"barrels": [[0.48, 6.0]],
+"from": "Rizieres (entree)",
+"name": "Raccourci des rizieres",
+"puddles": [[0.3, 4.0, 7.0], [0.66, -4.0, 7.0]],
+"to": "Rizieres (sortie)"
+}])
 width = 70.0
 checkpoint_count = 24
 bank_blend_length = 120.0

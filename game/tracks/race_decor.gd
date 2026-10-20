@@ -98,6 +98,8 @@ func _generate(track: TrackBlockout) -> void:
 	# les MultiMesh, et les boites ne disent pas a quoi elles servent)
 	root.set_meta(&"piers", piers)
 	root.set_meta(&"decks", decks)
+	# rien sur un raccourci (2026-10-20)
+	track.clear_branch_corridors(self)
 
 
 # --- ponts routiers --------------------------------------------------------------

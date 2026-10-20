@@ -993,7 +993,14 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   2,8 → 4,6 km (Rizières) ; chaque détour est un créneau dont la sortie est
   dans l'axe de l'entrée (raccourci possible tout droit). Course en 3 tours,
   tour de 90 à 130 s (METRICS.md §4, décision du 2026-10-20).
-- [ ] **Raccourcis** : embranchements dans le générateur de piste.
+- [x] **Raccourcis** (2026-10-20) : `TrackBlockout.branches`, une route droite
+  de 24 m qui coupe un détour (Cyber City : Docks, Échangeur ; Playa :
+  Marina, Village ; Sakura : Rizières), ~270 m plus courte, avec flaques et
+  barils ; murs de la piste ouverts à ses bouts, portique « RACCOURCI »
+  (torii 近道 à Sakura), néons ; pas de zone de reset dessus ; checkpoints
+  du détour doublés (même numéro) ; sur lui, un camion est sur la piste et
+  sa progression suit le détour ; décor dégagé (`clear_branch_corridors`)
+  (`shortcut_test`). Les bots ne les prennent pas (encore).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

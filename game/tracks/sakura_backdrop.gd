@@ -179,6 +179,8 @@ func _generate(track: TrackBlockout) -> void:
 	root.set_meta(&"trees", _trees.duplicate())
 	root.set_meta(&"houses", houses)
 	root.set_meta(&"landmarks", landmarks)
+	# rien sur un raccourci (2026-10-20)
+	track.clear_branch_corridors(self)
 
 
 ## Monuments au centre des virages : donjon (epingle), pagode (grande

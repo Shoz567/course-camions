@@ -133,6 +133,8 @@ func _generate(track: TrackBlockout) -> void:
 	root.set_meta(&"palms", palms.duplicate())
 	root.set_meta(&"rocks", rocks.duplicate())
 	root.set_meta(&"parasols", parasols.duplicate())
+	# rien sur un raccourci (2026-10-20)
+	track.clear_branch_corridors(self)
 
 
 ## Un palmier : tronc penche au hasard, couronne de palmes au sommet.

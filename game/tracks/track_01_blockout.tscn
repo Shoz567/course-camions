@@ -181,6 +181,19 @@ segments = Array[Dictionary]([{
 "name": "Grille de depart (a plat)",
 "type": "straight"
 }])
+branches = Array[Dictionary]([{
+"barrels": [[0.5, 6.0]],
+"from": "Quartier des docks (entree)",
+"name": "Raccourci des docks",
+"puddles": [[0.3, 4.0, 7.0], [0.68, -5.0, 6.0]],
+"to": "Quartier des docks (sortie)"
+}, {
+"barrels": [[0.22, -6.0], [0.72, 6.0]],
+"from": "Echangeur (entree)",
+"name": "Raccourci de l'echangeur",
+"puddles": [[0.42, -4.0, 7.0]],
+"to": "Echangeur (sortie)"
+}])
 width = 75.0
 bank_blend_length = 120.0
 climb_blend_length = 30.0

@@ -45,6 +45,15 @@ extends Node3D
 ## y veille : aucune pile de pont sur la route du dessous, pas de zone de
 ## reset qui deborde sur l'autre branche, checkpoints arretes sous le pont.
 ##
+## Raccourcis (`branches`, 2026-10-20 : « des raccourcis qui ont un reel
+## interet ») : une route droite, plus etroite, qui coupe un detour en
+## creneau (la sortie du detour est dans l'axe de son entree). Elle a sa
+## chaussee, ses murs, ses pieges ; les murs de la piste s'ouvrent la ou elle
+## les traverse ; aucune zone de reset ne la couvre ; chaque checkpoint du
+## detour a son double en travers du raccourci (meme numero : l'ordre tient) ;
+## un camion dessus est sur la piste (on_branch) et sa progression suit le
+## detour (closest_sample).
+##
 ## Genere : Geometry (chaussee, sol), Walls (2 glissieres continues, bord haut
 ## colore : cyan a gauche, magenta a droite en ville), Arches (portiques), Pads
 ## (plaques de boost et rampes de saut a chevrons lumineux, avec leur Area3D),
@@ -97,6 +106,18 @@ const SAME_SECTION_M := 160.0
 @export var climb_blend_length: float = 0.0
 ## Habillage du circuit (TrackTheme.Id).
 @export_enum("Cyber City", "Playa Del Sol", "Sakura") var theme_id: int = 0
+
+@export_group("Raccourcis")
+## Dictionary : "from" (segment ou il part, a son debut), "to" (segment ou il
+## revient, a sa fin), "name", "width" (m, defaut branch_width), "lateral"
+## (decalage de son axe, defaut : colle au bord oppose au detour), "puddles"
+## [[u, decalage, rayon], ...] et "barrels" [[u, decalage], ...] (u de 0 a 1
+## le long du raccourci).
+@export var branches: Array[Dictionary] = []
+@export var branch_width: float = 24.0
+## Portique a l'entree d'un raccourci : la ou ses deux piliers sont sortis de
+## la piste (cherche a partir de cette part de sa longueur).
+const BRANCH_GATE_U := 0.08
 
 @export_group("Glissieres")
 ## Epaisseur a hauteur de chaussee (METRICS.md §4 : 0,3 m minimum).
@@ -175,6 +196,14 @@ var _jumps: Array[Vector2] = []         # (s du tremplin, decalage)
 var _boosts: Array[Vector2] = []        # (s de la plaque, decalage)
 var _arches: Array[Dictionary] = []     # {s, label}
 var _segment_starts: Dictionary = {}    # nom -> abscisse du debut (m)
+var _segment_ends: Dictionary = {}      # nom -> abscisse de la fin (m)
+## Raccourcis resolus : {name, s0, s1, w, a, b, dir, right, len, pts}.
+var _br: Array[Dictionary] = []
+## Murs de la piste ouverts (1) par echantillon, gauche puis droite.
+var _wall_open: Array[PackedByteArray] = [PackedByteArray(), PackedByteArray()]
+## Pieges des raccourcis (indices apres ceux de la piste) : [repere, rayon].
+var _branch_puddles: Array = []
+var _branch_barrels: Array[Transform3D] = []
 var _puddles: Array[Vector3] = []       # (s, decalage, rayon)
 var _signs: Array[Vector2] = []         # (s, decalage)
 var _barrels: Array[Vector2] = []       # (s, decalage)
@@ -211,6 +240,7 @@ func rebuild() -> void:
 	theme = TrackTheme.of(theme_id)
 	if not _build_centerline():
 		return
+	_build_branches()
 	_build_geometry()
 
 
@@ -286,13 +316,24 @@ func closest_sample(p: Vector3, hint: int = -1) -> int:
 			if d < best_d:
 				best_d = d
 				best = i
-		return best
+		return _branch_mapped(p, best)
 	for i in n:
 		var d := _pos[i].distance_squared_to(p)
 		if d < best_d:
 			best_d = d
 			best = i
-	return best
+	return _branch_mapped(p, best)
+
+
+## Sur un raccourci, hors de la chaussee de la piste : l'echantillon du detour
+## a la meme part du chemin (sa progression suit le detour) ; sinon `best`.
+func _branch_mapped(p: Vector3, best: int) -> int:
+	if _br.is_empty():
+		return best
+	var k := on_branch(p, 2.0)
+	if k < 0 or absf((p - _pos[best]).dot(_right[best])) <= width / 2.0 + 1.0:
+		return best
+	return index_at_s(branch_progress_s(k, p))
 
 
 ## Plus petite distance HORIZONTALE (m) entre `p` et la ligne centrale d'une
@@ -378,10 +419,14 @@ func puddle_count() -> int:
 ## Centre de la flaque k, pose sur la chaussee ; rayon dans `puddle_radius`.
 func puddle_transform(k: int) -> Transform3D:
 	_ensure_built()
+	if k >= _puddles.size():
+		return _branch_puddles[k - _puddles.size()][0]
 	return frame_at(index_at_s(_puddles[k].x), _puddles[k].y, 0.0)
 
 
 func puddle_radius(k: int) -> float:
+	if k >= _puddles.size():
+		return float(_branch_puddles[k - _puddles.size()][1])
 	return _puddles[k].z
 
 
@@ -445,6 +490,14 @@ func is_water(p: Vector3) -> bool:
 ## au-dessus du sol.
 func get_respawn_transform(p: Vector3) -> Transform3D:
 	_ensure_built()
+	var kb := on_branch(p, 4.0)
+	if kb >= 0:
+		var bd := _br[kb]
+		var d := p - (bd["a"] as Vector3)
+		var u := clampf((d.x * (bd["dir"] as Vector3).x + d.z * (bd["dir"] as Vector3).z) / float(bd["len"]), 0.02, 0.98)
+		var lat := d.x * (bd["right"] as Vector3).x + d.z * (bd["right"] as Vector3).z
+		var lim := float(bd["w"]) / 2.0 - 3.0
+		return branch_frame(kb, u, clampf(lat, -lim, lim), 1.0)
 	var i := closest_sample(p)
 	var lateral := (p - sample_position(i)).dot(sample_right(i))
 	var limit := width / 2.0 - maxf(2.0, width * 0.1)
@@ -491,6 +544,7 @@ func _build_centerline() -> bool:
 	_boosts.clear()
 	_arches.clear()
 	_segment_starts.clear()
+	_segment_ends.clear()
 	_puddles.clear()
 	_signs.clear()
 	_barrels.clear()
@@ -498,6 +552,7 @@ func _build_centerline() -> bool:
 	for k in segments.size():
 		var seg: Dictionary = segments[k]
 		_segment_starts[String(seg.get("name", "%d" % k))] = seg_start
+		_segment_ends[String(seg.get("name", "%d" % k))] = seg_start + lengths[k]
 		if seg.has("jump"):
 			_jumps.append(Vector2(seg_start + float(seg["jump"]), float(seg.get("jump_offset", jump_offset))))
 		for b: Array in seg.get("boost", []):
@@ -702,8 +757,12 @@ func _build_geometry() -> void:
 		var wst := SurfaceTool.new()
 		wst.begin(Mesh.PRIMITIVE_TRIANGLES)
 		var wtris := PackedVector3Array()
+		var opened := _wall_open[0 if side < 0.0 else 1]
 		for i in n:
 			var j := (i + 1) % n
+			# un raccourci traverse le mur : ouvert
+			if not opened.is_empty() and (opened[i] == 1 or opened[j] == 1):
+				continue
 			var a := _wall_profile(i, side)
 			var b := _wall_profile(j, side)
 			var v0 := _s[i]
@@ -720,6 +779,8 @@ func _build_geometry() -> void:
 			theme.wall, wall_friction)
 		wall.set_meta(&"surface", &"asphalt")
 		_build_wall_neon(walls, side)
+
+	_build_branch_roads(geometry, walls)
 
 	# sol sous toute la piste et la ville (hors piste : lent, pas de vide)
 	# sur une ile, la mer va jusqu'a l'horizon
@@ -766,9 +827,11 @@ func _build_geometry() -> void:
 		_build_boost_pad(pads, _boosts[k].x, _boosts[k].y, k)
 	for k in _puddles.size():
 		_build_puddle(pads, _puddles[k], k)
+	_build_branch_hazards(pads, barrels)
 
 	_build_reset_zones(zones)
 	_build_checkpoints(checkpoints)
+	_build_branch_checkpoints(checkpoints)
 
 	for slot in grid_lateral.size():
 		var m := Marker3D.new()
@@ -817,7 +880,10 @@ func _build_wall_neon(parent: Node3D, side: float) -> void:
 		var inward := -Vector3(_right[i].x, 0.0, _right[i].z).normalized() * side * 0.04
 		var lift := Vector3(0.0, 0.03, 0.0)
 		strip.append(PackedVector3Array([prof[1] + down * 0.32 + inward, prof[1] + inward + lift, prof[2] + lift]))
+	var opened := _wall_open[0 if side < 0.0 else 1]
 	for i in n:
+		if not opened.is_empty() and (opened[i] == 1 or opened[(i + 1) % n] == 1):
+			continue
 		var a := strip[i]
 		var b := strip[(i + 1) % n]
 		_quad(st, tris, a[0], b[0], b[1], a[1], z2, z2, z2, z2, Vector3.ZERO)
@@ -971,6 +1037,12 @@ func _build_coast_mask() -> void:
 		_stamp(barrier, res, texel, _pos[i], theme.coast_land_radius, 1)
 		if _deck[i] == 0:
 			_stamp(land, res, texel, _pos[i], theme.coast_land_radius, 1)
+	# raccourcis : de la terre aussi
+	for bd: Dictionary in _br:
+		var pts: PackedVector3Array = bd["pts"]
+		for q in range(0, pts.size(), maxi(1, every)):
+			_stamp(barrier, res, texel, pts[q], theme.coast_land_radius * 0.6, 1)
+			_stamp(land, res, texel, pts[q], theme.coast_land_radius * 0.6, 1)
 	# 2. interieur de la boucle : ce que l'eau venue des bords n'atteint pas
 	var outside := PackedByteArray()
 	outside.resize(res * res)
@@ -1046,9 +1118,10 @@ static func _blur(grid: PackedByteArray, res: int) -> PackedByteArray:
 ## chaussee (arch_height de hauteur libre), tubes neon, enseigne tournee vers
 ## les camions qui arrivent, et une lumiere qui colore la piste dessous.
 ## Purement visuelle : aucune collision (ni camion, ni camera).
-func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
+func _build_arch(parent: Node3D, s: float, label: String, index: int, at: Transform3D = Transform3D(),
+		span: float = -1.0) -> void:
 	if theme.arch_style == TrackTheme.ArchStyle.TORII:
-		_build_torii(parent, s, label, index)
+		_build_torii(parent, s, label, index, at, span)
 		return
 	var i := index_at_s(s)
 	var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
@@ -1056,6 +1129,11 @@ func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
 	var arch_basis := Basis(r, Vector3.UP, -t)
 	var base := _pos[i]
 	var half := width / 2.0 + 3.0
+	# pose donnee (entree d'un raccourci) : son repere, sa largeur
+	if span > 0.0:
+		arch_basis = at.basis
+		base = at.origin
+		half = span / 2.0 + 3.0
 	var neon: Material = theme.arch_tubes[index % theme.arch_tubes.size()]
 	var neon_color := theme.arch_colors[index % theme.arch_colors.size()]
 	var root := Node3D.new()
@@ -1099,15 +1177,21 @@ func _build_arch(parent: Node3D, s: float, label: String, index: int) -> void:
 ## murs, linteau bas (nuki), double linteau haut (shimaki vermillon, kasagi
 ## noir aux extremites relevees), plaque centrale a l'enseigne, et deux
 ## grandes lanternes de papier rouges suspendues. Purement visuel.
-func _build_torii(parent: Node3D, s: float, label: String, index: int) -> void:
+func _build_torii(parent: Node3D, s: float, label: String, index: int, at: Transform3D = Transform3D(),
+		span: float = -1.0) -> void:
 	var i := index_at_s(s)
 	var t := Vector3(_fwd[i].x, 0.0, _fwd[i].z).normalized()
 	var r := t.cross(Vector3.UP).normalized()
 	var base := _pos[i]
 	var half := width / 2.0 + 4.0
+	var torii_basis := Basis(r, Vector3.UP, -t)
+	if span > 0.0:
+		torii_basis = at.basis
+		base = at.origin
+		half = span / 2.0 + 4.0
 	var root := Node3D.new()
 	root.name = "Arch%d" % index
-	root.transform = Transform3D(Basis(r, Vector3.UP, -t), base)
+	root.transform = Transform3D(torii_basis, base)
 	parent.add_child(root)
 	var red: Material = theme.arch_tubes[0]
 	var black: Material = theme.arch_frame
@@ -1225,7 +1309,7 @@ func _build_reset_zones(parent: Node3D) -> void:
 			# l'autre branche passe dans la zone (circuit en 8) : pas de zone ici,
 			# AutoReset mesure la sortie de piste a la geometrie
 			var zone_xf := Transform3D(zone_basis, center)
-			if _box_hits_other_road(zone_xf, box.size, _s[mid]):
+			if _box_hits_other_road(zone_xf, box.size, _s[mid]) or _box_hits_branch(zone_xf, box.size):
 				area.free()
 				continue
 			area.transform = zone_xf
@@ -1281,6 +1365,33 @@ func _build_checkpoints(parent: Node3D) -> void:
 		parent.add_child(area)
 
 
+## Doubles des checkpoints du detour, en travers de chaque raccourci : meme
+## numero, a la meme part du chemin.
+func _build_branch_checkpoints(parent: Node3D) -> void:
+	for kb in _br.size():
+		var bd := _br[kb]
+		var s0 := float(bd["s0"])
+		var s1 := float(bd["s1"])
+		for k in checkpoint_count:
+			var s := checkpoint_s(k)
+			if s <= s0 or s >= s1:
+				continue
+			var area := Area3D.new()
+			area.name = "CP%02dB%d" % [k, kb]
+			area.collision_layer = 1 << (CHECKPOINT_LAYER - 1)
+			area.collision_mask = 1 << (VEHICLE_LAYER - 1)
+			area.monitorable = false
+			var cs := CollisionShape3D.new()
+			var box := BoxShape3D.new()
+			box.size = Vector3(float(bd["w"]) + 2.0 * (wall_thickness + wall_lean + 1.0), checkpoint_height, checkpoint_depth)
+			cs.shape = box
+			cs.position = Vector3(0.0, checkpoint_height / 2.0 - 2.0, 0.0)
+			area.add_child(cs)
+			area.transform = branch_frame(kb, (s - s0) / (s1 - s0), 0.0, 0.0)
+			area.body_entered.connect(_on_checkpoint_body_entered.bind(k))
+			parent.add_child(area)
+
+
 func _on_checkpoint_body_entered(body: Node3D, index: int) -> void:
 	checkpoint_passed.emit(body, index)
 
@@ -1305,7 +1416,7 @@ func _on_sign_hit(truck: Truck, index: int) -> void:
 ## sur la chaussee - flaque d'eau a ras du sol (miroir sombre aux rides
 ## animees) ou banc de sable legerement bombe, selon le theme ; zone de
 ## declenchement cylindrique. Aucune collision.
-func _build_puddle(parent: Node3D, p: Vector3, index: int) -> void:
+func _build_puddle(parent: Node3D, p: Vector3, index: int, at: Transform3D = Transform3D(), placed: bool = false) -> void:
 	var area := Area3D.new()
 	area.name = "Puddle%d" % index
 	area.collision_layer = 0
@@ -1340,7 +1451,7 @@ func _build_puddle(parent: Node3D, p: Vector3, index: int) -> void:
 	mi.material_override = theme.hazard
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	area.add_child(mi)
-	area.transform = frame_at(index_at_s(p.x), p.y, 0.0)
+	area.transform = at if placed else frame_at(index_at_s(p.x), p.y, 0.0)
 	area.body_entered.connect(_on_puddle_body_entered.bind(index))
 	parent.add_child(area)
 
@@ -1362,12 +1473,12 @@ func _build_sign(parent: Node3D, s: float, lateral: float, index: int) -> void:
 	parent.add_child(board)
 
 
-func _build_barrel(parent: Node3D, s: float, lateral: float, index: int) -> void:
-	var i := index_at_s(s)
+func _build_barrel(parent: Node3D, s: float, lateral: float, index: int, at: Transform3D = Transform3D(),
+		placed: bool = false) -> void:
 	var barrel := ExplosiveBarrel.new()
 	barrel.name = "Barrel%d" % index
 	barrel.apply_style(theme.barrel_style)
-	barrel.transform = frame_at(i, lateral, 0.0)
+	barrel.transform = at if placed else frame_at(index_at_s(s), lateral, 0.0)
 	barrel.exploded.connect(func(truck: Truck) -> void:
 		barrel_hit.emit(truck, index))
 	parent.add_child(barrel)
@@ -1481,6 +1592,371 @@ func _build_boost_pad(parent: Node3D, s: float, lateral: float, index: int) -> v
 
 
 # --- utilitaires ------------------------------------------------------------------
+
+# --- raccourcis -----------------------------------------------------------------
+
+## Resout les raccourcis (droite entre leurs deux bouts sur la piste) et les
+## ouvertures des murs de la piste.
+func _build_branches() -> void:
+	_br.clear()
+	var n := _pos.size()
+	for side in 2:
+		_wall_open[side] = PackedByteArray()
+	if branches.is_empty():
+		return
+	for spec: Dictionary in branches:
+		var from := String(spec.get("from", ""))
+		var to := String(spec.get("to", ""))
+		if not _segment_starts.has(from) or not _segment_ends.has(to):
+			push_warning("TrackBlockout : raccourci %s, segments inconnus" % spec.get("name", ""))
+			continue
+		var s0 := float(_segment_starts[from])
+		var s1 := float(_segment_ends[to])
+		var i0 := index_at_s(s0)
+		var i1 := index_at_s(s1)
+		var w := float(spec.get("width", branch_width))
+		var turn := 0.0
+		for seg: Dictionary in segments:
+			if String(seg.get("name", "")) == from:
+				turn = float(seg.get("angle", 0.0))
+		# detour a droite : le raccourci file tout droit, colle au bord gauche
+		var lat := float(spec.get("lateral", -signf(turn) * (width / 2.0 - w / 2.0)))
+		var a := _pos[i0] + _flat_right(i0) * lat
+		var b := _pos[i1] + _flat_right(i1) * lat
+		var dir := Vector3(b.x - a.x, 0.0, b.z - a.z)
+		var length := dir.length()
+		dir = dir / maxf(length, 1e-3)
+		var right := dir.cross(Vector3.UP).normalized()
+		var count := maxi(2, roundi(length / sample_step))
+		var pts := PackedVector3Array()
+		for k in count + 1:
+			var u := float(k) / count
+			var p := a.lerp(b, u)
+			p.y = lerpf(a.y, b.y, smoothstep(0.0, 1.0, u))
+			pts.append(p)
+		_br.append({"name": String(spec.get("name", "Raccourci %d" % _br.size())), "s0": s0, "s1": s1, "w": w,
+			"a": a, "b": b, "dir": dir, "right": right, "len": length, "pts": pts, "spec": spec})
+	# mur de la piste dans le raccourci (a plus d'1 m de son bord) : ouvert
+	for side in 2:
+		_wall_open[side].resize(n)
+	for i in n:
+		for side in 2:
+			var edge := _pos[i] + _right[i] * ((-1.0 if side == 0 else 1.0) * width / 2.0)
+			_wall_open[side][i] = 1 if on_branch(edge, -1.0) >= 0 else 0
+
+
+## Lateral horizontal de la piste a l'echantillon i (sans devers).
+func _flat_right(i: int) -> Vector3:
+	return Vector3(_right[i].x, 0.0, _right[i].z).normalized()
+
+
+func branch_count() -> int:
+	_ensure_built()
+	return _br.size()
+
+
+func branch_name(k: int) -> String:
+	return String(_br[k]["name"])
+
+
+func branch_length(k: int) -> float:
+	_ensure_built()
+	return float(_br[k]["len"])
+
+
+## Abscisses (m) de la piste ou le raccourci k part et revient.
+func branch_span(k: int) -> Vector2:
+	_ensure_built()
+	return Vector2(float(_br[k]["s0"]), float(_br[k]["s1"]))
+
+
+## Repere sur le raccourci k a la part `u` (0 a 1), decale lateralement,
+## oriente dans le sens de course, `lift` m au-dessus.
+func branch_frame(k: int, u: float, lateral: float, lift: float) -> Transform3D:
+	_ensure_built()
+	var bd := _br[k]
+	var a := bd["a"] as Vector3
+	var b := bd["b"] as Vector3
+	var p := a.lerp(b, u)
+	p.y = lerpf(a.y, b.y, smoothstep(0.0, 1.0, u))
+	var dir := bd["dir"] as Vector3
+	var right := bd["right"] as Vector3
+	return Transform3D(Basis(right, Vector3.UP, -dir), p + right * lateral + Vector3.UP * lift)
+
+
+## Indice du raccourci sous `p` (sur sa chaussee, a `margin` m pres de ses
+## bords, a hauteur de route), -1 sinon.
+func on_branch(p: Vector3, margin: float = 0.0) -> int:
+	for k in _br.size():
+		var bd := _br[k]
+		var a := bd["a"] as Vector3
+		var dir := bd["dir"] as Vector3
+		var d := p - a
+		var u := (d.x * dir.x + d.z * dir.z) / float(bd["len"])
+		if u < 0.0 or u > 1.0:
+			continue
+		var right := bd["right"] as Vector3
+		if absf(d.x * right.x + d.z * right.z) > float(bd["w"]) / 2.0 + margin:
+			continue
+		var y := lerpf(a.y, (bd["b"] as Vector3).y, smoothstep(0.0, 1.0, u))
+		if p.y < y - 8.0 or p.y > y + 30.0:
+			continue
+		return k
+	return -1
+
+
+## Abscisse de la piste qui correspond a `p` sur le raccourci k (meme part du
+## chemin que sur le detour).
+func branch_progress_s(k: int, p: Vector3) -> float:
+	var bd := _br[k]
+	var d := p - (bd["a"] as Vector3)
+	var dir := bd["dir"] as Vector3
+	var u := clampf((d.x * dir.x + d.z * dir.z) / float(bd["len"]), 0.0, 1.0)
+	return lerpf(float(bd["s0"]), float(bd["s1"]), u)
+
+
+## `p` est sur la chaussee de la piste (a `margin` m pres de ses bords).
+func _on_main_road(p: Vector3, margin: float) -> bool:
+	# recherche grossiere (1 echantillon sur 4), puis fine autour
+	var n := _pos.size()
+	var best := 0
+	var best_d := INF
+	for i in range(0, n, 4):
+		var d := _pos[i].distance_squared_to(p)
+		if d < best_d:
+			best_d = d
+			best = i
+	var coarse := best
+	for k in range(-4, 5):
+		var i := posmod(coarse + k, n)
+		var d := _pos[i].distance_squared_to(p)
+		if d < best_d:
+			best_d = d
+			best = i
+	var q := p - _pos[best]
+	return absf(q.dot(_right[best])) < width / 2.0 + margin and absf(q.dot(_up[best])) < 10.0
+
+
+## Chaussee et murs des raccourcis, la ou ils sortent de la piste.
+func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
+	for kb in _br.size():
+		var bd := _br[kb]
+		var pts: PackedVector3Array = bd["pts"]
+		var w := float(bd["w"])
+		var right := bd["right"] as Vector3
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var tris := PackedVector3Array()
+		var lift := Vector3(0.0, 0.03, 0.0)
+		var inside := PackedByteArray()
+		inside.resize(pts.size())
+		for q in pts.size():
+			# tout le travers dans la piste : sa chaussee suffit
+			inside[q] = 1 if _on_main_road(pts[q] - right * w / 2.0, -1.0) \
+					and _on_main_road(pts[q] + right * w / 2.0, -1.0) else 0
+		for q in pts.size() - 1:
+			if inside[q] == 1 and inside[q + 1] == 1:
+				continue
+			var v0 := q * sample_step
+			var v1 := v0 + sample_step
+			_quad(st, tris, pts[q] - right * w / 2.0 + lift, pts[q] + right * w / 2.0 + lift,
+				pts[q + 1] + right * w / 2.0 + lift, pts[q + 1] - right * w / 2.0 + lift,
+				Vector2(0, v0), Vector2(1, v0), Vector2(1, v1), Vector2(0, v1), Vector3.UP)
+		if not tris.is_empty():
+			var mat := theme.road.duplicate() as ShaderMaterial
+			mat.set_shader_parameter("road_width", w)
+			var road := _static_body(geometry, "Branch%dRoad" % kb, st, tris, mat, 1.0)
+			road.set_meta(&"surface", &"asphalt")
+		# murs : la ou leur bord est hors de la piste (a plus d'1 m)
+		for side: float in [-1.0, 1.0]:
+			var wst := SurfaceTool.new()
+			wst.begin(Mesh.PRIMITIVE_TRIANGLES)
+			var wtris := PackedVector3Array()
+			var out := right * side
+			for q in pts.size() - 1:
+				var e0 := pts[q] + out * w / 2.0
+				var e1 := pts[q + 1] + out * w / 2.0
+				if _on_main_road(e0, 1.0) or _on_main_road(e1, 1.0):
+					continue
+				var a := _branch_wall_profile(e0, out)
+				var b := _branch_wall_profile(e1, out)
+				var v0 := q * sample_step
+				var v1 := v0 + sample_step
+				for k in 3:
+					if side > 0.0:
+						_quad(wst, wtris, a[k], b[k], b[k + 1], a[k + 1],
+							Vector2(k, v0), Vector2(k, v1), Vector2(k + 1, v1), Vector2(k + 1, v0), Vector3.ZERO)
+					else:
+						_quad(wst, wtris, a[k], a[k + 1], b[k + 1], b[k],
+							Vector2(k, v0), Vector2(k + 1, v0), Vector2(k + 1, v1), Vector2(k, v1), Vector3.ZERO)
+			if not wtris.is_empty():
+				var wall := _static_body(walls, "Branch%dWall%s" % [kb, "Left" if side < 0.0 else "Right"], wst, wtris,
+					theme.wall, wall_friction)
+				wall.set_meta(&"surface", &"asphalt")
+				_build_branch_neon(walls, kb, side)
+		# portique a l'entree : on voit le raccourci de loin
+		var gate := _group("BranchArches") if kb == 0 else get_node("BranchArches") as Node3D
+		var label := "近 道" if theme.arch_style == TrackTheme.ArchStyle.TORII else "RACCOURCI"
+		_build_arch(gate, 0.0, label, 100 + kb, branch_frame(kb, _gate_u(kb), 0.0, 0.0), w)
+
+
+## Part du raccourci k ou poser son portique : la premiere ou ses deux
+## piliers (a 4 m au-dela de ses bords) sont hors de la piste.
+func _gate_u(k: int) -> float:
+	var half := float(_br[k]["w"]) / 2.0 + 4.0
+	var u := BRANCH_GATE_U
+	while u < 0.5:
+		var f := branch_frame(k, u, 0.0, 0.0)
+		if not _on_main_road(f.origin - f.basis.x * half, 3.0) and not _on_main_road(f.origin + f.basis.x * half, 3.0):
+			return u
+		u += 0.01
+	return 0.5
+
+
+## Neon du haut des murs d'un raccourci (comme _build_wall_neon), la ou ils
+## sont construits.
+func _build_branch_neon(parent: Node3D, kb: int, side: float) -> void:
+	var bd := _br[kb]
+	var pts: PackedVector3Array = bd["pts"]
+	var w := float(bd["w"])
+	var out := (bd["right"] as Vector3) * side
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tris := PackedVector3Array()
+	var z2 := Vector2.ZERO
+	for q in pts.size() - 1:
+		var e0 := pts[q] + out * w / 2.0
+		var e1 := pts[q + 1] + out * w / 2.0
+		if _on_main_road(e0, 1.0) or _on_main_road(e1, 1.0):
+			continue
+		var strip: Array[PackedVector3Array] = []
+		for e: Vector3 in [e0, e1]:
+			var prof := _branch_wall_profile(e, out)
+			var down := (prof[0] - prof[1]).normalized()
+			var inward := -out * 0.04
+			var lift := Vector3(0.0, 0.03, 0.0)
+			strip.append(PackedVector3Array([prof[1] + down * 0.32 + inward, prof[1] + inward + lift, prof[2] + lift]))
+		_quad(st, tris, strip[0][0], strip[1][0], strip[1][1], strip[0][1], z2, z2, z2, z2, Vector3.ZERO)
+		_quad(st, tris, strip[0][1], strip[1][1], strip[1][2], strip[0][2], z2, z2, z2, z2, Vector3.ZERO)
+	if tris.is_empty():
+		return
+	var mi := MeshInstance3D.new()
+	mi.name = "Branch%dNeon%s" % [kb, "Left" if side < 0.0 else "Right"]
+	mi.mesh = st.commit()
+	mi.material_override = theme.edge_left if side < 0.0 else theme.edge_right
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+
+## Profil d'un mur de raccourci (comme _wall_profile) au bord `edge`,
+## exterieur `out` (horizontal).
+func _branch_wall_profile(edge: Vector3, out: Vector3) -> PackedVector3Array:
+	var top_y := edge.y + wall_height
+	var inner_bottom := edge + Vector3(0.0, -0.3, 0.0)
+	var inner_top := Vector3(edge.x, top_y, edge.z) - out * wall_lean
+	var outer_top := inner_top + out * (wall_thickness + wall_lean * (1.0 + 0.3 / wall_height))
+	var outer_bottom := Vector3(outer_top.x, minf(GROUND_Y - 0.1, edge.y - 0.3), outer_top.z)
+	return PackedVector3Array([inner_bottom, inner_top, outer_top, outer_bottom])
+
+
+## Flaques et barils des raccourcis (indices apres ceux de la piste).
+func _build_branch_hazards(pads: Node3D, barrels: Node3D) -> void:
+	_branch_puddles.clear()
+	_branch_barrels.clear()
+	for kb in _br.size():
+		var spec: Dictionary = _br[kb]["spec"]
+		for pd: Array in spec.get("puddles", []):
+			var xf := branch_frame(kb, float(pd[0]), float(pd[1]), 0.0)
+			var index := _puddles.size() + _branch_puddles.size()
+			_branch_puddles.append([xf, float(pd[2])])
+			_build_puddle(pads, Vector3(0.0, 0.0, float(pd[2])), index, xf, true)
+		for br: Array in spec.get("barrels", []):
+			var xf := branch_frame(kb, float(br[0]), float(br[1]), 0.0)
+			var index := _barrels.size() + _branch_barrels.size()
+			_branch_barrels.append(xf)
+			_build_barrel(barrels, 0.0, 0.0, index, xf, true)
+
+
+## Vrai si la boite `size` posee en `xf` touche un raccourci (murs compris).
+func _box_hits_branch(xf: Transform3D, size: Vector3) -> bool:
+	if _br.is_empty():
+		return false
+	var inv := xf.affine_inverse()
+	for bd: Dictionary in _br:
+		var pts: PackedVector3Array = bd["pts"]
+		var pad := float(bd["w"]) / 2.0 + wall_thickness + 4.0
+		for q in range(0, pts.size(), 2):
+			var l := inv * pts[q]
+			if absf(l.x) < size.x / 2.0 + pad and absf(l.z) < size.z / 2.0 + pad and absf(l.y) < size.y / 2.0 + 3.0:
+				return true
+	return false
+
+
+## Retire du decor `root` ce qui tomberait sur un raccourci : maillages et
+## instances de MultiMesh dont l'emprise touche sa chaussee (murs et 3 m de
+## marge compris), sous 15 m au-dessus d'elle (un pont routier passe). Appele
+## par les decors a la fin de leur generation.
+func clear_branch_corridors(root: Node) -> void:
+	if _br.is_empty() or root == null:
+		return
+	for n in root.find_children("*", "MultiMeshInstance3D", true, false):
+		var mmi := n as MultiMeshInstance3D
+		var mm := mmi.multimesh
+		if mm == null or mm.mesh == null:
+			continue
+		var aabb := mm.mesh.get_aabb()
+		var keep: Array[int] = []
+		for k in mm.instance_count:
+			var xf := mmi.global_transform * mm.get_instance_transform(k)
+			var box := xf * aabb
+			if not _blocks_branch(box):
+				keep.append(k)
+		if keep.size() == mm.instance_count:
+			continue
+		var xfs: Array[Transform3D] = []
+		var colors: Array[Color] = []
+		var custom: Array[Color] = []
+		for k in keep:
+			xfs.append(mm.get_instance_transform(k))
+			if mm.use_colors:
+				colors.append(mm.get_instance_color(k))
+			if mm.use_custom_data:
+				custom.append(mm.get_instance_custom_data(k))
+		mm.instance_count = xfs.size()
+		for k in xfs.size():
+			mm.set_instance_transform(k, xfs[k])
+			if mm.use_colors:
+				mm.set_instance_color(k, colors[k])
+			if mm.use_custom_data:
+				mm.set_instance_custom_data(k, custom[k])
+	for n in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		if _blocks_branch(mi.global_transform * mi.get_aabb()):
+			mi.queue_free()
+
+
+## L'emprise de `box` (monde) touche un raccourci, sous 15 m au-dessus de lui.
+func _blocks_branch(box: AABB) -> bool:
+	var c := box.get_center()
+	var radius := maxf(box.size.x, box.size.z) / 2.0 + wall_thickness + wall_lean + 3.0
+	var k := on_branch(Vector3(c.x, 0.0, c.z), radius)
+	if k < 0:
+		# on_branch juge aussi la hauteur : refait a plat
+		for kb in _br.size():
+			var bd := _br[kb]
+			var a := bd["a"] as Vector3
+			var probe := Vector3(c.x, lerpf(a.y, (bd["b"] as Vector3).y, 0.5), c.z)
+			if on_branch(probe, radius) == kb:
+				k = kb
+				break
+	if k < 0:
+		return false
+	var bd2 := _br[k]
+	var y := maxf((bd2["a"] as Vector3).y, (bd2["b"] as Vector3).y)
+	return box.position.y < y + 15.0
+
 
 func _group(group_name: String) -> Node3D:
 	var g := Node3D.new()
