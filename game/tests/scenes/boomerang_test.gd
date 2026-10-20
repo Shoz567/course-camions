@@ -5,7 +5,7 @@ extends PhysicsTest
 ## la cible 60 m devant et 4 m sur le cote. L'ancien boomerang (55 m/s dans
 ## l'absolu, demi-tour au bout de 50 ticks) ne prenait que ~17 m d'avance :
 ##   A. il vise la cible (target_ahead) et la touche a l'aller et au retour
-##      (2 x BOOMERANG_DAMAGE, tete et remorque comprises) ;
+##      (2 x BOOMERANG_DAMAGE a sa remorque : elle tracte) ;
 ##   B. il revient au tireur et disparait ;
 ##   C. un camion hors du cone, loin sur le cote, n'est pas touche.
 
@@ -50,7 +50,7 @@ func _test_tick(t: int) -> void:
 		_seen["target"] = _p.target_ahead() == _b
 		_seen["fired"] = _p.use(0)
 	if t == 410:
-		_seen["lost"] = _full - _total(_b)
+		_seen["lost"] = TruckHealth.of(_b).trailer_max_hp - TruckHealth.of(_b).trailer_hp
 		_seen["c"] = _total(_c)
 		var alive := 0
 		for n in get_children():

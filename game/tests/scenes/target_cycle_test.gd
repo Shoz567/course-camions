@@ -70,7 +70,7 @@ func _test_tick(t: int) -> void:
 		22:
 			_seen["next3"] = _p.target_ahead()
 			_hud._place_reticle(_p)
-			var at := _cam.unproject_position(_c.global_position + Vector3.UP * 2.2)
+			var at := _cam.unproject_position(TruckPowers.aim_point(_c))
 			_seen["reticle"] = [_hud.reticle_visible(), (_hud.get("_reticle") as Control).position.distance_to(at) < 1.0]
 			_p.use(0)
 		120:

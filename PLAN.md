@@ -951,6 +951,13 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   prêt) ; flèche haut de la croix (clavier T / J) : cible suivante parmi les
   camions devant, du plus proche au plus loin puis retour. Bit `target_next`
   de l'`InputFrame` : le host vise le même camion (`target_cycle_test`).
+- [x] **Remorque en priorité** (2026-10-20, « le pouvoir vise en priorité la
+  remorque, pour pénaliser les joueurs qui n'en ont pas ; ça diminue
+  fortement les dégâts faits aux camions qui tractent ») : missile,
+  boomerang, laser, mitrailleuse et viseur visent la remorque d'un camion qui
+  tracte ; elle encaisse les PV de chaque coup, la tête touchée n'en prend que
+  20 % (`TOWING_CAB_SHARE`). Sans remorque : tout sur la tête
+  (`power_trailer_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

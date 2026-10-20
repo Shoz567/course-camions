@@ -70,7 +70,7 @@ func _physics_process(delta: float) -> void:
 		if home.length() >= PowerCatalog.BOOMERANG_RANGE_M or _age == _turn_at:
 			_turn_back()
 		elif target != null:
-			_steer(target.global_position + Vector3.UP * 1.5 - global_position, PowerCatalog.BOOMERANG_SEEK_DEG)
+			_steer(TruckPowers.aim_point(target) - global_position, PowerCatalog.BOOMERANG_SEEK_DEG)
 	if returning:
 		if home.length() < 2.5:
 			queue_free()
