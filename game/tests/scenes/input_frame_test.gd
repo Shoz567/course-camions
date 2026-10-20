@@ -49,6 +49,11 @@ func _test_bytes() -> void:
 	var c := InputFrame.new()
 	c.copy_from(g)
 	check("copie : cargo recopie", c.cargo)
+	var tn := InputFrame.new()
+	tn.target_next = true
+	var tg := InputFrame.from_bytes(tn.to_bytes())
+	check("cible suivante : bit transporte, rien d'autre", tg.target_next and not tg.power_left
+		and not tg.power_right and not tg.honk and tn.to_bytes().size() == 6)
 	c.clear()
 	check("neutre : plus de cargo", not c.cargo)
 

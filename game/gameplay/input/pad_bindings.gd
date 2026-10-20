@@ -13,7 +13,7 @@ extends RefCounted
 
 ## Actions dans l'ordre de l'ecran, et leur nom affiche.
 const ACTIONS: PackedStringArray = ["handbrake", "boost", "cargo", "honk", "camera", "look_back", "reset",
-	"power_left", "power_right"]
+	"power_left", "power_right", "target"]
 const LABELS: Dictionary = {
 	"handbrake": "Frein à main / dérapage (drift)",
 	"boost": "Nitro boost",
@@ -24,6 +24,7 @@ const LABELS: Dictionary = {
 	"reset": "Reset sur la piste",
 	"power_left": "Pouvoir de gauche",
 	"power_right": "Pouvoir de droite",
+	"target": "Changer de cible",
 }
 
 ## Boutons qu'on ne peut pas donner : le bouton PS ouvre le systeme.
@@ -42,6 +43,7 @@ static func defaults() -> Dictionary:
 		"reset": PackedInt32Array([JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]),
 		"power_left": PackedInt32Array([JOY_BUTTON_DPAD_LEFT]),
 		"power_right": PackedInt32Array([JOY_BUTTON_DPAD_RIGHT]),
+		"target": PackedInt32Array([JOY_BUTTON_DPAD_UP]),
 	}
 
 
@@ -119,6 +121,7 @@ static func apply(source: DeviceInputSource, bindings: Dictionary) -> void:
 	source.buttons_reset = _typed(b["reset"])
 	source.buttons_power_left = _typed(b["power_left"])
 	source.buttons_power_right = _typed(b["power_right"])
+	source.buttons_target = _typed(b["target"])
 
 
 static func _typed(list: PackedInt32Array) -> Array[JoyButton]:

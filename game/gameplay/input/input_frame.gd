@@ -17,6 +17,8 @@ const BIT_CARGO := 16
 ## Pouvoirs (tache 4.5.8) : croix directionnelle gauche / droite.
 const BIT_POWER_LEFT := 32
 const BIT_POWER_RIGHT := 64
+## Cible suivante (2026-10-20) : fleche haut de la croix.
+const BIT_TARGET_NEXT := 128
 
 var tick: int = 0
 var steer: float = 0.0        # -1 (gauche) .. +1 (droite), zone morte appliquee
@@ -29,6 +31,7 @@ var honk: bool = false        # front montant : coup de klaxon (vu des autres jo
 var cargo: bool = false       # front montant : largage de cargo
 var power_left: bool = false  # front montant : pouvoir de gauche
 var power_right: bool = false # front montant : pouvoir de droite
+var target_next: bool = false # front montant : cible suivante des pouvoirs
 
 
 func copy_from(other: InputFrame) -> void:
@@ -43,6 +46,7 @@ func copy_from(other: InputFrame) -> void:
 	cargo = other.cargo
 	power_left = other.power_left
 	power_right = other.power_right
+	target_next = other.target_next
 
 
 ## Remet toutes les commandes au neutre (manette debranchee : roue libre).
@@ -57,6 +61,7 @@ func clear() -> void:
 	cargo = false
 	power_left = false
 	power_right = false
+	target_next = false
 
 
 func to_bytes() -> PackedByteArray:
@@ -93,6 +98,8 @@ func write_to(buf: PackedByteArray, offset: int) -> void:
 		bits |= BIT_POWER_LEFT
 	if power_right:
 		bits |= BIT_POWER_RIGHT
+	if target_next:
+		bits |= BIT_TARGET_NEXT
 	buf.encode_u8(offset + 5, bits)
 
 
@@ -110,3 +117,4 @@ func read_from(buf: PackedByteArray, offset: int) -> void:
 	cargo = (bits & BIT_CARGO) != 0
 	power_left = (bits & BIT_POWER_LEFT) != 0
 	power_right = (bits & BIT_POWER_RIGHT) != 0
+	target_next = (bits & BIT_TARGET_NEXT) != 0

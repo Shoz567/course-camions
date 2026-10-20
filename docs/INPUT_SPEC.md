@@ -76,6 +76,12 @@ montants des deux pouvoirs (bits 32 et 64 de l'octet de boutons ; la frame
 garde ses 6 octets). Manette : flèches gauche / droite de la croix
 (réaffectables) ; clavier : F / G (ZQSD), K / L (flèches).
 
+Ajout du 2026-10-20 : `target_next`, front montant « cible suivante » des
+pouvoirs (bit 128 ; la frame garde ses 6 octets). La simulation choisit la
+cible (`TruckPowers.target_ahead` / `cycle_target`) : elle passe par la frame
+pour que le host vise le même camion que le joueur. Manette : flèche haut de
+la croix ; clavier : T (ZQSD), J (flèches).
+
 ## 3. Mapping
 
 Profil **Forza Horizon, manette PlayStation 5 DualSense** (décidé le
@@ -99,6 +105,8 @@ position. Chaque action est une **liste** de boutons exportée par
 | caméra 1re / 3e personne | **R3** (local, hors `InputFrame`) | touche suivante (:) | C |
 | regard autour (petite amplitude : 30° de cap, 10° d'inclinaison) | **stick droit** (local, hors `InputFrame`) | — | — |
 | regarder derrière (tant que c'est tenu) | **L1** (local, hors `InputFrame`) | Fin | B |
+| `power_left` / `power_right` (pouvoirs) | **croix gauche / droite** | K / L | F / G |
+| `target_next` (cible suivante des pouvoirs, en cycle parmi les camions devant) | **croix haut** | J | T |
 | `reset` | **Options**, **Create** ou **pavé tactile** | Retour arrière | R |
 | rejouer après l'arrivée | Options | Entrée | Entrée |
 | revenir au menu après l'arrivée | Create | Échap | Échap |

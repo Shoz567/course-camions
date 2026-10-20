@@ -1471,8 +1471,8 @@ func _build_settings() -> Control:
 	bottom.add_child(keys)
 	keys.add_child(_section("Clavier"))
 	for line: String in [
-		"J1 — flèches · Ctrl droit drift · Maj droite boost · ; cargo · ! klaxon · : vue · Fin regarder derrière · Retour arrière reset",
-		"J2 — Z Q S D · Espace drift · Maj gauche boost · E cargo · H klaxon · C vue · B regarder derrière · R reset",
+		"J1 — flèches · Ctrl droit drift · Maj droite boost · ; cargo · ! klaxon · : vue · Fin regarder derrière · K / L pouvoirs · J cible · Retour arrière reset",
+		"J2 — Z Q S D · Espace drift · Maj gauche boost · E cargo · H klaxon · C vue · B regarder derrière · F / G pouvoirs · T cible · R reset",
 		"Seul : les deux jeux de touches · Échap : menu · Entrée : rejouer · F11 : plein écran / fenêtre",
 	]:
 		var l := _label(line, 17, 0)

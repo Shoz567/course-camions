@@ -81,4 +81,5 @@ func poll(tick: int) -> InputFrame:
 	frame.cargo = p.cargo or k.cargo
 	frame.power_left = p.power_left or k.power_left
 	frame.power_right = p.power_right or k.power_right
+	frame.target_next = p.target_next or k.target_next
 	return frame

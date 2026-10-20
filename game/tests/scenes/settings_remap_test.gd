@@ -111,9 +111,9 @@ func _test_finish() -> void:
 	check("aucune action sans bouton apres un echange", empty)
 	check("profil d'origine jamais modifie", str(defaults) == str(PadBindings.defaults()))
 	# C
-	var broken := PadBindings.sanitized({"boost": PackedInt32Array(), "camera": [200, -1], "honk": [JOY_BUTTON_DPAD_UP]})
+	var broken := PadBindings.sanitized({"boost": PackedInt32Array(), "camera": [200, -1], "honk": [JOY_BUTTON_DPAD_DOWN]})
 	check("profil abime : actions vides ou hors bornes -> defaut, le reste garde",
-		_list(broken, "boost") == "Carré" and _list(broken, "camera") == "R3" and _list(broken, "honk") == "Haut"
+		_list(broken, "boost") == "Carré" and _list(broken, "camera") == "R3" and _list(broken, "honk") == "Bas"
 		and _list(broken, "reset") == "Options, Create, Pavé tactile", str(broken))
 	# D
 	_round_trip()

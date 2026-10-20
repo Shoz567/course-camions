@@ -63,6 +63,8 @@ const CALLOUTS: Array[Dictionary] = [
 	{"key": "L1", "text": "Regarder derrière (tenu)", "anchors": [P_L1], "side": -1, "row": 1, "ring": 10.0},
 	{"key": "Create / pavé tactile", "text": "Reset sur la piste", "anchors": [P_CREATE, P_TOUCH],
 		"side": -1, "row": 2, "ring": 13.0, "via": [[], [Vector2(455, 202)]]},
+	{"key": "Croix directionnelle", "text": "◄ ► pouvoirs · ▲ cible", "anchors": [P_DPAD], "side": -1,
+		"row": 3, "ring": 24.0},
 	{"key": "Stick gauche / L3", "text": "Diriger · L3 : klaxon", "anchors": [P_LSTICK], "side": -1, "row": 4, "ring": 30.0},
 	{"key": "R2", "text": "Accélérer (progressif)", "anchors": [P_R2], "side": 1, "row": 0, "ring": 11.0},
 	{"key": "R1", "text": "Frein à main / dérapage (drift)", "anchors": [P_R1], "side": 1, "row": 1, "ring": 10.0},
