@@ -42,6 +42,7 @@ static func launch(from: Truck, aim: Truck = null, as_mirror: bool = false) -> P
 
 
 func _ready() -> void:
+	add_to_group(PowerMissile.PROJECTILES)
 	if DisplayServer.get_name() == "headless":
 		return
 	_spin = Node3D.new()

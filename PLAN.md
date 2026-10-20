@@ -979,6 +979,13 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   son ; bip au changement de cible. Viseur : rouge si un pouvoir prêt
   l'atteint, gris hors de portée, terne en recharge ; flèches ◄ ► par
   emplacement, distance dessous (`hit_feedback_test`).
+- [x] **Bots tactiques** (2026-10-20, « larguer la remorque au bon moment,
+  juste avant un virage, avec un poursuivant collé derrière ; bouclier quand un
+  missile arrive ») : bouclier sans temps de réaction quand un missile ou un
+  boomerang qui le vise est à moins de 25 m (moyen) / 40 m (dur), ou qu'un
+  laser le touche ; largage quand un camion le suit dans sa voie juste
+  derrière sa remorque (moyen), et seulement avant un virage de moins de
+  150 m de rayon (dur). Jamais en facile (`bot_tactics_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

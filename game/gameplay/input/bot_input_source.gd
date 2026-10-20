@@ -26,6 +26,14 @@ extends InputSource
 ## passera, et il ralentit s'il n'a plus le temps de se decaler ;
 ##   - pouvoirs : missile ou laser sur un camion devant, bouclier quand ses PV
 ##     baissent, apres un temps de reaction propre au niveau ;
+## Tactique (2026-10-20 : « larguer la remorque au bon moment : juste avant un
+## virage, avec un poursuivant colle derriere ; sortir le bouclier quand un
+## missile arrive ») :
+##   - bouclier quand un missile ou un boomerang qui le vise arrive a moins de
+##     SHIELD_WARN_M, ou qu'un laser le touche (moyen, dur ; sans attendre) ;
+##   - largage quand un camion le suit dans sa voie, juste derriere sa
+##     remorque (moyen) ; en dur, seulement si un virage arrive (il devra
+##     freiner, l'autre aussi : il ne l'evitera pas). Jamais en facile.
 ##   - bloque (moins de 5 km/h pendant STUCK_TICKS en course) : reset.
 ## Deterministe : aucun tirage, aucun temps reel ; ses ecarts viennent de son
 ## numero (voie de depart, rythme des pouvoirs).
@@ -45,6 +53,17 @@ const BRAKE := [0.5, 0.65, 0.95]
 const LINE := [0.35, 0.75, 1.0]
 const BOOST := [false, true, true]
 const REACTION_TICKS := [150, 70, 25]
+## Bouclier : distance (m) d'un projectile qui le vise a laquelle il le sort
+## (0 : jamais).
+const SHIELD_WARN_M := [0.0, 25.0, 40.0]
+## Largage : poursuivant dans la voie (ecart lateral < DROP_LATERAL_M), son
+## nez a moins de DROP_BEHIND_M derriere l'arriere de la remorque ; en dur,
+## un virage dans les DROP_CORNER_S secondes (rayon sous DROP_CORNER_RADIUS_M).
+const DROP := [false, true, true]
+const DROP_BEHIND_M := 18.0
+const DROP_LATERAL_M := 3.5
+const DROP_CORNER_S := [0.0, 0.0, 2.0]
+const DROP_CORNER_RADIUS_M := 150.0
 ## Lecture du profil de vitesse devant le camion (s de reaction), pas et
 ## portee du plan de freinage (m).
 const SPEED_LEAD_S := 0.25
@@ -102,6 +121,9 @@ var target_speed: float = 0.0
 var blocked_by: Node3D = null
 var line: RacingLine
 var _profile: PackedFloat32Array = []
+var _cargo: TruckCargo
+## Largages faits (tests).
+var drops: int = 0
 ## Vitesse max du niveau (m/s) : au-dessus, il ne remet pas les gaz.
 var _top: float = 0.0
 var _lat_now: float = 0.0
@@ -133,6 +155,7 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 		BOT_BRAKE * float(BRAKE[level]), PROFILE_CEILING_MS)
 	index = t.closest_sample(tr.global_position)
 	_lat_now = _lateral_of(tr.global_position, index)
+	_cargo = tr.get_node_or_null(^"Cargo") as TruckCargo
 
 
 func poll(tick: int) -> InputFrame:
@@ -159,6 +182,7 @@ func poll(tick: int) -> InputFrame:
 	_speed(v, float(traffic["cap"]))
 	_boost(bool(traffic["clear"]))
 	_powers()
+	_drop_tactic(v)
 	# bloque contre un mur, coince dans une epave : reset (comme un joueur)
 	_slow_ticks = _slow_ticks + 1 if v < 1.4 and RaceManager.state == RaceManagerNode.State.RACING else 0
 	if _slow_ticks >= STUCK_TICKS:
@@ -423,6 +447,73 @@ func _boost(clear: bool) -> void:
 	_boost_was = frame.boost
 
 
+## Un missile ou un boomerang qui le vise arrive (a moins de SHIELD_WARN_M),
+## ou un laser le touche.
+func _threatened() -> bool:
+	var warn := float(SHIELD_WARN_M[level])
+	if warn <= 0.0:
+		return false
+	var tree := truck.get_tree()
+	for n in tree.get_nodes_in_group(PowerMissile.PROJECTILES):
+		var aim: Variant = n.get("target")
+		if aim != truck:
+			continue
+		if n is PowerBoomerang and (n as PowerBoomerang).returning:
+			continue
+		if (n as Node3D).global_position.distance_to(truck.global_position) < warn:
+			return true
+	for n in tree.get_nodes_in_group(TruckPowers.TARGETS):
+		var t := n as Truck
+		if t == null or t == truck:
+			continue
+		var p := TruckPowers.of(t)
+		if p != null and p.laser_ticks > 0 and p.laser_hit == truck:
+			return true
+	return false
+
+
+## Largage tactique (voir l'en-tete) : un front d'un tick.
+func _drop_tactic(v: float) -> void:
+	if not bool(DROP[level]) or _cargo == null or not _cargo.is_ready() or truck.is_trailer_detached():
+		return
+	if _pursuer() == null:
+		return
+	var corner_s := float(DROP_CORNER_S[level])
+	if corner_s > 0.0 and not _corner_within(v, corner_s):
+		return
+	frame.cargo = true
+	drops += 1
+
+
+## Camion qui le suit dans sa voie, juste derriere sa remorque, ou null.
+func _pursuer() -> Truck:
+	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
+		var t := n as Truck
+		if t == null or t == truck or t.is_wrecked() or not t.is_inside_tree():
+			continue
+		var i := _sample_of(t.global_position, int(_hints.get(t, index)))
+		_hints[t] = i
+		# son nez par rapport a l'arriere de notre remorque (negatif : derriere)
+		var gap := _s_gap(index, i) + NOSE_M + TAIL_M
+		if gap > 0.0 or gap < -DROP_BEHIND_M:
+			continue
+		if absf(_lateral_of(t.global_position, i) - _lateral_of(truck.global_position, index)) < DROP_LATERAL_M:
+			return t
+	return null
+
+
+## Un virage arrive dans `seconds` s : la piste y tourne plus serre que
+## DROP_CORNER_RADIUS_M.
+func _corner_within(v: float, seconds: float) -> bool:
+	var reach := maxf(v * seconds, 20.0)
+	var d := 0.0
+	while d <= reach:
+		if absf(track.curvature(track.sample_ahead(index, d))) > 1.0 / DROP_CORNER_RADIUS_M:
+			return true
+		d += PLAN_STEP_M
+	return false
+
+
 ## Un camion juste a cote de la cabine (a portee des scies), ou null.
 func _beside() -> Truck:
 	var inv := truck.global_transform.affine_inverse()
@@ -441,10 +532,19 @@ func _powers() -> void:
 	var powers := TruckPowers.of(truck)
 	if powers == null:
 		return
+	var health := TruckHealth.of(truck)
+	# un projectile arrive : le bouclier tout de suite, sans temps de reaction
+	for k in 2:
+		if powers.slots[k] == PowerCatalog.Id.SHIELD and powers.cooldown[k] == 0 and _threatened():
+			if k == 0:
+				frame.power_left = true
+			else:
+				frame.power_right = true
+			_power_wait = int(REACTION_TICKS[level])
+			return
 	if _power_wait > 0:
 		_power_wait -= 1
 		return
-	var health := TruckHealth.of(truck)
 	for k in 2:
 		if powers.slots[k] < 0 or powers.cooldown[k] > 0:
 			continue

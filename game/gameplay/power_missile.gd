@@ -23,6 +23,11 @@ var _life: int = 0
 
 
 ## Tire depuis le toit de `from` vers `aim` (null : tout droit).
+## Projectiles des pouvoirs en vol (missiles, boomerangs) : les bots y voient
+## ce qui les vise (bouclier, BotInputSource).
+const PROJECTILES := &"power_projectiles"
+
+
 static func launch(from: Truck, aim: Truck, as_mirror: bool = false) -> PowerMissile:
 	var m := PowerMissile.new()
 	m.name = "Missile"
@@ -37,6 +42,7 @@ static func launch(from: Truck, aim: Truck, as_mirror: bool = false) -> PowerMis
 
 
 func _ready() -> void:
+	add_to_group(PROJECTILES)
 	_life = PowerCatalog.MISSILE_LIFE_TICKS
 	if DisplayServer.get_name() == "headless":
 		return
