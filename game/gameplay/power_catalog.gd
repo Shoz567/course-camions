@@ -64,6 +64,17 @@ const GUN_DAMAGE := 1.2
 ## par son train de roues), et un coup de lame tous les SAW_TIRE_INTERVAL
 ## ticks a chaque pneu dans la zone (TruckTires : il eclate au 3e, ~0,4 s).
 const SAW_TICKS := 240
+## Degats visuels des pouvoirs (2026-10-20 : « tout ce qui est capacite
+## puisse endommager les remorques et les camions, en plus des PV de maniere
+## visuelle ») : chaque coup marque la tole, tete ou remorque, comme un choc
+## a cette vitesse (m/s ; TruckDamageFx.crush : creux des 2,5, pieces
+## arrachees des 9). Laser : un coup tous les LASER_HIT_INTERVAL ticks.
+const MISSILE_HIT_MS := 18.0
+const BOOMERANG_HIT_MS := 12.0
+const SAW_HIT_MS := 10.0
+const LASER_HIT_MS := 7.0
+const LASER_HIT_INTERVAL := 15
+const GUN_HIT_MS := 4.0
 const SAW_REACH_M := 2.7
 const SAW_HALF_LENGTH_M := 3.6
 const SAW_DAMAGE_PER_TICK := 0.12

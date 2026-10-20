@@ -13,6 +13,8 @@ extends Node3D
 ##              portee de PowerCatalog), tout droit s'il n'y en a pas ;
 ##   LASER    : rayon droit devant pendant LASER_TICKS, LASER_DAMAGE_PER_TICK
 ##              au camion touche (le premier obstacle arrete le rayon) ;
+##   Tous : PV de la partie touchee, tete ou remorque, et degats visuels
+##              (strike, 2026-10-20) ;
 ##   MITRAILLEUSE : rafale de GUN_TICKS, une balle (rayon droit devant) tous
 ##              les GUN_INTERVAL ticks, GUN_DAMAGE au camion touche ;
 ##   SCIE     : SAW_TICKS de lames a plat sur les flancs, a hauteur des pneus ;
@@ -331,9 +333,9 @@ func _laser_tick() -> void:
 		var other := hit["collider"] as Truck
 		if other != null:
 			laser_hit = other
-			var h := TruckHealth.of(other) if not mirror else null
-			if h != null:
-				h.damage(PowerCatalog.LASER_DAMAGE_PER_TICK, &"laser")
+			var mark := laser_ticks % PowerCatalog.LASER_HIT_INTERVAL == 0
+			strike(other, hit["position"], fwd, PowerCatalog.LASER_DAMAGE_PER_TICK, &"laser",
+				PowerCatalog.LASER_HIT_MS if mark else 0.0, mirror)
 	if _beam != null:
 		_beam.visible = true
 		(_beam.mesh as CylinderMesh).height = length
@@ -355,9 +357,8 @@ func _gun_shot() -> void:
 		if other != null:
 			gun_hit = other
 			gun_hits += 1
-			var h := TruckHealth.of(other) if not mirror else null
-			if h != null:
-				h.damage(PowerCatalog.GUN_DAMAGE, &"mitrailleuse")
+			strike(other, hit["position"], fwd, PowerCatalog.GUN_DAMAGE, &"mitrailleuse",
+				PowerCatalog.GUN_HIT_MS, mirror)
 		if _hit_sparks != null:
 			_hit_sparks.global_position = hit["position"]
 			_hit_sparks.restart()
@@ -386,26 +387,33 @@ func _saw_tick() -> void:
 			continue
 		# tete : les flancs de son chassis (5 points par cote)
 		var side := 0.0
+		var cab_at := Vector3.ZERO
 		for i in 10:
 			var p := xf * Vector3(hw if i < 5 else -hw, TruckSpec.CHASSIS_CENTER.y, lerpf(-hl, hl, (i % 5) / 4.0))
 			side = saw_side(p)
 			if side != 0.0:
+				cab_at = p
 				break
-		var at := Vector3.ZERO
 		var cab := side != 0.0
+		var trailer_at := Vector3.ZERO
 		var trailer := false
 		var tires: TruckTires
 		for w in 6:
 			if w >= Truck.TRAILER_LEFT and t.is_trailer_detached():
 				break
-			var hub := t.trailer_wheel_local(w) + Vector3(0.0, TruckSpec.WHEEL_RADIUS, 0.0) 					if w >= Truck.TRAILER_LEFT else TruckSpec.hub_rest_position(w)
+			var hub := TruckSpec.hub_rest_position(w) if w < Truck.TRAILER_LEFT \
+					else t.trailer_wheel_local(w) + Vector3(0.0, TruckSpec.WHEEL_RADIUS, 0.0)
 			var p := xf * hub
 			var s := saw_side(p)
 			if s == 0.0:
 				continue
 			side = s
-			at = p
-			trailer = trailer or w >= Truck.TRAILER_LEFT
+			if w >= Truck.TRAILER_LEFT:
+				trailer = true
+				trailer_at = p
+			elif not cab:
+				cab = true
+				cab_at = p
 			if cut and not mirror:
 				if tires == null:
 					tires = t.get_node_or_null(^"Tires") as TruckTires
@@ -415,20 +423,51 @@ func _saw_tick() -> void:
 		if side == 0.0:
 			continue
 		saw_hit = t
+		var xw := _truck.global_transform
+		var push := _truck.global_basis.x * side
 		if _hit_sparks != null and (Engine.get_physics_frames() % 6) == 0:
-			if at == Vector3.ZERO:
-				at = Vector3(side * (hw + 0.4), SAW_HEIGHT_M, 0.0)
-			_hit_sparks.global_position = _truck.global_transform * at
+			_hit_sparks.global_position = xw * (cab_at if cab else trailer_at)
 			_hit_sparks.restart()
-		if mirror:
-			continue
-		var h := TruckHealth.of(t)
+		# PV a chaque tick, entailles dans la tole a chaque coup de lame
+		var ms := PowerCatalog.SAW_HIT_MS if cut else 0.0
+		if cab:
+			strike(t, xw * cab_at, push, PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie", ms, mirror)
+		if trailer:
+			strike(t, xw * trailer_at, push, PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie", ms, mirror)
+		if not mirror:
+			t.apply_central_force(push * PowerCatalog.SAW_PUSH_MS2 * t.mass)
+
+
+## Coup d'un pouvoir sur `victim` en `at` (monde), porte dans le sens `dir` :
+## PV de la tete, ou de la remorque si c'est elle qui est touchee (pas en
+## miroir : le host decide), et degats visuels comme un choc a `visual_ms`
+## (TruckDamageFx.power_hit ; 0 : aucun). Vrai si la remorque est touchee.
+static func strike(victim: Truck, at: Vector3, dir: Vector3, amount: float, source: StringName,
+		visual_ms: float, is_mirror: bool) -> bool:
+	var on_trailer := trailer_distance(victim, at) <= 0.5
+	if not is_mirror:
+		var h := TruckHealth.of(victim)
 		if h != null:
-			if cab:
-				h.damage(PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie")
-			if trailer:
-				h.damage_trailer(PowerCatalog.SAW_DAMAGE_PER_TICK, &"scie")
-		t.apply_central_force(_truck.global_basis.x * side * PowerCatalog.SAW_PUSH_MS2 * t.mass)
+			if on_trailer:
+				h.damage_trailer(amount, source)
+			else:
+				h.damage(amount, source)
+	if visual_ms > 0.0:
+		var fx := victim.get_node_or_null(^"DamageFx") as TruckDamageFx
+		if fx != null:
+			fx.power_hit(at, dir, visual_ms, on_trailer)
+	return on_trailer
+
+
+## Distance (m) du point monde `at` a la caisse de la remorque de `t` (0
+## dedans ; INF sans remorque).
+static func trailer_distance(t: Truck, at: Vector3) -> float:
+	if t.is_trailer_detached():
+		return INF
+	var xf := t.global_transform * Truck.trailer_local_transform(t.get_trailer_angle(), t.trailer_box_center)
+	var p := xf.affine_inverse() * at
+	var half := t.trailer_box_size / 2.0
+	return (p - p.clamp(-half, half)).length()
 
 
 ## Cote de la zone des lames (-1 gauche, 1 droite, 0 dehors) ou tombe `p`
@@ -436,7 +475,8 @@ func _saw_tick() -> void:
 static func saw_side(p: Vector3) -> float:
 	var ax := absf(p.x)
 	var flank := TruckSpec.CHASSIS_SIZE.x / 2.0
-	if ax < flank - 0.3 or ax > flank + PowerCatalog.SAW_REACH_M 			or absf(p.z) > PowerCatalog.SAW_HALF_LENGTH_M or p.y < -0.5 or p.y > 3.0:
+	if ax < flank - 0.3 or ax > flank + PowerCatalog.SAW_REACH_M \
+			or absf(p.z) > PowerCatalog.SAW_HALF_LENGTH_M or p.y < -0.5 or p.y > 3.0:
 		return 0.0
 	return signf(p.x)
 
