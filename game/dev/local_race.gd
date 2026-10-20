@@ -192,6 +192,8 @@ var net: NetRace
 var _abandoned: Array[int] = []
 ## Elimination : joueurs elimines, dans l'ordre.
 var eliminated: Array[int] = []
+## Contre-la-montre : record et fantome du joueur (TimeTrial).
+var time_trial: TimeTrial
 var _next_elim: int = -1
 ## Annonce passagere (« X a quitte la partie »), jusqu'au tick indique.
 var _notice: String = ""
@@ -221,6 +223,10 @@ func _ready() -> void:
 	if game_mode == GameStateNode.GameMode.ELIMINATION:
 		# pas de ligne d'arrivee : le dernier en piste gagne
 		race.total_laps = 99
+	if game_mode == GameStateNode.GameMode.TIME_TRIAL:
+		# seul contre le chrono et son fantome : ni bots, ni pouvoirs, ni largages
+		player_count = 1
+		bot_count = 0
 	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
@@ -255,6 +261,16 @@ func _ready() -> void:
 	split = null if NetSession.is_online() else _build_split_screen()
 	for i in player_count + bot_count:
 		players.append(_add_player(i))
+	if game_mode == GameStateNode.GameMode.TIME_TRIAL:
+		time_trial = TimeTrial.new()
+		time_trial.name = "TimeTrial"
+		time_trial.persist = DisplayServer.get_name() != "headless"
+		add_child(time_trial)
+		time_trial.setup(race, players[0].truck, track.theme_id, GameState.speed_class)
+		var hud := players[0].hud
+		time_trial.new_record.connect(func(ticks: int) -> void:
+			if hud != null:
+				hud.flash("NOUVEAU RECORD !  %s" % RaceHud.chrono(ticks), UiKit.GOLD))
 	if split != null and (player_count == 3 or player_count == 5):
 		_add_leader_view()
 	for i in players.size():
@@ -403,6 +419,12 @@ func _add_player(i: int) -> Player:
 		choice = int(m.get("trailer", GameState.trailer_choice[0] if mine else 0))
 		p.power_left = int(m.get("power_left", -1))
 		p.power_right = int(m.get("power_right", -1))
+	elif game_mode == GameStateNode.GameMode.TIME_TRIAL:
+		# contre-la-montre : la remorque choisie, aucun pouvoir
+		if i < GameState.trailer_choice.size():
+			choice = GameState.trailer_choice[i]
+		p.power_left = -1
+		p.power_right = -1
 	elif is_bot(i):
 		# bot : remorque et pouvoirs selon son numero (deterministe)
 		var b := i - player_count
@@ -761,7 +783,7 @@ func _simulate(tick: int) -> void:
 				if cargo != null:
 					cargo.start_race_lock()
 					# largages de la course, choisis au menu (en ligne : ceux du host)
-					cargo.drops_left = GameState.trailer_drops
+					cargo.drops_left = 0 if game_mode == GameStateNode.GameMode.TIME_TRIAL else GameState.trailer_drops
 		return
 	if game_mode == GameStateNode.GameMode.ELIMINATION:
 		_elimination_tick(tick)
@@ -1022,6 +1044,8 @@ func _process(delta: float) -> void:
 		var elim_on := elimination_seconds_left() >= 0
 		p.hud.set_standings("" if still or (elim_on and state == State.RACING) else standings)
 		p.hud.set_ticker(ticker_text() if still or elim_on else "")
+		if time_trial != null and state == State.RACING:
+			p.hud.set_ticker(time_trial.ticker_text())
 		if eliminated.has(i) and state == State.RACING:
 			p.hud.set_center_message("ÉLIMINÉ\n%de" % (players.size() - eliminated.find(i)), Color(1.0, 0.4, 0.2))
 			# sa vue suit le premier
