@@ -51,6 +51,9 @@ func _ready() -> void:
 	_truck = get_parent() as Truck
 	if _truck != null:
 		_truck.cargo_requested.connect(_on_cargo_requested)
+		var health := TruckHealth.of(_truck)
+		if health != null:
+			health.respawned.connect(_on_respawned)
 
 
 ## Depart de la course : largage interdit pendant first_seconds_lock_ticks.
@@ -141,6 +144,23 @@ func net_set_charge(charge: float, locked: bool) -> void:
 		_lock = 0
 		_rearm = 0
 		_cooldown = roundi((1.0 - clampf(charge, 0.0, 1.0)) * cooldown_ticks)
+
+
+## Camion reapparu, remorque neuve attelee : le meme delai qu'au retour
+## d'une remorque avant de pouvoir la larguer.
+func _on_respawned() -> void:
+	_cooldown = 0
+	_waiting = 0
+	_rearm = rearm_ticks
+
+
+## Client en ligne : largage predit que le host a refuse ; la remorque est
+## revenue, le largage n'est pas compte.
+func undo_drop() -> void:
+	if drops_left >= 0:
+		drops_left += 1
+	_cooldown = 0
+	_waiting = 0
 
 
 func _on_cargo_requested() -> void:
