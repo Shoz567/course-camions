@@ -30,10 +30,10 @@ segments = Array[Dictionary]([{
 "type": "straight"
 }, {
 "boost": [[90.0, 16.0]],
+"climb": 42.0,
 "jump": 60.0,
 "jump_offset": -18.0,
 "length": 240.0,
-"climb": 42.0,
 "name": "Grande montee",
 "type": "straight"
 }, {
@@ -57,9 +57,40 @@ segments = Array[Dictionary]([{
 "arch": 40.0,
 "arch_label": "NEON RIDGE",
 "boost": [[40.0, -16.0]],
-"length": 80.0,
+"length": 60.0,
 "name": "Crete",
 "type": "straight"
+}, {
+"angle": -90.0,
+"name": "Quartier des docks (entree)",
+"radius": 120.0,
+"signs": [[80.0, -32.0]],
+"type": "arc"
+}, {
+"angle": 90.0,
+"barrels": [[90.0, 14.0]],
+"name": "Quartier des docks (premier angle)",
+"radius": 120.0,
+"type": "arc"
+}, {
+"arch": 10.0,
+"arch_label": "DOCKS",
+"boost": [[10.0, 0.0]],
+"length": 20.0,
+"name": "Quartier des docks (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Quartier des docks (second angle)",
+"puddle": [[90.0, -22.0, 7.0]],
+"radius": 120.0,
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Quartier des docks (sortie)",
+"radius": 120.0,
+"signs": [[100.0, 32.0]],
+"type": "arc"
 }, {
 "angle": 35.0,
 "climb": -18.0,
@@ -85,11 +116,11 @@ segments = Array[Dictionary]([{
 }, {
 "arch": 15.0,
 "arch_label": "SKY JUMP",
+"climb": -5.0,
 "jump": 60.0,
 "jump_offset": 12.0,
-"length": 200.0,
+"length": 140.0,
 "line": 12.0,
-"climb": -5.0,
 "name": "Ligne droite du tremplin (cote droit)",
 "type": "straight"
 }, {
@@ -102,18 +133,47 @@ segments = Array[Dictionary]([{
 "type": "arc"
 }, {
 "boost": [[30.0, -10.0]],
+"climb": 6.0,
 "jump": 110.0,
 "jump_offset": 16.0,
 "length": 160.0,
-"climb": 6.0,
 "name": "Bosse des stands",
 "type": "straight"
 }, {
+"angle": -90.0,
+"barrels": [[100.0, -14.0]],
+"name": "Echangeur (entree)",
+"radius": 120.0,
+"type": "arc"
+}, {
+"angle": 90.0,
+"name": "Echangeur (premier angle)",
+"radius": 120.0,
+"signs": [[60.0, 32.0]],
+"type": "arc"
+}, {
+"boost": [[5.0, 14.0], [15.0, -14.0]],
+"length": 20.0,
+"name": "Echangeur (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Echangeur (second angle)",
+"radius": 120.0,
+"signs": [[90.0, -32.0]],
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Echangeur (sortie)",
+"puddle": [[80.0, 22.0, 7.0]],
+"radius": 120.0,
+"type": "arc"
+}, {
 "auto": true,
 "boost": [[280.0, 16.0], [380.0, -16.0]],
+"climb": -6.0,
 "jump": 120.0,
 "jump_offset": -14.0,
-"climb": -6.0,
 "name": "Ligne droite des stands (longueur calculee)",
 "type": "straight"
 }, {

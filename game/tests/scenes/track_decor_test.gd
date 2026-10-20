@@ -4,7 +4,7 @@ extends PhysicsTest
 ##   - environnement de nuit partage : ciel bleu nuit a horizon pourpre,
 ##     brouillard, glow ;
 ##   - piste n°1 : neon cyan (gauche) et magenta (droite) sur les deux
-##     glissieres ; 3 arches lumineuses au-dessus de la chaussee (hauteur libre
+##     glissieres ; 4 arches lumineuses au-dessus de la chaussee (hauteur libre
 ##     >= arch_height), piliers au-dela des murs, aucune collision ;
 ##   - ville : au moins 250 tours, TOUTES au-dela des zones de reset (un camion
 ##     qui sort retombe dans une zone avant d'atteindre une tour), aucune qui
@@ -76,7 +76,7 @@ func _check_track() -> void:
 	check("glissieres : neon cyan a gauche, magenta a droite", left != null and right != null
 		and left.material_override == preload("res://tracks/materials/neon_cyan.tres")
 		and right.material_override == preload("res://tracks/materials/neon_magenta.tres"))
-	check("3 arches", _track.arch_count() == 3, "%d" % _track.arch_count())
+	check("4 arches", _track.arch_count() == 4, "%d" % _track.arch_count())
 	var arches := _track.get_node("Arches")
 	var bodies := arches.find_children("*", "CollisionObject3D", true, false)
 	check("arches : aucune collision (ni camion, ni camera)", bodies.is_empty(), "%d corps" % bodies.size())

@@ -5,7 +5,7 @@ extends PhysicsTest
 ## camera de poursuite le suit (tache 2.1).
 ##
 ## Piste :
-##   - un tour complet, en 60 a 90 s (METRICS.md §4, duree de tour) ;
+##   - un tour complet, en 90 a 130 s (METRICS.md §4, duree de tour, 2026-10-20) ;
 ##   - jamais retourne (inclinaison < 45 deg), jamais hors de la chaussee,
 ##     aucun NaN ; le tremplin est sur la ligne de course et il est franchi ;
 ##   - geometrie : boucle fermee, largeur >= 14 m et murs >= 0,3 m (METRICS §4) ;
@@ -24,7 +24,7 @@ extends PhysicsTest
 ##     Les mouvements lents (collines, parabole du saut) sont suivis : c'est
 ##     voulu.
 
-const MAX_TICKS := 7000
+const MAX_TICKS := 11000
 
 var _track: TrackBlockout
 var _truck: Truck
@@ -162,7 +162,7 @@ func _test_finish() -> void:
 	check("tour complet", _lap_end > 0, "progression=%.0f m / %.0f m" % [_progress, _track.length() + _track.grid_distance])
 	if _lap_end > 0:
 		var lap_s := (_lap_end - _lap_start) / 60.0
-		check_near("duree du tour (s) dans 60 .. 90 (METRICS.md §4)", lap_s, 75.0, 15.0)
+		check_near("duree du tour (s) dans 90 .. 130 (METRICS.md §4)", lap_s, 110.0, 20.0)
 	check("jamais retourne", not _upside)
 	check_below("inclinaison max (deg)", _max_tilt, 45.0)
 	check("jamais hors de la chaussee", _off_track == 0, "ticks=%d" % _off_track)

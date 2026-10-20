@@ -16,6 +16,37 @@ segments = Array[Dictionary]([{
 "puddle": [[150.0, -24.0, 7.0]],
 "type": "straight"
 }, {
+"angle": -90.0,
+"name": "Marina (entree)",
+"radius": 130.0,
+"signs": [[80.0, -32.0]],
+"type": "arc"
+}, {
+"angle": 90.0,
+"barrels": [[100.0, 12.0]],
+"name": "Marina (premier angle)",
+"radius": 130.0,
+"type": "arc"
+}, {
+"arch": 90.0,
+"arch_label": "MARINA",
+"boost": [[60.0, 0.0]],
+"length": 150.0,
+"name": "Marina (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Marina (second angle)",
+"puddle": [[100.0, -22.0, 7.0]],
+"radius": 130.0,
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Marina (sortie)",
+"radius": 130.0,
+"signs": [[90.0, 32.0]],
+"type": "arc"
+}, {
 "angle": 60.0,
 "bank": 5.0,
 "climb": 8.0,
@@ -64,6 +95,35 @@ segments = Array[Dictionary]([{
 "puddle": [[60.0, -22.0, 7.0]],
 "radius": 150.0,
 "signs": [[50.0, -32.0]],
+"type": "arc"
+}, {
+"angle": -90.0,
+"barrels": [[90.0, -12.0]],
+"name": "Village de pecheurs (entree)",
+"radius": 130.0,
+"type": "arc"
+}, {
+"angle": 90.0,
+"name": "Village de pecheurs (premier angle)",
+"radius": 130.0,
+"signs": [[70.0, 32.0]],
+"type": "arc"
+}, {
+"boost": [[50.0, 12.0], [120.0, -12.0]],
+"length": 160.0,
+"name": "Village de pecheurs (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Village de pecheurs (second angle)",
+"radius": 130.0,
+"signs": [[80.0, -32.0]],
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Village de pecheurs (sortie)",
+"puddle": [[90.0, 20.0, 7.0]],
+"radius": 130.0,
 "type": "arc"
 }, {
 "climb": 3.0,

@@ -2,7 +2,7 @@ extends PhysicsTest
 
 ## Plaques de la piste n°1, par les vraies Area3D, avec PadEffects (le gameplay
 ## des scenes de course) :
-##   - 6 plaques de boost et 4 rampes de saut, a chevrons lumineux ;
+##   - 9 plaques de boost et 4 rampes de saut, a chevrons lumineux ;
 ##   A. boost : un camion a 100 km/h roule sur une plaque de la ligne droite
 ##      des stands. Il gagne au moins 35 km/h en 3 ticks (coup de pouce), reste
 ##      boost pendant 1,5 s, ne depasse pas la vitesse max + 40 km/h, joue son
@@ -13,7 +13,7 @@ extends PhysicsTest
 ##      vitesse de chute ramenee sous 3,5 m/s, 4 roues au sol, jamais couche.
 
 const V0_KMH := 100.0
-const BOOST_PAD := 4        # ligne droite des stands, a droite
+const BOOST_PAD := 7        # ligne droite des stands, a droite (circuit rallonge : 7)
 const JUMP_PAD := 1         # tremplin, a droite (0 : montee, 2 : bosse, 3 : stands)
 
 var _track: TrackBlockout
@@ -108,8 +108,8 @@ var _v_prev_a: float = 0.0
 
 
 func _test_finish() -> void:
-	check("6 plaques de boost, 4 rampes de saut",
-		_track.boost_pad_count() == 6 and _track.jump_pad_count() == 4,
+	check("9 plaques de boost, 4 rampes de saut",
+		_track.boost_pad_count() == 9 and _track.jump_pad_count() == 4,
 		"%d / %d" % [_track.boost_pad_count(), _track.jump_pad_count()])
 	var pad := _track.get_node("Pads/BoostPad0/Chevrons") as MeshInstance3D
 	check("plaque a chevrons orange (materiau)", pad != null

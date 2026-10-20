@@ -986,6 +986,14 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   laser le touche ; largage quand un camion le suit dans sa voie juste
   derrière sa remorque (moyen), et seulement avant un virage de moins de
   150 m de rayon (dur). Jamais en facile (`bot_tactics_test`).
+- [x] **Circuits rallongés** (2026-10-20, « rallonger les circuits, plus
+  complexes, plus de virages, plus de détours pour que les raccourcis aient un
+  réel intérêt ») : Cyber City 3,0 → 4,4 km (détours des Docks et de
+  l'Échangeur), Playa 2,7 → 4,6 km (Marina, Village de pêcheurs), Sakura
+  2,8 → 4,6 km (Rizières) ; chaque détour est un créneau dont la sortie est
+  dans l'axe de l'entrée (raccourci possible tout droit). Course en 3 tours,
+  tour de 90 à 130 s (METRICS.md §4, décision du 2026-10-20).
+- [ ] **Raccourcis** : embranchements dans le générateur de piste.
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille
