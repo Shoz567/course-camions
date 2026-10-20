@@ -254,7 +254,12 @@ func _draw_labels() -> void:
 			draw_ps_symbol(self, icon, Vector2(badge_x + 17.0, r.position.y + 14.0), 7.0)
 		draw_string(font, Vector2(badge_x + 10.0 + icon_w, r.position.y + 20.0), key_str,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 18, ACCENT)
-		draw_string(font, Vector2(r.position.x, r.position.y + 48.0), c["text"], align, r.size.x, 18, TEXT)
+		# legende plus petite si elle deborde (polices plus larges : Playa,
+		# Sakura coupaient « recharge 30 s »)
+		var fs := 18
+		while fs > 13 and font.get_string_size(c["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > r.size.x:
+			fs -= 1
+		draw_string(font, Vector2(r.position.x, r.position.y + 48.0), c["text"], align, r.size.x, fs, TEXT)
 
 
 func _centered_text(text: String, center: Vector2, font_size: int, color: Color) -> void:

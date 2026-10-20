@@ -257,7 +257,8 @@ class StatBar:
 			var r := Rect2(k * (w + gap), 0, w, size.y)
 			var on := k < lit
 			var col := accent.lerp(UiKit.TEXT, float(k) / SEGMENTS * 0.35) if on else Color(1, 1, 1, 0.1)
-			var sb := UiKit.box(col, Color(0, 0, 0, 0), 0, 0.35, 1)
+			# segments penches en neon seulement, droits ailleurs
+			var sb := UiKit.box(col, Color(0, 0, 0, 0), 0, 0.35 if UiKit.SKEW > 0.0 else 0.0, mini(UiKit.RADIUS, 3))
 			sb.set_content_margin_all(0)
 			draw_style_box(sb, r)
 		var mid := size.x / 2.0

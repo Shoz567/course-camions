@@ -104,6 +104,9 @@ var home: Control
 ## Page de selection, ouverte par PRET.
 var loadout: LoadoutSelect
 var _player_dots: HBoxContainer
+var _column: VBoxContainer
+var _column_gaps: Array[Control] = []
+var _fitting: bool = false
 var _pads_label: Label
 var _orbit_center: Vector3
 var _orbit_angle: float = 0.0
@@ -363,16 +366,13 @@ func select_speed(k: int) -> void:
 static func paint_player_button(b: Button, i: int, lit: bool) -> void:
 	var c := UiKit.PLAYER_COLORS[i]
 	UiKit.style_choice(b, b.get_theme_font_size("font_size"), c)
-	# habillage a tuiles (bois de Playa, de Sakura) : la tuile est gardee,
-	# teintee a la couleur du joueur ; neon : aplat de sa couleur
-	var tile := b.get_theme_stylebox("normal") as StyleBoxTexture
-	if tile != null:
+	# habillage a tuiles (bois de Playa, de Sakura) : le bois, en gris teinte
+	# a la couleur du joueur (le bois de miel virait le bleu au vert) ; neon :
+	# aplat de sa couleur
+	if b.get_theme_stylebox("normal") is StyleBoxTexture:
 		if lit:
-			for state: String in ["normal", "hover", "pressed", "hover_pressed"]:
-				var t := (b.get_theme_stylebox(state) as StyleBox).duplicate() as StyleBox
-				if t is StyleBoxTexture:
-					(t as StyleBoxTexture).modulate_color = c.lightened(0.2 if state.begins_with("hover") else 0.0)
-				b.add_theme_stylebox_override(state, t)
+			b.add_theme_stylebox_override("normal", UiKit.tile_box(c, true))
+			b.add_theme_stylebox_override("hover", UiKit.tile_box(c.lightened(0.2), true))
 		return
 	b.add_theme_stylebox_override("pressed", UiKit.box(c, Color(1, 1, 1, 0.95), 3, UiKit.SKEW, 3, Color(c, 0.7), 14))
 	b.add_theme_stylebox_override("hover_pressed", UiKit.box(c.lightened(0.1), Color.WHITE, 3, UiKit.SKEW, 3, Color(c, 0.8), 16))
@@ -1006,6 +1006,10 @@ var TEXT_DIM: Color:
 ## Colonne de gauche (px, ecran de reference 1920 x 1080).
 const COLUMN_X := 84
 const COLUMN_W := 700
+## Hauteur de la colonne : du haut (40) a la barre d'aide (64 px), moins une
+## marge ; espace garde au minimum entre VITESSE et PRET.
+const COLUMN_H := 960.0
+const START_GAP := 14
 ## Fond des cartes de circuit (Cyber City : nuit violette ; Playa : lagon).
 const TRACK_TINTS: Array[Color] = [Color(0.36, 0.1, 0.62), Color(0.0, 0.5, 0.58), Color(0.86, 0.3, 0.48)]
 
@@ -1058,9 +1062,11 @@ func _build_ui() -> void:
 	var column := VBoxContainer.new()
 	column.name = "Column"
 	column.position = Vector2(COLUMN_X, 40)
-	column.size = Vector2(COLUMN_W, 960)
+	column.size = Vector2(COLUMN_W, COLUMN_H)
 	column.add_theme_constant_override("separation", 0)
 	home.add_child(column)
+	_column = column
+	_column_gaps.clear()
 
 	# onglets de mode
 	var tabs := HBoxContainer.new()
@@ -1087,7 +1093,7 @@ func _build_ui() -> void:
 	online_tab.pressed.connect(toggle_online)
 	online_button = online_tab
 	tabs.add_child(online_tab)
-	column.add_child(UiKit.gap(26))
+	column.add_child(_column_gap(26))
 
 	# logo : CRAZY en blanc, WHEELS en or dessous ; ombre rose decalee. Le
 	# titre s'anime (echelle) : hors conteneur, qui la remettrait a zero
@@ -1121,11 +1127,11 @@ func _build_ui() -> void:
 		dash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tag_row.add_child(dash)
 	tag_row.add_child(UiKit.label("COURSE DE CAMIONS ARCADE", 20, UiKit.CYAN, 800))
-	column.add_child(UiKit.gap(18))
+	column.add_child(_column_gap(18))
 
 	# circuit : une carte par circuit
 	column.add_child(_section("Circuit"))
-	column.add_child(UiKit.gap(8))
+	column.add_child(_column_gap(8))
 	var track_row := _row("Tracks")
 	track_row.add_theme_constant_override("separation", 16)
 	column.add_child(track_row)
@@ -1136,14 +1142,14 @@ func _build_ui() -> void:
 		track_row.add_child(tb)
 		track_buttons.append(tb)
 	subtitle = UiKit.label("", 17, TEXT_DIM, 600, false)
-	column.add_child(UiKit.gap(10))
+	column.add_child(_column_gap(10))
 	column.add_child(subtitle)
 	select_track(GameState.selected_track)
-	column.add_child(UiKit.gap(18))
+	column.add_child(_column_gap(18))
 
 	# joueurs
 	column.add_child(_section("Joueurs"))
-	column.add_child(UiKit.gap(8))
+	column.add_child(_column_gap(8))
 	var row := _row("Players")
 	column.add_child(row)
 	var group := ButtonGroup.new()
@@ -1166,10 +1172,10 @@ func _build_ui() -> void:
 			Color(UiKit.PLAYER_COLORS[i], 0.5), 4))
 		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_player_dots.add_child(dot)
-	column.add_child(UiKit.gap(8))
+	column.add_child(_column_gap(8))
 	column.add_child(_player_dots)
 	# bots (hors ligne) : nombre et niveau, sur une ligne
-	column.add_child(UiKit.gap(6))
+	column.add_child(_column_gap(6))
 	var bots_row := _row("Bots")
 	var bots_label := _label("BOTS", 18, 0)
 	bots_label.custom_minimum_size.x = 72
@@ -1212,13 +1218,13 @@ func _build_ui() -> void:
 	UiKit.style_choice(waiting_button, 16)
 	waiting_button.pressed.connect(toggle_join)
 	pads_row.add_child(waiting_button)
-	column.add_child(UiKit.gap(8))
+	column.add_child(_column_gap(8))
 	column.add_child(pads_row)
-	column.add_child(UiKit.gap(16))
+	column.add_child(_column_gap(16))
 
 	# categorie de vitesse, facon cylindree : chevrons de 1 a 4
 	column.add_child(_section("Vitesse"))
-	column.add_child(UiKit.gap(8))
+	column.add_child(_column_gap(8))
 	var speed_row := _row("Speeds")
 	column.add_child(speed_row)
 	var speed_group := ButtonGroup.new()
@@ -1235,6 +1241,7 @@ func _build_ui() -> void:
 
 	# PRET : ouvre la page de selection
 	var push := Control.new()
+	push.custom_minimum_size.y = START_GAP
 	push.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	push.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(push)
@@ -1245,10 +1252,13 @@ func _build_ui() -> void:
 	UiKit.style_primary(start_button, 52)
 	start_button.pressed.connect(open_selection)
 	column.add_child(start_button)
-	column.add_child(UiKit.gap(8))
+	column.add_child(_column_gap(8))
 	var next := UiKit.label("ensuite : remorque et pouvoirs de chaque joueur", 16, TEXT_DIM, 600, false)
+	next.name = "NextHint"
 	next.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(next)
+	column.minimum_size_changed.connect(_fit_column)
+	_fit_column()
 
 	# barre d'aide en bas, sur toute la largeur
 	var bar := PanelContainer.new()
@@ -1393,6 +1403,38 @@ func _gap(height: int) -> Control:
 	return UiKit.gap(height)
 
 
+## Intervalle de la colonne d'accueil, resserre par _fit_column.
+func _column_gap(height: int) -> Control:
+	var g := UiKit.gap(height)
+	g.set_meta(&"base", height)
+	_column_gaps.append(g)
+	return g
+
+
+## Colonne d'accueil dans sa hauteur (2026-10-20, « la note pres » passait
+## sous la barre d'aide en Playa : police plus haute, texte des manettes sur
+## deux lignes) : si le contenu deborde de COLUMN_H, les intervalles se
+## resserrent d'autant (pas sous 30 %), PRET et sa note restent au-dessus de
+## la barre.
+func _fit_column() -> void:
+	if _fitting or _column == null:
+		return
+	_fitting = true
+	# contenu seul (sans les intervalles actuels), puis intervalles voulus :
+	# ne change rien si deja bons (pas de boucle de minimum_size_changed)
+	var now := 0.0
+	var base := 0.0
+	for g in _column_gaps:
+		now += g.custom_minimum_size.y
+		base += float(g.get_meta(&"base"))
+	var over := _column.get_combined_minimum_size().y - now + base - COLUMN_H
+	var f := clampf(1.0 - over / base, 0.3, 1.0) if over > 0.0 and base > 0.0 else 1.0
+	for g in _column_gaps:
+		g.custom_minimum_size.y = floorf(float(g.get_meta(&"base")) * f)
+	_column.size = Vector2(COLUMN_W, COLUMN_H)
+	_fitting = false
+
+
 ## Ecran des parametres : schema de la manette (chaque commande legendee),
 ## touches du clavier, son (coupure et volume reels), reglages a venir, et
 ## RETOUR vers le menu. Couvre le menu : ses clics ne passent pas au travers.
@@ -1440,11 +1482,15 @@ func _build_settings() -> Control:
 	sound_check = CheckButton.new()
 	sound_check.name = "SoundCheck"
 	sound_check.text = "Son"
-	sound_check.add_theme_font_size_override("font_size", 19)
+	UiKit.style_toggle(sound_check, 19)
 	sound_check.toggled.connect(set_sound)
 	opts.add_child(sound_check)
 	var vol := HBoxContainer.new()
-	vol.add_child(_label("Volume", 19, 0))
+	# texte aligne sur celui des interrupteurs (marge de 6 px)
+	vol.add_theme_constant_override("separation", 6)
+	vol.add_child(UiKit.gap(0))
+	vol.add_child(UiKit.label("Volume", 19, UiKit.TEXT, 600, false))
+	vol.add_child(UiKit.gap(0))
 	volume_slider = HSlider.new()
 	volume_slider.name = "Volume"
 	volume_slider.min_value = 0.0
@@ -1455,19 +1501,20 @@ func _build_settings() -> Control:
 	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	volume_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	volume_slider.value_changed.connect(set_volume)
+	UiKit.style_slider(volume_slider)
 	vol.add_child(volume_slider)
 	opts.add_child(vol)
 	var rumble := CheckButton.new()
 	rumble.text = "Vibrations manette (bientôt)"
 	rumble.button_pressed = true
-	rumble.add_theme_font_size_override("font_size", 19)
+	UiKit.style_toggle(rumble, 19)
 	opts.add_child(rumble)
 	quality_option = OptionButton.new()
 	quality_option.name = "Quality"
 	for q: String in GraphicsSettings.NAMES:
 		quality_option.add_item("Qualité graphique : %s" % q)
 	quality_option.tooltip_text = "Haute : reflets, éclairage indirect, occlusion. Moyenne : occlusion. Basse : aucun effet."
-	quality_option.add_theme_font_size_override("font_size", 19)
+	UiKit.style_option(quality_option, 19)
 	quality_option.select(GameState.graphics_quality)
 	quality_option.item_selected.connect(set_quality)
 	opts.add_child(quality_option)
@@ -1475,7 +1522,7 @@ func _build_settings() -> Control:
 	fps_check.name = "FpsCheck"
 	fps_check.text = "Compteur d'images par seconde (FPS)"
 	fps_check.tooltip_text = "Affiché en haut à droite, au menu et en course."
-	fps_check.add_theme_font_size_override("font_size", 19)
+	UiKit.style_toggle(fps_check, 19)
 	fps_check.button_pressed = GameState.show_fps
 	fps_check.toggled.connect(set_show_fps)
 	opts.add_child(fps_check)
@@ -1484,7 +1531,7 @@ func _build_settings() -> Control:
 	dynres_check.name = "DynResCheck"
 	dynres_check.text = "Résolution dynamique"
 	dynres_check.tooltip_text = "Baisse la résolution de la 3D seulement quand la carte graphique\nne tient plus 60 images/s (mise à l'échelle FSR). Effets intacts."
-	dynres_check.add_theme_font_size_override("font_size", 19)
+	UiKit.style_toggle(dynres_check, 19)
 	dynres_check.button_pressed = GameState.dynamic_resolution
 	dynres_check.toggled.connect(set_dynamic_resolution)
 	opts.add_child(dynres_check)
@@ -1552,7 +1599,7 @@ func _build_online() -> Control:
 	actions.add_child(host_button)
 	ip_edit = LineEdit.new()
 	ip_edit.name = "HostAddress"
-	ip_edit.placeholder_text = "adresse IP du host, ex. 192.168.1.20"
+	ip_edit.placeholder_text = "IP du host, ex. 192.168.1.20"
 	ip_edit.custom_minimum_size = Vector2(380, 60)
 	ip_edit.add_theme_font_size_override("font_size", 20)
 	UiKit.style_field(ip_edit)
@@ -1570,7 +1617,7 @@ func _build_online() -> Control:
 	slow_check.name = "SlowUpload"
 	slow_check.text = "Connexion lente du host : 20 envois par seconde au lieu de 60 (un peu plus de délai)"
 	slow_check.tooltip_text = "60 envois/s : le moins de délai (~270 kbps à 4 joueurs).\n20 envois/s : pour une connexion Internet qui envoie peu (~90 kbps)."
-	slow_check.add_theme_font_size_override("font_size", 17)
+	UiKit.style_toggle(slow_check, 17)
 	slow_check.button_pressed = NetSession.snapshot_ticks > 1
 	slow_check.toggled.connect(func(on: bool) -> void:
 		NetSession.snapshot_ticks = NetSessionNode.SNAPSHOT_TICKS_LOW_BANDWIDTH if on else 1)
