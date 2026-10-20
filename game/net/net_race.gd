@@ -809,6 +809,9 @@ func _check_predicted_drop(truck: Truck) -> void:
 	_predicted_drop.queue_free()
 	_predicted_drop = null
 	truck.reattach_trailer(true)
+	var cargo := truck.get_node_or_null(^"Cargo") as TruckCargo
+	if cargo != null:
+		cargo.undo_drop()
 	drops_cancelled += 1
 
 ## Pose les marionnettes a l'instant (tick local + decalage du host - retard).

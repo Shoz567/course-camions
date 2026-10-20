@@ -11,7 +11,10 @@ extends PhysicsTest
 ##      rien (« PLUS DE LARGAGE »), deux remorques sur la route en tout ;
 ##   C. zero largage permis : rien ne part jamais ;
 ##   D. menu : une ligne LARGAGES de 0 a 5, le choix va dans GameState ;
-##   E. course (dev/race.tscn) : au GO, chaque camion a les largages du menu.
+##   E. course (dev/race.tscn) : au GO, chaque camion a les largages du menu ;
+##   F. en ligne, largage predit refuse par le host (undo_drop) : rendu ;
+##   G. camion reapparu avec une remorque neuve : le meme delai avant le
+##      largage qu'au retour d'une remorque.
 
 var _a: Truck
 var _z: Truck
@@ -75,6 +78,10 @@ func _test_tick(t: int) -> void:
 		602:
 			_seen["after"] = _drops_a
 			_seen["z"] = [_drops_z, _cz.status_text()]
+			_cz.drops_left = 1
+			_cz.undo_drop()
+			_seen["undo"] = _cz.drops_left
+			TruckHealth.of(_z).damage(1000.0, &"test")
 			# D : le menu
 			_menu = (load("res://ui/main_menu.tscn") as PackedScene).instantiate() as MainMenu
 			_menu.auto_change_scene = false
@@ -94,6 +101,8 @@ func _test_tick(t: int) -> void:
 			_race.set("player_count", 1)
 			_race.position = Vector3(0.0, -500.0, 0.0)
 			add_child(_race)
+		900:
+			_seen["respawn"] = [_z.is_wrecked(), _cz.status_text()]
 		910:
 			var p: Object = (_race.get("players") as Array)[0]
 			var c := (p.get("truck") as Truck).get_node(^"Cargo") as TruckCargo
@@ -115,4 +124,7 @@ func _test_finish() -> void:
 	var z: Array = _seen.get("z", [9, ""])
 	check("C zero largage permis : rien ne part", int(z[0]) == 0 and String(z[1]) == "PLUS DE LARGAGE", str(z))
 	check("D menu : LARGAGES de 0 a 5, choix enregistre", _seen.get("menu") == [6, 4, 4], str(_seen.get("menu")))
+	check("F largage predit refuse : rendu", int(_seen.get("undo", 0)) == 2, str(_seen.get("undo")))
+	var r: Array = _seen.get("respawn", [true, ""])
+	check("G reapparu : delai avant le largage", not bool(r[0]) and String(r[1]).begins_with("largage dans"), str(r))
 	check("E course : au GO, les largages du menu", int(_seen.get("race", -9)) == 4, str(_seen.get("race")))

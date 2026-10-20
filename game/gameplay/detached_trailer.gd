@@ -287,8 +287,9 @@ func _on_truck_hit(truck: Truck, approach_ms: float, contact: Array) -> void:
 			n = -n
 		struck.emit(at, n, amount, approach_ms)
 		_hit_effects(at, n, amount, approach_ms)
+		# aussi chez un client : son camion passe a travers comme chez le host
 		if hp > 0.0 and hp < max_hp * BREACH_RATIO and approach_ms >= BREACH_SPEED_MS \
-				and not _passing.has(truck) and not net_mirror:
+				and not _passing.has(truck):
 			_breach(truck, at, n)
 	else:
 		_update_damage_stage()
