@@ -931,6 +931,11 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   boomerang) retire ses PV à la partie touchée, tête ou remorque, et marque la
   tôle (traces, creux, pièces arrachées selon la force ; rien sous bouclier)
   (`powers_test`, `powers2_test`).
+- [x] **Boomerang** (2026-10-20, « il ne va pas très loin, il revient sans
+  faire grand-chose ») : vitesse comptée par rapport au tireur, portée 85 m,
+  aimanté sur le camion visé à l'aller ; il le traverse, fait demi-tour et
+  repasse dessus (2 coups), puis revient (`boomerang_test` : cible à 60 m,
+  tous deux à 126 km/h ; l'ancien ne la touchait pas).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

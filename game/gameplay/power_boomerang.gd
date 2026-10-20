@@ -1,32 +1,39 @@
 class_name PowerBoomerang
 extends Node3D
 
-## Boomerang aimante (pouvoir, 2026-10-19) : part du toit du tireur a
-## BOOMERANG_SPEED_MS tout droit pendant BOOMERANG_OUT_TICKS, fait demi-tour
-## vers lui, puis le suit en tournant d'au plus BOOMERANG_TURN_DEG par tick ; il disparait
+## Boomerang aimante (pouvoir, 2026-10-19 ; portee et aimant : 2026-10-20)
+## : part du toit du tireur a BOOMERANG_SPEED_MS de plus que lui, fonce sur
+## le camion vise (tout droit sans cible), le traverse et fait demi-tour
+## BOOMERANG_PASS_TICKS plus tard (il repasse dessus), ou a BOOMERANG_RANGE_M
+## du tireur ; il revient alors vers lui et disparait
 ## en le rejoignant, ou au bout de BOOMERANG_LIFE_TICKS. Chaque camion a moins
 ## de BOOMERANG_RADIUS_M de lui (tete ou caisse de la remorque) est touche une
 ## fois a l'aller et une fois au retour : BOOMERANG_DAMAGE PV a la partie
-## touchee, tole marquee (TruckPowers.strike) et un coup de cote. Il traverse les camions
-## et passe au-dessus des murs (il vole). En miroir (client en ligne) : rien
-## que l'image. Aucun tirage aleatoire.
+## touchee, tole marquee (TruckPowers.strike) et un coup de cote. Il traverse
+## les camions et passe au-dessus des murs (il vole). En miroir (client en
+## ligne) : rien que l'image. Aucun tirage aleatoire.
 
 signal struck(victim: Truck)
 
 var shooter: Truck
+## Camion vise a l'aller (null : tout droit).
+var target: Truck
 var direction: Vector3 = Vector3.FORWARD
 var mirror: bool = false
 var returning: bool = false
 var _age: int = 0
+## Tick du demi-tour une fois la cible touchee (il la traverse d'abord).
+var _turn_at: int = -1
 var _hit_out: Dictionary = {}
 var _hit_back: Dictionary = {}
 var _spin: Node3D
 
 
-static func launch(from: Truck, as_mirror: bool = false) -> PowerBoomerang:
+static func launch(from: Truck, aim: Truck = null, as_mirror: bool = false) -> PowerBoomerang:
 	var b := PowerBoomerang.new()
 	b.name = "Boomerang"
 	b.shooter = from
+	b.target = aim
 	b.mirror = as_mirror
 	b.direction = -from.global_basis.z
 	from.get_parent().add_child(b)
@@ -56,25 +63,45 @@ func _physics_process(delta: float) -> void:
 	if _age >= PowerCatalog.BOOMERANG_LIFE_TICKS or shooter == null or not is_instance_valid(shooter):
 		queue_free()
 		return
-	if _age >= PowerCatalog.BOOMERANG_OUT_TICKS and not returning:
-		# demi-tour net vers le tireur : le retour repasse sur l'aller
-		returning = true
-		direction = (shooter.global_position + Vector3.UP * 2.5 - global_position).normalized()
+	var home := shooter.global_position + Vector3.UP * 2.5 - global_position
+	if not returning:
+		if target != null and (not is_instance_valid(target) or target.is_wrecked()):
+			target = null
+		if home.length() >= PowerCatalog.BOOMERANG_RANGE_M or _age == _turn_at:
+			_turn_back()
+		elif target != null:
+			_steer(target.global_position + Vector3.UP * 1.5 - global_position, PowerCatalog.BOOMERANG_SEEK_DEG)
 	if returning:
-		var home := shooter.global_position + Vector3.UP * 2.5 - global_position
 		if home.length() < 2.5:
 			queue_free()
 			return
-		var want := home.normalized()
-		var angle := direction.angle_to(want)
-		if angle > 1e-4:
-			var axis := direction.cross(want).normalized()
-			if axis.length_squared() > 0.5:
-				direction = direction.rotated(axis, minf(angle, deg_to_rad(PowerCatalog.BOOMERANG_TURN_DEG))).normalized()
-	global_position += direction * PowerCatalog.BOOMERANG_SPEED_MS * delta
+		_steer(home, PowerCatalog.BOOMERANG_TURN_DEG)
+	# vitesse par rapport au tireur : il garde son avance, et le rattrape au retour
+	var carry := shooter.linear_velocity.length() if returning else maxf(shooter.linear_velocity.dot(direction), 0.0)
+	var speed := PowerCatalog.BOOMERANG_SPEED_MS + carry
+	global_position += direction * speed * delta
 	if _spin != null:
 		_spin.rotate_y(0.5)
 	_strike()
+
+
+## Demi-tour net vers le tireur : le retour repasse sur l'aller (et sur le
+## camion qu'il vient de toucher).
+func _turn_back() -> void:
+	returning = true
+	direction = (shooter.global_position + Vector3.UP * 2.5 - global_position).normalized()
+
+
+## Tourne vers `want` d'au plus `max_deg` degres.
+func _steer(want: Vector3, max_deg: float) -> void:
+	if want.length_squared() < 1e-4:
+		return
+	want = want.normalized()
+	var angle := direction.angle_to(want)
+	if angle > 1e-4:
+		var axis := direction.cross(want).normalized()
+		if axis.length_squared() > 0.5:
+			direction = direction.rotated(axis, minf(angle, deg_to_rad(max_deg))).normalized()
 
 
 func _strike() -> void:
@@ -96,6 +123,10 @@ func _strike() -> void:
 			at += (global_position - at).limit_length(TruckSpec.CHASSIS_SIZE.x / 2.0)
 		TruckPowers.strike(t, at, direction, PowerCatalog.BOOMERANG_DAMAGE, &"boomerang",
 			PowerCatalog.BOOMERANG_HIT_MS, mirror)
+		if t == target and not returning:
+			# il traverse la cible, puis revient sur elle
+			target = null
+			_turn_at = _age + PowerCatalog.BOOMERANG_PASS_TICKS
 		if mirror:
 			continue
 		var side := direction.cross(Vector3.UP).normalized()

@@ -21,8 +21,9 @@ extends Node3D
 ##              un camion a cote (zone de SAW_REACH_M au-dela du flanc, sur
 ##              tout le flanc du tracteur) perd SAW_DAMAGE_PER_TICK, ses pneus
 ##              dans la zone se font trancher (crevaison) et il est ecarte ;
-##   BOOMERANG : PowerBoomerang, aller tout droit puis retour aimante vers le
-##              tireur, touche chaque camion une fois par passage.
+##   BOOMERANG : PowerBoomerang, aimante vers le camion vise a l'aller (tout
+##              droit sans cible), puis retour vers le tireur ; touche chaque
+##              camion une fois par passage.
 ## Recharge par emplacement, comptee en ticks des l'activation. Rien ne part
 ## d'une epave. Aucun tirage aleatoire. Sur la machine qui fait foi (hors
 ## ligne, host) ; les visuels ne decident rien (rien en headless).
@@ -198,7 +199,7 @@ func _physics_process(_delta: float) -> void:
 			for k in 2:
 				var pressed := g.power_left if k == 0 else g.power_right
 				if pressed and slots[k] >= 0 and cooldown[k] == 0 and not _truck.is_wrecked():
-					_fire(k, target_ahead() if slots[k] == PowerCatalog.Id.MISSILE else null)
+					_fire(k, target_ahead() if _aims(slots[k]) else null)
 					_predicted[k] = PREDICT_TICKS
 		return
 	var f := _truck.get_input()
@@ -214,7 +215,7 @@ func use(k: int) -> bool:
 	var p := slots[k]
 	if mirror or p < 0 or cooldown[k] > 0 or _truck == null or _truck.is_wrecked():
 		return false
-	last_target = target_ahead() if p == PowerCatalog.Id.MISSILE else null
+	last_target = target_ahead() if _aims(p) else null
 	_fire(k, last_target)
 	fired.emit(k, p)
 	return true
@@ -247,7 +248,12 @@ func _fire(k: int, aim: Truck) -> void:
 		PowerCatalog.Id.SAW:
 			saw_ticks = PowerCatalog.SAW_TICKS
 		PowerCatalog.Id.BOOMERANG:
-			PowerBoomerang.launch(_truck, mirror)
+			PowerBoomerang.launch(_truck, aim, mirror)
+
+
+## Pouvoir qui part vers le camion vise (missile, boomerang).
+static func _aims(p: int) -> bool:
+	return p == PowerCatalog.Id.MISSILE or p == PowerCatalog.Id.BOOMERANG
 
 
 ## L'effet de l'emplacement `k` dure encore (laser, rafale, scies, bouclier).
