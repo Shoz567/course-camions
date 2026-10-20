@@ -24,6 +24,12 @@ extends Node3D
 ##   oeil derriere le pare-brise, orientation legerement amortie).
 ## - Post-traitement de la vue (ScreenFx, hors qualite basse) : aberration
 ##   sur les bords, vignettage (plus de flou de vitesse depuis le 2026-10-09).
+## - Regard (2026-10-20 : « bouger legerement la camera avec le joystick
+##   droit, sans enorme amplitude ; une touche pour regarder derriere ») : le
+##   stick droit decale le cap d'au plus look_yaw_max_deg et l'inclinaison
+##   d'au plus look_pitch_max_deg, amorti ; « regarder derriere » (L1 tenu)
+##   retourne la vue d'un coup, et la rend au relachement. Lu sur
+##   look_source (entree locale), jamais dans l'InputFrame.
 ## - Tremblement (shake, 2026-10-16) : une explosion proche secoue l'image
 ##   (decalage du cadrage et leger roulis), qui s'amortit en ~0,7 s.
 
@@ -69,8 +75,17 @@ enum View { CHASE, COCKPIT }
 @export var shake_roll_deg: float = 2.5
 ## Decroissance de la secousse (par seconde).
 @export var shake_decay: float = 1.5
+@export_group("Regard")
+@export var look_yaw_max_deg: float = 30.0
+@export var look_pitch_max_deg: float = 10.0
+@export var look_damping: float = 10.0
 
 var view: View = View.CHASE
+## Entree locale du joueur (stick droit, regarder derriere) ; null : aucun regard.
+var look_source: LocalInputSource
+## Regard amorti (x vers la droite, y vers le bas, -1..1) et vue arriere.
+var look: Vector2 = Vector2.ZERO
+var looking_back: bool = false
 ## Qualite de la course (GraphicsSettings.split_quality) : en basse, pas de
 ## post-traitement. A poser avant l'entree dans l'arbre.
 var quality: int = GameState.graphics_quality
@@ -166,6 +181,7 @@ func _process(delta: float) -> void:
 		_initialized = false
 	_last_target = xf.origin
 	_apply_shake(delta)
+	_read_look(delta)
 	if view == View.COCKPIT:
 		_process_cockpit(xf, delta)
 		return
@@ -195,11 +211,28 @@ func _process(delta: float) -> void:
 		_yaw = lerp_angle(_yaw, heading, 1.0 - exp(-yaw_damping * delta))
 	_focus.y = maxf(_focus.y, xf.origin.y + focus_min_height)
 
-	global_transform = Transform3D(Basis(Vector3.UP, _yaw), _focus)
+	global_transform = Transform3D(Basis(Vector3.UP, _yaw + look_yaw()), _focus)
+	_arm.rotation.x = -deg_to_rad(pitch_deg + look.y * look_pitch_max_deg)
 	_camera.position = Vector3(0.0, 0.0, _arm_length())
 	var speed_ratio := clampf(absf(forward_speed) * 3.6 / fov_speed_kmh, 0.0, 1.0)
 	var fov := lerpf(fov_min, fov_max, speed_ratio)
 	_camera.fov = lerpf(_camera.fov, fov, 1.0 - exp(-fov_damping * delta))
+
+
+## Regard de cette image : stick amorti, vue arriere immediate.
+func _read_look(delta: float) -> void:
+	var want := Vector2.ZERO
+	looking_back = false
+	if look_source != null:
+		want = look_source.look()
+		looking_back = look_source.looking_back()
+	look = look.lerp(want, 1.0 - exp(-look_damping * delta))
+
+
+## Decalage du cap (rad) : stick a droite, regard a droite ; demi-tour en
+## vue arriere.
+func look_yaw() -> float:
+	return (PI if looking_back else 0.0) - look.x * deg_to_rad(look_yaw_max_deg)
 
 
 ## Longueur du bras a cette image : la sphere part du pivot vers la camera et
@@ -238,5 +271,6 @@ func _process_cockpit(xf: Transform3D, delta: float) -> void:
 		_cockpit_basis = b
 	else:
 		_cockpit_basis = _cockpit_basis.slerp(b, 1.0 - exp(-cockpit_damping * delta)).orthonormalized()
-	global_transform = Transform3D(_cockpit_basis, xf * cockpit_offset)
+	var gaze := Basis(Vector3.UP, look_yaw()) * Basis(Vector3.RIGHT, -look.y * deg_to_rad(look_pitch_max_deg))
+	global_transform = Transform3D(_cockpit_basis * gaze, xf * cockpit_offset)
 	_camera.fov = cockpit_fov

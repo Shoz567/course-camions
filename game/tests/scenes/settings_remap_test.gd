@@ -6,9 +6,11 @@ extends PhysicsTest
 ##      en echange les anciens boutons ; le bouton PS est refuse ;
 ##   C. un profil abime (action vide, bouton hors bornes) reprend ses defauts ;
 ##   D. fichier d'options : ecrit puis relu, tout revient a l'identique ;
-##   E. menu : RÉAFFECTER, Nitro, puis L1 sur la manette 2 -> nitro = L1,
+##   E. menu : RÉAFFECTER, Nitro, puis L3 sur la manette 2 -> nitro = L3,
 ##      klaxon = Carre (echange) ; PS ignore ; Echap annule ; PAR DEFAUT ;
-##   F. en course : une manette suit le profil (L1 = nitro, Carre plus rien).
+##   F. en course : une manette suit le profil (L3 = nitro, Carre plus rien) ;
+##   G. profil d'avant « regarder derriere » (2026-10-20, klaxon sur L1) :
+##      L1 passe a regarder derriere, le klaxon reprend L3.
 
 const TEST_PATH := "user://settings_remap_test.cfg"
 
@@ -52,9 +54,9 @@ func _test_tick(t: int) -> void:
 		3:
 			_pad(2, JOY_BUTTON_GUIDE, false)
 			_seen["after_ps"] = _menu.remap_waiting
-			_pad(2, JOY_BUTTON_LEFT_SHOULDER, true)
+			_pad(2, JOY_BUTTON_LEFT_STICK, true)
 		4:
-			_pad(2, JOY_BUTTON_LEFT_SHOULDER, false)
+			_pad(2, JOY_BUTTON_LEFT_STICK, false)
 			_seen["bindings"] = GameState.pad_bindings.duplicate(true)
 			_seen["boost_text"] = (_menu._remap_buttons["boost"] as Button).text
 			_seen["honk_text"] = (_menu._remap_buttons["honk"] as Button).text
@@ -69,10 +71,10 @@ func _test_tick(t: int) -> void:
 			_input.device = 0
 			_input.keyboard_layout = KeyboardInputSource.Layout.NONE
 			add_child(_input)
-			_pad(0, JOY_BUTTON_LEFT_SHOULDER, true)
+			_pad(0, JOY_BUTTON_LEFT_STICK, true)
 		7:
 			_seen["l1_boost"] = _input.poll(t).boost
-			_pad(0, JOY_BUTTON_LEFT_SHOULDER, false)
+			_pad(0, JOY_BUTTON_LEFT_STICK, false)
 			_pad(0, JOY_BUTTON_X, true)
 		9:
 			var f := _input.poll(t)
@@ -91,7 +93,8 @@ func _test_finish() -> void:
 	check("profil par defaut = boutons par defaut de DeviceInputSource",
 		_same(defaults["handbrake"], d.buttons_handbrake) and _same(defaults["boost"], d.buttons_boost)
 		and _same(defaults["cargo"], d.buttons_cargo) and _same(defaults["honk"], d.buttons_honk)
-		and _same(defaults["camera"], d.buttons_camera) and _same(defaults["reset"], d.buttons_reset))
+		and _same(defaults["camera"], d.buttons_camera) and _same(defaults["reset"], d.buttons_reset)
+		and _same(defaults["look_back"], d.buttons_look_back))
 	d.free()
 	# B
 	var b1 := PadBindings.assign(defaults, "honk", JOY_BUTTON_RIGHT_SHOULDER)
@@ -119,18 +122,25 @@ func _test_finish() -> void:
 	check("menu : en attente, la ligne le dit", String(_seen.get("waiting_text", "")).begins_with("appuyez"),
 		String(_seen.get("waiting_text", "")))
 	check("menu : le bouton PS est ignore, l'attente continue", String(_seen.get("after_ps", "")) == "boost")
-	check("menu : L1 (manette 2) -> nitro = L1, klaxon = Carre en echange",
-		not bound.is_empty() and _list(bound, "boost") == "L1" and _list(bound, "honk") == "Carré",
+	check("menu : L3 (manette 2) -> nitro = L3, klaxon = Carre en echange",
+		not bound.is_empty() and _list(bound, "boost") == "L3" and _list(bound, "honk") == "Carré",
 		"%s / %s" % [_seen.get("boost_text"), _seen.get("honk_text")])
 	check("menu : les lignes affichent les nouveaux boutons",
-		String(_seen.get("boost_text", "")) == "L1" and String(_seen.get("honk_text", "")) == "Carré")
+		String(_seen.get("boost_text", "")) == "L3" and String(_seen.get("honk_text", "")) == "Carré")
 	var cancel: Array = _seen.get("cancel", ["x", false, ""])
 	check("menu : Echap annule l'attente sans fermer ni rien changer",
 		String(cancel[0]) == "" and bool(cancel[1]) and String(cancel[2]) == "R3", str(cancel))
 	# F
-	check("en course : L1 = nitro", bool(_seen.get("l1_boost", false)))
+	check("en course : L3 = nitro", bool(_seen.get("l1_boost", false)))
 	var sq: Array = _seen.get("square", [true, false])
 	check("en course : Carre = klaxon, plus nitro", not bool(sq[0]) and bool(sq[1]), str(sq))
+	# G
+	var old := PadBindings.defaults()
+	old.erase("look_back")
+	old["honk"] = PackedInt32Array([JOY_BUTTON_LEFT_SHOULDER])
+	var migrated := PadBindings.sanitized(old)
+	check("ancien profil : L1 regarde derriere, klaxon sur L3",
+		_list(migrated, "look_back") == "L1" and _list(migrated, "honk") == "L3", str(migrated))
 	check("PAR DEFAUT puis RETOUR", bool(_seen.get("reset", false)) and bool(_seen.get("closed", false)))
 	GameState.pad_bindings = PadBindings.defaults()
 

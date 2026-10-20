@@ -12,13 +12,15 @@ extends RefCounted
 ## anciens boutons de la premiere (aucune action ne devient injouable).
 
 ## Actions dans l'ordre de l'ecran, et leur nom affiche.
-const ACTIONS: PackedStringArray = ["handbrake", "boost", "cargo", "honk", "camera", "reset", "power_left", "power_right"]
+const ACTIONS: PackedStringArray = ["handbrake", "boost", "cargo", "honk", "camera", "look_back", "reset",
+	"power_left", "power_right"]
 const LABELS: Dictionary = {
 	"handbrake": "Frein à main / dérapage (drift)",
 	"boost": "Nitro boost",
 	"cargo": "Largage de remorque",
 	"honk": "Klaxon",
 	"camera": "Changer de vue",
+	"look_back": "Regarder derrière",
 	"reset": "Reset sur la piste",
 	"power_left": "Pouvoir de gauche",
 	"power_right": "Pouvoir de droite",
@@ -34,8 +36,9 @@ static func defaults() -> Dictionary:
 		"handbrake": PackedInt32Array([JOY_BUTTON_A, JOY_BUTTON_RIGHT_SHOULDER]),
 		"boost": PackedInt32Array([JOY_BUTTON_X]),
 		"cargo": PackedInt32Array([JOY_BUTTON_Y]),
-		"honk": PackedInt32Array([JOY_BUTTON_LEFT_SHOULDER]),
+		"honk": PackedInt32Array([JOY_BUTTON_LEFT_STICK]),
 		"camera": PackedInt32Array([JOY_BUTTON_RIGHT_STICK]),
+		"look_back": PackedInt32Array([JOY_BUTTON_LEFT_SHOULDER]),
 		"reset": PackedInt32Array([JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]),
 		"power_left": PackedInt32Array([JOY_BUTTON_DPAD_LEFT]),
 		"power_right": PackedInt32Array([JOY_BUTTON_DPAD_RIGHT]),
@@ -71,6 +74,7 @@ static func assign(bindings: Dictionary, action: String, button: int) -> Diction
 static func sanitized(bindings: Dictionary) -> Dictionary:
 	var d := defaults()
 	var out := {}
+	var fallback := PackedStringArray()
 	for a: String in ACTIONS:
 		var list := PackedInt32Array()
 		var src: Variant = bindings.get(a, null)
@@ -80,6 +84,26 @@ static func sanitized(bindings: Dictionary) -> Dictionary:
 				if v >= 0 and v < JOY_BUTTON_MAX and not list.has(v) and not RESERVED.has(v as JoyButton):
 					list.append(v)
 		out[a] = list if not list.is_empty() else d[a]
+		if list.is_empty():
+			fallback.append(a)
+	# action reprise par defaut (absente d'un profil d'avant son ajout, comme
+	# look_back sur L1 le 2026-10-20) : ses boutons sont retires aux autres,
+	# et une action laissee sans bouton reprend les siens (le klaxon : L3)
+	for a: String in fallback:
+		var taken: PackedInt32Array = d[a]
+		for other: String in ACTIONS:
+			if other == a:
+				continue
+			var list: PackedInt32Array = out[other]
+			for b in taken:
+				var k := list.find(b)
+				if k >= 0:
+					list.remove_at(k)
+			if list.is_empty():
+				for b in d[other]:
+					if not taken.has(b):
+						list.append(b)
+			out[other] = list
 	return out
 
 
@@ -91,6 +115,7 @@ static func apply(source: DeviceInputSource, bindings: Dictionary) -> void:
 	source.buttons_cargo = _typed(b["cargo"])
 	source.buttons_honk = _typed(b["honk"])
 	source.buttons_camera = _typed(b["camera"])
+	source.buttons_look_back = _typed(b["look_back"])
 	source.buttons_reset = _typed(b["reset"])
 	source.buttons_power_left = _typed(b["power_left"])
 	source.buttons_power_right = _typed(b["power_right"])
