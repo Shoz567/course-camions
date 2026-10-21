@@ -149,6 +149,8 @@ static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> Vehicle
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# bus Effets / Ambiance / Musique et limiteur, avant le premier son
+	SoundMix.setup()
 	resolution = DynamicResolution.new()
 	resolution.name = "DynamicResolution"
 	add_child(resolution)

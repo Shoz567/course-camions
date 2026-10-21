@@ -25,7 +25,7 @@ func _ready() -> void:
 	unit_size = UNIT_M
 	max_distance = MAX_M
 	volume_db = -4.0
-	bus = &"Master"
+	bus = SoundMix.AMBIENCE
 	if DisplayServer.get_name() == "headless":
 		return
 	if _stream == null:

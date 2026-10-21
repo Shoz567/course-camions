@@ -137,6 +137,7 @@ func _ready() -> void:
 		_bang.stream = _bang_stream
 		_bang.unit_size = 18.0
 		_bang.max_distance = 160.0
+		_bang.bus = SoundMix.EFFECTS
 		add_child(_bang)
 		for w in _spark_fx.size():
 			_spark_fx[w] = _make_rim_sparks()

@@ -1028,6 +1028,14 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   temps, PV) (`race_hud_test`).
 - [ ] À valider en jeu par l'équipe : équilibrage des nouveaux pouvoirs et des
   niveaux de bots, lisibilité du HUD à 5-6 joueurs.
+- [x] **Mixage** (2026-10-21, « un grésillement quand on lance le jeu, tous
+  les bruitages sont plutôt forts ; la pluie est vachement forte au début ») :
+  bus Effets (−6 dB), Ambiance (−6 dB) et Musique sous le Master, qui garde
+  le volume des réglages ; limiteur sur le Master (plafond −1 dB : plus
+  d'écrêtage) (`SoundMix`) ; pluie de Cyber City 6 dB sous les autres
+  ambiances, plus douce (gouttes plus rares et sourdes : énergie aiguë de
+  0,65 à 0,10), fondu d'entrée de 2,5 s (`sound_mix_test`). À confirmer à
+  l'oreille : le grésillement venait-il de l'écrêtage ou des gouttes ?
 
 ## Questions de design ouvertes
 

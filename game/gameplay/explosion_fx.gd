@@ -140,6 +140,7 @@ func _ready() -> void:
 		sound.stream = ExplosiveBarrel._build_explosion_stream()
 		sound.unit_size = 30.0
 		sound.max_distance = 220.0
+		sound.bus = SoundMix.EFFECTS
 		add_child(sound)
 		sound.play()
 
