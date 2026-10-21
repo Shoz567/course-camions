@@ -141,6 +141,23 @@ const APPROACH_CURV_M := 10.0
 const EXIT_MIN_M := 60.0
 const EXIT_MAX_M := 300.0
 const SHORTCUT_GRIP := 0.75
+## Virages du raccourci lui-meme (courbure exacte de son axe) : marge moindre.
+const BRANCH_CURVE_GRIP := 0.75
+## Sur le raccourci, il se cale du cote interieur du virage qui vient (lu
+## BRANCH_INSIDE_S devant), jusqu'a BRANCH_INSIDE_PART de la place en travers,
+## pleinement sous un rayon de BRANCH_INSIDE_R_M : sa remorque, deportee vers
+## l'exterieur, garde de la place avant le mur.
+const BRANCH_INSIDE_S := 1.0
+const BRANCH_INSIDE_PART := 0.6
+const BRANCH_INSIDE_R_M := 120.0
+## Raccourci (2026-10-21) : il compte sur ce freinage (part du sien) avant ses
+## virages (il freine en courbe, la remorque chasse), et ne prend la nitro que
+## si rien ne demande de ralentir sur BRANCH_BOOST_CLEAR_M.
+const BRANCH_BRAKE := 0.6
+## Saut d'un raccourci : il ne le prend que si sa vitesse max depasse d'autant
+## la vitesse conseillee (TrackBlockout.branch_jump_min_kmh).
+const JUMP_SPEED_MARGIN := 1.1
+const BRANCH_BOOST_CLEAR_M := 250.0
 const PUDDLE_COST_M := 8.0
 ## Nombre d'or : passages successifs repartis regulierement dans [0, 1).
 const GOLDEN := 0.618034
@@ -492,7 +509,7 @@ func _speed(v: float, cap: float) -> void:
 	# devant (reaction) : sqrt(p(d)^2 + 2 a d). Au-dessus de sa vitesse max
 	# (nitro, pad de boost), il garde son elan tant qu'aucun virage ne demande
 	# de ralentir (avant : il freinait aussitot et perdait chaque boost)
-	var brake := BOT_BRAKE * float(BRAKE[level])
+	var brake := BOT_BRAKE * float(BRAKE[level]) * (BRANCH_BRAKE if _branch >= 0 else 1.0)
 	var lead := v * SPEED_LEAD_S
 	var reach := minf(v * v / (2.0 * brake) + PLAN_STEP_M, PLAN_MAX_M)
 	target_speed = INF
@@ -502,7 +519,7 @@ func _speed(v: float, cap: float) -> void:
 		target_speed = minf(target_speed, sqrt(p * p + 2.0 * brake * d))
 		d += PLAN_STEP_M
 	# en travers apres un accrochage : repartir, quoi qu'il y ait devant
-	var ahead := -track.branch_frame(_branch, 0.0, 0.0, 0.0).basis.z if _on_branch() else track.sample_forward(index)
+	var ahead := _branch_dir(_branch, track.branch_u(_branch, truck.global_position)) if _on_branch() 			else track.sample_forward(index)
 	var astray := (-truck.global_basis.z).dot(ahead) < ASTRAY_DOT and v < ASTRAY_MS
 	target_speed = minf(target_speed, ASTRAY_MS if astray else cap)
 	# garde-fou : direction en butee et le camion s'ecarte de sa ligne vers
@@ -525,7 +542,7 @@ func _boost(clear: bool) -> void:
 		var v := truck.linear_velocity.length()
 		var ok := true
 		var d := 0.0
-		while d <= BOOST_CLEAR_M:
+		while d <= (BRANCH_BOOST_CLEAR_M if _branch >= 0 else BOOST_CLEAR_M):
 			if _profile_at(d) < v + 1.0:
 				ok = false
 				break
@@ -543,6 +560,11 @@ func _boost(clear: bool) -> void:
 ## memes choix (suite fixe, aucun tirage).
 static func takes_shortcut(bot_level: int, phase: int, pass_index: int) -> bool:
 	return fposmod(phase * 0.37 + pass_index * GOLDEN, 1.0) < float(SHORTCUT_TAKE[bot_level])
+
+
+## Le raccourci k n'a pas de saut, ou il va assez vite pour le franchir.
+func _can_jump(k: int) -> bool:
+	return _top * 3.6 >= track.branch_jump_min_kmh(k) * JUMP_SPEED_MARGIN
 
 
 ## Sur le raccourci choisi (passe son entree).
@@ -591,20 +613,22 @@ func _update_branch() -> void:
 			continue
 		_branch_seen = k
 		_passes += 1
-		if takes_shortcut(level, _phase, _passes):
+		if takes_shortcut(level, _phase, _passes) and _can_jump(k):
 			_branch = k
 			_to_entry = gap
 			shortcuts_taken += 1
 		return
 
 
-## Vitesse du profil a `d` m devant, le long de son chemin : sur le raccourci
-## (tout droit), aucun plafond ; apres, le profil de la piste a la sortie.
+## Vitesse du profil a `d` m devant, le long de son chemin : sur le raccourci,
+## celle de ses virages (2026-10-21 : il n'est plus tout droit) ; apres, le
+## profil de la piste a la sortie.
 func _profile_at(d: float) -> float:
 	if _branch >= 0 and d >= _to_entry:
 		var blen := track.branch_length(_branch)
 		if d <= _to_entry + blen:
-			return PROFILE_CEILING_MS
+			var c := track.branch_curvature(_branch, (d - _to_entry) / blen)
+			return minf(PROFILE_CEILING_MS, sqrt(_grip * BRANCH_CURVE_GRIP / maxf(c, 1e-5)))
 		var past := d - _to_entry - blen
 		var j := track.index_at_s(track.branch_span(_branch).y + past)
 		if past > _exit_m[_branch] + 20.0:
@@ -759,6 +783,11 @@ func _approach_point(k: int, i: int) -> Vector3:
 	return track.sample_position(i) + track.sample_right(i) * _approach_lat(k, i)
 
 
+## Sens de course du raccourci k a sa part u.
+func _branch_dir(k: int, u: float) -> Vector3:
+	return -track.branch_frame(k, clampf(u, 0.0, 1.0), 0.0, 0.0).basis.z
+
+
 ## Son ecart, comme _lat_now (sur un raccourci : axe plus decalage).
 func _my_lat() -> float:
 	if _on_branch():
@@ -778,7 +807,7 @@ func _branch_traffic(v: float) -> Dictionary:
 	var bl := track.branch_lateral(k)
 	var half := track.branch_width_of(k) / 2.0 - SHORTCUT_EDGE_M
 	var look := maxf(LOOK_AHEAD_M, v * LOOK_AHEAD_S)
-	var dir := -track.branch_frame(k, 0.0, 0.0, 0.0).basis.z
+	var dir := _branch_dir(k, u_me)
 	var my_v := truck.linear_velocity.dot(dir)
 	# obstacles : [devant mon nez (m), ecart a l'axe, portee en travers,
 	# vitesse, camion qui roule]
@@ -808,6 +837,8 @@ func _branch_traffic(v: float) -> Dictionary:
 		if ahead > -TAIL_M - tail - NOSE_M and (ahead < 1.0 or my_v - tv > 0.5):
 			obs.append([ahead, track.branch_lateral_of(k, t.global_position), 2.0 * HALF_WIDTH_M + CLEAR_M, tv, true])
 	var cur := _lat_now - bl
+	var turn := track.branch_turn(k, u_me + v * BRANCH_INSIDE_S / blen)
+	var inside := -clampf(turn * BRANCH_INSIDE_R_M, -1.0, 1.0) * half * BRANCH_INSIDE_PART
 	var best := INF
 	var best_x := cur
 	var x := -half
@@ -818,7 +849,7 @@ func _branch_traffic(v: float) -> Dictionary:
 				free = false
 				break
 		if free:
-			var cost := absf(x - cur) + 0.3 * absf(x)
+			var cost := 0.5 * absf(x - cur) + absf(x - inside)
 			for pd in puddles:
 				if float(pd[0]) <= look and absf(x - float(pd[1])) < float(pd[2]):
 					cost += PUDDLE_COST_M

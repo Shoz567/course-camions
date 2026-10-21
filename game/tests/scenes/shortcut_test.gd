@@ -118,19 +118,18 @@ func _cps_doubled(t: TrackBlockout, b: int) -> bool:
 
 
 func _test_tick(t: int) -> void:
-	# pilote : suit l'axe du raccourci (ecart lateral, puis cap)
-	var start := _track.branch_frame(0, 0.0, 0.0, 0.0)
-	var dir := -start.basis.z
-	var right := start.basis.x
+	# pilote : suit l'axe du raccourci (ecart lateral, puis cap 8 m devant ;
+	# il est courbe depuis le 2026-10-21)
 	var p := _truck.global_position
-	var lat := (p - start.origin).dot(right)
+	var along := _track.branch_u(0, p)
+	var lat := _track.branch_lateral_of(0, p)
+	var dir := -_track.branch_frame(0, clampf(along + 8.0 / _track.branch_length(0), 0.0, 1.0), 0.0, 0.0).basis.z
 	var f := -_truck.global_basis.z
 	var heading := atan2(f.cross(dir).y, f.dot(dir))
 	var frame := InputFrame.new()
 	frame.throttle = 0.7
 	frame.steer = clampf(-lat * 0.06 - heading * 1.5, -1.0, 1.0)
 	_truck.set_input(frame)
-	var along := (p - start.origin).dot(dir) / _track.branch_length(0)
 	if along > 0.1 and along < 0.9:
 		_progress.append(_track.sample_s(_track.closest_sample(p)))
 	if along > 0.5 and not _seen.has("respawn"):

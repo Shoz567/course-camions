@@ -1014,6 +1014,31 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   coûteux. Bot dur, docks : 1580 ticks contre 2185 par le détour
   (`bot_shortcut_test`) ; 3 niveaux sur les 5 raccourcis : aucun mur, aucune
   remise en piste.
+  - 2026-10-21 (« ils n'atterrissent pas au niveau de la piste, ça fait un
+    muret ; des problèmes de texture et de collision quand ils croisent la
+    piste ; pas des lignes droites, trop simple ; ou un saut à faire avec
+    une certaine vitesse ») :
+    - **Jonctions** : la chaussée du raccourci est découpée au bord de la
+      piste (20 cm dessous, 2 cm plus bas), à la hauteur de ce bord, puis
+      rejoint son profil sur 30 m : plus de marche (jusqu'à 1,7 m avant),
+      plus de chaussée posée 3 cm au-dessus de la piste sur ~100 m (elle
+      scintillait). Côté corrigé : il part du bord opposé au virage du
+      détour (le signe était inversé : ~85 m sur la piste au lieu de ~135)
+      (`branch_junction_test`).
+    - **Courbes** : tracé en S (`"path"` : points de passage), 28 m de
+      large : docks, village, rizières (rayons 100–125 m). Les bots
+      freinent à la courbure du raccourci (marge 0,75, freinage compté à
+      60 %, pas de nitro si un virage vient dans les 250 m) et se calent à
+      l'intérieur des virages (la remorque garde de la place). Bot dur,
+      docks : ~14–20 % plus rapide que le détour (seuil du test : 10 %).
+    - **Sauts** : échangeur (trou de 26 m, 85 km/h conseillés) et marina
+      (30 m, 95 km/h) : montée de 7 m vers un plateau, tremplin de toute
+      la largeur (chevrons), vide, parois ; tombé : chute (hors piste),
+      réapparition après le vide ; aucun checkpoint entre le tremplin et ce
+      point. Mesuré : passe dès 80 / 90 km/h, tombe à 75 / 85. Un bot ne le
+      prend que si sa vitesse max dépasse de 10 % la vitesse conseillée
+      (`branch_jump_test`). 3 niveaux × 5 raccourcis : aucun mur, aucune
+      remise en piste. Mini-carte : tracé courbe.
 - [x] **Bonus sur la piste** (2026-10-20, « réparation, recharge de pouvoir ») :
   `TrackPickup`, cubes lumineux qui tournent (✚ vert : +40 PV tête, +30
   remorque, pneus neufs ; ⚡ jaune : le pouvoir le plus long à recharger

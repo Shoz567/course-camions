@@ -520,14 +520,22 @@ func is_water(p: Vector3) -> bool:
 ## au-dessus du sol.
 func get_respawn_transform(p: Vector3) -> Transform3D:
 	_ensure_built()
+	# tombe dans le vide d'un saut : apres le bord de reception
+	for k in _br.size():
+		var j: PackedFloat32Array = _br[k]["jump"]
+		if j.is_empty():
+			continue
+		var c := _branch_coords(k, p)
+		var length := float(_br[k]["len"])
+		var half := float(_br[k]["w"]) / 2.0
+		if c.x > j[0] - BRANCH_RAMP_M / length and c.x < j[1] and absf(c.y) < half + 8.0 \
+				and p.y < _branch_center_y(k, c.x) - 1.5:
+			return branch_frame(k, j[1] + BRANCH_JUMP_RESPAWN_M / length, clampf(c.y, -half + 3.0, half - 3.0), 1.0)
 	var kb := on_branch(p, 4.0)
 	if kb >= 0:
-		var bd := _br[kb]
-		var d := p - (bd["a"] as Vector3)
-		var u := clampf((d.x * (bd["dir"] as Vector3).x + d.z * (bd["dir"] as Vector3).z) / float(bd["len"]), 0.02, 0.98)
-		var lat := d.x * (bd["right"] as Vector3).x + d.z * (bd["right"] as Vector3).z
-		var lim := float(bd["w"]) / 2.0 - 3.0
-		return branch_frame(kb, u, clampf(lat, -lim, lim), 1.0)
+		var c := _branch_coords(kb, p)
+		var lim := float(_br[kb]["w"]) / 2.0 - 3.0
+		return branch_frame(kb, clampf(c.x, 0.02, 0.98), clampf(c.y, -lim, lim), 1.0)
 	var i := closest_sample(p)
 	var lateral := (p - sample_position(i)).dot(sample_right(i))
 	var limit := width / 2.0 - maxf(2.0, width * 0.1)
@@ -1613,16 +1621,20 @@ func _on_jump_pad_body_entered(body: Node3D, index: int) -> void:
 ## `dir` -1 : rampe tournee vers l'arriere (jumelle d'une rampe d'arene).
 func _build_jump(parent: Node3D, s: float, offset: float, index: int, dir: float = 1.0, suffix: String = "") -> void:
 	var i := index_at_s(s)
-	var f := _fwd[i] * dir
-	var r := _right[i] * dir
-	var u := _up[i]
-	var base := _pos[i] + _right[i] * offset
-	var hw := jump_width / 2.0
-	var top := jump_length * tan(deg_to_rad(jump_angle_deg))
+	_build_ramp(parent, _pos[i] + _right[i] * offset, _fwd[i] * dir, _right[i] * dir, _up[i], jump_width / 2.0,
+		jump_length, jump_length * tan(deg_to_rad(jump_angle_deg)), "JumpPad%d%s" % [index, suffix],
+		"JumpTrigger%d%s" % [index, suffix], index)
+
+
+## Rampe (corps convexe, face a chevrons) posee en `base` (milieu du bord
+## d'attaque), vers `f`, demi-largeur `hw`, longueur `length`, sommet a
+## `top` m ; sa zone de declenchement emet jump_pad_entered(`index`).
+func _build_ramp(parent: Node3D, base: Vector3, f: Vector3, r: Vector3, u: Vector3, hw: float, length: float,
+		top: float, body_name: String, trigger_name: String, index: int) -> void:
 	var p := PackedVector3Array([
-		base - r * hw - u * 0.02, base + r * hw - u * 0.02,                              # attaque
-		base - r * hw + f * jump_length + u * top, base + r * hw + f * jump_length + u * top,  # sommet
-		base - r * hw + f * jump_length - u * 0.3, base + r * hw + f * jump_length - u * 0.3,  # pied arriere
+		base - r * hw - u * 0.02, base + r * hw - u * 0.02,                        # attaque
+		base - r * hw + f * length + u * top, base + r * hw + f * length + u * top,  # sommet
+		base - r * hw + f * length - u * 0.3, base + r * hw + f * length - u * 0.3,  # pied arriere
 	])
 	var face := SurfaceTool.new()
 	face.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -1636,7 +1648,7 @@ func _build_jump(parent: Node3D, s: float, offset: float, index: int, dir: float
 	_tri(st, tris, p[0], p[2], p[4])                                        # flancs
 	_tri(st, tris, p[1], p[5], p[3])
 	var body := StaticBody3D.new()
-	body.name = "JumpPad%d%s" % [index, suffix]
+	body.name = body_name
 	body.collision_layer = 1 << (ROAD_LAYER - 1)
 	body.collision_mask = 0
 	body.set_meta(&"surface", &"asphalt")
@@ -1659,17 +1671,17 @@ func _build_jump(parent: Node3D, s: float, offset: float, index: int, dir: float
 	parent.add_child(body)
 	# declenchement : les derniers metres de la rampe, jusqu'a 3 m au-dessus
 	var area := Area3D.new()
-	area.name = "JumpTrigger%d%s" % [index, suffix]
+	area.name = trigger_name
 	area.collision_layer = 0
 	area.collision_mask = 1 << (VEHICLE_LAYER - 1)
 	area.monitorable = false
 	var acs := CollisionShape3D.new()
 	var abox := BoxShape3D.new()
-	abox.size = Vector3(jump_width, 4.0, jump_trigger_depth)
+	abox.size = Vector3(hw * 2.0, 4.0, jump_trigger_depth)
 	acs.shape = abox
 	area.add_child(acs)
 	area.transform = Transform3D(Basis(r, u, -f),
-		base + f * (jump_length - jump_trigger_depth / 2.0) + u * (top + 1.0))
+		base + f * (length - jump_trigger_depth / 2.0) + u * (top + 1.0))
 	area.body_entered.connect(_on_jump_pad_body_entered.bind(index))
 	parent.add_child(area)
 
@@ -1712,7 +1724,35 @@ func _build_boost_pad(parent: Node3D, s: float, lateral: float, index: int) -> v
 
 # --- raccourcis -----------------------------------------------------------------
 
-## Resout les raccourcis (droite entre leurs deux bouts sur la piste) et les
+## Raccourci : distance (m) au-dela du bord de la piste sur laquelle sa
+## chaussee passe de la hauteur de ce bord a son propre profil en long.
+const BRANCH_BLEND_M := 30.0
+## Pas (m) du trace fin d'un raccourci, avant reechantillonnage.
+const BRANCH_FINE_M := 0.5
+## Largeur maximale (m) d'une bande de sa chaussee en travers.
+const BRANCH_CELL_M := 3.0
+## Saut d'un raccourci (2026-10-21, « ou carrément un saut à faire avec une
+## certaine vitesse » ; "jump" : {"u", "gap", "min_kmh"}) : sa chaussee monte
+## de BRANCH_JUMP_LIFT_M sur BRANCH_JUMP_RISE_M vers un plateau
+## (BRANCH_JUMP_FLAT_M avant le bord d'envol, autant apres celui de
+## reception), le vide entre les deux ; tremplin de toute la largeur
+## (BRANCH_RAMP_M, BRANCH_RAMP_DEG) au bord d'envol, signale par
+## jump_pad_entered (indice BRANCH_JUMP_PAD + k). Tombe dans le vide : hors
+## piste (chute) ; il reapparait BRANCH_JUMP_RESPAWN_M apres le bord de
+## reception. Aucun checkpoint ne tombe entre le tremplin et ce point.
+const BRANCH_JUMP_LIFT_M := 7.0
+const BRANCH_JUMP_RISE_M := 90.0
+const BRANCH_JUMP_FLAT_M := 25.0
+const BRANCH_RAMP_M := 14.0
+const BRANCH_RAMP_DEG := 9.0
+const BRANCH_JUMP_PAD := 900
+const BRANCH_JUMP_RESPAWN_M := 10.0
+## Sa chaussee est coupee a cette distance sous le bord de la piste (m) et y
+## passe 2 cm sous elle : pas de fente entre les deux maillages.
+const BRANCH_TUCK_M := 0.2
+
+## Resout les raccourcis : trace (droite entre leurs deux bouts sur la piste,
+## deformee par leurs points de passage "path"), profil en long, et les
 ## ouvertures des murs de la piste.
 func _build_branches() -> void:
 	_br.clear()
@@ -1736,23 +1776,82 @@ func _build_branches() -> void:
 		for seg: Dictionary in segments:
 			if String(seg.get("name", "")) == from:
 				turn = float(seg.get("angle", 0.0))
-		# detour a droite : le raccourci file tout droit, colle au bord gauche
-		var lat := float(spec.get("lateral", -signf(turn) * (width / 2.0 - w / 2.0)))
+		# detour a droite (angle < 0) : le raccourci part colle au bord gauche,
+		# il quitte la piste au plus tot (avant le 2026-10-21 : le signe etait
+		# inverse, il longeait le bord interieur du virage sur ~135 m)
+		var lat := float(spec.get("lateral", signf(turn) * (width / 2.0 - w / 2.0)))
 		var a := _pos[i0] + _flat_right(i0) * lat
 		var b := _pos[i1] + _flat_right(i1) * lat
-		var dir := Vector3(b.x - a.x, 0.0, b.z - a.z)
-		var length := dir.length()
-		dir = dir / maxf(length, 1e-3)
-		var right := dir.cross(Vector3.UP).normalized()
+		var axis := Vector3(b.x - a.x, 0.0, b.z - a.z)
+		var straight := axis.length()
+		axis = axis / maxf(straight, 1e-3)
+		var across := axis.cross(Vector3.UP).normalized()
+		# trace fin : l'avance le long de l'axe, l'ecart des points de passage
+		var knots: Array[Vector2] = [Vector2.ZERO]
+		for kn: Array in spec.get("path", []):
+			knots.append(Vector2(float(kn[0]), float(kn[1])))
+		knots.append(Vector2(1.0, 0.0))
+		var fine := PackedVector3Array()
+		var fine_x := PackedFloat32Array()
+		var steps := maxi(2, ceili(straight / BRANCH_FINE_M))
+		for k in steps + 1:
+			var x := float(k) / steps
+			fine.append(a + axis * (x * straight) + across * _knot_offset(knots, x))
+			fine_x.append(x)
+		var cum := PackedFloat32Array([0.0])
+		for k in range(1, fine.size()):
+			cum.append(cum[k - 1] + Vector2(fine[k].x - fine[k - 1].x, fine[k].z - fine[k - 1].z).length())
+		# reechantillonne a pas constant le long du trace (u : part de sa longueur)
+		var length := cum[cum.size() - 1]
 		var count := maxi(2, roundi(length / sample_step))
 		var pts := PackedVector3Array()
-		for k in count + 1:
-			var u := float(k) / count
-			var p := a.lerp(b, u)
-			p.y = lerpf(a.y, b.y, smoothstep(0.0, 1.0, u))
-			pts.append(p)
-		_br.append({"name": String(spec.get("name", "Raccourci %d" % _br.size())), "s0": s0, "s1": s1, "w": w,
-			"a": a, "b": b, "dir": dir, "right": right, "len": length, "pts": pts, "spec": spec, "lat": lat})
+		var xs := PackedFloat32Array()
+		var f := 0
+		for q in count + 1:
+			var d := length * q / count
+			while f < fine.size() - 2 and cum[f + 1] < d:
+				f += 1
+			var t := clampf((d - cum[f]) / maxf(cum[f + 1] - cum[f], 1e-6), 0.0, 1.0)
+			pts.append(fine[f].lerp(fine[f + 1], t))
+			xs.append(lerpf(fine_x[f], fine_x[f + 1], t))
+		var dirs := PackedVector3Array()
+		var rights := PackedVector3Array()
+		var curv := PackedFloat32Array()
+		for q in count + 1:
+			var p0 := pts[maxi(q - 1, 0)]
+			var p1 := pts[mini(q + 1, count)]
+			var dq := Vector3(p1.x - p0.x, 0.0, p1.z - p0.z).normalized()
+			dirs.append(dq)
+			rights.append(dq.cross(Vector3.UP).normalized())
+			curv.append(_turn_curv(pts[maxi(q - 4, 0)], pts[q], pts[mini(q + 4, count)]))
+		# chaque moitie juge la portion de piste qu'elle longe : de l'entree au
+		# milieu du detour, puis du milieu a la sortie
+		var span := posmod(i1 - i0, n)
+		var bd := {"name": String(spec.get("name", "Raccourci %d" % _br.size())), "s0": s0, "s1": s1, "w": w,
+			"lat": lat, "a": a, "b": b, "axis": axis, "straight": straight, "len": length, "pts": pts, "xs": xs,
+			"dirs": dirs, "rights": rights, "curv": curv, "spec": spec,
+			"win": PackedInt32Array([i0 - 40, i0 + span / 2, i0 + span / 2, i0 + span + 40]),
+			"u_out": 0.0, "u_in": 1.0, "h_out": a.y, "h_in": b.y}
+		_br.append(bd)
+		# profil en long : de la hauteur du bord de la piste ou il la quitte a
+		# celle du bord ou il la rejoint
+		var kb := _br.size() - 1
+		for q in count + 1:
+			var m := _branch_main(kb, pts[q], float(q) / count)
+			if m.x > 0.0:
+				bd["u_out"] = float(q) / count
+				bd["h_out"] = m.y
+				break
+		for q in range(count, -1, -1):
+			var m := _branch_main(kb, pts[q], float(q) / count)
+			if m.x > 0.0:
+				bd["u_in"] = float(q) / count
+				bd["h_in"] = m.y
+				break
+		bd["jump"] = _place_jump(spec.get("jump", {}), s0, s1, length, count)
+		for q in count + 1:
+			pts[q].y = _branch_y(kb, pts[q], float(q) / count)
+		bd["pts"] = pts
 	# mur de la piste dans le raccourci (a plus d'1 m de son bord) : ouvert
 	for side in 2:
 		_wall_open[side].resize(n)
@@ -1762,9 +1861,184 @@ func _build_branches() -> void:
 			_wall_open[side][i] = 1 if on_branch(edge, -1.0) >= 0 else 0
 
 
+## Saut d'un raccourci : PackedFloat32Array([part du bord d'envol, part du
+## bord de reception, vitesse conseillee km/h]), vide sans saut. Bords sur
+## des rangees du maillage ; decale (au plus 0,15) pour qu'aucun checkpoint ne
+## tombe entre le pied du tremplin et le point de reapparition.
+func _place_jump(jump: Dictionary, s0: float, s1: float, length: float, count: int) -> PackedFloat32Array:
+	if jump.is_empty():
+		return PackedFloat32Array()
+	var step := length / count
+	var gap_rows := maxi(1, roundi(float(jump.get("gap", 40.0)) / step))
+	var want := float(jump.get("u", 0.5))
+	for k in 31:
+		var u := want + (0.01 if k % 2 == 1 else -0.01) * ceili(k / 2.0)
+		var qa := roundi(u * count)
+		var ua := float(qa) / count
+		var ub := float(qa + gap_rows) / count
+		var lo := lerpf(s0, s1, ua - (BRANCH_RAMP_M + 4.0) / length)
+		var hi := lerpf(s0, s1, ub + (BRANCH_JUMP_RESPAWN_M + 25.0) / length)
+		var free := true
+		for c in checkpoint_count:
+			var s := checkpoint_s(c)
+			if s > lo and s < hi:
+				free = false
+				break
+		if free:
+			return PackedFloat32Array([ua, ub, float(jump.get("min_kmh", 0.0))])
+	push_warning("TrackBlockout : saut de raccourci sans place hors des checkpoints")
+	return PackedFloat32Array()
+
+
+## Surelevation (m) de la chaussee d'un raccourci a sa part u : le plateau de
+## son saut.
+func _jump_lift(bd: Dictionary, u: float) -> float:
+	var j: PackedFloat32Array = bd["jump"]
+	if j.is_empty():
+		return 0.0
+	var length := float(bd["len"])
+	var a := j[0] - BRANCH_JUMP_FLAT_M / length
+	var b := j[1] + BRANCH_JUMP_FLAT_M / length
+	var rise := BRANCH_JUMP_RISE_M / length
+	return BRANCH_JUMP_LIFT_M * smoothstep(a - rise, a, u) * (1.0 - smoothstep(b, b + rise, u))
+
+
+## Le raccourci k est vide a sa part u (entre les bords de son saut).
+func _in_gap(k: int, u: float) -> bool:
+	var j: PackedFloat32Array = _br[k]["jump"]
+	return not j.is_empty() and u > j[0] and u < j[1]
+
+
+## Ecart a l'axe d'un raccourci a l'avance x (0 a 1) : d'un point de passage
+## (x, ecart) au suivant en S doux (tangent a l'axe a chacun).
+static func _knot_offset(knots: Array[Vector2], x: float) -> float:
+	for k in knots.size() - 1:
+		if x <= knots[k + 1].x:
+			return lerpf(knots[k].y, knots[k + 1].y, smoothstep(knots[k].x, knots[k + 1].x, x))
+	return knots[knots.size() - 1].y
+
+
+## Courbure (1/m, > 0 a gauche) du cercle par trois points, a l'horizontale.
+static func _turn_curv(a: Vector3, b: Vector3, c: Vector3) -> float:
+	var ab := Vector2(b.x - a.x, b.z - a.z)
+	var bc := Vector2(c.x - b.x, c.z - b.z)
+	var ac := Vector2(c.x - a.x, c.z - a.z)
+	var den := ab.length() * bc.length() * ac.length()
+	return -2.0 * ab.cross(ac) / den if den > 1e-3 else 0.0
+
+
 ## Lateral horizontal de la piste a l'echantillon i (sans devers).
 func _flat_right(i: int) -> Vector3:
 	return Vector3(_right[i].x, 0.0, _right[i].z).normalized()
+
+
+## Echantillon de la piste le plus proche de `p` (a l'horizontale) parmi les
+## indices lo a hi (pris modulo le nombre d'echantillons).
+func _nearest_in(p: Vector3, lo: int, hi: int) -> int:
+	var n := _pos.size()
+	var best := lo
+	var best_d := INF
+	for i in range(lo, hi + 1, 4):
+		var j := posmod(i, n)
+		var d := Vector2(_pos[j].x - p.x, _pos[j].z - p.z).length_squared()
+		if d < best_d:
+			best_d = d
+			best = i
+	var coarse := best
+	for i in range(maxi(coarse - 4, lo), mini(coarse + 4, hi) + 1):
+		var j := posmod(i, n)
+		var d := Vector2(_pos[j].x - p.x, _pos[j].z - p.z).length_squared()
+		if d < best_d:
+			best_d = d
+			best = i
+	return posmod(best, n)
+
+
+## La piste (portion lo..hi) au droit de `p` : Vector2(distance de `p` au-dela
+## de son bord, m, negative sur sa chaussee ; hauteur de sa chaussee au droit
+## de `p`, ou de son bord au-dela). Interpolee entre deux echantillons, devers
+## compris : c'est le bord de son maillage.
+func _main_cross(p: Vector3, lo: int, hi: int) -> Vector2:
+	var n := _pos.size()
+	var i := _nearest_in(p, lo, hi)
+	var fw := Vector2(_fwd[i].x, _fwd[i].z).normalized()
+	var t := Vector2(p.x - _pos[i].x, p.z - _pos[i].z).dot(fw)
+	var j := posmod(i + (1 if t >= 0.0 else -1), n)
+	var seg := maxf(Vector2(_pos[j].x - _pos[i].x, _pos[j].z - _pos[i].z).length(), 1e-3)
+	var k := clampf(absf(t) / seg, 0.0, 1.0)
+	var c := _pos[i].lerp(_pos[j], k)
+	var r := _right[i].lerp(_right[j], k).normalized()
+	var rf := Vector2(r.x, r.z)
+	var lat := Vector2(p.x - c.x, p.z - c.z).dot(rf) / maxf(rf.length_squared(), 1e-6)
+	var lc := clampf(lat, -width / 2.0, width / 2.0)
+	return Vector2(absf(lat) - width / 2.0, c.y + r.y * lc)
+
+
+## _main_cross pour le raccourci k a sa part u (la portion de piste qu'il longe).
+func _branch_main(k: int, p: Vector3, u: float) -> Vector2:
+	var win: PackedInt32Array = _br[k]["win"]
+	return _main_cross(p, win[0], win[1]) if u < 0.5 else _main_cross(p, win[2], win[3])
+
+
+## Hauteur de la chaussee du raccourci k en `p` (a sa part u) : au bord de la
+## piste, celle de ce bord ; au-dela, elle rejoint son profil en long sur
+## BRANCH_BLEND_M (pas de marche, ni de chaussee posee sur la piste).
+func _branch_y(k: int, p: Vector3, u: float) -> float:
+	return _branch_y_from(k, _branch_main(k, p, u), u)
+
+
+func _branch_y_from(k: int, main: Vector2, u: float) -> float:
+	var bd := _br[k]
+	var own := lerpf(float(bd["h_out"]), float(bd["h_in"]),
+		smoothstep(float(bd["u_out"]), maxf(float(bd["u_in"]), float(bd["u_out"]) + 1e-3), u)) + _jump_lift(bd, u)
+	return lerpf(main.y, own, smoothstep(0.0, BRANCH_BLEND_M, main.x))
+
+
+## Position de `p` sur le raccourci k : Vector2(u, ecart a son axe, m, > 0 a
+## droite) ; u hors de [0, 1] avant son entree ou apres sa sortie (prolonge
+## en ligne droite).
+func _branch_coords(k: int, p: Vector3) -> Vector2:
+	var bd := _br[k]
+	var pts: PackedVector3Array = bd["pts"]
+	var dirs: PackedVector3Array = bd["dirs"]
+	var rights: PackedVector3Array = bd["rights"]
+	var count := pts.size() - 1
+	var length := float(bd["len"])
+	var a := bd["a"] as Vector3
+	var axis := bd["axis"] as Vector3
+	var x := ((p.x - a.x) * axis.x + (p.z - a.z) * axis.z) / float(bd["straight"])
+	if x <= 0.0 or x >= 1.0:
+		var e := 0 if x <= 0.0 else count
+		var d := p - pts[e]
+		return Vector2(float(e) / count + (d.x * dirs[e].x + d.z * dirs[e].z) / length,
+			d.x * rights[e].x + d.z * rights[e].z)
+	# l'echantillon de meme avance, puis le segment le plus proche autour
+	var xs: PackedFloat32Array = bd["xs"]
+	var q0 := clampi(xs.bsearch(x), 0, count)
+	var reach := 24
+	var best_d := INF
+	var best_q := 0
+	var best_t := 0.0
+	for q in range(maxi(q0 - reach, 0), mini(q0 + reach, count)):
+		var seg := Vector2(pts[q + 1].x - pts[q].x, pts[q + 1].z - pts[q].z)
+		var rel := Vector2(p.x - pts[q].x, p.z - pts[q].z)
+		var t := clampf(rel.dot(seg) / maxf(seg.length_squared(), 1e-6), 0.0, 1.0)
+		var d := (rel - seg * t).length_squared()
+		if d < best_d:
+			best_d = d
+			best_q = q
+			best_t = t
+	var c := pts[best_q].lerp(pts[best_q + 1], best_t)
+	var r := rights[best_q].lerp(rights[best_q + 1], best_t).normalized()
+	return Vector2((best_q + best_t) / count, (p.x - c.x) * r.x + (p.z - c.z) * r.z)
+
+
+## Hauteur de l'axe du raccourci k a sa part u (dans [0, 1]).
+func _branch_center_y(k: int, u: float) -> float:
+	var pts: PackedVector3Array = _br[k]["pts"]
+	var fq := clampf(u, 0.0, 1.0) * (pts.size() - 1)
+	var q := mini(floori(fq), pts.size() - 2)
+	return lerpf(pts[q].y, pts[q + 1].y, fq - q)
 
 
 func branch_count() -> int:
@@ -1776,6 +2050,7 @@ func branch_name(k: int) -> String:
 	return String(_br[k]["name"])
 
 
+## Longueur du raccourci k le long de son trace (m).
 func branch_length(k: int) -> float:
 	_ensure_built()
 	return float(_br[k]["len"])
@@ -1787,18 +2062,59 @@ func branch_span(k: int) -> Vector2:
 	return Vector2(float(_br[k]["s0"]), float(_br[k]["s1"]))
 
 
-## Repere sur le raccourci k a la part `u` (0 a 1), decale lateralement,
-## oriente dans le sens de course, `lift` m au-dessus.
+## Repere sur le raccourci k a la part `u` de sa longueur (0 a 1 ; au-dela,
+## prolonge en ligne droite), decale lateralement de son axe, oriente dans le
+## sens de course, `lift` m au-dessus de sa chaussee.
 func branch_frame(k: int, u: float, lateral: float, lift: float) -> Transform3D:
 	_ensure_built()
 	var bd := _br[k]
-	var a := bd["a"] as Vector3
-	var b := bd["b"] as Vector3
-	var p := a.lerp(b, u)
-	p.y = lerpf(a.y, b.y, smoothstep(0.0, 1.0, u))
-	var dir := bd["dir"] as Vector3
-	var right := bd["right"] as Vector3
-	return Transform3D(Basis(right, Vector3.UP, -dir), p + right * lateral + Vector3.UP * lift)
+	var pts: PackedVector3Array = bd["pts"]
+	var dirs: PackedVector3Array = bd["dirs"]
+	var count := pts.size() - 1
+	var c: Vector3
+	var dir: Vector3
+	if u < 0.0 or u > 1.0:
+		var e := 0 if u < 0.0 else count
+		dir = dirs[e]
+		c = pts[e] + dir * ((u - float(e) / count) * float(bd["len"]))
+	else:
+		var fq := u * count
+		var q := mini(floori(fq), count - 1)
+		c = pts[q].lerp(pts[q + 1], fq - q)
+		dir = dirs[q].lerp(dirs[q + 1], fq - q).normalized()
+	var right := dir.cross(Vector3.UP).normalized()
+	var p := c + right * lateral
+	p.y = _branch_y(k, p, clampf(u, 0.0, 1.0))
+	return Transform3D(Basis(right, Vector3.UP, -dir), p + Vector3.UP * lift)
+
+
+## Courbure (1/m, sans signe) de l'axe du raccourci k a sa part u.
+func branch_curvature(k: int, u: float) -> float:
+	return absf(branch_turn(k, u))
+
+
+## Courbure signee (1/m, > 0 : virage a gauche) de l'axe du raccourci k a sa
+## part u.
+func branch_turn(k: int, u: float) -> float:
+	_ensure_built()
+	var curv: PackedFloat32Array = _br[k]["curv"]
+	return curv[clampi(roundi(clampf(u, 0.0, 1.0) * (curv.size() - 1)), 0, curv.size() - 1)]
+
+
+## Saut du raccourci k : Vector2(part du bord d'envol, part du bord de
+## reception), Vector2(-1, -1) s'il n'en a pas.
+func branch_jump(k: int) -> Vector2:
+	_ensure_built()
+	var j: PackedFloat32Array = _br[k]["jump"]
+	return Vector2(j[0], j[1]) if not j.is_empty() else Vector2(-1.0, -1.0)
+
+
+## Vitesse conseillee (km/h) pour franchir le saut du raccourci k (0 : pas de
+## saut).
+func branch_jump_min_kmh(k: int) -> float:
+	_ensure_built()
+	var j: PackedFloat32Array = _br[k]["jump"]
+	return j[2] if not j.is_empty() else 0.0
 
 
 ## Decalage de l'axe du raccourci k par rapport a la ligne centrale de la
@@ -1817,18 +2133,12 @@ func branch_width_of(k: int) -> float:
 ## Part du raccourci k ou se trouve `p` (0 : son entree, 1 : sa sortie ; hors
 ## de [0, 1] avant ou apres), a l'horizontale.
 func branch_u(k: int, p: Vector3) -> float:
-	var bd := _br[k]
-	var d := p - (bd["a"] as Vector3)
-	var dir := bd["dir"] as Vector3
-	return (d.x * dir.x + d.z * dir.z) / float(bd["len"])
+	return _branch_coords(k, p).x
 
 
 ## Ecart de `p` a l'axe du raccourci k (m, > 0 a droite dans le sens de course).
 func branch_lateral_of(k: int, p: Vector3) -> float:
-	var bd := _br[k]
-	var d := p - (bd["a"] as Vector3)
-	var right := bd["right"] as Vector3
-	return d.x * right.x + d.z * right.z
+	return _branch_coords(k, p).y
 
 
 ## Flaques du raccourci k : [[u, decalage, rayon], ...] (comme "puddles").
@@ -1853,18 +2163,16 @@ func branch_barrels(k: int) -> Array[ExplosiveBarrel]:
 ## bords, a hauteur de route), -1 sinon.
 func on_branch(p: Vector3, margin: float = 0.0) -> int:
 	for k in _br.size():
-		var bd := _br[k]
-		var a := bd["a"] as Vector3
-		var dir := bd["dir"] as Vector3
-		var d := p - a
-		var u := (d.x * dir.x + d.z * dir.z) / float(bd["len"])
-		if u < 0.0 or u > 1.0:
+		var c := _branch_coords(k, p)
+		if c.x < 0.0 or c.x > 1.0:
 			continue
-		var right := bd["right"] as Vector3
-		if absf(d.x * right.x + d.z * right.z) > float(bd["w"]) / 2.0 + margin:
+		if absf(c.y) > float(_br[k]["w"]) / 2.0 + margin:
 			continue
-		var y := lerpf(a.y, (bd["b"] as Vector3).y, smoothstep(0.0, 1.0, u))
+		var y := _branch_center_y(k, c.x)
 		if p.y < y - 8.0 or p.y > y + 30.0:
+			continue
+		# sous le bord d'un saut : il tombe
+		if p.y < y - 1.5 and _in_gap(k, c.x):
 			continue
 		return k
 	return -1
@@ -1874,79 +2182,75 @@ func on_branch(p: Vector3, margin: float = 0.0) -> int:
 ## chemin que sur le detour).
 func branch_progress_s(k: int, p: Vector3) -> float:
 	var bd := _br[k]
-	var d := p - (bd["a"] as Vector3)
-	var dir := bd["dir"] as Vector3
-	var u := clampf((d.x * dir.x + d.z * dir.z) / float(bd["len"]), 0.0, 1.0)
-	return lerpf(float(bd["s0"]), float(bd["s1"]), u)
+	return lerpf(float(bd["s0"]), float(bd["s1"]), clampf(_branch_coords(k, p).x, 0.0, 1.0))
 
 
-## `p` est sur la chaussee de la piste (a `margin` m pres de ses bords).
-func _on_main_road(p: Vector3, margin: float) -> bool:
-	# recherche grossiere (1 echantillon sur 4), puis fine autour
-	var n := _pos.size()
-	var best := 0
-	var best_d := INF
-	for i in range(0, n, 4):
-		var d := _pos[i].distance_squared_to(p)
-		if d < best_d:
-			best_d = d
-			best = i
-	var coarse := best
-	for k in range(-4, 5):
-		var i := posmod(coarse + k, n)
-		var d := _pos[i].distance_squared_to(p)
-		if d < best_d:
-			best_d = d
-			best = i
-	var q := p - _pos[best]
-	return absf(q.dot(_right[best])) < width / 2.0 + margin and absf(q.dot(_up[best])) < 10.0
-
-
-## Chaussee et murs des raccourcis, la ou ils sortent de la piste.
+## Chaussee et murs des raccourcis. La chaussee est decoupee au bord de la
+## piste (aucun recouvrement : pas de scintillement), a la hauteur de ce bord
+## (pas de marche) ; murs et neons la ou leur bord est a plus d'1 m de la piste.
 func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 	for kb in _br.size():
 		var bd := _br[kb]
 		var pts: PackedVector3Array = bd["pts"]
+		var rights: PackedVector3Array = bd["rights"]
+		var count := pts.size() - 1
 		var w := float(bd["w"])
-		var right := bd["right"] as Vector3
+		var step := float(bd["len"]) / count
+		var cols := maxi(1, ceili(w / BRANCH_CELL_M))
+		# grille : sommet a la hauteur de la chaussee, uv, distance au bord de la piste
+		var verts := PackedVector3Array()
+		var outs := PackedFloat32Array()
+		var uvs := PackedVector2Array()
+		for q in count + 1:
+			var u := float(q) / count
+			for c in cols + 1:
+				var p := pts[q] + rights[q] * (-w / 2.0 + w * c / cols)
+				var m := _branch_main(kb, p, u)
+				p.y = _branch_y_from(kb, m, u) - (0.02 if m.x < 0.0 else 0.0)
+				verts.append(p)
+				outs.append(m.x)
+				uvs.append(Vector2(float(c) / cols, q * step))
+		# saut : rangees du vide (de qa a qb)
+		var jump: PackedFloat32Array = bd["jump"]
+		var qa := roundi(jump[0] * count) if not jump.is_empty() else count + 1
+		var qb := roundi(jump[1] * count) if not jump.is_empty() else count + 1
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		var tris := PackedVector3Array()
-		var lift := Vector3(0.0, 0.03, 0.0)
-		var inside := PackedByteArray()
-		inside.resize(pts.size())
-		for q in pts.size():
-			# tout le travers dans la piste : sa chaussee suffit
-			inside[q] = 1 if _on_main_road(pts[q] - right * w / 2.0, -1.0) \
-					and _on_main_road(pts[q] + right * w / 2.0, -1.0) else 0
-		for q in pts.size() - 1:
-			if inside[q] == 1 and inside[q + 1] == 1:
+		for q in count:
+			if q >= qa and q < qb:
 				continue
-			var v0 := q * sample_step
-			var v1 := v0 + sample_step
-			_quad(st, tris, pts[q] - right * w / 2.0 + lift, pts[q] + right * w / 2.0 + lift,
-				pts[q + 1] + right * w / 2.0 + lift, pts[q + 1] - right * w / 2.0 + lift,
-				Vector2(0, v0), Vector2(1, v0), Vector2(1, v1), Vector2(0, v1), Vector3.UP)
+			var u := (q + 0.5) / count
+			for c in cols:
+				var a := q * (cols + 1) + c
+				var b := a + 1
+				var d := a + cols + 1
+				var e := d + 1
+				for tri: PackedInt32Array in [PackedInt32Array([a, b, e]), PackedInt32Array([a, e, d])]:
+					_clip_branch_tri(st, tris, kb, u, tri, verts, outs, uvs)
 		if not tris.is_empty():
 			var mat := theme.road.duplicate() as ShaderMaterial
 			mat.set_shader_parameter("road_width", w)
+			mat.set_shader_parameter("finish_line", false)
 			var road := _static_body(geometry, "Branch%dRoad" % kb, st, tris, mat, 1.0)
 			road.set_meta(&"surface", &"asphalt")
-		# murs : la ou leur bord est hors de la piste (a plus d'1 m)
 		for side: float in [-1.0, 1.0]:
+			var col := 0 if side < 0.0 else cols
 			var wst := SurfaceTool.new()
 			wst.begin(Mesh.PRIMITIVE_TRIANGLES)
 			var wtris := PackedVector3Array()
-			var out := right * side
-			for q in pts.size() - 1:
-				var e0 := pts[q] + out * w / 2.0
-				var e1 := pts[q + 1] + out * w / 2.0
-				if _on_main_road(e0, 1.0) or _on_main_road(e1, 1.0):
+			var nst := SurfaceTool.new()
+			nst.begin(Mesh.PRIMITIVE_TRIANGLES)
+			var ntris := PackedVector3Array()
+			for q in count:
+				var i0 := q * (cols + 1) + col
+				var i1 := i0 + cols + 1
+				if outs[i0] < 1.0 or outs[i1] < 1.0 or (q >= qa and q < qb):
 					continue
-				var a := _branch_wall_profile(e0, out)
-				var b := _branch_wall_profile(e1, out)
-				var v0 := q * sample_step
-				var v1 := v0 + sample_step
+				var a := _branch_wall_profile(verts[i0], rights[q] * side)
+				var b := _branch_wall_profile(verts[i1], rights[q + 1] * side)
+				var v0 := q * step
+				var v1 := v0 + step
 				for k in 3:
 					if side > 0.0:
 						_quad(wst, wtris, a[k], b[k], b[k + 1], a[k + 1],
@@ -1954,63 +2258,106 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 					else:
 						_quad(wst, wtris, a[k], a[k + 1], b[k + 1], b[k],
 							Vector2(k, v0), Vector2(k + 1, v0), Vector2(k + 1, v1), Vector2(k, v1), Vector3.ZERO)
+				_branch_neon_quad(nst, ntris, a, b, rights[q] * side, rights[q + 1] * side)
 			if not wtris.is_empty():
 				var wall := _static_body(walls, "Branch%dWall%s" % [kb, "Left" if side < 0.0 else "Right"], wst, wtris,
 					theme.wall, wall_friction)
 				wall.set_meta(&"surface", &"asphalt")
-				_build_branch_neon(walls, kb, side)
+				var mi := MeshInstance3D.new()
+				mi.name = "Branch%dNeon%s" % [kb, "Left" if side < 0.0 else "Right"]
+				mi.mesh = nst.commit()
+				mi.material_override = theme.edge_left if side < 0.0 else theme.edge_right
+				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				walls.add_child(mi)
+		if qb <= count:
+			_build_branch_cliffs(walls, kb, verts, cols, qa, qb)
 		# portique a l'entree : on voit le raccourci de loin
 		var gate := _group("BranchArches") if kb == 0 else get_node("BranchArches") as Node3D
 		var label := "近 道" if theme.arch_style == TrackTheme.ArchStyle.TORII else "RACCOURCI"
 		_build_arch(gate, 0.0, label, 100 + kb, branch_frame(kb, _gate_u(kb), 0.0, 0.0), w)
 
 
+## Bords du vide d'un saut : une paroi de la chaussee jusqu'au sol, en
+## travers, aux rangees qa (envol) et qb (reception), tournee vers le vide
+## (une face : deux faces dos a dos scintillaient).
+func _build_branch_cliffs(walls: Node3D, kb: int, verts: PackedVector3Array, cols: int, qa: int, qb: int) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tris := PackedVector3Array()
+	for row: int in [qa, qb]:
+		for c in cols:
+			var a := verts[row * (cols + 1) + c]
+			var b := verts[row * (cols + 1) + c + 1]
+			var a0 := Vector3(a.x, GROUND_Y - 0.1, a.z)
+			var b0 := Vector3(b.x, GROUND_Y - 0.1, b.z)
+			var h := a.y - a0.y
+			# _quad : sens anti-horaire vu de la face visible
+			if row == qa:
+				_quad(st, tris, b0, a0, a, b, Vector2(0, h), Vector2(1, h), Vector2(1, 0), Vector2(0, 0), Vector3.ZERO)
+			else:
+				_quad(st, tris, a0, b0, b, a, Vector2(0, h), Vector2(1, h), Vector2(1, 0), Vector2(0, 0), Vector3.ZERO)
+	var body := _static_body(walls, "Branch%dCliffs" % kb, st, tris, theme.wall, wall_friction)
+	body.set_meta(&"surface", &"asphalt")
+
+
+## Triangle `tri` (indices dans la grille) de la chaussee du raccourci k,
+## decoupe a BRANCH_TUCK_M sous le bord de la piste : seule la partie hors de
+## sa chaussee est emise ; un sommet du decoupage passe 2 cm sous elle.
+func _clip_branch_tri(st: SurfaceTool, tris: PackedVector3Array, k: int, u: float, tri: PackedInt32Array,
+		verts: PackedVector3Array, outs: PackedFloat32Array, uvs: PackedVector2Array) -> void:
+	var poly := PackedVector3Array()
+	var puv := PackedVector2Array()
+	for e in 3:
+		var ia := tri[e]
+		var ib := tri[(e + 1) % 3]
+		var oa := outs[ia] + BRANCH_TUCK_M
+		var ob := outs[ib] + BRANCH_TUCK_M
+		if oa >= 0.0:
+			poly.append(verts[ia])
+			puv.append(uvs[ia])
+		if (oa >= 0.0) != (ob >= 0.0):
+			var t := oa / (oa - ob)
+			var p := verts[ia].lerp(verts[ib], t)
+			p.y = _branch_main(k, p, u).y - 0.02
+			poly.append(p)
+			puv.append(uvs[ia].lerp(uvs[ib], t))
+	# eventail, meme sens que _quad
+	for j in range(1, poly.size() - 1):
+		for v: int in [0, j + 1, j]:
+			st.set_uv(puv[v])
+			st.add_vertex(poly[v])
+			tris.append(poly[v])
+
+
 ## Part du raccourci k ou poser son portique : la premiere ou ses deux
-## piliers (a 4 m au-dela de ses bords) sont hors de la piste.
+## piliers (a 4 m au-dela de ses bords) sont a plus de 3 m de la piste.
 func _gate_u(k: int) -> float:
 	var half := float(_br[k]["w"]) / 2.0 + 4.0
 	var u := BRANCH_GATE_U
 	while u < 0.5:
 		var f := branch_frame(k, u, 0.0, 0.0)
-		if not _on_main_road(f.origin - f.basis.x * half, 3.0) and not _on_main_road(f.origin + f.basis.x * half, 3.0):
+		if _branch_main(k, f.origin - f.basis.x * half, u).x > 3.0 \
+				and _branch_main(k, f.origin + f.basis.x * half, u).x > 3.0:
 			return u
 		u += 0.01
 	return 0.5
 
 
-## Neon du haut des murs d'un raccourci (comme _build_wall_neon), la ou ils
-## sont construits.
-func _build_branch_neon(parent: Node3D, kb: int, side: float) -> void:
-	var bd := _br[kb]
-	var pts: PackedVector3Array = bd["pts"]
-	var w := float(bd["w"])
-	var out := (bd["right"] as Vector3) * side
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var tris := PackedVector3Array()
+## Neon du haut d'un mur de raccourci (comme _build_wall_neon), entre deux
+## profils de mur.
+func _branch_neon_quad(st: SurfaceTool, tris: PackedVector3Array, a: PackedVector3Array, b: PackedVector3Array,
+		out_a: Vector3, out_b: Vector3) -> void:
 	var z2 := Vector2.ZERO
-	for q in pts.size() - 1:
-		var e0 := pts[q] + out * w / 2.0
-		var e1 := pts[q + 1] + out * w / 2.0
-		if _on_main_road(e0, 1.0) or _on_main_road(e1, 1.0):
-			continue
-		var strip: Array[PackedVector3Array] = []
-		for e: Vector3 in [e0, e1]:
-			var prof := _branch_wall_profile(e, out)
-			var down := (prof[0] - prof[1]).normalized()
-			var inward := -out * 0.04
-			var lift := Vector3(0.0, 0.03, 0.0)
-			strip.append(PackedVector3Array([prof[1] + down * 0.32 + inward, prof[1] + inward + lift, prof[2] + lift]))
-		_quad(st, tris, strip[0][0], strip[1][0], strip[1][1], strip[0][1], z2, z2, z2, z2, Vector3.ZERO)
-		_quad(st, tris, strip[0][1], strip[1][1], strip[1][2], strip[0][2], z2, z2, z2, z2, Vector3.ZERO)
-	if tris.is_empty():
-		return
-	var mi := MeshInstance3D.new()
-	mi.name = "Branch%dNeon%s" % [kb, "Left" if side < 0.0 else "Right"]
-	mi.mesh = st.commit()
-	mi.material_override = theme.edge_left if side < 0.0 else theme.edge_right
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	parent.add_child(mi)
+	var strip: Array[PackedVector3Array] = []
+	for k in 2:
+		var prof := a if k == 0 else b
+		var out := out_a if k == 0 else out_b
+		var down := (prof[0] - prof[1]).normalized()
+		var inward := -out * 0.04
+		var lift := Vector3(0.0, 0.03, 0.0)
+		strip.append(PackedVector3Array([prof[1] + down * 0.32 + inward, prof[1] + inward + lift, prof[2] + lift]))
+	_quad(st, tris, strip[0][0], strip[1][0], strip[1][1], strip[0][1], z2, z2, z2, z2, Vector3.ZERO)
+	_quad(st, tris, strip[0][1], strip[1][1], strip[1][2], strip[0][2], z2, z2, z2, z2, Vector3.ZERO)
 
 
 ## Profil d'un mur de raccourci (comme _wall_profile) au bord `edge`,
@@ -2040,6 +2387,12 @@ func _build_branch_hazards(pads: Node3D, barrels: Node3D) -> void:
 			var index := _barrels.size() + _branch_barrels.size()
 			_branch_barrels.append(xf)
 			_build_barrel(barrels, 0.0, 0.0, index, xf, true)
+		var j: PackedFloat32Array = _br[kb]["jump"]
+		if not j.is_empty():
+			var f0 := branch_frame(kb, j[0] - BRANCH_RAMP_M / float(_br[kb]["len"]), 0.0, 0.0)
+			_build_ramp(pads, f0.origin, -f0.basis.z, f0.basis.x, Vector3.UP, float(_br[kb]["w"]) / 2.0 - 0.3,
+				BRANCH_RAMP_M, BRANCH_RAMP_M * tan(deg_to_rad(BRANCH_RAMP_DEG)), "BranchJump%d" % kb,
+				"BranchJumpTrigger%d" % kb, BRANCH_JUMP_PAD + kb)
 
 
 ## Vrai si la boite `size` posee en `xf` touche un raccourci (murs compris).
@@ -2106,21 +2459,14 @@ func clear_branch_corridors(root: Node) -> void:
 func _blocks_branch(box: AABB) -> bool:
 	var c := box.get_center()
 	var radius := maxf(box.size.x, box.size.z) / 2.0 + wall_thickness + wall_lean + 3.0
-	var k := on_branch(Vector3(c.x, 0.0, c.z), radius)
-	if k < 0:
-		# on_branch juge aussi la hauteur : refait a plat
-		for kb in _br.size():
-			var bd := _br[kb]
-			var a := bd["a"] as Vector3
-			var probe := Vector3(c.x, lerpf(a.y, (bd["b"] as Vector3).y, 0.5), c.z)
-			if on_branch(probe, radius) == kb:
-				k = kb
-				break
-	if k < 0:
-		return false
-	var bd2 := _br[k]
-	var y := maxf((bd2["a"] as Vector3).y, (bd2["b"] as Vector3).y)
-	return box.position.y < y + 15.0
+	# a plat (on_branch juge aussi la hauteur)
+	for k in _br.size():
+		var bc := _branch_coords(k, c)
+		if bc.x < 0.0 or bc.x > 1.0 or absf(bc.y) > float(_br[k]["w"]) / 2.0 + radius:
+			continue
+		if box.position.y < _branch_center_y(k, bc.x) + 15.0:
+			return true
+	return false
 
 
 func _group(group_name: String) -> Node3D:
