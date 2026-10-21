@@ -50,7 +50,10 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
     réapparitions et bonus à l'écart des obstacles. Camions plus maniables
     (`VehicleTuning.for_arena`) ; une remorque par vie, pas de largage ;
     carte d'arène façon FPS ; bots qui vont aux bonus et évitent murs, îlot
-    et barils.
+    et barils. Niveaux de bots distincts en arène : facile (lent, jamais de
+    soin, pouvoirs rares), moyen (soin une fois sur deux, attaque
+    régulière), dur (charge à la nitro, interception, proies abîmées, soin
+    systématique) ; `arena_levels_test` mesure le danger de chaque niveau.
 
 ### Circuits
 - Trois circuits : Cyber City (nuit, néons), Playa Del Sol (île, pont de la
