@@ -39,7 +39,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   un camion en l'air vers la piste est retirée (#58).
 - **Largages de remorque limités** : 0 à 5 par course (menu, 3 par défaut),
   20 s de délai après le retour d'une remorque (#66).
-- **Modes de jeu** (#72, ligne MODE du menu, hors ligne pour l'instant) :
+- **Modes de jeu** (#72, ligne MODE du menu ; en ligne depuis le
+  2026-10-21, sauf le contre-la-montre) :
   - Élimination : après 30 s puis toutes les 20 s, le dernier saute ;
   - Contre-la-montre : seul, fantôme du meilleur tour sauvegardé
     (`user://ghosts`) ;
@@ -113,8 +114,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 
 ## Limites connues
 
-- Les modes Élimination, Contre-la-montre et Arène ne se jouent pas encore en
-  ligne (en ligne : course normale).
+- Le contre-la-montre ne se joue pas en ligne (en ligne : course normale) ;
+  Élimination et Arène en ligne n'ont pas encore été essayés sur 2 PC.
 - Les bots ne prennent pas les raccourcis.
 - Les bots se larguent leurs remorques dessus dans le peloton : à juger en
   partie (nombre de largages réglable au menu).

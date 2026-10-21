@@ -1015,7 +1015,10 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   sur toutes les machines), loin des tremplins, plaques, flaques, barils et
   panneaux (`TrackBlockout._scatter_pickups`).
 - [x] **Modes de jeu** (2026-10-20) : ligne MODE au menu (`GameState.game_mode`,
-  hors ligne pour l'instant).
+  en ligne depuis le 2026-10-21 (« tous les modes en ligne, à part le
+  contre-la-montre ») : le host envoie son mode au lancement (protocole 4),
+  puis éliminés, vies et prochaine élimination dans l'état de course
+  (`net_modes_test`, `net_session_test`) ; essai sur 2 PC à faire).
   - Élimination : après 30 s puis toutes les 20 s, le dernier saute (épave,
     plus de réapparition, sa vue suit le premier) ; le dernier en piste gagne
     (`elimination_test`).
