@@ -11,6 +11,13 @@ extends Control
 ## par-dessus la route qu'ils enjambent (croisement de Sakura). Une epave :
 ## pastille grise. Rendu seulement : la course lui donne la piste et les
 ## camions, il lit leurs positions (CLAUDE.md §7).
+##
+## Arene (piste sans marquage de course, 2026-10-21 : « pas un circuit, une
+## carte comme dans les FPS : voir les objets, les tremplins, la position des
+## joueurs, et pas juste le tour, qui n'est même pas le bord de la map ») : le
+## sol de l'arene jusqu'a ses murs, l'ilot central, les tremplins (emprise,
+## arete du sommet en blanc), plaques de boost, flaques, et, tant qu'ils sont
+## la, les barils et les bonus (vert : reparation, jaune : recharge).
 
 ## Grand cote du cadre (px, avant ui_scale) et marge interieure.
 const SIZE := 300.0
@@ -28,6 +35,17 @@ const ROAD := Color(0.9, 0.92, 1.0, 0.92)
 const EDGE := Color(0.0, 0.0, 0.0, 0.6)
 const WRECK := Color(0.45, 0.45, 0.5)
 const BACKDROP := Color(0.02, 0.025, 0.06, 0.45)
+## Arene : grand cote du cadre (px, avant ui_scale) et couleurs.
+const ARENA_SIZE := 330.0
+const FLOOR := Color(0.3, 0.33, 0.42, 0.88)
+const ISLAND := Color(0.04, 0.05, 0.09, 0.92)
+const WALL := Color(1.0, 1.0, 1.0, 0.8)
+const RAMP := Color(0.45, 0.8, 1.0, 0.95)
+const BOOST := Color(1.0, 0.58, 0.1, 0.95)
+const PUDDLE := Color(0.2, 0.55, 1.0, 0.75)
+const BARREL := Color(1.0, 0.22, 0.12)
+const REPAIR := Color(0.3, 1.0, 0.45)
+const POWER := Color(1.0, 0.85, 0.2)
 
 var ui_scale: float = 1.0
 ## Camions suivis : { "truck": Truck, "color": Color, "self": bool }.
@@ -38,6 +56,16 @@ var ground: Array[PackedVector2Array] = []
 var decks: Array[PackedVector2Array] = []
 var branches: Array[PackedVector2Array] = []
 var finish: PackedVector2Array = []
+## Arene : sol (jusqu'aux murs) et ilot, en pixels ; tremplins (emprise au
+## sol, arete du sommet) ; plaques de boost ; flaques (x, y, rayon en px).
+var arena: bool = false
+var floor_poly := PackedVector2Array()
+var island_poly := PackedVector2Array()
+var ramps: Array[PackedVector2Array] = []
+var ramp_tops: Array[PackedVector2Array] = []
+var pads: Array[PackedVector2Array] = []
+var puddles: Array[Vector3] = []
+var _track: TrackBlockout
 ## Monde (x, z) -> carte : centre du trace et echelle (px par m).
 var _center := Vector2.ZERO
 var _scale := 1.0
@@ -54,6 +82,12 @@ func _ready() -> void:
 ## Prend le trace de `track` et les camions a suivre.
 func setup(track: TrackBlockout, list: Array[Dictionary]) -> void:
 	markers = list
+	_track = track
+	arena = not track.race_markings
+	if arena:
+		_setup_arena(track)
+		queue_redraw()
+		return
 	var n := track.sample_count()
 	var lo := Vector2(INF, INF)
 	var hi := Vector2(-INF, -INF)
@@ -102,6 +136,69 @@ func setup(track: TrackBlockout, list: Array[Dictionary]) -> void:
 	queue_redraw()
 
 
+## Arene : le sol jusqu'aux murs (bord exterieur de la chaussee), l'ilot
+## (bord interieur), les tremplins, plaques et flaques.
+func _setup_arena(track: TrackBlockout) -> void:
+	var n := track.sample_count()
+	var edges: Array[PackedVector2Array] = [PackedVector2Array(), PackedVector2Array()]
+	for i in range(0, n, STEP):
+		var p := track.sample_position(i)
+		var r := track.sample_right(i)
+		var flat := Vector2(r.x, r.z).normalized() * track.width / 2.0
+		edges[0].append(Vector2(p.x, p.z) - flat)
+		edges[1].append(Vector2(p.x, p.z) + flat)
+	var outer := 0 if absf(_area(edges[0])) > absf(_area(edges[1])) else 1
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for q in edges[outer]:
+		lo = lo.min(q)
+		hi = hi.max(q)
+	var pad := MARGIN * ui_scale
+	_center = (lo + hi) / 2.0
+	var span := (hi - lo).max(Vector2.ONE)
+	_scale = (ARENA_SIZE * ui_scale - 2.0 * pad) / maxf(span.x, span.y)
+	box = span * _scale + Vector2.ONE * 2.0 * pad
+	custom_minimum_size = box
+	size = box
+	floor_poly = _mapped(edges[outer])
+	island_poly = _mapped(edges[1 - outer])
+	ramps.clear()
+	ramp_tops.clear()
+	for body in track.find_children("JumpPad*", "StaticBody3D", true, false):
+		var pts := ((body.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points
+		var at := (body as Node3D).global_transform
+		ramps.append(PackedVector2Array([to_map(at * pts[0]), to_map(at * pts[1]), to_map(at * pts[5]),
+			to_map(at * pts[4])]))
+		ramp_tops.append(PackedVector2Array([to_map(at * pts[2]), to_map(at * pts[3])]))
+	pads.clear()
+	for k in track.boost_pad_count():
+		var xf := track.boost_pad_transform(k)
+		var ax := xf.basis.x.normalized() * track.boost_pad_size.x / 2.0
+		var az := xf.basis.z.normalized() * track.boost_pad_size.y / 2.0
+		pads.append(PackedVector2Array([to_map(xf.origin - ax - az), to_map(xf.origin + ax - az),
+			to_map(xf.origin + ax + az), to_map(xf.origin - ax + az)]))
+	puddles.clear()
+	for k in track.puddle_count():
+		var c := to_map(track.puddle_transform(k).origin)
+		puddles.append(Vector3(c.x, c.y, track.puddle_radius(k) * _scale))
+
+
+## Polygone (x, z du monde) -> pixels.
+func _mapped(poly: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for q in poly:
+		out.append((q - _center) * _scale + box / 2.0)
+	return out
+
+
+## Aire signee d'un polygone.
+static func _area(poly: PackedVector2Array) -> float:
+	var a := 0.0
+	for i in poly.size():
+		a += poly[i].cross(poly[(i + 1) % poly.size()])
+	return a / 2.0
+
+
 ## Point du monde -> pixel de la carte.
 func to_map(p: Vector3) -> Vector2:
 	return (Vector2(p.x, p.z) - _center) * _scale + box / 2.0
@@ -123,19 +220,10 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	var k := ui_scale
 	draw_style_box(UiKit.box(BACKDROP, Color(1, 1, 1, 0.12), 1, 0.0, roundi(10 * k)), Rect2(Vector2.ZERO, box))
-	for line in ground:
-		draw_polyline(line, EDGE, (ROAD_W + 2.0 * EDGE_W) * k, true)
-	for line in branches:
-		draw_polyline(line, EDGE, (BRANCH_W + 2.0 * EDGE_W) * k, true)
-	for line in ground:
-		draw_polyline(line, ROAD, ROAD_W * k, true)
-	for line in branches:
-		draw_polyline(line, Color(ROAD, 0.75), BRANCH_W * k, true)
-	# ponts : par-dessus la route qu'ils enjambent
-	for line in decks:
-		draw_polyline(line, EDGE, (ROAD_W + 2.0 * EDGE_W) * k, true)
-		draw_polyline(line, ROAD, ROAD_W * k, true)
-	_draw_finish(k)
+	if arena:
+		_draw_arena(k)
+	else:
+		_draw_track(k)
 	# les autres, puis le sien par-dessus
 	for pass_self in [false, true]:
 		for m in markers:
@@ -152,6 +240,66 @@ func _draw() -> void:
 			else:
 				draw_circle(at, (DOT_R + 1.5) * k, EDGE)
 				draw_circle(at, DOT_R * k, col)
+
+
+## Arene : sol, ilot et murs, flaques, plaques, tremplins, bonus et barils
+## encore la.
+func _draw_arena(k: float) -> void:
+	if floor_poly.size() >= 3:
+		draw_colored_polygon(floor_poly, FLOOR)
+		draw_polyline(_closed(floor_poly), WALL, 2.0 * k, true)
+	if island_poly.size() >= 3:
+		draw_colored_polygon(island_poly, ISLAND)
+		draw_polyline(_closed(island_poly), WALL, 2.0 * k, true)
+	for pd in puddles:
+		draw_circle(Vector2(pd.x, pd.y), maxf(pd.z, 3.0 * k), PUDDLE)
+	for p in pads:
+		draw_colored_polygon(p, BOOST)
+	for i in ramps.size():
+		draw_colored_polygon(ramps[i], RAMP)
+		draw_polyline(_closed(ramps[i]), EDGE, 1.0 * k, true)
+		draw_line(ramp_tops[i][0], ramp_tops[i][1], Color.WHITE, 2.0 * k, true)
+	if _track == null:
+		return
+	var s := 3.6 * k
+	for j in _track.pickup_count():
+		var pk := _track.pickup_node(j)
+		if pk == null or not is_instance_valid(pk) or not pk.available():
+			continue
+		var at := to_map(pk.global_position)
+		draw_rect(Rect2(at - Vector2.ONE * (s + k), Vector2.ONE * 2.0 * (s + k)), EDGE)
+		draw_rect(Rect2(at - Vector2.ONE * s, Vector2.ONE * 2.0 * s), REPAIR if pk.kind == TrackPickup.Kind.REPAIR else POWER)
+	for j in _track.barrel_count():
+		var b := _track.barrel_node(j)
+		if b == null or not is_instance_valid(b) or not b.visible or b.exploded_state:
+			continue
+		var at := to_map(b.global_position)
+		draw_circle(at, 4.0 * k, EDGE)
+		draw_circle(at, 3.0 * k, BARREL)
+
+
+static func _closed(poly: PackedVector2Array) -> PackedVector2Array:
+	var out := poly.duplicate()
+	if out.size() > 0:
+		out.append(out[0])
+	return out
+
+
+## Circuit : trace, raccourcis, ponts, ligne d'arrivee.
+func _draw_track(k: float) -> void:
+	for line in ground:
+		draw_polyline(line, EDGE, (ROAD_W + 2.0 * EDGE_W) * k, true)
+	for line in branches:
+		draw_polyline(line, EDGE, (BRANCH_W + 2.0 * EDGE_W) * k, true)
+	for line in ground:
+		draw_polyline(line, ROAD, ROAD_W * k, true)
+	for line in branches:
+		draw_polyline(line, Color(ROAD, 0.75), BRANCH_W * k, true)
+	# ponts : par-dessus la route qu'ils enjambent
+	for line in decks:
+		draw_polyline(line, EDGE, (ROAD_W + 2.0 * EDGE_W) * k, true)
+		draw_polyline(line, ROAD, ROAD_W * k, true)
+	_draw_finish(k)
 
 
 ## Ligne d'arrivee : damier noir et blanc en travers de la route.

@@ -1090,6 +1090,28 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     mini-carte sans ligne d'arrivée. 3 arènes, 5 bots, 60 s : aucun bot
     coincé, aucun choc contre un obstacle (`arena_ramps_test`,
     `arena_rules_test`).
+    2026-10-21 (« augmenter la maniabilité ; une carte comme dans les FPS ;
+    les bots ont du mal ; on ne peut pas lâcher la remorque, une remorque
+    par vie ») :
+    - **Maniabilité** : `VehicleTuning.for_arena()` (facteurs `arena_*` :
+      adhérence ×1,25, accélération ×1,4, direction ×1,6, braquage ×1,15,
+      angle à haute vitesse ×1,2, inertie en lacet ×0,8). Mesuré à 100cc :
+      0-60 km/h 2,6 s au lieu de 3,6 ; quart de tour à 50 km/h 1,7 s au lieu
+      de 2,2 ; rayon 11 m au lieu de 16 ; 1,28 g tenus au lieu de 1,06
+      (`truck_arena_handling_test`).
+    - **Remorque** : pas de largage ; détruite, elle ne revient qu'avec le
+      camion neuf, à la vie suivante (`TruckCargo.one_per_life`) ; HUD
+      « REMORQUE · une par vie » / « REMORQUE DÉTRUITE · prochaine vie »
+      (`arena_trailer_test`).
+    - **Carte d'arène** (`MiniMap.arena`) : sol jusqu'aux murs, îlot,
+      tremplins (arête du sommet), plaques, flaques, barils et bonus encore
+      là, joueurs (`arena_rules_test` H).
+    - **Bots** : ils vont chercher une réparation sous 40 % de PV, une
+      recharge si leurs pouvoirs attendent (sans lâcher une proie plus
+      proche) ; contournent barils et îlot ; anticipent les murs (le virage
+      pour longer le mur les y porterait : ils tournent, puis freinent) ;
+      120 km/h au plus. 5 bots, 45 s : 0 à 3 chocs contre un mur pris seuls
+      (17 avant), 5 bonus au moins, aucun coincé (`arena_bots_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

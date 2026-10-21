@@ -453,6 +453,9 @@ func _add_player(i: int) -> Player:
 	t.free_spin = game_mode == GameStateNode.GameMode.ARENA
 	# categorie de vitesse du menu (Normal par defaut : le reglage mesure)
 	p.base_tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
+	# arene (2026-10-21) : plus maniable
+	if game_mode == GameStateNode.GameMode.ARENA:
+		p.base_tuning = p.base_tuning.for_arena()
 	t.tuning = p.base_tuning
 	add_child(t)
 	p.truck = t
@@ -829,6 +832,10 @@ func _simulate(tick: int) -> void:
 					cargo.start_race_lock()
 					# largages de la course, choisis au menu (en ligne : ceux du host)
 					cargo.drops_left = 0 if game_mode == GameStateNode.GameMode.TIME_TRIAL else GameState.trailer_drops
+					# arene : pas de largage, une remorque par vie
+					cargo.one_per_life = game_mode == GameStateNode.GameMode.ARENA
+					if cargo.one_per_life:
+						cargo.drops_left = 0
 		return
 	if game_mode == GameStateNode.GameMode.ELIMINATION:
 		_elimination_tick(tick)

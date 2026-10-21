@@ -35,6 +35,11 @@ signal reattached
 
 ## Largages qui restent dans la course (-1 : illimite).
 var drops_left: int = -1
+## Arene (2026-10-21 : « on ne peut pas lâcher la remorque ; une fois
+## détruite, elle ne réapparaît que quand on perd une vie ») : une remorque
+## par vie, pas de nouvelle remorque apres sa destruction (la course met
+## aussi drops_left a 0) ; la suivante arrive avec le camion neuf.
+var one_per_life: bool = false
 
 var _truck: Truck
 var _cooldown: int = 0
@@ -70,7 +75,7 @@ func _physics_process(_delta: float) -> void:
 		_rearm -= 1
 	if net_mirror:
 		return
-	if _truck == null or not _truck.is_trailer_detached() or _cooldown > 0 or _truck.is_wrecked():
+	if _truck == null or not _truck.is_trailer_detached() or _cooldown > 0 or _truck.is_wrecked() or one_per_life:
 		return
 	# recharge finie : une nouvelle remorque apparait (l'ancienne reste)
 	_waiting += 1
@@ -115,6 +120,9 @@ func rearm_seconds_left() -> int:
 
 ## Etat pour le HUD.
 func status_text() -> String:
+	if one_per_life:
+		return "REMORQUE DÉTRUITE · prochaine vie" if _truck != null and _truck.is_trailer_detached() \
+				else "REMORQUE · une par vie"
 	if _lock > 0:
 		return "VERROU %d s" % lock_seconds_left()
 	if _truck != null and _truck.is_trailer_detached():
