@@ -1,4 +1,4 @@
-﻿extends PhysicsTest
+extends PhysicsTest
 
 ## Ecran de chargement (2026-10-17) : sous l'ecran, la course n'avance pas -
 ## grille immobile meme plein gaz, pas de compte a rebours ; prete
