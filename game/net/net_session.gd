@@ -40,7 +40,8 @@ const MAX_PLAYERS := 6
 ## Versions de protocole differentes : le host refuse le client.
 ## 4 (2026-10-21) : mode de jeu au lancement, eliminations et vies dans l'etat
 ## de course.
-const PROTOCOL := 4
+## 5 (2026-10-21) : duree de l'arene au lancement.
+const PROTOCOL := 5
 const MAX_NAME := 16
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
@@ -435,20 +436,23 @@ static func online_mode(mode: int) -> int:
 	return clampi(mode, 0, GameStateNode.MODE_NAMES.size() - 1)
 
 
-## Host : lance la course pour tous, sur le circuit, la categorie et le mode
-## choisis au menu du host.
+## Host : lance la course pour tous, sur le circuit, la categorie, le mode et
+## la duree de l'arene choisis au menu du host.
 func launch_race() -> void:
 	if not is_host():
 		return
 	var data := _pack(members)
 	var mode := online_mode(GameState.game_mode)
 	for id in _guest_peers():
-		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode)
-	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode)
+		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
+			GameState.arena_minutes)
+	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
+		GameState.arena_minutes)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3, mode: int = 0) -> void:
+func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3, mode: int = 0,
+		arena_minutes: int = 4) -> void:
 	# chargement de la course : chacun peut se figer quelques secondes
 	for m in members:
 		var id := int(m["peer"])
@@ -462,6 +466,8 @@ func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: 
 	GameState.trailer_drops = clampi(drops, 0, GameStateNode.MAX_TRAILER_DROPS)
 	# avant le choix de la scene : l'arene remplace le circuit (track_scene)
 	GameState.game_mode = online_mode(mode)
+	# le compte a rebours de l'arene est le meme chez tous
+	GameState.arena_minutes = arena_minutes if GameStateNode.ARENA_MINUTES.has(arena_minutes) else 4
 	members = _unpack(data)
 	race_launched.emit()
 	if auto_change_scene:

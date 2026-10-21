@@ -1027,6 +1027,7 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
 - [x] **Modes de jeu** (2026-10-20) : ligne MODE au menu (`GameState.game_mode`,
   en ligne depuis le 2026-10-21 (« tous les modes en ligne, à part le
   contre-la-montre ») : le host envoie son mode au lancement (protocole 4),
+  et la durée de l'arène (protocole 5),
   puis éliminés, vies et prochaine élimination dans l'état de course
   (`net_modes_test`, `net_session_test`) ; essai sur 2 PC à faire).
   - Élimination : après 30 s puis toutes les 20 s, le dernier saute (épave,

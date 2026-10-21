@@ -116,7 +116,6 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 
 - Le contre-la-montre ne se joue pas en ligne (en ligne : course normale) ;
   Élimination et Arène en ligne n'ont pas encore été essayés sur 2 PC.
-- Les bots ne prennent pas les raccourcis.
 - Les bots se larguent leurs remorques dessus dans le peloton : à juger en
   partie (nombre de largages réglable au menu).
 - Bots : dépassement dans l'épingle serrée de Sakura ; premiers tours en
