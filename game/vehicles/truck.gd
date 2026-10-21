@@ -127,6 +127,10 @@ const STOP_SPEED_MS := 0.5
 @export var debug_handbrake: bool = true
 ## Anti tete-a-queue : derive prevue au-dela de drift_max_slip_deg ramenee.
 @export var debug_spin_guard: bool = true
+
+## Arene (2026-10-21) : pas de garde anti tete-a-queue, et le frein a main
+## pousse la derive jusqu'a free_spin_target_slip_deg : demi-tour rapide.
+var free_spin: bool = false
 ## Drift : force laterale commandee au stick, la trajectoire suit le virage.
 @export var debug_drift_carve: bool = true
 @export var debug_air_control: bool = true
@@ -1292,11 +1296,11 @@ func _apply_drift_assist(t: VehicleTuning, up: Vector3, fwd: Vector3, steer_in: 
 		return
 	var slip := atan2(flat.dot(fwd.cross(up)), flat.dot(fwd))
 	var w := angular_velocity.dot(up)
-	if debug_spin_guard and _apply_spin_guard(t, up, slip, w, path_rate):
+	if debug_spin_guard and not free_spin and _apply_spin_guard(t, up, slip, w, path_rate):
 		return
 	if _handbrake_blend <= 0.2:
 		return
-	var target := -steer_in * deg_to_rad(t.drift_target_slip_deg)
+	var target := -steer_in * deg_to_rad(t.free_spin_target_slip_deg if free_spin else t.drift_target_slip_deg)
 	# deja au-dela de la cible, du meme cote (ou stick au neutre) : angle libre
 	if slip * target >= 0.0 and absf(slip) >= absf(target):
 		return

@@ -227,6 +227,10 @@ extends Resource
 ## Derive jamais depassee, frein a main ou non : au-dela, la garde anti
 ## tete-a-queue ramene le lacet. En dessous, l'angle est libre.
 @export_range(0.0, 89.0, 0.1, "suffix:°") var drift_max_slip_deg: float = 0.0
+## Arene (Truck.free_spin, 2026-10-21 : « retirer la limitation de drift pour
+## pouvoir se retourner plus vite ») : derive visee au plein braquage, sans
+## garde anti tete-a-queue ; au-dela de 90 deg, le camion fait demi-tour.
+@export_range(0.0, 180.0, 0.1, "suffix:°") var free_spin_target_slip_deg: float = 0.0
 ## Part de la vitesse « raclee » par les pneus en drift qui est restituee le
 ## long de la trajectoire (0 = physique brute, 1 = aucune perte due aux pneus).
 @export_range(0.0, 1.0, 0.01) var drift_speed_keep: float = 0.0
@@ -309,6 +313,9 @@ func validate() -> PackedStringArray:
 	if drift_target_slip_deg >= drift_max_slip_deg:
 		errors.append("drift_target_slip_deg (%s) >= drift_max_slip_deg (%s)"
 			% [drift_target_slip_deg, drift_max_slip_deg])
+	if free_spin_target_slip_deg <= drift_max_slip_deg:
+		errors.append("free_spin_target_slip_deg (%s) <= drift_max_slip_deg (%s)"
+			% [free_spin_target_slip_deg, drift_max_slip_deg])
 	if handbrake_rear_grip_factor >= 1.0:
 		errors.append("handbrake_rear_grip_factor = %s : doit etre < 1" % handbrake_rear_grip_factor)
 	if steer_grip_ratio > 3.0:

@@ -99,6 +99,12 @@ const SAME_SECTION_M := 160.0
 @export var segments: Array[Dictionary] = []
 ## Largeur de chaussee entre les murs (METRICS.md §4 : 14 m minimum).
 @export var width: float = 14.0
+## Faux en arene (2026-10-21 : « pas de concept de tour, c'est juste une
+## arène ») : pas de ligne d'arrivee peinte sur la route.
+@export var race_markings: bool = true
+## Vrai en arene (2026-10-21 : pas de sens de course) : chaque tremplin a
+## une rampe jumelle dos a dos, il se saute dans les deux sens.
+@export var jumps_both_ways: bool = false
 ## Pas d'echantillonnage de la ligne centrale.
 @export var sample_step: float = 2.0
 ## Longueur des raccords de ligne de course.
@@ -769,6 +775,7 @@ func _build_geometry() -> void:
 		_quad(st, road_tris, l0, r0, r1, l1, Vector2(0, v0), Vector2(1, v0), Vector2(1, v1), Vector2(0, v1), _up[i])
 	var road_mat := theme.road.duplicate() as ShaderMaterial
 	road_mat.set_shader_parameter("road_width", width)
+	road_mat.set_shader_parameter("finish_line", race_markings)
 	var road := _static_body(geometry, "Road", st, road_tris, road_mat, 1.0)
 	road.set_meta(&"surface", &"asphalt")
 
@@ -844,6 +851,8 @@ func _build_geometry() -> void:
 	var pads := _group("Pads")
 	for k in _jumps.size():
 		_build_jump(pads, _jumps[k].x, _jumps[k].y, k)
+		if jumps_both_ways:
+			_build_jump(pads, _jumps[k].x + 2.0 * jump_length, _jumps[k].y, k, -1.0, "B")
 	for k in _boosts.size():
 		_build_boost_pad(pads, _boosts[k].x, _boosts[k].y, k)
 	for k in _puddles.size():
@@ -1525,12 +1534,13 @@ func _on_jump_pad_body_entered(body: Node3D, index: int) -> void:
 
 ## Rampe de saut : prisme convexe, bord d'attaque au ras de la chaussee, face de
 ## roulement a chevrons bleus lumineux ; zone de declenchement au sommet.
-func _build_jump(parent: Node3D, s: float, offset: float, index: int) -> void:
+## `dir` -1 : rampe tournee vers l'arriere (jumelle d'une rampe d'arene).
+func _build_jump(parent: Node3D, s: float, offset: float, index: int, dir: float = 1.0, suffix: String = "") -> void:
 	var i := index_at_s(s)
-	var f := _fwd[i]
-	var r := _right[i]
+	var f := _fwd[i] * dir
+	var r := _right[i] * dir
 	var u := _up[i]
-	var base := _pos[i] + r * offset
+	var base := _pos[i] + _right[i] * offset
 	var hw := jump_width / 2.0
 	var top := jump_length * tan(deg_to_rad(jump_angle_deg))
 	var p := PackedVector3Array([
@@ -1550,7 +1560,7 @@ func _build_jump(parent: Node3D, s: float, offset: float, index: int) -> void:
 	_tri(st, tris, p[0], p[2], p[4])                                        # flancs
 	_tri(st, tris, p[1], p[5], p[3])
 	var body := StaticBody3D.new()
-	body.name = "JumpPad%d" % index
+	body.name = "JumpPad%d%s" % [index, suffix]
 	body.collision_layer = 1 << (ROAD_LAYER - 1)
 	body.collision_mask = 0
 	body.set_meta(&"surface", &"asphalt")
@@ -1573,7 +1583,7 @@ func _build_jump(parent: Node3D, s: float, offset: float, index: int) -> void:
 	parent.add_child(body)
 	# declenchement : les derniers metres de la rampe, jusqu'a 3 m au-dessus
 	var area := Area3D.new()
-	area.name = "JumpTrigger%d" % index
+	area.name = "JumpTrigger%d%s" % [index, suffix]
 	area.collision_layer = 0
 	area.collision_mask = 1 << (VEHICLE_LAYER - 1)
 	area.monitorable = false

@@ -132,7 +132,8 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @export var players_from_menu: bool = false
 ## Mode de jeu (GameStateNode.GameMode) ; repris du menu avec players_from_menu.
 @export var game_mode: int = GameStateNode.GameMode.RACE
-## Arene : vies par camion et duree de la manche (ticks).
+## Arene : vies par camion et duree de la manche (ticks ; 0 : sans limite,
+## le dernier debout gagne).
 @export var arena_lives: int = 3
 @export var arena_limit_ticks: int = 14400
 ## Elimination : premiere a ce tick de course, puis toutes les elim_every_ticks.
@@ -209,6 +210,9 @@ var _notice_until: int = 0
 var _lost_reason: String = ""
 var _lost_tick: int = 0
 const LOST_TICKS := 180
+## Arene : depart a cet ecart du milieu de l'anneau (m), d'un cote puis de
+## l'autre.
+const ARENA_SPAWN_LATERAL_M := 20.0
 const NOTICE_TICKS := 240
 ## Sans snapshot depuis ce nombre de ticks : « connexion instable ».
 const UNSTABLE_TICKS := 90
@@ -223,6 +227,8 @@ func _ready() -> void:
 		bot_count = GameState.bot_count
 		bot_level = GameState.bot_level
 		game_mode = GameState.game_mode
+		# duree de l'arene choisie au menu (2026-10-21)
+		arena_limit_ticks = GameState.arena_minutes * 3600
 	# les modes ne se jouent pas encore en ligne
 	if NetSession.is_online():
 		game_mode = GameStateNode.GameMode.RACE
@@ -256,7 +262,7 @@ func _ready() -> void:
 		TruckMaterials.set_weather(TruckMaterials.CITY_GRIME, 0.85)
 	else:
 		TruckMaterials.set_weather(TruckMaterials.BEACH_GRIME, 0.0)
-	auto_reset.respawn_provider = race.respawn_transform
+	auto_reset.respawn_provider = respawn_for
 	race.race_finished.connect(_on_race_finished)
 	race.lap_completed.connect(_on_lap_completed)
 	# pluie et ville, ou vagues et vent, sous la musique
@@ -321,6 +327,41 @@ func _ready() -> void:
 		add_child(net)
 		net.setup(self, players, race)
 		NetSession.connection_lost.connect(_on_connection_lost)
+
+
+## Pose de depart du camion `i` : sa case de la grille ; en arene (2026-10-21 :
+## « ne pas démarrer sur la ligne de départ mais à différents points de
+## l'arène »), repartis a intervalles egaux tout autour de l'anneau, en
+## quinconce de part et d'autre du milieu, un sur deux dans l'autre sens.
+func start_transform(i: int) -> Transform3D:
+	if game_mode != GameStateNode.GameMode.ARENA:
+		return track.get_start_transform(i)
+	var total := maxi(player_count + bot_count, 1)
+	var s := track.length() * (float(i) + 0.5) / total
+	var lateral := ARENA_SPAWN_LATERAL_M * (1.0 if i % 2 == 0 else -1.0)
+	var xf := track.frame_at(track.index_at_s(s), lateral, 0.6)
+	# pas de sens de course : un camion sur deux part dans l'autre sens
+	return xf.rotated_local(Vector3.UP, PI) if i % 2 == 1 else xf
+
+
+## Reapparition du camion : apres le dernier checkpoint (RaceLaps), ou en
+## arene la ou il est tombe (arena_respawn).
+func respawn_for(truck: Truck) -> Transform3D:
+	if game_mode == GameStateNode.GameMode.ARENA:
+		return arena_respawn(truck)
+	return race.respawn_transform(truck)
+
+
+## Arene : reapparition la ou il est tombe (pas de checkpoint a respecter),
+## tourne dans le sens ou il roulait.
+func arena_respawn(truck: Truck) -> Transform3D:
+	var xf := track.get_respawn_transform(truck.global_position)
+	var heading := -truck.global_basis.z
+	if truck.linear_velocity.length() > 2.0:
+		heading = truck.linear_velocity
+	if (-xf.basis.z).dot(heading) < 0.0:
+		xf = xf.rotated_local(Vector3.UP, PI)
+	return xf
 
 
 ## Machine qui simule la course : hors ligne, ou host en ligne.
@@ -424,7 +465,9 @@ func _add_player(i: int) -> Player:
 	var t := (load("res://vehicles/truck.tscn") as PackedScene).instantiate() as Truck
 	t.name = "Truck%d" % (i + 1)
 	dress(t.get_node("Visual") as TruckVisual, slot_of(i))
-	t.transform = track.get_start_transform(i)   # pose d'un camion immobile
+	t.transform = start_transform(i)   # pose d'un camion immobile
+	# arene : demi-tour libre au frein a main (2026-10-21)
+	t.free_spin = game_mode == GameStateNode.GameMode.ARENA
 	# categorie de vitesse du menu (Normal par defaut : le reglage mesure)
 	p.base_tuning = GameStateNode.speed_tuning(t.tuning, GameState.speed_class)
 	t.tuning = p.base_tuning
@@ -473,7 +516,7 @@ func _add_player(i: int) -> Player:
 	# saute : RaceLaps.respawn_transform)
 	var health := TruckHealth.of(t)
 	if health != null and is_authority():
-		health.respawn_provider = race.respawn_transform
+		health.respawn_provider = respawn_for
 	if is_bot(i):
 		# bot : il conduit seul, sans camera ni HUD
 		var bot := BotInputSource.new()
@@ -814,7 +857,7 @@ func _simulate(tick: int) -> void:
 		var f := p.input.poll(tick)
 		p.truck.set_input(f)
 		if f.reset and not p.truck.is_wrecked():
-			p.truck.reset_to(race.respawn_transform(p.truck))
+			p.truck.reset_to(respawn_for(p.truck))
 			if p.camera != null:
 				p.camera.snap()
 
@@ -853,7 +896,7 @@ func _client_tick(tick: int) -> void:
 		# sas READY et compte a rebours : camion immobile, comme chez le host
 		local.truck.set_input(f if state == State.RACING or state == State.FINISHED else _neutral)
 		if state == State.RACING and f.reset and not local.truck.is_wrecked() and not local.truck.is_net_puppet():
-			local.truck.reset_to(race.respawn_transform(local.truck))
+			local.truck.reset_to(respawn_for(local.truck))
 			local.camera.snap()
 	net.client_tick(tick, f)
 	if state == State.COUNTDOWN:
@@ -967,12 +1010,13 @@ func still_racing(r: RaceLaps.Racer) -> bool:
 func ticker_text() -> String:
 	var parts := PackedStringArray()
 	var arena_left := arena_seconds_left()
-	if arena_left >= 0:
+	if _arena_running():
 		var hearts := PackedStringArray()
 		for p in ranking():
 			var i := players.find(p)
 			hearts.append("%s %s" % [player_name(i), "♥".repeat(lives[i]) if lives[i] > 0 else "✖"])
-		parts.append("ARÈNE  ·  %d:%02d  ·  %s" % [arena_left / 60, arena_left % 60, "  ".join(hearts)])
+		var clock := "%d:%02d" % [arena_left / 60, arena_left % 60] if arena_left >= 0 else "SANS LIMITE"
+		parts.append("ARÈNE  ·  %s  ·  %s" % [clock, "  ".join(hearts)])
 	var elim := elimination_seconds_left()
 	if elim >= 0 and _alive().size() > 1:
 		var last := ranking()
@@ -1087,9 +1131,12 @@ func _process(delta: float) -> void:
 		# encore en course apres la premiere arrivee : pas de carte au milieu
 		# de sa route, un bandeau en haut (le classement complet attend la fin)
 		var still := still_racing(r)
-		var elim_on := elimination_seconds_left() >= 0 or arena_seconds_left() >= 0
+		var elim_on := elimination_seconds_left() >= 0 or _arena_running()
 		if game_mode == GameStateNode.GameMode.ARENA and not lives.is_empty():
 			p.hud.lap_override = "VIES %s" % ("♥".repeat(lives[i]) if lives[i] > 0 else "✖")
+			# pas de tours : ni chronos de tour, ni rang a la progression
+			p.hud.lap_times = false
+			p.hud.place_override = ranking().find(p) + 1
 		elif game_mode == GameStateNode.GameMode.ELIMINATION:
 			p.hud.lap_override = "ÉLIMINATION  ·  TOUR %d" % race.display_lap(p.truck)
 		p.hud.set_standings("" if still or (elim_on and state == State.RACING) else standings)
@@ -1136,6 +1183,14 @@ func _process(delta: float) -> void:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),
 				String(c["name"]).to_upper(), c["cc"]], Color(1.0, 0.85, 0.2))
+		elif r != null and r.finished and game_mode == GameStateNode.GameMode.ARENA and not lives.is_empty():
+			var rank_a := ranking().find(p) + 1
+			var more_a := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \
+					else "\nen attente des autres"
+			if state == State.FINISHED and NetSession.is_client():
+				more_a = "\nle host relance la course   Create / Echap : quitter la partie"
+			p.hud.set_center_message("%s\n%s%s" % ["VAINQUEUR !" if rank_a == 1 else "%de" % rank_a,
+				"%d vie%s" % [lives[i], "s" if lives[i] > 1 else ""], more_a], Color.WHITE)
 		elif r != null and r.finished:
 			var rank := _finish_order.find(p.truck) + 1
 			var more := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \
@@ -1173,6 +1228,9 @@ func _on_race_finished(truck: Truck, _total: int) -> void:
 ## Tour boucle par un joueur de cet ecran : carillon, dernier tour, arrivee
 ## (RaceSound). Les camions des autres joueurs en ligne ne sonnent pas ici.
 func _on_lap_completed(truck: Truck, lap: int, _lap_ticks: int) -> void:
+	# arene : pas de tours
+	if game_mode == GameStateNode.GameMode.ARENA:
+		return
 	for i in players.size():
 		if players[i].truck == truck and is_local(i):
 			last_cue = RaceSound.cue_for(lap, race.total_laps)
@@ -1242,7 +1300,7 @@ func _arena_tick(tick: int) -> void:
 		if alive.size() == 1:
 			race.finish_now(alive[0].truck)
 		return
-	if tick - _state_tick >= arena_limit_ticks:
+	if arena_limit_ticks > 0 and tick - _state_tick >= arena_limit_ticks:
 		# temps ecoule : les vivants dans l'ordre (vies, PV), le premier gagne
 		var order := ranking()
 		for p in order:
@@ -1258,9 +1316,14 @@ func _arena_score(i: int) -> float:
 	return lives[i] * 1000.0 + hp
 
 
-## Secondes avant la fin de la manche d'arene (-1 hors arene).
+## Manche d'arene en cours.
+func _arena_running() -> bool:
+	return game_mode == GameStateNode.GameMode.ARENA and state == State.RACING
+
+
+## Secondes avant la fin de la manche d'arene (-1 hors arene, ou sans limite).
 func arena_seconds_left() -> int:
-	if game_mode != GameStateNode.GameMode.ARENA or state != State.RACING:
+	if not _arena_running() or arena_limit_ticks <= 0:
 		return -1
 	return maxi(ceili((arena_limit_ticks - (Engine.get_physics_frames() - _state_tick)) / 60.0), 0)
 

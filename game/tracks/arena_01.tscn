@@ -68,6 +68,8 @@ segments = Array[Dictionary]([{
 }])
 width = 160.0
 checkpoint_count = 4
+race_markings = false
+jumps_both_ways = true
 bank_blend_length = 120.0
 wall_height = 2.8
 wall_friction = 0.5
@@ -85,3 +87,4 @@ script = ExtResource("2")
 
 [node name="RaceDecor" type="Node3D" parent="."]
 script = ExtResource("3")
+inner_grandstands = false
