@@ -329,9 +329,22 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   instance se fige jusqu'à 16 s en créant la course et la liaison tombe :
   limite de la machine, essai à faire sur 2 PC.
 
+### Étape 6 : modes en ligne (2026-10-21)
+
+- **Protocole 4** : le lancement (`_launch`) porte le mode du host
+  (`NetSessionNode.online_mode` : le contre-la-montre devient une course,
+  il se joue seul) ; le client le pose avant de choisir la scène (l'arène
+  remplace le circuit).
+- **Élimination et arène** : le host seul décide qui saute et qui perd une
+  vie. L'état de course (`LocalRace.net_state`, renvoyé à chaque changement)
+  porte trois champs de plus : éliminés, vies, tick de la prochaine
+  élimination (ramené à l'horloge du client). L'épave d'un éliminé arrive par
+  `Ev.WRECK` ; sans `Ev.RESPAWN`, il ne revient pas.
+
 ### Pas encore fait
 
 - Essai sur 2 vrais PC, puis à 4 joueurs (critère de sortie de la phase 6).
+- Élimination et arène en ligne : à essayer sur 2 PC.
 - Débris et éclats : calculés par chaque machine (purement visuels).
 - Un seul joueur par PC.
 Tester sans 2 PC : lancer deux fois le jeu en fenêtre (`godot --path game

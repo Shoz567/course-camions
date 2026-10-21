@@ -38,7 +38,9 @@ enum Mode { OFFLINE, HOST, CLIENT }
 const DEFAULT_PORT := 7777
 const MAX_PLAYERS := 6
 ## Versions de protocole differentes : le host refuse le client.
-const PROTOCOL := 3
+## 4 (2026-10-21) : mode de jeu au lancement, eliminations et vies dans l'etat
+## de course.
+const PROTOCOL := 4
 const MAX_NAME := 16
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
@@ -424,19 +426,29 @@ static func _unpack(data: Array) -> Array[Dictionary]:
 
 # --- course ------------------------------------------------------------------------
 
-## Host : lance la course pour tous, sur le circuit et la categorie choisis au
-## menu du host.
+## Mode de jeu d'une partie en ligne (2026-10-21 : « tous les modes en ligne,
+## à part le contre-la-montre ») : celui du host, ou une course normale s'il a
+## choisi le contre-la-montre (seul contre son fantome).
+static func online_mode(mode: int) -> int:
+	if mode == GameStateNode.GameMode.TIME_TRIAL:
+		return GameStateNode.GameMode.RACE
+	return clampi(mode, 0, GameStateNode.MODE_NAMES.size() - 1)
+
+
+## Host : lance la course pour tous, sur le circuit, la categorie et le mode
+## choisis au menu du host.
 func launch_race() -> void:
 	if not is_host():
 		return
 	var data := _pack(members)
+	var mode := online_mode(GameState.game_mode)
 	for id in _guest_peers():
-		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops)
-	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops)
+		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode)
+	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode)
 
 
 @rpc("authority", "call_remote", "reliable")
-func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3) -> void:
+func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3, mode: int = 0) -> void:
 	# chargement de la course : chacun peut se figer quelques secondes
 	for m in members:
 		var id := int(m["peer"])
@@ -448,6 +460,8 @@ func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: 
 	GameState.selected_track = clampi(track, 0, GameStateNode.TRACKS.size() - 1)
 	GameState.speed_class = clampi(speed_class, 0, GameStateNode.SPEED_CLASSES.size() - 1)
 	GameState.trailer_drops = clampi(drops, 0, GameStateNode.MAX_TRAILER_DROPS)
+	# avant le choix de la scene : l'arene remplace le circuit (track_scene)
+	GameState.game_mode = online_mode(mode)
 	members = _unpack(data)
 	race_launched.emit()
 	if auto_change_scene:

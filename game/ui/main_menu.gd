@@ -948,7 +948,10 @@ func _refresh_online() -> void:
 		var ips := NetSessionNode.local_addresses()
 		status = "Partie ouverte. Les autres joueurs tapent : %s  (port %d)" % [
 			" ou ".join(ips) if not ips.is_empty() else "l'adresse IP de ce PC", NetSessionNode.DEFAULT_PORT]
-		status += "\nCircuit et vitesse : ceux choisis dans le menu. Chacun choisit son convoi ; LANCER quand tout le monde est PRÊT."
+		status += "\nCircuit, vitesse et mode (%s) : ceux choisis dans le menu. Chacun choisit son convoi ; LANCER quand tout le monde est PRÊT." \
+				% GameStateNode.MODE_NAMES[NetSessionNode.online_mode(GameState.game_mode)]
+		if GameState.game_mode == GameStateNode.GameMode.TIME_TRIAL:
+			status += "\nLe contre-la-montre se joue seul, hors ligne : la partie sera une course."
 	elif NetSession.is_client():
 		if NetSession.local_slot() < 0:
 			status = "Connexion à %s..." % ip_edit.text

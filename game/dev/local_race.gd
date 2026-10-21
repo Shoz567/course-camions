@@ -218,14 +218,13 @@ func _ready() -> void:
 	if NetSession.is_online():
 		player_count = clampi(NetSession.members.size(), 1, MAX_PLAYERS)
 		ready_gate = true
+		# le mode du host (envoye au lancement), sauf le contre-la-montre
+		game_mode = NetSessionNode.online_mode(GameState.game_mode)
 	elif players_from_menu and GameState.requested_players > 0:
 		player_count = clampi(GameState.requested_players, 1, MAX_PLAYERS)
 		bot_count = GameState.bot_count
 		bot_level = GameState.bot_level
 		game_mode = GameState.game_mode
-	# les modes ne se jouent pas encore en ligne
-	if NetSession.is_online():
-		game_mode = GameStateNode.GameMode.RACE
 	if game_mode == GameStateNode.GameMode.ELIMINATION:
 		# pas de ligne d'arrivee : le dernier en piste gagne
 		race.total_laps = 99
@@ -868,19 +867,27 @@ func _local_player() -> Player:
 
 
 ## Etat de la course que le host diffuse (NetRace) : etat, tick d'entree
-## (horloge du host), sas READY, remorques, tick du depart des chronos.
+## (horloge du host), sas READY, remorques, tick du depart des chronos ; modes
+## (2026-10-21) : elimines, vies en arene, tick de la prochaine elimination.
 func net_state() -> Array:
 	var trailers := PackedInt32Array()
 	for p in players:
 		trailers.append(p.trailer)
-	return [int(state), _state_tick, ready_flags.duplicate(), trailers, race.start_tick]
+	return [int(state), _state_tick, ready_flags.duplicate(), trailers, race.start_tick,
+		eliminated.duplicate(), lives.duplicate(), _next_elim]
 
 
 ## Client : applique l'etat recu du host (net_state). Les ticks du host sont
 ## ramenes a l'horloge de cette machine.
 func apply_net_state(s: Array) -> void:
-	if s.size() != 5:
+	if s.size() != 8:
 		return
+	# modes : le host decide qui saute et qui perd une vie, ce PC affiche
+	eliminated.assign(s[5] as Array)
+	if not (s[6] as Array).is_empty():
+		lives.assign(s[6] as Array)
+	var elim := int(s[7])
+	_next_elim = _to_local(elim) if elim >= 0 else -1
 	var trailers := s[3] as PackedInt32Array
 	for i in mini(players.size(), trailers.size()):
 		if players[i].trailer != trailers[i]:
@@ -892,7 +899,7 @@ func apply_net_state(s: Array) -> void:
 		ready_flags[i] = bool(flags[i])
 	var start := int(s[4])
 	if start >= 0:
-		race.start_tick = net.to_local_tick(start)
+		race.start_tick = _to_local(start)
 	var next: int = clampi(int(s[0]), 0, State.size() - 1)
 	if next == int(state):
 		return
@@ -906,12 +913,17 @@ func apply_net_state(s: Array) -> void:
 		_enter_countdown(now)
 	elif next == State.RACING:
 		# depart manque (connexion en cours) : on part tout de suite
-		_enter_racing(mini(net.to_local_tick(int(s[1])), now))
+		_enter_racing(mini(_to_local(int(s[1])), now))
 	elif next == State.FINISHED:
 		state = State.FINISHED
 		music.fade_out()
 	else:
 		state = State.LOBBY
+
+
+## Tick du host -> tick de ce PC (tel quel sans NetRace : tests).
+func _to_local(host_tick: int) -> int:
+	return net.to_local_tick(host_tick) if net != null else host_tick
 
 
 ## Host : le joueur `i` a quitte la partie ; il ne bloque ni le sas READY ni
@@ -1222,7 +1234,8 @@ func _elimination_tick(tick: int) -> void:
 ## puis de PV. Classement : vivants (vies, PV), puis sortis du dernier au
 ## premier.
 func _on_arena_destroyed(i: int) -> void:
-	if eliminated.has(i):
+	# en ligne, le client recoit vies et elimines du host (apply_net_state)
+	if eliminated.has(i) or not is_authority():
 		return
 	lives[i] = maxi(lives[i] - 1, 0)
 	if lives[i] == 0:
