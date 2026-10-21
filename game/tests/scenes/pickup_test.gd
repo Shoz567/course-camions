@@ -1,7 +1,12 @@
 extends PhysicsTest
 
 ## Bonus sur la piste (2026-10-20 : « reparation, recharge de pouvoir ») :
-##   A. chaque circuit a 4 rangees de 3 bonus : 6 de reparation, 6 de recharge ;
+##   A. chaque circuit a 12 bonus : 6 de reparation, 6 de recharge ;
+##   E. epars (2026-10-21 : « pas des rangées, plutôt répartis un peu
+##      aléatoirement, comme les barils ») : jamais deux a la meme hauteur de
+##      piste (ecart > 20 m), decalages varies, tous sur la chaussee, loin des
+##      barils, plaques et tremplins ; memes places a chaque construction (en
+##      ligne, host et clients les numerotent pareil) ;
 ##   B. reparation : le camion abime (40 PV, remorque 20, un pneu creve) en
 ##      prend un : +40 PV a la tete, +30 a la remorque, pneus neufs ; le bonus
 ##      disparait (un 2e camion juste apres n'a rien), puis revient ;
@@ -38,6 +43,16 @@ func _test_setup() -> void:
 			else:
 				pow += 1
 		kinds.append([t.pickup_count(), rep, pow])
+		_seen["spread%d" % k] = _spread(t)
+		if k == 0:
+			# une 2e construction du meme circuit : memes places
+			var twin := (load(TRACKS[k]) as PackedScene).instantiate() as TrackBlockout
+			add_child(twin)
+			var same := true
+			for i in t.pickup_count():
+				same = same and twin.pickup_place(i) == t.pickup_place(i)
+			_seen["twin"] = same and twin.pickup_count() == t.pickup_count()
+			twin.queue_free()
 		if k == 0:
 			_track = t
 		else:
@@ -59,6 +74,31 @@ func _test_setup() -> void:
 	_pc = TruckPowers.setup(_c, PowerCatalog.Id.MISSILE, PowerCatalog.Id.LASER)
 	_hud = RaceHud.new()
 	add_child(_hud)
+
+
+## [ecart d'abscisse minimal (m), decalages distincts, |decalage| max (m),
+## places encombrees].
+func _spread(t: TrackBlockout) -> Array:
+	var s := PackedFloat32Array()
+	var lats := {}
+	var widest := 0.0
+	var crowded := 0
+	for i in t.pickup_count():
+		var p := t.pickup_place(i)
+		s.append(p.x)
+		lats[roundi(p.y * 2.0)] = true
+		widest = maxf(widest, absf(p.y))
+		if not t.pickup_clear(p.x, p.y):
+			crowded += 1
+		for k in t.barrel_count():
+			var b := t.barrel_transform(k).origin
+			if b.distance_to(t.pickup_node(i).global_position) < TrackBlockout.PICKUP_CLEAR_M - 1.0:
+				crowded += 1
+	s.sort()
+	var gap := INF
+	for i in range(1, s.size()):
+		gap = minf(gap, s[i] - s[i - 1])
+	return [gap, lats.size(), widest - (t.width / 2.0 - TrackBlockout.PICKUP_EDGE_M), crowded]
 
 
 func _spawn(at: Vector3) -> Truck:
@@ -104,7 +144,12 @@ func _test_tick(t: int) -> void:
 
 
 func _test_finish() -> void:
-	check("A 4 rangees de 3 bonus par circuit (6 reparations, 6 recharges)",
+	for k in TRACKS.size():
+		var sp: Array = _seen.get("spread%d" % k, [0.0, 0, 1.0, 1])
+		check("E %s : epars (ecart > 20 m, decalages varies, sur la chaussee, loin des pieges)" % TRACKS[k].get_file(),
+			float(sp[0]) > 20.0 and int(sp[1]) >= 6 and float(sp[2]) <= 0.01 and int(sp[3]) == 0, str(sp))
+	check("E memes places a chaque construction", bool(_seen.get("twin", false)))
+	check("A 12 bonus par circuit (6 reparations, 6 recharges)",
 		_seen.get("kinds") == [[12, 6, 6], [12, 6, 6], [12, 6, 6]], str(_seen.get("kinds")))
 	var a: Array = _seen.get("after", [0.0, 0.0, true, true])
 	check("B reparation : +40 PV, remorque +30, pneus neufs, bonus pris",

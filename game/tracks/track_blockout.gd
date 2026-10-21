@@ -28,8 +28,10 @@ extends Node3D
 ##   "boost": [[m, lateral], ...]  plaques de boost (distance, decalage).
 ##   "puddle": [[m, lateral, rayon], ...]  flaques d'eau (ralentissement).
 ##   "signs": [[m, lateral], ...]  panneaux ejectables (vitesse / 2).
-##   "pickups": [[m, "repair" | "power"], ...]  rangee de trois bonus en travers
-##                  (TrackPickup : reparation, recharge d'un pouvoir).
+##   "pickups": [[m, "repair" | "power"], ...]  trois bonus de cette sorte
+##                  (TrackPickup : reparation, recharge d'un pouvoir), places
+##                  ensuite epars sur tout le tour (_scatter_pickups) : la
+##                  distance ne sert plus.
 ##   "arch": m      arche lumineuse au-dessus de la piste a cette distance ;
 ##   "arch_label": texte de son enseigne.
 ##   "bridge": 1 | 2  pont en beton (1) ou en bois (2) : la ou la chaussee est
@@ -90,8 +92,14 @@ const RESET_ZONE_LAYER := 4    # couche 4 `reset_zone`
 const CHECKPOINT_LAYER := 3    # couche 3 `checkpoint`
 const VEHICLE_LAYER := 2
 const GROUND_Y := -0.05        # sol sous la chaussee (evite le z-fighting)
-## Rangee de bonus : decalages lateraux, en part de la largeur.
-const PICKUP_LANES: Array[float] = [-0.28, 0.0, 0.28]
+## Bonus par entree "pickups" d'un segment.
+const PICKUPS_PER_ENTRY := 3
+## Bonus epars : graine du generateur fixe, ecart minimal aux pieges (m),
+## marge aux murs (m), tour libre apres la ligne (m).
+const PICKUP_SEED := 7919
+const PICKUP_CLEAR_M := 14.0
+const PICKUP_EDGE_M := 3.5
+const PICKUP_START_M := 60.0
 ## En deca de cet ecart d'abscisse (m), deux echantillons sont la meme portion
 ## de piste ; au-dela, une autre (circuit en 8 : l'autre branche).
 const SAME_SECTION_M := 160.0
@@ -582,8 +590,8 @@ func _build_centerline() -> bool:
 			_barrels.append(Vector2(seg_start + float(br[0]), float(br[1])))
 		for pk: Array in seg.get("pickups", []):
 			var kind := TrackPickup.Kind.REPAIR if String(pk[1]) == "repair" else TrackPickup.Kind.POWER
-			for lane: float in PICKUP_LANES:
-				_pickups.append(Vector3(seg_start + float(pk[0]), lane * width, kind))
+			for _n in PICKUPS_PER_ENTRY:
+				_pickups.append(Vector3(seg_start + float(pk[0]), 0.0, kind))
 		if seg.has("arch"):
 			_arches.append({"s": seg_start + float(seg["arch"]), "label": String(seg.get("arch_label", ""))})
 		seg_start += lengths[k]
@@ -619,6 +627,7 @@ func _build_centerline() -> bool:
 			fine_seg.append(k)
 			fine_u.append(float(j + 1) / n)
 	_length = s
+	_scatter_pickups()
 	var count := maxi(8, roundi(_length / sample_step))
 	var ds := _length / count
 	_pos.resize(count)
@@ -695,6 +704,73 @@ func _build_centerline() -> bool:
 		var low := _pos[i].y - absf(_right[i].y) * width / 2.0
 		_deck[i] = 1 if _bridge[i] > 0 and low - GROUND_Y > bridge_min_height else 0
 	return true
+
+
+## Bonus epars (2026-10-21 : « pas des rangées sur la piste, plutôt répartis
+## un peu aléatoirement, un peu comme les barils ») : autant de bonus que
+## demandes par les segments, de sortes melangees, un par tranche egale du
+## tour (de PICKUP_START_M a la grille de depart), a une abscisse et un
+## decalage tires dans la tranche, loin des tremplins, plaques, flaques,
+## barils et panneaux. Generateur fixe, comme les gouttes de pluie (CLAUDE.md
+## §7) : le meme trace donne les memes places sur toutes les machines (en
+## ligne, Ev.PICKUP designe un bonus par son numero).
+func _scatter_pickups() -> void:
+	var kinds: Array[int] = []
+	for p in _pickups:
+		kinds.append(int(p.z))
+	_pickups.clear()
+	var n := kinds.size()
+	if n == 0:
+		return
+	var lcg := PICKUP_SEED + roundi(_length)
+	# reparations et recharges melangees (Fisher-Yates)
+	for k in range(n - 1, 0, -1):
+		lcg = _lcg(lcg)
+		var j := lcg % (k + 1)
+		var tmp := kinds[k]
+		kinds[k] = kinds[j]
+		kinds[j] = tmp
+	# grille de 6 camions au plus (LocalRace.MAX_PLAYERS)
+	var rows := ceili(6.0 / maxf(grid_lateral.size(), 1.0))
+	var hi := _length - grid_distance - rows * grid_row_spacing - 20.0
+	var span := (hi - PICKUP_START_M) / n
+	var half := maxf(width / 2.0 - PICKUP_EDGE_M, 0.0)
+	for k in n:
+		var at := Vector2.ZERO
+		for _try in 16:
+			lcg = _lcg(lcg)
+			at.x = PICKUP_START_M + span * (k + 0.1 + 0.8 * float(lcg % 10000) / 10000.0)
+			lcg = _lcg(lcg)
+			at.y = (float(lcg % 10000) / 5000.0 - 1.0) * half
+			if pickup_clear(at.x, at.y):
+				break
+		_pickups.append(Vector3(at.x, at.y, kinds[k]))
+
+
+## Une place de bonus (abscisse, decalage) loin des pieges ?
+func pickup_clear(s: float, lateral: float) -> bool:
+	for j in _jumps:
+		# la rampe, puis l'envol et la reception
+		if s > j.x - PICKUP_CLEAR_M and s < j.x + jump_length + 50.0:
+			return false
+	for b in _boosts + _barrels + _signs:
+		if Vector2(s - b.x, lateral - b.y).length() < PICKUP_CLEAR_M:
+			return false
+	for pd in _puddles:
+		if Vector2(s - pd.x, lateral - pd.y).length() < pd.z + PICKUP_CLEAR_M / 2.0:
+			return false
+	return true
+
+
+## Pas du generateur congruentiel fixe (memes constantes que l'ambiance).
+static func _lcg(v: int) -> int:
+	return (v * 1103515245 + 12345) & 0x7fffffff
+
+
+## Place du bonus `k` : (abscisse, decalage, TrackPickup.Kind).
+func pickup_place(k: int) -> Vector3:
+	_ensure_built()
+	return _pickups[k]
 
 
 func _segment_length(seg: Dictionary, auto_value: float) -> float:

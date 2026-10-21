@@ -1007,9 +1007,13 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
 - [x] **Bonus sur la piste** (2026-10-20, « réparation, recharge de pouvoir ») :
   `TrackPickup`, cubes lumineux qui tournent (✚ vert : +40 PV tête, +30
   remorque, pneus neufs ; ⚡ jaune : le pouvoir le plus long à recharger
-  redevient prêt), en rangées de 3 en travers (segment `"pickups"`), 4
-  rangées par circuit ; reviennent après 15 s ; message au HUD ; en ligne,
-  le host décide (Ev.PICKUP) (`pickup_test`).
+  redevient prêt), 12 par circuit (segment `"pickups"` : 3 par entrée) ;
+  reviennent après 15 s ; message au HUD ; en ligne, le host décide
+  (Ev.PICKUP) (`pickup_test`). 2026-10-21 (« pas des rangées, plutôt
+  répartis un peu aléatoirement, comme les barils ») : épars, un par tranche
+  du tour, abscisse et décalage tirés par un générateur fixe (mêmes places
+  sur toutes les machines), loin des tremplins, plaques, flaques, barils et
+  panneaux (`TrackBlockout._scatter_pickups`).
 - [x] **Modes de jeu** (2026-10-20) : ligne MODE au menu (`GameState.game_mode`,
   hors ligne pour l'instant).
   - Élimination : après 30 s puis toutes les 20 s, le dernier saute (épave,
