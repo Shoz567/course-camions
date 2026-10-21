@@ -7,7 +7,9 @@ extends PhysicsTest
 ##      suit jusqu'au bout et ressort sur la piste apres le detour, sans etre
 ##      remis en piste, sans faire sauter de baril ni frotter un mur ;
 ##   B. le meme trajet par le detour (bot qui ignore les raccourcis) : le
-##      raccourci fait gagner au moins 15 % du temps ;
+##      raccourci fait gagner au moins 10 % du temps (15 % quand il etait tout
+##      droit ; en S depuis le 2026-10-21, « trop simple, il n'y a plus
+##      d'interet a passer a cote », il demande de freiner : ~14 a 20 %) ;
 ##   C. decisions (suite fixe) sur 20 passages : dur, tous ; moyen, environ
 ##      3 sur 4 ; facile, environ 2 sur 5 ; deux bots moyens ne font pas les
 ##      memes choix.
@@ -126,8 +128,8 @@ func _test_finish() -> void:
 	var b: Array = _seen.get("b", [1, false, false, -1])
 	check("B sans raccourci : par le detour, jusqu'au meme point", int(b[0]) == 0 and bool(b[2]) and int(b[3]) == 0,
 		str(b))
-	check_ratio_above("B le raccourci fait gagner au moins 15 % (ticks detour / raccourci)",
-		float(_seen.get("ticks_b", 0)), float(maxi(int(_seen.get("ticks_a", 1)), 1)), 1.0 / 0.85)
+	check_ratio_above("B le raccourci fait gagner au moins 10 % (ticks detour / raccourci)",
+		float(_seen.get("ticks_b", 0)), float(maxi(int(_seen.get("ticks_a", 1)), 1)), 1.0 / 0.9)
 	var c: Array = _seen.get("c", [[0, 0, 0, 0], false])
 	var n: Array = c[0]
 	check("C 20 passages : dur 20, moyen ~15, facile ~8 ; deux moyens differents",

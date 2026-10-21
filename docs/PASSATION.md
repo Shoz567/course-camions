@@ -53,10 +53,13 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   2026-10-19).
 - **Rallongés** à 4,4–4,6 km avec des détours (Docks, Échangeur, Marina,
   Village de pêcheurs, Rizières) (#70).
-- **Raccourcis** : 5 routes droites de 24 m qui coupent les détours
-  (~270 m de moins, flaques et barils, portique « RACCOURCI »), gérées par
-  `TrackBlockout.branches` (murs ouverts, checkpoints doublés, progression et
-  réapparition sur le raccourci, décor dégagé) (#70).
+- **Raccourcis** : 5 routes qui coupent les détours (flaques et barils,
+  portique « RACCOURCI »), gérées par `TrackBlockout.branches` (murs
+  ouverts, checkpoints doublés, progression et réapparition sur le
+  raccourci, décor dégagé) (#70). Depuis le 2026-10-21 : jonctions au ras
+  de la piste (ni marche ni scintillement), tracés en S (docks, village,
+  rizières) et sauts (échangeur 85 km/h, marina 95 km/h ; tombé : chute,
+  réapparition après le vide). Les bots les prennent.
 - **Bonus sur la piste** : réparation (✚, +40 PV, +30 remorque, pneus neufs)
   et recharge (⚡, le pouvoir le plus long redevient prêt), rangées de 3,
   retour après 15 s (#71).

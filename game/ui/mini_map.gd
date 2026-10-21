@@ -88,8 +88,11 @@ func setup(track: TrackBlockout, list: Array[Dictionary]) -> void:
 		(decks if cur_deck else ground).append(cur)
 	branches.clear()
 	for b in track.branch_count():
-		branches.append(PackedVector2Array([to_map(track.branch_frame(b, 0.0, 0.0, 0.0).origin),
-			to_map(track.branch_frame(b, 1.0, 0.0, 0.0).origin)]))
+		var line := PackedVector2Array()
+		var parts := maxi(2, ceili(track.branch_length(b) / 12.0))
+		for k in parts + 1:
+			line.append(to_map(track.branch_frame(b, float(k) / parts, 0.0, 0.0).origin))
+		branches.append(line)
 	var start := track.frame_at(0, 0.0, 0.0)
 	var half := start.basis.x * (track.width / 2.0)
 	finish = PackedVector2Array([to_map(start.origin - half), to_map(start.origin + half)])

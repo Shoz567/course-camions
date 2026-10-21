@@ -147,6 +147,8 @@ segments = Array[Dictionary]([{
 branches = Array[Dictionary]([{
 "barrels": [[0.48, 6.0]],
 "from": "Rizieres (entree)",
+"path": [[0.25, -38.0], [0.55, 24.0], [0.82, -18.0]],
+"width": 28.0,
 "name": "Raccourci des rizieres",
 "puddles": [[0.3, 4.0, 7.0], [0.66, -4.0, 7.0]],
 "to": "Rizieres (sortie)"
