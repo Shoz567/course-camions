@@ -1000,8 +1000,17 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   (torii 近道 à Sakura), néons ; pas de zone de reset dessus ; checkpoints
   du détour doublés (même numéro) ; sur lui, un camion est sur la piste et
   sa progression suit le détour ; décor dégagé (`clear_branch_corridors`)
-  (`shortcut_test`). Les bots les prennent depuis le 2026-10-21 (voir
-  « Bots et raccourcis »).
+  (`shortcut_test`). Les bots les prennent depuis le 2026-10-21 (« améliore
+  les bots pour qu'ils prennent les short cut ») : décision à 460 m de
+  l'entrée (dur : toujours ; moyen : 3 passages sur 4 ; facile : 2 sur 5 ;
+  suite fixe, décalée par bot) ; ligne d'approche qui quitte la ligne de
+  course pour l'écart du raccourci, ligne de sortie qui la regagne
+  (longueurs les moins courbées ; la sortie n'aborde pas un tremplin par le
+  flanc) ; vitesse plafonnée à la courbure de ces lignes ; sur le raccourci,
+  place en travers qui évite barils et camions, et les flaques si c'est peu
+  coûteux. Bot dur, docks : 1580 ticks contre 2185 par le détour
+  (`bot_shortcut_test`) ; 3 niveaux sur les 5 raccourcis : aucun mur, aucune
+  remise en piste.
 - [x] **Bonus sur la piste** (2026-10-20, « réparation, recharge de pouvoir ») :
   `TrackPickup`, cubes lumineux qui tournent (✚ vert : +40 PV tête, +30
   remorque, pneus neufs ; ⚡ jaune : le pouvoir le plus long à recharger
@@ -1029,16 +1038,6 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   temps, PV) (`race_hud_test`).
 - [ ] À valider en jeu par l'équipe : équilibrage des nouveaux pouvoirs et des
   niveaux de bots, lisibilité du HUD à 5-6 joueurs.
-- [x] **Bots et raccourcis** (2026-10-21, « améliore les bots pour qu'ils
-  prennent les short cut ») : décision à 460 m de l'entrée (dur : toujours ;
-  moyen : 3 passages sur 4 ; facile : 2 sur 5 ; suite fixe, décalée par
-  bot) ; ligne d'approche qui quitte la ligne de course pour l'écart du
-  raccourci, ligne de sortie qui la regagne (longueurs les moins courbées,
-  sortie qui n'aborde pas un tremplin par le flanc) ; vitesse plafonnée à la
-  courbure de ces lignes ; sur le raccourci, place en travers qui évite
-  barils et camions, et les flaques si c'est peu coûteux. Bot dur, docks :
-  1580 ticks contre 2185 par le détour (`bot_shortcut_test`) ; essai des 3
-  niveaux sur les 5 raccourcis : aucun mur, aucune remise en piste.
 
 ## Questions de design ouvertes
 

@@ -115,7 +115,7 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 
 - Les modes Élimination, Contre-la-montre et Arène ne se jouent pas encore en
   ligne (en ligne : course normale).
-- Les bots prennent les raccourcis (2026-10-21), pas encore les bonus.
+- Les bots ne prennent pas les raccourcis.
 - Les bots se larguent leurs remorques dessus dans le peloton : à juger en
   partie (nombre de largages réglable au menu).
 - Bots : dépassement dans l'épingle serrée de Sakura ; premiers tours en
