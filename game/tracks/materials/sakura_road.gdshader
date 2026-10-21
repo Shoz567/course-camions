@@ -7,6 +7,8 @@ shader_type spatial;
 // blancs, ligne d'arrivee en damier. UV.x : 0 (bord gauche) .. 1 (bord
 // droit). UV.y : distance le long de la piste (m) ; ligne d'arrivee a 0.
 uniform float road_width = 70.0;
+// ligne d'arrivee peinte (faux en arene : pas de tours)
+uniform bool finish_line = true;
 
 #include "res://tracks/materials/asphalt.gdshaderinc"
 
@@ -95,7 +97,7 @@ void fragment() {
 	paint = clamp(paint, 0.0, 1.0) * (0.65 + 0.35 * smoothstep(0.25, 0.6, a_fbm(p * vec2(1.5, 0.4))));
 	col = mix(col, vec3(0.86, 0.85, 0.82), paint * (1.0 - 0.6 * wood_k));
 	col = mix(col, mix(far_col, petal_col, k), clamp(cover, 0.0, 1.0));
-	if (s >= 0.0 && s < 3.0) {
+	if (finish_line && s >= 0.0 && s < 3.0) {
 		float c = mod(floor(UV.x * 28.0) + floor(s * 2.0), 2.0);
 		col = mix(vec3(0.03), vec3(0.85), c);
 	}

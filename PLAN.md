@@ -1039,6 +1039,17 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     autour d'un îlot, rampes, plaques, barils, bonus) ; 3 vies, le dernier
     debout gagne, 4 min au plus (vies puis PV) ; bots chasseurs
     (`BotInputSource.arena`) ; vies au HUD (`arena_test`).
+    2026-10-21 (« retire les gradins au centre ; pas de concept de tour ;
+    démarrer à différents points ; retirer la limitation de drift ; choisir
+    la limite de temps ; retirer le principe de sens ») : plus de tribune ni
+    de projecteur sur l'îlot ; ni ligne d'arrivée peinte, ni chrono de tour,
+    ni carillon de tour, rang des vies au HUD ; départs répartis autour de
+    l'anneau, un sur deux dans l'autre sens ; tremplins à rampe jumelle (dans
+    les deux sens) ; réapparition sur place, dans le sens où il roulait ;
+    `Truck.free_spin` : sans garde anti tête-à-queue, le frein à main pousse
+    la dérive à 140° (`free_spin_target_slip_deg`) : demi-tour ; ligne DURÉE
+    au menu (2, 3, 4, 5, 8 min ou sans limite, `GameState.arena_minutes`)
+    (`arena_rules_test`, `truck_free_spin_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

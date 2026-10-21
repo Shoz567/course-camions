@@ -55,6 +55,9 @@ var player_buttons: Array[Button] = []
 var bot_buttons: Array[Button] = []
 var bot_level_buttons: Array[Button] = []
 var drop_buttons: Array[Button] = []
+## Duree de l'arene (GameState.ARENA_MINUTES), ligne visible en mode arene.
+var arena_time_buttons: Array[Button] = []
+var arena_time_row: Control
 var mode_buttons: Array[Button] = []
 const MODE_TIPS: PackedStringArray = [
 	"Course classique en 3 tours",
@@ -279,10 +282,17 @@ func select_track(k: int) -> void:
 	if is_node_ready() and GameState.selected_track != _ambiance:
 		apply_ambiance(GameState.selected_track)
 		call_deferred(&"_restyle")
-	if subtitle != null:
-		var t: Dictionary = GameStateNode.TRACKS[GameState.selected_track]
-		var tag := String(t["tagline"])
-		subtitle.text = "%s  ·  %d tours" % [tag.left(1).to_upper() + tag.substr(1), RaceLaps.DEFAULT_LAPS]
+	_update_subtitle()
+
+
+## Ambiance du circuit choisi, et ses tours (une arene n'en a pas).
+func _update_subtitle() -> void:
+	if subtitle == null:
+		return
+	var t: Dictionary = GameStateNode.TRACKS[GameState.selected_track]
+	var tag := String(t["tagline"])
+	var laps := "arène" if GameState.game_mode == GameStateNode.GameMode.ARENA else "%d tours" % RaceLaps.DEFAULT_LAPS
+	subtitle.text = "%s  ·  %s" % [tag.left(1).to_upper() + tag.substr(1), laps]
 
 
 ## Ambiance du circuit `track` : habillage de l'interface (UiKit, pour les
@@ -331,6 +341,7 @@ func _restyle() -> void:
 	bot_buttons.clear()
 	bot_level_buttons.clear()
 	drop_buttons.clear()
+	arena_time_buttons.clear()
 	mode_buttons.clear()
 	speed_buttons.clear()
 	track_buttons.clear()
@@ -423,6 +434,19 @@ func select_mode(k: int, save: bool = true) -> void:
 		MenuSound.play_select()
 	for i in mode_buttons.size():
 		mode_buttons[i].set_pressed_no_signal(i == GameState.game_mode)
+	if arena_time_row != null:
+		arena_time_row.visible = GameState.game_mode == GameStateNode.GameMode.ARENA
+	_update_subtitle()
+
+
+## Duree d'une manche d'arene (minutes, 0 : sans limite).
+func select_arena_time(minutes: int, save: bool = true) -> void:
+	GameState.arena_minutes = minutes if GameStateNode.ARENA_MINUTES.has(minutes) else 4
+	if save and is_node_ready():
+		GameState.save_settings()
+		MenuSound.play_select()
+	for k in arena_time_buttons.size():
+		arena_time_buttons[k].set_pressed_no_signal(GameStateNode.ARENA_MINUTES[k] == GameState.arena_minutes)
 
 
 ## Largages de remorque par joueur et par course (0 a 5).
@@ -1198,6 +1222,25 @@ func _build_ui() -> void:
 		mode_row.add_child(mb)
 		mode_buttons.append(mb)
 	column.add_child(mode_row)
+	# duree de l'arene (2026-10-21), visible en mode arene
+	var time_row := _row("ArenaTime")
+	var time_label := _label("DURÉE", 18, 0)
+	time_label.custom_minimum_size.x = 72
+	time_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	time_row.add_child(time_label)
+	var time_group := ButtonGroup.new()
+	for minutes in GameStateNode.ARENA_MINUTES:
+		var ab := _choice("ArenaTime%d" % minutes, "%d MIN" % minutes if minutes > 0 else "SANS LIMITE", time_group, 15)
+		ab.custom_minimum_size.y = 36
+		ab.tooltip_text = "Manche d'arène de %d minutes" % minutes if minutes > 0 \
+				else "Pas de limite de temps : le dernier debout gagne"
+		ab.pressed.connect(select_arena_time.bind(minutes))
+		time_row.add_child(ab)
+		arena_time_buttons.append(ab)
+	column.add_child(_column_gap(4))
+	column.add_child(time_row)
+	arena_time_row = time_row
+	select_arena_time(GameState.arena_minutes, false)
 	select_mode(GameState.game_mode, false)
 	column.add_child(_column_gap(10))
 

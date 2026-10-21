@@ -120,6 +120,10 @@ var trailer_drops: int = 3
 ## 20 s), contre-la-montre (seul, fantome du meilleur tour), arene (stock-car,
 ## le dernier debout gagne).
 enum GameMode { RACE, ELIMINATION, TIME_TRIAL, ARENA }
+## Duree d'une manche d'arene (2026-10-21 : « pouvoir choisir la limite de
+## temps »), en minutes ; 0 : sans limite (le dernier debout gagne).
+const ARENA_MINUTES: PackedInt32Array = [2, 3, 4, 5, 8, 0]
+var arena_minutes: int = 4
 const MODE_NAMES: PackedStringArray = ["COURSE", "ÉLIMINATION", "CONTRE-LA-MONTRE", "ARÈNE"]
 var game_mode: int = GameMode.RACE
 
@@ -194,6 +198,7 @@ func write_settings(path: String) -> Error:
 	cfg.set_value("race", "bots", bot_count)
 	cfg.set_value("race", "trailer_drops", trailer_drops)
 	cfg.set_value("race", "mode", game_mode)
+	cfg.set_value("race", "arena_minutes", arena_minutes)
 	cfg.set_value("race", "bot_level", bot_level)
 	for a: String in PadBindings.ACTIONS:
 		cfg.set_value("pad", a, pad_bindings[a])
@@ -219,6 +224,8 @@ func read_settings(path: String) -> Error:
 	bot_count = clampi(int(cfg.get_value("race", "bots", bot_count)), 0, 5)
 	trailer_drops = clampi(int(cfg.get_value("race", "trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
 	game_mode = clampi(int(cfg.get_value("race", "mode", game_mode)), 0, MODE_NAMES.size() - 1)
+	var minutes := int(cfg.get_value("race", "arena_minutes", arena_minutes))
+	arena_minutes = minutes if ARENA_MINUTES.has(minutes) else 4
 	bot_level = clampi(int(cfg.get_value("race", "bot_level", bot_level)), 0, 2)
 	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
 	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():

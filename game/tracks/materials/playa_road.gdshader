@@ -7,6 +7,8 @@ shader_type spatial;
 // platelage de planches en travers. UV.x : 0 (bord gauche) .. 1 (bord droit).
 // UV.y : distance le long de la piste (m) ; ligne d'arrivee a 0.
 uniform float road_width = 75.0;
+// ligne d'arrivee peinte (faux en arene : pas de tours)
+uniform bool finish_line = true;
 
 #include "res://tracks/materials/asphalt.gdshaderinc"
 
@@ -75,7 +77,7 @@ void fragment() {
 		* (0.6 + 0.4 * smoothstep(0.25, 0.6, a_fbm(p * vec2(1.5, 0.4)))) * (1.0 - 0.7 * drift);
 	col = mix(col, vec3(0.8, 0.8, 0.78), paint);
 	// ligne d'arrivee : damier sur 3 m
-	if (s >= 0.0 && s < 3.0) {
+	if (finish_line && s >= 0.0 && s < 3.0) {
 		float c = mod(floor(UV.x * 28.0) + floor(s * 2.0), 2.0);
 		col = mix(vec3(0.03), vec3(0.8), c);
 	}

@@ -5,6 +5,8 @@ shader_type spatial;
 // qui ricochent -, marquages blancs uses. UV.x : 0 (bord gauche) .. 1 (bord
 // droit). UV.y : distance le long de la piste (m) ; ligne d'arrivee a 0.
 uniform float road_width = 75.0;
+// ligne d'arrivee peinte (faux en arene : pas de tours)
+uniform bool finish_line = true;
 // 0 : sec ; 1 : detrempe.
 uniform float wetness : hint_range(0.0, 1.0) = 1.0;
 
@@ -38,7 +40,7 @@ void fragment() {
 	// peinture usee : effacee par endroits, plus terne dans les ornieres
 	paint = clamp(paint, 0.0, 1.0) * (0.55 + 0.45 * smoothstep(0.25, 0.6, a_fbm(p * vec2(1.5, 0.4))));
 	// ligne d'arrivee : damier sur 3 m
-	if (s >= 0.0 && s < 3.0) {
+	if (finish_line && s >= 0.0 && s < 3.0) {
 		float c = mod(floor(UV.x * 28.0) + floor(s * 2.0), 2.0);
 		col = mix(vec3(0.015), vec3(0.6), c);
 		paint = 0.0;

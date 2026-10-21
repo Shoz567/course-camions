@@ -73,6 +73,7 @@ steer_rate_deg_per_tick = 5.0
 drift_steer_deg = 16.0
 drift_target_slip_deg = 50.0
 drift_max_slip_deg = 62.0
+free_spin_target_slip_deg = 140.0
 drift_speed_keep = 0.8
 drift_carve_g = 1.2
 drift_assist_gain = 3.0

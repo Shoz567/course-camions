@@ -21,6 +21,9 @@ extends Node3D
 ## "decks": 1 ou 2}.
 @export var overpasses: Array[Dictionary] = []
 @export var grandstands: bool = true
+## Faux : pas de tribune du cote interieur du circuit (2026-10-21, arene :
+## « retire les gradins au centre »).
+@export var inner_grandstands: bool = true
 @export var sky_beams: bool = true
 ## Lampadaires le long de la piste (de nuit seulement).
 @export var street_lights: bool = true
@@ -248,6 +251,21 @@ static func _first_clear(track: TrackBlockout, origin: Vector3, dir: Vector3, st
 
 # --- tribunes ---------------------------------------------------------------------
 
+## Centre du circuit (moyenne de sa ligne centrale).
+static func _centroid(track: TrackBlockout) -> Vector3:
+	var c := Vector3.ZERO
+	var count := 0
+	for j in range(0, track.sample_count(), 8):
+		c += track.sample_position(j)
+		count += 1
+	return c / maxf(count, 1.0)
+
+
+## Decaler de `toward` depuis `p` rapproche du centre : cote interieur.
+static func _inner(p: Vector3, toward: Vector3, centroid: Vector3) -> bool:
+	return (p + toward).distance_to(centroid) < p.distance_to(centroid)
+
+
 func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 	var stands := Node3D.new()
 	stands.name = "Grandstands"
@@ -260,6 +278,7 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 	var rows := 8
 	var row_depth := 1.7
 	var row_rise := 1.05
+	var centroid := _centroid(track)
 	# deux blocs par cote : le long de la grille, puis apres la ligne de depart
 	for block: Array in [[-105.0, -14.0], [16.0, 112.0]]:
 		var s_mid := (float(block[0]) + float(block[1])) / 2.0
@@ -269,6 +288,9 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 		var t := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
 		var r := t.cross(Vector3.UP).normalized()
 		for side: float in [-1.0, 1.0]:
+			var toward := r * side * beyond
+			if not inner_grandstands and _inner(p, toward, centroid):
+				continue
 			var stand := Node3D.new()
 			stand.name = "Stand%d" % stands.get_child_count()
 			# repere de la tribune : X le long de la piste, Z vers l'exterieur
@@ -382,6 +404,7 @@ static func _person_mesh() -> ArrayMesh:
 func _build_beams(root: Node3D, track: TrackBlockout) -> void:
 	var colors := [Color(0.1, 0.9, 1.0), Color(1.0, 0.15, 0.8), Color(0.55, 0.3, 1.0), Color(1.0, 0.85, 0.3)]
 	var beyond := track.width / 2.0 + 28.0
+	var centroid := _centroid(track)
 	var k := 0
 	for s: float in [-95.0, -35.0, 35.0, 95.0]:
 		var i := track.index_at_s(s)
@@ -389,6 +412,8 @@ func _build_beams(root: Node3D, track: TrackBlockout) -> void:
 		var t := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
 		var r := t.cross(Vector3.UP).normalized()
 		for side: float in [-1.0, 1.0]:
+			if not inner_grandstands and _inner(p, r * side * beyond, centroid):
+				continue
 			var col: Color = colors[k % colors.size()]
 			var base := p + r * side * beyond
 			var lamp := StandardMaterial3D.new()
