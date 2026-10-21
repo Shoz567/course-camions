@@ -190,6 +190,36 @@ const ARENA_STUCK_MS := 2.5
 const ARENA_STUCK_TICKS := 45
 const ARENA_BACK_TICKS := 70
 const ARENA_IGNORE_TICKS := 90
+## Arene (2026-10-21 : « les bots ont du mal : ils tapent murs et obstacles,
+## trop passifs ») : sous ARENA_REPAIR_PART de ses PV, il va chercher la
+## reparation la plus proche (a moins de ARENA_PICKUP_M, et pas plus d'une fois
+## et demie plus loin que sa proie, sauf a moins de ARENA_PICKUP_NEAR_M) ; ses
+## pouvoirs en recharge (plus de ARENA_POWER_WAIT_TICKS), une recharge plus
+## proche que sa proie (ou a moins de ARENA_PICKUP_NEAR_M / 1,5) : la chasse
+## d'abord. Il contourne
+## les barils sur sa route (ARENA_BARREL_CLEAR_M de part et d'autre, jusqu'a
+## ARENA_LOOK_S devant), et anticipe les murs : sa position dans
+## ARENA_WALL_LOOK_S, pas celle d'a present.
+const ARENA_REPAIR_PART := 0.4
+const ARENA_PICKUP_M := 140.0
+const ARENA_PICKUP_NEAR_M := 60.0
+const ARENA_POWER_WAIT_TICKS := 240
+const ARENA_BARREL_CLEAR_M := 6.0
+const ARENA_LOOK_S := 1.4
+const ARENA_WALL_LOOK_S := 0.7
+## Ilot central : sa cible derriere lui, il le contourne par la tangente (a
+## ARENA_ISLAND_CLEAR_M de son bord) au lieu de foncer dedans.
+const ARENA_ISLAND_CLEAR_M := 10.0
+## Murs : le virage pour longer le mur le plus proche (a ARENA_TURN_ACCEL de
+## lateral) le deporterait de R (1 - cos a) vers lui ; plus que la moitie de
+## la place qui reste x 0,85 (moins ARENA_WALL_MARGIN_M) : il tourne vers le
+## milieu, sans nitro ; plus que toute la place : il freine aussi. Vitesse
+## plafonnee a ARENA_TOP_MS (176 km/h a la nitro, il ne pouvait plus tourner).
+const ARENA_TURN_ACCEL := 8.0
+const ARENA_WALL_MARGIN_M := 8.0
+const ARENA_TOP_MS := 33.0
+var _island_c := Vector3.ZERO
+var _island_r: float = -1.0
 var _arena_stuck: int = 0
 var _arena_back: int = 0
 var _arena_out: bool = false
@@ -921,21 +951,48 @@ func _arena_drive(v: float) -> void:
 	fwd.y = 0.0
 	fwd = fwd.normalized()
 	var want := fwd
-	if prey != null:
+	var pickup := _arena_pickup(best)
+	if pickup != null:
+		want = pickup.global_position - truck.global_position
+		want.y = 0.0
+		want = want.normalized() if want.length_squared() > 1.0 else fwd
+	elif prey != null:
 		want = prey.global_position + prey.linear_velocity * 0.6 - truck.global_position
 		want.y = 0.0
 		want = want.normalized() if want.length_squared() > 1.0 else fwd
-	# bord de l'anneau : vers le milieu de la chaussee
+	want = _arena_avoid(want, v)
+	if pickup != null:
+		want = _around_island(want, pickup.global_position)
+	elif prey != null:
+		want = _around_island(want, prey.global_position)
+	# bord de l'anneau (ou de l'ilot) la ou il sera bientot : vers le milieu
 	var lat := _lateral_of(truck.global_position, index)
 	var edge := track.width / 2.0 - ARENA_EDGE_M
-	if absf(lat) > edge and truck.linear_velocity.dot(track.sample_right(index)) * signf(lat) > 0.0:
+	var lat_v := truck.linear_velocity.dot(track.sample_right(index))
+	var toward := lat_v * signf(lat)
+	var room := track.width / 2.0 - absf(lat) - ARENA_WALL_MARGIN_M
+	var drift_out := 0.0
+	if toward > 0.0 and v > 1.0:
+		drift_out = v * v / ARENA_TURN_ACCEL * (1.0 - cos(asin(clampf(toward / v, 0.0, 1.0))))
+	var lat_soon := lat + lat_v * ARENA_WALL_LOOK_S
+	var near_wall := drift_out > room * 0.85 or (absf(lat_soon) > edge and toward > 0.0)
+	if near_wall:
 		want = (track.sample_position(index) - truck.global_position).normalized()
 		want.y = 0.0
 	var angle := atan2(fwd.cross(want).y, fwd.dot(want))
 	frame.steer = clampf(-angle * 2.0, -1.0, 1.0)
 	frame.throttle = 1.0 if absf(angle) < 1.8 else 0.6
 	frame.brake = 0.0
-	frame.boost = prey != null and absf(angle) < 0.15 and best > 40.0 and bool(BOOST[level])
+	frame.boost = (prey != null or pickup != null) and absf(angle) < 0.15 and best > 40.0 and bool(BOOST[level]) \
+			and not near_wall
+	if v > ARENA_TOP_MS:
+		frame.throttle = 0.0
+		frame.boost = false
+	# le mur approche trop vite pour le longer : freine aussi
+	if drift_out > room:
+		frame.throttle = 0.0
+		frame.boost = false
+		frame.brake = clampf((drift_out - room) / maxf(room, 4.0), 0.3, 1.0)
 	# gaz a fond sans avancer : il pousse quelqu'un ou un mur, il recule
 	_arena_stuck = _arena_stuck + 1 if v < ARENA_STUCK_MS and RaceManager.state == RaceManagerNode.State.RACING else 0
 	if _arena_stuck >= ARENA_STUCK_TICKS:
@@ -945,6 +1002,115 @@ func _arena_drive(v: float) -> void:
 		if prey != null and best < 15.0:
 			_arena_shunned = prey
 			_arena_shun_left = ARENA_IGNORE_TICKS
+
+
+## Arene : `want`, ou, si la ligne vers `goal` traverse l'ilot central, la
+## tangente a son contour (du cote le plus proche de `want`).
+func _around_island(want: Vector3, goal: Vector3) -> Vector3:
+	if _island_r < 0.0:
+		_measure_island()
+	var p := truck.global_position
+	var to_c := _island_c - p
+	to_c.y = 0.0
+	var r := _island_r + ARENA_ISLAND_CLEAR_M
+	var d := to_c.length()
+	if d < r:
+		# trop pres : s'en eloigner, en tournant autour
+		var out := -to_c.normalized()
+		return (out + want).normalized() if (out + want).length_squared() > 1e-4 else out
+	var to_g := goal - p
+	to_g.y = 0.0
+	var t := to_c.dot(to_g) / maxf(to_g.length_squared(), 1e-3)
+	if t <= 0.0 or t >= 1.0 or (to_c - to_g * t).length() >= r:
+		return want
+	var off := asin(clampf(r / d, 0.0, 1.0))
+	var a := to_c.normalized().rotated(Vector3.UP, off)
+	var b := to_c.normalized().rotated(Vector3.UP, -off)
+	return a if a.dot(want) > b.dot(want) else b
+
+
+## Ilot central (une fois) : centre du trace, et rayon du bord interieur le
+## plus eloigne du centre (contour arrondi : prudent).
+func _measure_island() -> void:
+	var n := track.sample_count()
+	var c := Vector3.ZERO
+	for i in n:
+		c += track.sample_position(i)
+	c /= maxf(n, 1)
+	var far := [0.0, 0.0]
+	var mean := [0.0, 0.0]
+	for i in n:
+		var p := track.sample_position(i)
+		var r := track.sample_right(i)
+		for k in 2:
+			var e := p + r * track.width / 2.0 * (-1.0 if k == 0 else 1.0)
+			var dist := Vector2(e.x - c.x, e.z - c.z).length()
+			far[k] = maxf(float(far[k]), dist)
+			mean[k] = float(mean[k]) + dist
+	var inner := 0 if float(mean[0]) < float(mean[1]) else 1
+	_island_c = c
+	_island_r = float(far[inner])
+
+
+## Arene : le bonus a aller chercher (reparation s'il est abime, recharge si
+## ses pouvoirs attendent), le plus proche dispo et pas trop loin au regard de
+## sa proie (a `prey_d` m), ou null.
+func _arena_pickup(prey_d: float) -> TrackPickup:
+	var health := TruckHealth.of(truck)
+	var powers := TruckPowers.of(truck)
+	var want_repair := health != null and health.hp < health.max_hp * ARENA_REPAIR_PART
+	# une recharge : au moins un pouvoir, et tous ceux qu'il a en attente
+	var want_power := false
+	if powers != null:
+		for k in 2:
+			if powers.slots[k] >= 0:
+				want_power = true
+		for k in 2:
+			if powers.slots[k] >= 0 and powers.cooldown[k] <= ARENA_POWER_WAIT_TICKS:
+				want_power = false
+	if not want_repair and not want_power:
+		return null
+	var best: TrackPickup = null
+	var best_d := ARENA_PICKUP_M
+	for k in track.pickup_count():
+		var pk := track.pickup_node(k)
+		if pk == null or not is_instance_valid(pk) or not pk.available():
+			continue
+		var d := pk.global_position.distance_to(truck.global_position)
+		var ok := (pk.kind == TrackPickup.Kind.REPAIR and want_repair
+				and (d < ARENA_PICKUP_NEAR_M or d < prey_d * 1.5)) \
+			or (pk.kind == TrackPickup.Kind.POWER and want_power
+				and (d < ARENA_PICKUP_NEAR_M / 1.5 or d < prey_d))
+		if ok and d < best_d:
+			best_d = d
+			best = pk
+	return best
+
+
+## Arene : `want` (horizontal, unitaire) decale pour contourner un baril
+## intact sur sa route.
+func _arena_avoid(want: Vector3, v: float) -> Vector3:
+	var p := truck.global_position
+	var side := want.cross(Vector3.UP).normalized()
+	var look := clampf(v * ARENA_LOOK_S, 12.0, 45.0)
+	var out := want
+	for k in track.barrel_count():
+		var b := track.barrel_node(k)
+		if b == null or not is_instance_valid(b) or not b.visible or b.exploded_state:
+			continue
+		var rel := b.global_position - p
+		rel.y = 0.0
+		var along := rel.dot(want)
+		if along < 2.0 or along > look:
+			continue
+		var off := rel.dot(side)
+		if absf(off) >= ARENA_BARREL_CLEAR_M:
+			continue
+		# s'en ecarte du cote ou il est deja, d'autant plus qu'il est pres
+		var away := -signf(off) if absf(off) > 0.3 else (1.0 if _phase % 2 == 0 else -1.0)
+		out += side * away * (ARENA_BARREL_CLEAR_M - absf(off)) / ARENA_BARREL_CLEAR_M * (1.0 - along / look) * 2.0
+	out.y = 0.0
+	return out.normalized() if out.length_squared() > 1e-4 else want
 
 
 ## Un missile ou un boomerang qui le vise arrive (a moins de SHIELD_WARN_M),

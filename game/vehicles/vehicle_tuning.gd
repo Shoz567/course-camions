@@ -296,6 +296,37 @@ extends Resource
 @export_range(1.0, 4.0, 0.01) var air_gravity_factor: float = 0.0
 
 
+@export_group("Arene")
+## Maniabilite en arene (2026-10-21 : « augmenter la maniabilité : moins
+## glisser, accélérer plus vite, réagir plus vite, tourner plus serré ») :
+## facteurs appliques par for_arena() au reglage de la categorie de vitesse.
+## Adherence laterale.
+@export_range(0.0, 3.0, 0.01) var arena_grip_factor: float = 0.0
+## Acceleration (marche avant et arriere).
+@export_range(0.0, 3.0, 0.01) var arena_accel_factor: float = 0.0
+## Vitesse de rotation des roues directrices.
+@export_range(0.0, 3.0, 0.01) var arena_steer_rate_factor: float = 0.0
+## Angle de braquage max (basse vitesse).
+@export_range(0.0, 2.0, 0.01) var arena_max_steer_factor: float = 0.0
+## Angle a haute vitesse (steer_grip_ratio).
+@export_range(0.0, 2.0, 0.01) var arena_steer_grip_factor: float = 0.0
+## Inertie en lacet (< 1 : il pivote plus vite).
+@export_range(0.0, 2.0, 0.01) var arena_yaw_inertia_factor: float = 0.0
+
+
+## Copie reglee pour l'arene (facteurs arena_*).
+func for_arena() -> VehicleTuning:
+	var t := duplicate() as VehicleTuning
+	t.lateral_grip_g = lateral_grip_g * arena_grip_factor
+	t.engine_accel_ms2 = engine_accel_ms2 * arena_accel_factor
+	t.reverse_accel_ms2 = reverse_accel_ms2 * arena_accel_factor
+	t.steer_rate_deg_per_tick = steer_rate_deg_per_tick * arena_steer_rate_factor
+	t.max_steer_deg = minf(max_steer_deg * arena_max_steer_factor, 60.0)
+	t.steer_grip_ratio = minf(steer_grip_ratio * arena_steer_grip_factor, 3.0)
+	t.inertia_yaw_kgm2 = inertia_yaw_kgm2 * arena_yaw_inertia_factor
+	return t
+
+
 ## Liste des erreurs de reglage ; vide = valide.
 func validate() -> PackedStringArray:
 	var errors := PackedStringArray()

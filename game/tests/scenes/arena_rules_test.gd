@@ -15,7 +15,9 @@ extends PhysicsTest
 ##   F. reapparition la ou il est tombe, tourne dans le sens ou il roulait ;
 ##   G. (2026-10-21) departs a l'ecart des tremplins, barils, plaques et
 ##      flaques (un camion partait sur un baril) ; mini-carte sans ligne
-##      d'arrivee.
+##      d'arrivee ;
+##   H. (2026-10-21) carte d'arene facon FPS : le sol jusqu'aux murs, l'ilot,
+##      chaque rampe, plaque et flaque ; plus maniable (reglage d'arene).
 
 var _scene: Node3D
 var _seen: Dictionary = {}
@@ -88,6 +90,16 @@ func _test_tick(t: int) -> void:
 	var hud := (players[0] as Object).get("hud") as RaceHud
 	var ranking: Array = _scene.call("ranking")
 	_seen["g_map"] = hud.minimap.finish.size() if hud.minimap != null else -1
+	var mm := hud.minimap
+	var trk := _scene.get("track") as TrackBlockout
+	if mm != null:
+		_seen["h"] = [mm.arena, mm.floor_poly.size() > 20, mm.island_poly.size() > 20,
+			absf(MiniMap._area(mm.floor_poly)) > absf(MiniMap._area(mm.island_poly)) * 4.0,
+			mm.ramps.size() == trk.jump_pad_count() * 2, mm.pads.size() == trk.boost_pad_count(),
+			mm.puddles.size() == trk.puddle_count()]
+	var tr0 := (players[0] as Object).get("truck") as Truck
+	var base := GameStateNode.speed_tuning(load("res://vehicles/default_vehicle.tres") as VehicleTuning, GameState.speed_class)
+	_seen["h_tune"] = tr0.tuning.lateral_grip_g > base.lateral_grip_g and tr0.tuning.steer_rate_deg_per_tick > base.steer_rate_deg_per_tick
 	_seen["d"] = [hud.lap_times, (hud.get("_lap_time") as Label).visible, (hud.get("_times") as Label).visible,
 		hud.place_override == ranking.find(players[0]) + 1]
 	_seen["e"] = [int(_scene.call("arena_seconds_left")), String(_scene.call("ticker_text")).contains("SANS LIMITE")]
@@ -127,3 +139,6 @@ func _test_finish() -> void:
 	check("F reapparition sur place, dans le sens ou il roulait", _seen.get("f") == [true, true], str(_seen.get("f")))
 	check("G departs a l'ecart des obstacles ; mini-carte sans ligne d'arrivee",
 		int(_seen.get("g_bad", 0)) == 0 and _seen.get("g_map") == 0, "%s %s" % [_seen.get("g_bad", 0), _seen.get("g_map")])
+	var h: Array = _seen.get("h", [])
+	check("H carte d'arene : sol, ilot, rampes, plaques, flaques", h.size() == 7 and not h.has(false), str(h))
+	check("H reglage d'arene (adherence, direction)", _seen.get("h_tune") == true, str(_seen.get("h_tune")))
