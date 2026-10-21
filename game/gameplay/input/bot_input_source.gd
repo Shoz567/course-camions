@@ -35,6 +35,13 @@ extends InputSource
 ##     remorque (moyen) ; en dur, seulement si un virage arrive (il devra
 ##     freiner, l'autre aussi : il ne l'evitera pas). Jamais en facile.
 ##   - bloque (moins de 5 km/h pendant STUCK_TICKS en course) : reset.
+## Raccourcis (2026-10-21 : « améliore les bots pour qu'ils prennent les short
+## cut ») : a SHORTCUT_COMMIT_M de l'entree d'un raccourci, il decide de le
+## prendre (part SHORTCUT_TAKE des passages selon le niveau, suite fixe) ;
+## il se decale alors vers lui, son plan de freinage saute le virage du
+## detour, il vise le long du raccourci, y contourne barils, flaques et
+## camions, et reprend sa ligne a la sortie. Remis en piste sur un
+## raccourci, il le suit jusqu'au bout.
 ## Deterministe : aucun tirage, aucun temps reel ; ses ecarts viennent de son
 ## numero (voie de depart, rythme des pouvoirs).
 
@@ -109,6 +116,34 @@ const STUCK_TICKS := 180
 ## Plafond du profil de vitesse (m/s) : au-dela de toute vitesse atteinte.
 const PROFILE_CEILING_MS := 90.0
 const SHIELD_HP := 55.0
+## Raccourcis : part des passages ou il le prend, par niveau ; distance de
+## l'entree ou il decide (m) ; marge aux murs du raccourci et pas des places
+## essayees en travers (m).
+const SHORTCUT_TAKE := [0.4, 0.75, 1.0]
+const SHORTCUT_COMMIT_M := 460.0
+const SHORTCUT_EDGE_M := 4.5
+const SHORTCUT_STEP_M := 0.5
+## Vers et sur le raccourci : vitesse de changement d'ecart (part de
+## LANE_RATE_M : un decalage brusque, en virage ou a plus de 40 m/s, le
+## jetait contre le mur) ; part de l'adherence gardee a l'approche (il se
+## decale en virage) ; cout d'une
+## place dans une flaque (m d'ecart equivalents : il l'evite si c'est peu
+## couteux, la traverse sinon).
+const SHORTCUT_LANE_RATE := 0.5
+## Ligne d'approche : longueurs essayees pour quitter la ligne de course (m,
+## la moins courbee est gardee, par raccourci) ; elle suit l'axe du raccourci sur les derniers APPROACH_ALIGN_M ;
+## demi-pas de la mesure de sa courbure (m).
+const APPROACH_BLEND_MIN_M := 60.0
+const APPROACH_BLEND_MAX_M := 380.0
+const APPROACH_ALIGN_M := 30.0
+const APPROACH_CURV_M := 10.0
+## Ligne de sortie : longueurs essayees pour regagner la ligne de course (m).
+const EXIT_MIN_M := 60.0
+const EXIT_MAX_M := 300.0
+const SHORTCUT_GRIP := 0.75
+const PUDDLE_COST_M := 8.0
+## Nombre d'or : passages successifs repartis regulierement dans [0, 1).
+const GOLDEN := 0.618034
 
 var track: TrackBlockout
 var truck: Truck
@@ -121,6 +156,8 @@ var target_speed: float = 0.0
 var blocked_by: Node3D = null
 var line: RacingLine
 var _profile: PackedFloat32Array = []
+## Acceleration laterale du niveau (m/s2).
+var _grip: float = 0.0
 var _cargo: TruckCargo
 ## Arene (2026-10-20) : il chasse le camion le plus proche au lieu de suivre
 ## la piste (ses pouvoirs et largages restent).
@@ -129,6 +166,26 @@ var arena: bool = false
 const ARENA_EDGE_M := 22.0
 ## Largages faits (tests).
 var drops: int = 0
+## Faux : il ignore les raccourcis (tests, comparaison).
+var shortcuts: bool = true
+## Raccourcis pris (tests).
+var shortcuts_taken: int = 0
+## Raccourci choisi (approche ou dessus), -1 sinon ; distance le long de son
+## chemin jusqu'a son entree (m, negative dessus) ; dernier raccourci juge a
+## l'approche ; passages juges.
+var _branch: int = -1
+var _to_entry: float = INF
+var _branch_seen: int = -1
+var _passes: int = 0
+## Ecart de la ligne d'approche au point vise, au tick precedent (INF : aucun).
+var _approach_was: float = INF
+## Par raccourci : longueur (m) sur laquelle sa ligne d'approche quitte la
+## ligne de course.
+var _blend_m: PackedFloat32Array = []
+## Raccourci qu'il vient de quitter par sa sortie (il regagne sa ligne), -1 ;
+## par raccourci, longueur de sa ligne de sortie (m).
+var _exit: int = -1
+var _exit_m: PackedFloat32Array = []
 ## Vitesse max du niveau (m/s) : au-dessus, il ne remet pas les gaz.
 var _top: float = 0.0
 var _lat_now: float = 0.0
@@ -156,10 +213,16 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 	_top = tr.tuning.top_speed_kmh / 3.6 * float(SPEED[level])
 	# profil sans plafond de vitesse : il ne freine que pour un virage (au-dessus
 	# de sa vitesse max, apres un pad ou la nitro, il garde son elan)
-	_profile = line.speed_profile(BOT_LATERAL_G * float(GRIP[level]) * TruckSpec.GRAVITY,
+	_grip = BOT_LATERAL_G * float(GRIP[level]) * TruckSpec.GRAVITY
+	_profile = line.speed_profile(_grip,
 		BOT_BRAKE * float(BRAKE[level]), PROFILE_CEILING_MS)
 	index = t.closest_sample(tr.global_position)
 	_lat_now = _lateral_of(tr.global_position, index)
+	_blend_m.clear()
+	_exit_m.clear()
+	for k in t.branch_count():
+		_blend_m.append(_best_blend(k))
+		_exit_m.append(_best_exit(k))
 	_cargo = tr.get_node_or_null(^"Cargo") as TruckCargo
 
 
@@ -185,7 +248,8 @@ func poll(tick: int) -> InputFrame:
 	if arena:
 		_arena_drive(v)
 	else:
-		var traffic := _traffic(v)
+		_update_branch()
+		var traffic := _branch_traffic(v) if _on_branch() else _traffic(v)
 		_steer(v, float(traffic["lateral"]))
 		_speed(v, float(traffic["cap"]))
 		_boost(bool(traffic["clear"]))
@@ -241,6 +305,11 @@ func _traffic(v: float) -> Dictionary:
 	var start := clampf(1.0 - _driven_m / START_BLEND_M, 0.0, 1.0)
 	var lead := track.sample_ahead(index, 10.0 + v * 0.4)
 	var want := _line_at(lead) + lane * start
+	# vers un raccourci : sa ligne d'approche (au point vise par la direction)
+	if _branch >= 0:
+		want = _approach_lat(_branch, track.sample_ahead(index, 8.0 + v * 0.38))
+	elif _exit >= 0:
+		want = _exit_lat(_exit, track.sample_ahead(index, 8.0 + v * 0.38))
 	var cap := INF
 	var clear := true
 	var half := track.width / 2.0 - 4.0
@@ -286,6 +355,10 @@ func _traffic(v: float) -> Dictionary:
 		# couloir actuel s'il est tout pres (la ligne s'ecarte d'elle-meme d'un
 		# baril encore loin)
 		var path_lat := _line_at(oi) + lane * start
+		if _branch >= 0:
+			path_lat = _approach_lat(_branch, oi)
+		elif _exit >= 0:
+			path_lat = _exit_lat(_exit, oi)
 		var near := room < NEAR_S * v + 5.0
 		if absf(lat - path_lat) >= reach and (not near or absf(lat - me_lat) >= reach):
 			continue
@@ -394,11 +467,19 @@ func _others() -> Array[Dictionary]:
 
 
 func _steer(v: float, want: float) -> void:
-	_lat_now = move_toward(_lat_now, want, LANE_RATE_M)
 	var look := 8.0 + v * 0.38
-	var j := track.sample_ahead(index, look)
-	var aim := track.sample_position(j) + track.sample_right(j) * _lat_now
-	var local := truck.global_transform.affine_inverse() * aim
+	if (_branch >= 0 and not _on_branch()) or _exit >= 0:
+		# sa ligne d'approche (ou de sortie) glisse sous lui : il la suit, seul
+		# son ecart a elle va a la vitesse limitee
+		var j := track.sample_ahead(index, look)
+		var a := _approach_lat(_branch, j) if _branch >= 0 else _exit_lat(_exit, j)
+		if is_finite(_approach_was):
+			_lat_now += a - _approach_was
+		_approach_was = a
+	else:
+		_approach_was = INF
+	_lat_now = move_toward(_lat_now, want, LANE_RATE_M * (SHORTCUT_LANE_RATE if _branch >= 0 or _exit >= 0 else 1.0))
+	var local := truck.global_transform.affine_inverse() * _aim(look)
 	var ld2 := maxf(local.x * local.x + local.z * local.z, 1.0)
 	var curv := 2.0 * local.x / ld2
 	var wheelbase := TruckSpec.ANCHORS[2].z - TruckSpec.ANCHORS[0].z
@@ -417,16 +498,16 @@ func _speed(v: float, cap: float) -> void:
 	target_speed = INF
 	var d := 0.0
 	while d <= reach:
-		var p := _profile[track.sample_ahead(index, lead + d)]
+		var p := _profile_at(lead + d)
 		target_speed = minf(target_speed, sqrt(p * p + 2.0 * brake * d))
 		d += PLAN_STEP_M
 	# en travers apres un accrochage : repartir, quoi qu'il y ait devant
-	var astray := (-truck.global_basis.z).dot(track.sample_forward(index)) < ASTRAY_DOT and v < ASTRAY_MS
+	var ahead := -track.branch_frame(_branch, 0.0, 0.0, 0.0).basis.z if _on_branch() else track.sample_forward(index)
+	var astray := (-truck.global_basis.z).dot(ahead) < ASTRAY_DOT and v < ASTRAY_MS
 	target_speed = minf(target_speed, ASTRAY_MS if astray else cap)
 	# garde-fou : direction en butee et le camion s'ecarte de sa ligne vers
 	# l'exterieur (il ne tient pas le virage) : il leve le pied
-	var me_lat := _lateral_of(truck.global_position, index)
-	var drift := (me_lat - _lat_now) * signf(frame.steer)
+	var drift := (_my_lat() - _lat_now) * signf(frame.steer)
 	if absf(frame.steer) > 0.97 and drift < -SATURATION_DRIFT_M:
 		target_speed = minf(target_speed, v * 0.92)
 	var err := target_speed - v
@@ -445,7 +526,7 @@ func _boost(clear: bool) -> void:
 		var ok := true
 		var d := 0.0
 		while d <= BOOST_CLEAR_M:
-			if _profile[track.sample_ahead(index, d)] < v + 1.0:
+			if _profile_at(d) < v + 1.0:
 				ok = false
 				break
 			d += 8.0
@@ -453,6 +534,311 @@ func _boost(clear: bool) -> void:
 	# front : appui d'un tick, puis relache
 	frame.boost = press and not _boost_was
 	_boost_was = frame.boost
+
+
+# --- raccourcis ----------------------------------------------------------------
+
+## Prend-il le raccourci a ce passage ? Part SHORTCUT_TAKE[niveau] des
+## passages, decalee par son numero : deux bots du meme niveau ne font pas les
+## memes choix (suite fixe, aucun tirage).
+static func takes_shortcut(bot_level: int, phase: int, pass_index: int) -> bool:
+	return fposmod(phase * 0.37 + pass_index * GOLDEN, 1.0) < float(SHORTCUT_TAKE[bot_level])
+
+
+## Sur le raccourci choisi (passe son entree).
+func _on_branch() -> bool:
+	return _branch >= 0 and _to_entry <= 0.0
+
+
+## Raccourci choisi : adopte s'il roule dessus (hors de la chaussee de la
+## piste), quitte a la sortie ou s'il en est sorti, choisi a l'approche ;
+## distance a son entree.
+func _update_branch() -> void:
+	_to_entry = INF
+	if not shortcuts or track.branch_count() == 0:
+		_branch = -1
+		return
+	var p := truck.global_position
+	if _exit >= 0:
+		var past := _s_gap(track.index_at_s(track.branch_span(_exit).y), index)
+		if past > _exit_m[_exit] + 10.0 or past < -50.0:
+			_exit = -1
+	var on := track.on_branch(p, 1.0)
+	# l'echantillon suivi est loin : il roule sur un raccourci (remis en piste
+	# dessus, ou pousse)
+	if on >= 0 and track.sample_position(index).distance_to(p) > track.width / 2.0 + 2.0:
+		if _branch != on:
+			_branch = on
+			_lat_now = track.branch_lateral(on) + track.branch_lateral_of(on, p)
+	if _branch >= 0:
+		var u := track.branch_u(_branch, p)
+		if u > 1.0 or (u > 0.0 and on != _branch):
+			# sorti au bout (il regagne sa ligne), ou pousse hors de sa
+			# chaussee : la piste reprend
+			_exit = _branch if u > 1.0 else -1
+			_branch = -1
+		else:
+			_to_entry = -u * track.branch_length(_branch) if u >= 0.0 \
+					else maxf(_s_gap(index, track.index_at_s(track.branch_span(_branch).x)), 0.0)
+			return
+	for k in track.branch_count():
+		var gap := _s_gap(index, track.index_at_s(track.branch_span(k).x))
+		if gap <= 0.0 or gap > SHORTCUT_COMMIT_M:
+			if _branch_seen == k:
+				_branch_seen = -1
+			continue
+		if _branch_seen == k:
+			continue
+		_branch_seen = k
+		_passes += 1
+		if takes_shortcut(level, _phase, _passes):
+			_branch = k
+			_to_entry = gap
+			shortcuts_taken += 1
+		return
+
+
+## Vitesse du profil a `d` m devant, le long de son chemin : sur le raccourci
+## (tout droit), aucun plafond ; apres, le profil de la piste a la sortie.
+func _profile_at(d: float) -> float:
+	if _branch >= 0 and d >= _to_entry:
+		var blen := track.branch_length(_branch)
+		if d <= _to_entry + blen:
+			return PROFILE_CEILING_MS
+		var past := d - _to_entry - blen
+		var j := track.index_at_s(track.branch_span(_branch).y + past)
+		if past > _exit_m[_branch] + 20.0:
+			return _profile[j]
+		return minf(_profile[j], _cap(_exit_curv(_branch, j)))
+	var i := track.sample_ahead(index, d)
+	var p := _profile[i]
+	# vers le raccourci, ou en le quittant, il suit sa ligne d'approche ou de
+	# sortie, pas la ligne de course
+	if _branch >= 0 and d >= _to_entry - _blend_m[_branch] - 20.0:
+		p = minf(p, _cap(_approach_curv(_branch, i)))
+	elif _exit >= 0 and _s_gap(track.index_at_s(track.branch_span(_exit).y), i) <= _exit_m[_exit] + 20.0:
+		p = minf(p, _cap(_exit_curv(_exit, i)))
+	return p
+
+
+## Vitesse de virage (m/s) a cette courbure, avec la marge SHORTCUT_GRIP.
+func _cap(curv: float) -> float:
+	return sqrt(_grip * SHORTCUT_GRIP / maxf(curv, 1e-5))
+
+
+## Point vise a `look` m devant, le long de son chemin, a l'ecart _lat_now
+## (de la ligne centrale ; sur un raccourci, de son axe plus son decalage).
+func _aim(look: float) -> Vector3:
+	if _branch >= 0 and look >= _to_entry:
+		var blen := track.branch_length(_branch)
+		var u := (look - _to_entry) / blen
+		if u <= 1.0:
+			return track.branch_frame(_branch, u, _lat_now - track.branch_lateral(_branch), 0.0).origin
+		var i := track.index_at_s(track.branch_span(_branch).y + (u - 1.0) * blen)
+		return track.sample_position(i) + track.sample_right(i) * _lat_now
+	var j := track.sample_ahead(index, look)
+	return track.sample_position(j) + track.sample_right(j) * _lat_now
+
+
+## Vers le raccourci k : ecart, a l'echantillon i de la piste, de sa ligne
+## d'approche. Loin de l'entree, sa ligne de course (elle prepare deja le
+## virage du detour, du cote du raccourci) ; sur _blend_m[k], elle glisse en
+## douceur vers l'ecart de l'axe du raccourci (branch_lateral, toujours sur
+## la chaussee), atteint APPROACH_ALIGN_M avant l'entree. Une ligne fixe sur
+## la piste : pas d'a-coup, et sa courbure se mesure. (L'axe prolonge en
+## ligne droite sortait de la route avant un virage ou un S.)
+func _approach_lat(k: int, i: int) -> float:
+	var to := _s_gap(i, track.index_at_s(track.branch_span(k).x))
+	var blend := _blend_m[k]
+	var w := clampf((blend - to) / (blend - APPROACH_ALIGN_M), 0.0, 1.0)
+	return lerpf(_line_at(i), track.branch_lateral(k), smoothstep(0.0, 1.0, w))
+
+
+## Courbure (1/m) de sa ligne d'approche a l'echantillon i (trois points,
+## APPROACH_CURV_M de part et d'autre, a l'horizontale).
+func _approach_curv(k: int, i: int) -> float:
+	var s := track.sample_s(i)
+	var a := _approach_point(k, track.index_at_s(s - APPROACH_CURV_M))
+	var b := _approach_point(k, i)
+	var c := _approach_point(k, track.index_at_s(s + APPROACH_CURV_M))
+	return _curv3(a, b, c)
+
+
+## Courbure (1/m) du cercle par trois points, a l'horizontale.
+static func _curv3(a: Vector3, b: Vector3, c: Vector3) -> float:
+	var ab := Vector2(b.x - a.x, b.z - a.z)
+	var bc := Vector2(c.x - b.x, c.z - b.z)
+	var ac := Vector2(c.x - a.x, c.z - a.z)
+	var den := ab.length() * bc.length() * ac.length()
+	return 2.0 * absf(ab.cross(ac)) / den if den > 1e-3 else 0.0
+
+
+## Longueur de glissement (pas de 20 m) dont la ligne d'approche du raccourci
+## k a la plus faible courbure maximale (une fois, a la mise en place).
+func _best_blend(k: int) -> float:
+	var s0 := track.branch_span(k).x
+	var best := APPROACH_BLEND_MIN_M
+	var best_curv := INF
+	var blend := APPROACH_BLEND_MIN_M
+	while blend <= APPROACH_BLEND_MAX_M:
+		_blend_m.resize(k + 1)
+		_blend_m[k] = blend
+		var worst := 0.0
+		var d := 0.0
+		while d <= blend + 20.0:
+			worst = maxf(worst, _approach_curv(k, track.index_at_s(s0 - d)))
+			d += 4.0
+		if worst < best_curv:
+			best_curv = worst
+			best = blend
+		blend += 20.0
+	return best
+
+
+## Apres le raccourci k : ecart, a l'echantillon i de la piste, de sa ligne de
+## sortie. Elle part de l'ecart de l'axe du raccourci et rejoint en douceur sa
+## ligne de course sur _exit_m[k] (la piste peut tourner aussitot apres la
+## sortie : il ne doit pas y rester du cote interieur).
+func _exit_lat(k: int, i: int) -> float:
+	var d := _s_gap(track.index_at_s(track.branch_span(k).y), i)
+	var w := clampf(d / _exit_m[k], 0.0, 1.0)
+	return lerpf(track.branch_lateral(k), _line_at(i), smoothstep(0.0, 1.0, w))
+
+
+## Courbure (1/m) de sa ligne de sortie a l'echantillon i.
+func _exit_curv(k: int, i: int) -> float:
+	var s := track.sample_s(i)
+	var a := _exit_point(k, track.index_at_s(s - APPROACH_CURV_M))
+	var b := _exit_point(k, i)
+	var c := _exit_point(k, track.index_at_s(s + APPROACH_CURV_M))
+	return _curv3(a, b, c)
+
+
+func _exit_point(k: int, i: int) -> Vector3:
+	return track.sample_position(i) + track.sample_right(i) * _exit_lat(k, i)
+
+
+## Longueur de sortie (pas de 20 m) la moins courbee, qui ne passe pas sur le
+## bord d'un tremplin (il l'aborderait de biais, par son flanc).
+func _best_exit(k: int) -> float:
+	var s1 := track.branch_span(k).y
+	var best := EXIT_MIN_M
+	var best_cost := INF
+	var length := EXIT_MIN_M
+	while length <= EXIT_MAX_M:
+		_exit_m.resize(k + 1)
+		_exit_m[k] = length
+		var worst := 0.0
+		var d := 0.0
+		while d <= length + 20.0:
+			worst = maxf(worst, _exit_curv(k, track.index_at_s(s1 + d)))
+			d += 4.0
+		for j in track.jump_pad_count():
+			var xf := track.jump_pad_transform(j)
+			var ji := track.closest_sample(xf.origin)
+			var ahead := _s_gap(track.index_at_s(s1), ji)
+			if ahead < -track.jump_length or ahead > length + 20.0:
+				continue
+			# le long de la rampe, l'ensemble ne doit chevaucher aucun bord
+			var jl := _lateral_of(xf.origin, ji)
+			var u := -track.jump_length
+			while u <= track.jump_length:
+				var y := _exit_lat(k, track.index_at_s(track.sample_s(ji) + u))
+				if absf(absf(y - jl) - track.jump_width / 2.0) < HALF_WIDTH_M + 1.0:
+					worst += 1.0
+					break
+				u += 2.0
+		if worst < best_cost:
+			best_cost = worst
+			best = length
+		length += 20.0
+	return best
+
+
+func _approach_point(k: int, i: int) -> Vector3:
+	return track.sample_position(i) + track.sample_right(i) * _approach_lat(k, i)
+
+
+## Son ecart, comme _lat_now (sur un raccourci : axe plus decalage).
+func _my_lat() -> float:
+	if _on_branch():
+		return track.branch_lateral(_branch) + track.branch_lateral_of(_branch, truck.global_position)
+	return _lateral_of(truck.global_position, index)
+
+
+## Sur le raccourci : la place en travers (pas SHORTCUT_STEP_M) la plus proche
+## de sa voie, et du milieu, qui evite les barils et les camions devant lui,
+## et les flaques si ce n'est pas trop couteux ; sans place, il se cale derriere le plus proche qui roule.
+## Memes champs que _traffic.
+func _branch_traffic(v: float) -> Dictionary:
+	var k := _branch
+	var p := truck.global_position
+	var blen := track.branch_length(k)
+	var u_me := track.branch_u(k, p)
+	var bl := track.branch_lateral(k)
+	var half := track.branch_width_of(k) / 2.0 - SHORTCUT_EDGE_M
+	var look := maxf(LOOK_AHEAD_M, v * LOOK_AHEAD_S)
+	var dir := -track.branch_frame(k, 0.0, 0.0, 0.0).basis.z
+	var my_v := truck.linear_velocity.dot(dir)
+	# obstacles : [devant mon nez (m), ecart a l'axe, portee en travers,
+	# vitesse, camion qui roule]
+	var obs: Array[Array] = []
+	# flaques : [devant (m), ecart, portee] ; un cout, pas un mur
+	var puddles: Array[Array] = []
+	for pd: Array in track.branch_puddles(k):
+		var ahead := (float(pd[0]) - u_me) * blen - float(pd[2]) - NOSE_M
+		if ahead > -2.0:
+			puddles.append([ahead, float(pd[1]), float(pd[2]) + HALF_WIDTH_M])
+	var barrel_r := ExplosiveBarrel.BARREL_RADIUS + 1.0
+	for b in track.branch_barrels(k):
+		if b == null or not is_instance_valid(b) or not b.is_inside_tree() or not b.visible or b.exploded_state:
+			continue
+		# sa zone compte jusqu'a ce que la remorque l'ait passee
+		var ahead := (track.branch_u(k, b.global_position) - u_me) * blen - barrel_r - NOSE_M
+		if ahead > -TAIL_M - 2.0 * barrel_r:
+			obs.append([ahead, track.branch_lateral_of(k, b.global_position), barrel_r + HALF_WIDTH_M + CLEAR_M, 0.0, false])
+	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
+		var t := n as Truck
+		if t == null or t == truck or not t.is_inside_tree() or t.is_wrecked() or track.on_branch(t.global_position, 2.0) != k:
+			continue
+		var tail := NOSE_M if t.is_trailer_detached() else TAIL_M
+		var ahead := (track.branch_u(k, t.global_position) - u_me) * blen - tail - NOSE_M
+		var tv := t.linear_velocity.dot(dir)
+		# a cote, ou devant et plus lent
+		if ahead > -TAIL_M - tail - NOSE_M and (ahead < 1.0 or my_v - tv > 0.5):
+			obs.append([ahead, track.branch_lateral_of(k, t.global_position), 2.0 * HALF_WIDTH_M + CLEAR_M, tv, true])
+	var cur := _lat_now - bl
+	var best := INF
+	var best_x := cur
+	var x := -half
+	while x <= half + 0.001:
+		var free := true
+		for o in obs:
+			if float(o[0]) <= look and absf(x - float(o[1])) < float(o[2]):
+				free = false
+				break
+		if free:
+			var cost := absf(x - cur) + 0.3 * absf(x)
+			for pd in puddles:
+				if float(pd[0]) <= look and absf(x - float(pd[1])) < float(pd[2]):
+					cost += PUDDLE_COST_M
+			if cost < best:
+				best = cost
+				best_x = x
+		x += SHORTCUT_STEP_M
+	var cap := INF
+	var clear := true
+	blocked_by = null
+	for o in obs:
+		var ahead := float(o[0])
+		if ahead < 0.0 or ahead > look or absf(best_x - float(o[1])) >= float(o[2]):
+			continue
+		if ahead < 40.0:
+			clear = false
+		# pas de place pour passer un camion : il se cale derriere
+		if bool(o[4]):
+			cap = minf(cap, maxf(float(o[3]), 0.0) + maxf(0.0, ahead - FOLLOW_GAP_M) * 0.35)
+	return {"lateral": bl + clampf(best_x, -half, half), "cap": cap, "clear": clear}
 
 
 ## Arene : fonce sur le camion vivant le plus proche (vise un peu devant lui),

@@ -128,7 +128,7 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 ## Suites possibles
 
 - Essai réel en ligne sur 2 PC ; modes en ligne.
-- Bots qui prennent les raccourcis et les bonus.
+- Bots qui vont chercher les bonus.
 - Vibrations de manette ; tutoriel des nouvelles commandes à la 1re course.
 - Relevé de fin de course (dégâts par pouvoir, largages) pour équilibrer.
 - Scinder `make test` en suite rapide / complète.
