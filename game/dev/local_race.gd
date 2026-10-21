@@ -227,8 +227,6 @@ func _ready() -> void:
 		bot_count = GameState.bot_count
 		bot_level = GameState.bot_level
 		game_mode = GameState.game_mode
-		# duree de l'arene choisie au menu (2026-10-21)
-		arena_limit_ticks = GameState.arena_minutes * 3600
 	# les modes ne se jouent pas encore en ligne
 	if NetSession.is_online():
 		game_mode = GameStateNode.GameMode.RACE
@@ -241,6 +239,9 @@ func _ready() -> void:
 		bot_count = 0
 	if game_mode == GameStateNode.GameMode.ARENA:
 		# pas de tours ni de sens de course : le dernier debout gagne
+		# duree choisie au menu (2026-10-21)
+		if players_from_menu and GameState.requested_players > 0:
+			arena_limit_ticks = GameState.arena_minutes * 3600
 		race.total_laps = 999
 		race.wrong_way_enabled = false
 	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
@@ -327,41 +328,6 @@ func _ready() -> void:
 		add_child(net)
 		net.setup(self, players, race)
 		NetSession.connection_lost.connect(_on_connection_lost)
-
-
-## Pose de depart du camion `i` : sa case de la grille ; en arene (2026-10-21 :
-## « ne pas démarrer sur la ligne de départ mais à différents points de
-## l'arène »), repartis a intervalles egaux tout autour de l'anneau, en
-## quinconce de part et d'autre du milieu, un sur deux dans l'autre sens.
-func start_transform(i: int) -> Transform3D:
-	if game_mode != GameStateNode.GameMode.ARENA:
-		return track.get_start_transform(i)
-	var total := maxi(player_count + bot_count, 1)
-	var s := track.length() * (float(i) + 0.5) / total
-	var lateral := ARENA_SPAWN_LATERAL_M * (1.0 if i % 2 == 0 else -1.0)
-	var xf := track.frame_at(track.index_at_s(s), lateral, 0.6)
-	# pas de sens de course : un camion sur deux part dans l'autre sens
-	return xf.rotated_local(Vector3.UP, PI) if i % 2 == 1 else xf
-
-
-## Reapparition du camion : apres le dernier checkpoint (RaceLaps), ou en
-## arene la ou il est tombe (arena_respawn).
-func respawn_for(truck: Truck) -> Transform3D:
-	if game_mode == GameStateNode.GameMode.ARENA:
-		return arena_respawn(truck)
-	return race.respawn_transform(truck)
-
-
-## Arene : reapparition la ou il est tombe (pas de checkpoint a respecter),
-## tourne dans le sens ou il roulait.
-func arena_respawn(truck: Truck) -> Transform3D:
-	var xf := track.get_respawn_transform(truck.global_position)
-	var heading := -truck.global_basis.z
-	if truck.linear_velocity.length() > 2.0:
-		heading = truck.linear_velocity
-	if (-xf.basis.z).dot(heading) < 0.0:
-		xf = xf.rotated_local(Vector3.UP, PI)
-	return xf
 
 
 ## Machine qui simule la course : hors ligne, ou host en ligne.
@@ -1307,6 +1273,41 @@ func _arena_tick(tick: int) -> void:
 			if not eliminated.has(players.find(p)):
 				race.finish_now(p.truck)
 		_arena_over = true
+
+
+## Pose de depart du camion `i` : sa case de la grille ; en arene (2026-10-21 :
+## « ne pas démarrer sur la ligne de départ mais à différents points de
+## l'arène »), repartis a intervalles egaux tout autour de l'anneau, en
+## quinconce de part et d'autre du milieu, un sur deux dans l'autre sens.
+func start_transform(i: int) -> Transform3D:
+	if game_mode != GameStateNode.GameMode.ARENA:
+		return track.get_start_transform(i)
+	var total := maxi(player_count + bot_count, 1)
+	var s := track.length() * (float(i) + 0.5) / total
+	var lateral := ARENA_SPAWN_LATERAL_M * (1.0 if i % 2 == 0 else -1.0)
+	var xf := track.frame_at(track.index_at_s(s), lateral, 0.6)
+	# pas de sens de course : un camion sur deux part dans l'autre sens
+	return xf.rotated_local(Vector3.UP, PI) if i % 2 == 1 else xf
+
+
+## Reapparition du camion : apres le dernier checkpoint (RaceLaps), ou en
+## arene la ou il est tombe (arena_respawn).
+func respawn_for(truck: Truck) -> Transform3D:
+	if game_mode == GameStateNode.GameMode.ARENA:
+		return arena_respawn(truck)
+	return race.respawn_transform(truck)
+
+
+## Arene : reapparition la ou il est tombe (pas de checkpoint a respecter),
+## tourne dans le sens ou il roulait.
+func arena_respawn(truck: Truck) -> Transform3D:
+	var xf := track.get_respawn_transform(truck.global_position)
+	var heading := -truck.global_basis.z
+	if truck.linear_velocity.length() > 2.0:
+		heading = truck.linear_velocity
+	if (-xf.basis.z).dot(heading) < 0.0:
+		xf = xf.rotated_local(Vector3.UP, PI)
+	return xf
 
 
 ## Valeur d'un camion vivant en arene : vies, puis PV (tete et remorque).
