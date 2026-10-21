@@ -335,6 +335,8 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   (`NetSessionNode.online_mode` : le contre-la-montre devient une course,
   il se joue seul) ; le client le pose avant de choisir la scène (l'arène
   remplace le circuit).
+- **Protocole 5** : le lancement porte aussi la durée de l'arène du host
+  (`GameState.arena_minutes`) : même compte à rebours chez tous.
 - **Élimination et arène** : le host seul décide qui saute et qui perd une
   vie. L'état de course (`LocalRace.net_state`, renvoyé à chaque changement)
   porte trois champs de plus : éliminés, vies, tick de la prochaine

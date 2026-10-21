@@ -238,8 +238,8 @@ func _ready() -> void:
 		bot_count = 0
 	if game_mode == GameStateNode.GameMode.ARENA:
 		# pas de tours ni de sens de course : le dernier debout gagne
-		# duree choisie au menu (2026-10-21)
-		if players_from_menu and GameState.requested_players > 0:
+		# duree choisie au menu (2026-10-21) ; en ligne, celle du host
+		if NetSession.is_online() or (players_from_menu and GameState.requested_players > 0):
 			arena_limit_ticks = GameState.arena_minutes * 3600
 		race.total_laps = 999
 		race.wrong_way_enabled = false
