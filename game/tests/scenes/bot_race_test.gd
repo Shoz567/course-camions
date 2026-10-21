@@ -8,6 +8,8 @@ extends PhysicsTest
 ##      tous devant le joueur immobile ;
 ##   C. ils restent sur la piste : aucun detruit par une chute, au plus une
 ##      remise en piste a eux trois ;
+## Sans largage de remorque (GameState.trailer_drops = 0) : la conduite seule ;
+## le largage tactique a son test (bot_tactics_test).
 ##   D. le niveau compte : adherence visee, vitesse visee, freinage, part de
 ##      la ligne de course et reaction aux pouvoirs progressent de facile a
 ##      dur.
@@ -19,11 +21,14 @@ var _crashes: int = 0
 var _resets: int = 0
 var _start: Array = []
 var _seen: Dictionary = {}
+var _drops_saved: int = 3
 
 
 func _test_setup() -> void:
 	duration_ticks = TICKS
 	GameState.requested_players = 0
+	_drops_saved = GameState.trailer_drops
+	GameState.trailer_drops = 0
 	_scene = (load("res://dev/race.tscn") as PackedScene).instantiate() as Node3D
 	_scene.set("ready_gate", false)
 	_scene.set("player_count", 1)
@@ -64,6 +69,7 @@ func _test_tick(t: int) -> void:
 
 
 func _test_finish() -> void:
+	GameState.trailer_drops = _drops_saved
 	var names: PackedStringArray = _seen.get("names", PackedStringArray())
 	check("4 camions : 1 joueur et 3 bots", names.size() == 4 and names[1].begins_with("BOT 1")
 		and names[3].begins_with("BOT 3"), str(names))
