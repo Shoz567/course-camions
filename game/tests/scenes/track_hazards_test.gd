@@ -2,7 +2,7 @@ extends PhysicsTest
 
 ## Relief et pieges de la piste n°1, avec PadEffects :
 ##   - collines : au moins 30 m de denivele, une vraie cote raide (pente max entre 12 et 20 %) ;
-##     4 flaques, 8 panneaux, 4 barils explosifs ;
+##     6 flaques, 12 panneaux, 6 barils explosifs (circuit rallonge, 2026-10-20) ;
 ##   C. descente plongeante : un camion lache sans gaz ni frein en haut de la chicane
 ##      accelere sous l'effet de la gravite (+8 km/h en 3 s au moins) ;
 ##   D. compression : au pied de la grande montee, a 110 km/h, la suspension s'enfonce nettement ;
@@ -198,7 +198,7 @@ func _test_finish() -> void:
 	check_below("collines : pente max reste roulable (%)", grade * 100.0, 20.0)
 	check_above("C descente plongeante : la gravite accelere (km/h en 3 s)", _c_v3 - _c_v0, 8.0)
 	check_below("D compression au pied de la cote : moyeu (m)", _d_min_hub, 0.40)
-	check("4 flaques, 8 panneaux, 4 barils", _track.puddle_count() == 4 and _track.sign_count() == 8 and _track.barrel_count() == 4,
+	check("6 flaques, 12 panneaux, 6 barils", _track.puddle_count() == 6 and _track.sign_count() == 12 and _track.barrel_count() == 6,
 		"%d / %d / %d" % [_track.puddle_count(), _track.sign_count(), _track.barrel_count()])
 
 	check("A flaque : glissade savonnette declenchee", _a_slipped == 1, "%d" % _a_slipped)

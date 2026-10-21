@@ -90,6 +90,35 @@ segments = Array[Dictionary]([{
 "signs": [[50.0, 33.0]],
 "type": "arc"
 }, {
+"angle": -90.0,
+"barrels": [[90.0, 12.0]],
+"name": "Rizieres (entree)",
+"radius": 125.0,
+"type": "arc"
+}, {
+"angle": 90.0,
+"name": "Rizieres (premier angle)",
+"radius": 125.0,
+"signs": [[70.0, -33.0]],
+"type": "arc"
+}, {
+"boost": [[50.0, -12.0], [110.0, 12.0]],
+"length": 150.0,
+"name": "Rizieres (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Rizieres (second angle)",
+"radius": 125.0,
+"signs": [[80.0, 33.0]],
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Rizieres (sortie)",
+"puddle": [[90.0, -20.0, 7.0]],
+"radius": 125.0,
+"type": "arc"
+}, {
 "angle": -45.0,
 "climb": -3.0,
 "name": "S des jardins (droite)",
@@ -111,7 +140,15 @@ segments = Array[Dictionary]([{
 "name": "Grille de depart (a plat)",
 "type": "straight"
 }])
+branches = Array[Dictionary]([{
+"barrels": [[0.48, 6.0]],
+"from": "Rizieres (entree)",
+"name": "Raccourci des rizieres",
+"puddles": [[0.3, 4.0, 7.0], [0.66, -4.0, 7.0]],
+"to": "Rizieres (sortie)"
+}])
 width = 70.0
+checkpoint_count = 24
 bank_blend_length = 120.0
 climb_blend_length = 30.0
 theme_id = 2

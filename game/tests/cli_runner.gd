@@ -41,7 +41,9 @@ extends SceneTree
 ## Code de sortie : 0 si aucun FAIL, 1 sinon.
 
 const DEFAULT_DIR := "res://tests/scenes"
-const DEFAULT_MAX_ITERATIONS := 7200
+## 12 000 images (200 s) : un tour complet des circuits rallonges (2026-10-20,
+## 4,4 a 4,6 km) tient, pilote automatique prudent compris.
+const DEFAULT_MAX_ITERATIONS := 12000
 
 var _dir: String = DEFAULT_DIR
 var _runs: int = 1

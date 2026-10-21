@@ -7,11 +7,12 @@ extends PhysicsTest
 ##      sauter aucun ;
 ##   B. remorque larguee en travers de sa ligne, 130 m devant lui lance : il
 ##      la contourne sans la toucher ;
-##   C. largage juste devant lui : une remorque dans l'axe, 40 m devant sur sa
-##      ligne, lancee a 60 % de sa vitesse (elle glisse et ralentit) : il la
+##   C. largage juste devant lui, sur la ligne droite de depart du 2e tour
+##      (sans tremplin : en l'air, il ne peut ni braquer ni freiner) : une remorque
+##      dans l'axe, 40 m devant sur sa ligne, lancee a 60 % de sa vitesse (elle glisse et ralentit) : il la
 ##      contourne, ou la touche a moins de 8 m/s.
 
-const TICKS := 2400
+const TICKS := 8400
 
 var _scene: Node3D
 var _bot: BotInputSource
@@ -69,7 +70,9 @@ func _test_tick(t: int) -> void:
 		_seen["barrels"] = _barrels
 		_seen["v_b"] = _truck.linear_velocity.length()
 		_b = _drop(130.0, true, 0.0)
-	if _b != null and _c == null and s > 1150.0 and s < 1400.0:
+	# C : sur une ligne droite (circuit rallonge du 2026-10-20 : la ou etait
+	# le cas C, il y a maintenant les virages des docks)
+	if _b != null and _c == null and t - _race_tick > 3000 and s > 15.0 and s < 45.0:
 		_seen["v_c"] = _truck.linear_velocity.length()
 		_c = _drop(40.0, false, _truck.linear_velocity.length() * 0.6)
 

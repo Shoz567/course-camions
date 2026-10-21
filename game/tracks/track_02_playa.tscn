@@ -16,6 +16,37 @@ segments = Array[Dictionary]([{
 "puddle": [[150.0, -24.0, 7.0]],
 "type": "straight"
 }, {
+"angle": -90.0,
+"name": "Marina (entree)",
+"radius": 130.0,
+"signs": [[80.0, -32.0]],
+"type": "arc"
+}, {
+"angle": 90.0,
+"barrels": [[100.0, 12.0]],
+"name": "Marina (premier angle)",
+"radius": 130.0,
+"type": "arc"
+}, {
+"arch": 90.0,
+"arch_label": "MARINA",
+"boost": [[60.0, 0.0]],
+"length": 150.0,
+"name": "Marina (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Marina (second angle)",
+"puddle": [[100.0, -22.0, 7.0]],
+"radius": 130.0,
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Marina (sortie)",
+"radius": 130.0,
+"signs": [[90.0, 32.0]],
+"type": "arc"
+}, {
 "angle": 60.0,
 "bank": 5.0,
 "climb": 8.0,
@@ -66,6 +97,35 @@ segments = Array[Dictionary]([{
 "signs": [[50.0, -32.0]],
 "type": "arc"
 }, {
+"angle": -90.0,
+"barrels": [[90.0, -12.0]],
+"name": "Village de pecheurs (entree)",
+"radius": 130.0,
+"type": "arc"
+}, {
+"angle": 90.0,
+"name": "Village de pecheurs (premier angle)",
+"radius": 130.0,
+"signs": [[70.0, 32.0]],
+"type": "arc"
+}, {
+"boost": [[50.0, 12.0], [120.0, -12.0]],
+"length": 160.0,
+"name": "Village de pecheurs (traversee)",
+"type": "straight"
+}, {
+"angle": 90.0,
+"name": "Village de pecheurs (second angle)",
+"radius": 130.0,
+"signs": [[80.0, -32.0]],
+"type": "arc"
+}, {
+"angle": -90.0,
+"name": "Village de pecheurs (sortie)",
+"puddle": [[90.0, 20.0, 7.0]],
+"radius": 130.0,
+"type": "arc"
+}, {
 "climb": 3.0,
 "jump": 50.0,
 "jump_offset": 12.0,
@@ -107,6 +167,19 @@ segments = Array[Dictionary]([{
 "length": 100.0,
 "name": "Grille de depart (a plat)",
 "type": "straight"
+}])
+branches = Array[Dictionary]([{
+"barrels": [[0.5, -6.0]],
+"from": "Marina (entree)",
+"name": "Raccourci de la marina",
+"puddles": [[0.3, -4.0, 7.0], [0.7, 5.0, 6.0]],
+"to": "Marina (sortie)"
+}, {
+"barrels": [[0.25, 6.0], [0.7, -6.0]],
+"from": "Village de pecheurs (entree)",
+"name": "Raccourci du village",
+"puddles": [[0.45, 4.0, 7.0]],
+"to": "Village de pecheurs (sortie)"
 }])
 width = 75.0
 bank_blend_length = 120.0

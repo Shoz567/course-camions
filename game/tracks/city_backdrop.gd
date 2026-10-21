@@ -28,3 +28,5 @@ func _ready() -> void:
 
 func _generate(track: TrackBlockout) -> void:
 	add_child(CityBuilder.around_track(track, city_seed))
+	# rien sur un raccourci (2026-10-20)
+	track.clear_branch_corridors(self)

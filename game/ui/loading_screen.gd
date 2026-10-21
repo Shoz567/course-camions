@@ -272,8 +272,8 @@ func _build() -> void:
 	box.add_child(UiKit.section("Prochaine course"))
 	box.add_child(UiKit.label(String(t["name"]).to_upper(), 64, UiKit.TEXT, 900))
 	var tag := String(t["tagline"])
-	box.add_child(UiKit.label("%s  ·  %s %s  ·  4 tours" % [tag.left(1).to_upper() + tag.substr(1), c["cc"],
-		String(c["name"]).to_upper()], 22, UiKit.CYAN, 700))
+	box.add_child(UiKit.label("%s  ·  %s %s  ·  %d tours" % [tag.left(1).to_upper() + tag.substr(1), c["cc"],
+		String(c["name"]).to_upper(), RaceLaps.DEFAULT_LAPS], 22, UiKit.CYAN, 700))
 	box.add_child(UiKit.gap(10))
 	# barre inclinee : fond nuit, remplissage rose
 	var bar := Panel.new()

@@ -2,10 +2,10 @@ extends PhysicsTest
 
 ## Circuit n°2, Playa Del Sol (tracks/track_02_playa.tscn), avec PadEffects :
 ##   - habillage : theme plage (chaussee et sol a lui, plus de neon sur les
-##     glissieres), 3 arches, environnement de plein soleil (ciel bleu clair,
+##     glissieres), 4 arches, environnement de plein soleil (ciel bleu clair,
 ##     soleil avec ombres dans la scene de course) ;
 ##   - relief : au moins 25 m de denivele, pente max roulable (< 20 %) ;
-##     4 bancs de sable, 8 panneaux, 6 plaques de boost, 4 tremplins ;
+##     6 bancs de sable, 12 panneaux, 9 plaques de boost, 4 tremplins ;
 ##   - ile : terre sous la ligne de depart et le long de la promenade, mer au
 ##     large et SOUS le grand pont ; le pont et la jetee sont des tabliers sur
 ##     piles (au moins 12 piles, aucune collision), pas la ligne de depart ;
@@ -111,7 +111,7 @@ func _check_theme() -> void:
 		and is_equal_approx(float(road_mat.get_shader_parameter("road_width")), _track.width))
 	var left := _track.get_node("Walls/NeonLeft") as MeshInstance3D
 	check("glissieres : plus de neon de ville", left.material_override != preload("res://tracks/materials/neon_cyan.tres"))
-	check("3 arches", _track.arch_count() == 3, "%d" % _track.arch_count())
+	check("4 arches", _track.arch_count() == 4, "%d" % _track.arch_count())
 	var env := load("res://tracks/playa_sun.tres") as Environment
 	# ciel realiste (sky_day.gdshader, 2026-10-07) : zenith bleu profond,
 	# horizon clair, cumulus de beau temps
@@ -146,8 +146,8 @@ func _check_relief() -> void:
 		% [_track.length(), hi - lo, grade * 100.0, _a_before, _a_after])
 	check_above("relief : denivele du trace (m)", hi - lo, 25.0)
 	check_below("relief : pente max roulable (%)", grade * 100.0, 20.0)
-	check("4 bancs de sable, 8 panneaux, 6 plaques de boost, 4 tremplins",
-		_track.puddle_count() == 4 and _track.sign_count() == 8 and _track.boost_pad_count() == 6
+	check("6 bancs de sable, 12 panneaux, 9 plaques de boost, 4 tremplins",
+		_track.puddle_count() == 6 and _track.sign_count() == 12 and _track.boost_pad_count() == 9
 		and _track.jump_pad_count() == 4,
 		"%d / %d / %d / %d" % [_track.puddle_count(), _track.sign_count(), _track.boost_pad_count(), _track.jump_pad_count()])
 	var bank := _track.get_node("Pads/Puddle%d/Water" % SANDBANK) as MeshInstance3D

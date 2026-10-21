@@ -18,7 +18,9 @@ signal race_finished(truck: Truck, total_ticks: int)
 signal wrong_way_changed(truck: Truck, wrong: bool)
 
 @export var track: TrackBlockout
-@export var total_laps: int = 4
+## Tours d'une course (2026-10-20 : 3, circuits rallonges a 4,6-4,8 km).
+const DEFAULT_LAPS := 3
+@export var total_laps: int = DEFAULT_LAPS
 ## Mauvais sens : vitesse a contre-sens (m/s) tenue pendant ce nombre de ticks.
 @export var wrong_way_speed_ms: float = 2.0
 @export var wrong_way_ticks: int = 45
