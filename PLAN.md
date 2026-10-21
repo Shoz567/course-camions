@@ -1076,6 +1076,20 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     la dérive à 140° (`free_spin_target_slip_deg`) : demi-tour ; ligne DURÉE
     au menu (2, 3, 4, 5, 8 min ou sans limite, `GameState.arena_minutes`)
     (`arena_rules_test`, `truck_free_spin_test`).
+    2026-10-21 (« les tremplins ont des problèmes, il y en a qui se rentrent
+    dedans ; pas mal de petits soucis ») : rampe jumelle dos à dos en ligne
+    droite (avant, à l'abscisse s + 2 L sur l'arc : elle chevauchait la
+    première côté îlot, s'en écartait de travers côté extérieur) ; flancs
+    inclinés (`jump_side_run`, 6 m : on aborde un tremplin de tous les
+    côtés) ; bonus hors des bosses et de leurs envols (jugés au sol) ;
+    départs et réapparitions à 9 m des tremplins, barils, plaques et flaques
+    (`TrackBlockout.clear_spot` ; un camion partait sur un baril) ; bots :
+    gaz à fond sans avancer pendant 0,75 s, ils reculent (contre un bord,
+    déjà tournés vers le milieu : ils repartent tout droit), puis laissent
+    cette proie 1,5 s (deux bots se poussaient nez à nez sans fin) ;
+    mini-carte sans ligne d'arrivée. 3 arènes, 5 bots, 60 s : aucun bot
+    coincé, aucun choc contre un obstacle (`arena_ramps_test`,
+    `arena_rules_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

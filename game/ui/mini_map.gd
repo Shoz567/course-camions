@@ -95,7 +95,10 @@ func setup(track: TrackBlockout, list: Array[Dictionary]) -> void:
 		branches.append(line)
 	var start := track.frame_at(0, 0.0, 0.0)
 	var half := start.basis.x * (track.width / 2.0)
-	finish = PackedVector2Array([to_map(start.origin - half), to_map(start.origin + half)])
+	# arene (2026-10-21) : pas de ligne d'arrivee
+	finish = PackedVector2Array()
+	if track.race_markings:
+		finish = PackedVector2Array([to_map(start.origin - half), to_map(start.origin + half)])
 	queue_redraw()
 
 

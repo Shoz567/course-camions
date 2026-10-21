@@ -181,6 +181,20 @@ var _cargo: TruckCargo
 var arena: bool = false
 ## Distance au bord de l'arene (m) ou il revient vers le milieu.
 const ARENA_EDGE_M := 22.0
+## Arene (2026-10-21) : sous ARENA_STUCK_MS pendant ARENA_STUCK_TICKS gaz a
+## fond (deux bots nez a nez se poussaient sans fin), il recule
+## ARENA_BACK_TICKS en braquant (contre un bord, deja tourne vers le milieu :
+## il repart tout droit, reculer le collait au mur), puis laisse cette proie
+## ARENA_IGNORE_TICKS.
+const ARENA_STUCK_MS := 2.5
+const ARENA_STUCK_TICKS := 45
+const ARENA_BACK_TICKS := 70
+const ARENA_IGNORE_TICKS := 90
+var _arena_stuck: int = 0
+var _arena_back: int = 0
+var _arena_out: bool = false
+var _arena_shunned: Truck = null
+var _arena_shun_left: int = 0
 ## Largages faits (tests).
 var drops: int = 0
 ## Faux : il ignore les raccourcis (tests, comparaison).
@@ -876,11 +890,28 @@ func _branch_traffic(v: float) -> Dictionary:
 ## plein gaz ; trop pres d'un mur et en s'y dirigeant, il revient vers le
 ## milieu de l'anneau. Nitro en ligne droite sur sa proie.
 func _arena_drive(v: float) -> void:
+	_arena_shun_left = maxi(_arena_shun_left - 1, 0)
+	if _arena_back > 0:
+		# recule en braquant un peu, pour se degager de biais (a fond, la
+		# remorque se met en portefeuille et bloque)
+		_arena_back -= 1
+		frame.boost = false
+		if _arena_out:
+			frame.throttle = 1.0
+			frame.brake = 0.0
+			frame.steer = 0.0
+			return
+		frame.throttle = 0.0
+		frame.brake = 1.0
+		frame.steer = 0.35 if _phase % 2 == 0 else -0.35
+		return
 	var prey: Truck = null
 	var best := INF
 	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
 		var t := n as Truck
 		if t == null or t == truck or t.is_wrecked():
+			continue
+		if t == _arena_shunned and _arena_shun_left > 0:
 			continue
 		var d := t.global_position.distance_to(truck.global_position)
 		if d < best:
@@ -905,6 +936,15 @@ func _arena_drive(v: float) -> void:
 	frame.throttle = 1.0 if absf(angle) < 1.8 else 0.6
 	frame.brake = 0.0
 	frame.boost = prey != null and absf(angle) < 0.15 and best > 40.0 and bool(BOOST[level])
+	# gaz a fond sans avancer : il pousse quelqu'un ou un mur, il recule
+	_arena_stuck = _arena_stuck + 1 if v < ARENA_STUCK_MS and RaceManager.state == RaceManagerNode.State.RACING else 0
+	if _arena_stuck >= ARENA_STUCK_TICKS:
+		_arena_stuck = 0
+		_arena_back = ARENA_BACK_TICKS
+		_arena_out = absf(lat) > edge and fwd.dot(track.sample_right(index)) * signf(lat) < 0.0
+		if prey != null and best < 15.0:
+			_arena_shunned = prey
+			_arena_shun_left = ARENA_IGNORE_TICKS
 
 
 ## Un missile ou un boomerang qui le vise arrive (a moins de SHIELD_WARN_M),
