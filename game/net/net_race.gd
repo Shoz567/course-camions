@@ -64,7 +64,7 @@ const MAX_OBJECTS := 40
 ## Un obstacle immobile est quand meme renvoye tous les KEYFRAME_TICKS ticks.
 const KEYFRAME_TICKS := 30
 ## Evenements de jeu (_event), du host vers les clients.
-enum Ev { WRECK, RESPAWN, TRAILER_EXPLODED, DROP, OBJECT_HIT, OBJECT_GONE, BARREL, SIGN, IMPACT, LEFT, POWER }
+enum Ev { WRECK, RESPAWN, TRAILER_EXPLODED, DROP, OBJECT_HIT, OBJECT_GONE, BARREL, SIGN, IMPACT, LEFT, POWER, PICKUP }
 
 var race_scene: Node
 var players: Array = []
@@ -151,6 +151,7 @@ var _object_id: Dictionary = {}
 var _next_object_id: int = 1
 ## Barils et panneaux du circuit : meme ordre chez tout le monde (meme scene).
 var _barrels: Array[ExplosiveBarrel] = []
+var _pickups: Array[TrackPickup] = []
 var _signs: Array[RoadsideSign] = []
 ## Client : derniers flags appliques par camion (klaxon, boost : fronts).
 var _last_flags: PackedInt32Array = PackedInt32Array()
@@ -192,6 +193,10 @@ func setup(scene: Node, list: Array, lap_counter: RaceLaps) -> void:
 			_barrels.append(n as ExplosiveBarrel)
 		elif n is RoadsideSign:
 			_signs.append(n as RoadsideSign)
+		elif n is TrackPickup:
+			# bonus : le host decide qui les prend (Ev.PICKUP)
+			_pickups.append(n as TrackPickup)
+			(n as TrackPickup).net_mirror = not NetSession.is_host()
 	if NetSession.is_host():
 		_hook_host_events()
 		for i in players.size():
@@ -455,6 +460,8 @@ func _hook_host_events() -> void:
 		_barrels[k].exploded.connect(func(_t: Truck) -> void: _send_event(Ev.BARREL, [k]))
 	for k in _signs.size():
 		_signs[k].hit.connect(func(t: Truck) -> void: _send_event(Ev.SIGN, [k, t.linear_velocity]))
+	for k in _pickups.size():
+		_pickups[k].taken.connect(func(t: Truck, _p: TrackPickup) -> void: _send_event(Ev.PICKUP, [k, _index_of(t)]))
 
 
 ## Obstacle ne en course (remorque larguee, carcasse) : son id, partage par
@@ -748,6 +755,10 @@ func _event(kind: int, data: Array) -> void:
 			var k := int(data[0]) if data.size() == 2 else -1
 			if k >= 0 and k < _signs.size():
 				_signs[k].net_knock(data[1])
+		Ev.PICKUP:
+			var k := int(data[0]) if data.size() == 2 else -1
+			if k >= 0 and k < _pickups.size():
+				_pickups[k].net_take(_truck_at(data, 1))
 		Ev.LEFT:
 			var k := int(data[0]) if data.size() == 1 else -1
 			if k >= 0 and k < players.size():

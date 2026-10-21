@@ -48,6 +48,11 @@ var _center_text: String = ""
 var _center_color: Color = Color.WHITE
 var _slots: Array[Dictionary] = [{}, {}]
 var _reticle: TargetReticle
+## Message bref sous le haut de l'ecran (bonus pris, 2026-10-20) : il
+## s'efface en FLASH_S.
+var _flash: Label
+var _flash_left: float = 0.0
+const FLASH_S := 1.4
 ## Retour de coup (2026-10-20) : chiffres de degats qui montent de la cible,
 ## son de touche, bip au changement de cible.
 var _powers_seen: TruckPowers
@@ -112,6 +117,12 @@ func _ready() -> void:
 	_standings.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_standings.offset_top = 150 * k
 	_build_cards(k)
+	_flash = _label(40, Vector2.ZERO)
+	_flash.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_flash.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_flash.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_flash.offset_top = 230 * k
+	_flash.visible = false
 	_reticle = TargetReticle.new()
 	_reticle.name = "Reticle"
 	_reticle.ui_scale = k
@@ -287,6 +298,10 @@ func set_center_message(text: String, color: Color = Color.WHITE) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _flash_left > 0.0:
+		_flash_left = maxf(0.0, _flash_left - _delta)
+		_flash.modulate.a = clampf(_flash_left / (FLASH_S * 0.4), 0.0, 1.0)
+		_flash.visible = _flash_left > 0.0
 	if truck == null or race == null:
 		return
 	var r := race.racer(truck)
@@ -471,6 +486,21 @@ func _play(stream: AudioStreamWAV) -> void:
 	if _sound != null and stream != null:
 		_sound.stream = stream
 		_sound.play()
+
+
+## Message bref (bonus pris) : `text` en `color`, efface en FLASH_S.
+func flash(text: String, color: Color) -> void:
+	if _flash == null:
+		return
+	_flash.text = text
+	_flash.add_theme_color_override("font_color", color)
+	_flash_left = FLASH_S
+	_flash.modulate.a = 1.0
+	_flash.visible = true
+
+
+func flash_text() -> String:
+	return _flash.text if _flash != null and _flash.visible else ""
 
 
 ## Viseur visible (tests).

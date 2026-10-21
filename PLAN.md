@@ -1001,6 +1001,12 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   du détour doublés (même numéro) ; sur lui, un camion est sur la piste et
   sa progression suit le détour ; décor dégagé (`clear_branch_corridors`)
   (`shortcut_test`). Les bots ne les prennent pas (encore).
+- [x] **Bonus sur la piste** (2026-10-20, « réparation, recharge de pouvoir ») :
+  `TrackPickup`, cubes lumineux qui tournent (✚ vert : +40 PV tête, +30
+  remorque, pneus neufs ; ⚡ jaune : le pouvoir le plus long à recharger
+  redevient prêt), en rangées de 3 en travers (segment `"pickups"`), 4
+  rangées par circuit ; reviennent après 15 s ; message au HUD ; en ligne,
+  le host décide (Ev.PICKUP) (`pickup_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

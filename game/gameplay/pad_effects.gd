@@ -12,7 +12,10 @@ extends Node
 ##   - panneau percute : le panneau s'envole (RoadsideSign), sans penalite
 ##     de vitesse sur le camion ;
 ##   - baril explosif : le baril saute (ExplosiveBarrel) et le camion qui l'a
-##     fait detoner perd barrel_damage PV (TruckHealth).
+##     fait detoner perd barrel_damage PV (TruckHealth) ;
+##   - bonus (TrackPickup, 2026-10-20) : reparation (+repair_cab_hp a la tete,
+##     +repair_trailer_hp a la remorque, pneus neufs) ou recharge (le pouvoir
+##     qui avait le plus de recharge redevient pret).
 ## Une meme plaque ne redeclenche pas pour le meme camion avant cooldown_ticks.
 
 @export var track: TrackBlockout
@@ -28,6 +31,8 @@ extends Node
 @export var sign_ticks: int = 0
 @export var sign_decel_ms2: float = 0.0
 @export var barrel_damage: float = TruckHealth.BARREL_DAMAGE
+@export var repair_cab_hp: float = 40.0
+@export var repair_trailer_hp: float = 30.0
 
 ## Dernier declenchement : "b3:<id du camion>" -> tick physique.
 var _last: Dictionary = {}
@@ -42,6 +47,21 @@ func _ready() -> void:
 	track.puddle_entered.connect(_on_puddle)
 	track.sign_hit.connect(_on_sign)
 	track.barrel_hit.connect(_on_barrel)
+	track.pickup_taken.connect(_on_pickup)
+
+
+func _on_pickup(truck: Truck, kind: int, _index: int) -> void:
+	if kind == TrackPickup.Kind.REPAIR:
+		var h := TruckHealth.of(truck)
+		if h != null:
+			h.repair(repair_cab_hp, repair_trailer_hp)
+		var tires := truck.get_node_or_null(^"Tires") as TruckTires
+		if tires != null and not tires.net_mirror:
+			tires.repair()
+	else:
+		var p := TruckPowers.of(truck)
+		if p != null and not p.mirror:
+			p.refill_one()
 
 
 func _on_boost_pad(body: Node3D, index: int) -> void:
