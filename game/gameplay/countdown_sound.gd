@@ -35,7 +35,7 @@ static func _ensure_init() -> void:
 		return
 	_player = AudioStreamPlayer.new()
 	_player.name = "CountdownSoundPlayer"
-	_player.bus = &"Master"
+	_player.bus = SoundMix.EFFECTS
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null and tree.root != null:
 		tree.root.add_child(_player)

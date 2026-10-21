@@ -42,7 +42,7 @@ static func play(cue: Cue) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_player = AudioStreamPlayer.new()
 		_player.name = "RaceSoundPlayer"
-		_player.bus = &"Master"
+		_player.bus = SoundMix.EFFECTS
 		_player.volume_db = -4.0
 		var tree := Engine.get_main_loop() as SceneTree
 		if tree == null or tree.root == null:

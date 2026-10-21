@@ -14,8 +14,8 @@ extends Node
 ##
 ## Rendu une seule fois, sur un thread de fond (WorkerThreadPool), des le menu
 ## (`prepare()`), puis garde en cache pour les courses suivantes. Joue sur le
-## bus Master : le volume et la sourdine des reglages s'appliquent. Noeud enfant
-## de la course : il disparait avec elle (retour au menu, rejouer).
+## bus Musique (SoundMix), sous le Master : le volume et la sourdine des
+## reglages s'appliquent. Noeud enfant de la course : il disparait avec elle (retour au menu, rejouer).
 ## Totalement inactive en headless (tests) : ni rendu, ni lecteur.
 
 const RATE := 22050
@@ -126,7 +126,7 @@ func _try_start() -> void:
 	if _player == null:
 		_player = AudioStreamPlayer.new()
 		_player.name = "RaceMusicPlayer"
-		_player.bus = &"Master"
+		_player.bus = SoundMix.MUSIC
 		add_child(_player)
 	_player.stream = s
 	_player.volume_db = VOLUME_DB

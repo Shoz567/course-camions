@@ -45,7 +45,7 @@ static func _ensure_init() -> void:
 		return
 	_player = AudioStreamPlayer.new()
 	_player.name = "MenuSoundPlayer"
-	_player.bus = &"Master"
+	_player.bus = SoundMix.EFFECTS
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null and tree.root != null:
 		# differe : au _ready du menu, la racine est occupee a ajouter la scene

@@ -215,6 +215,7 @@ func _init() -> void:
 	_audio_player.name = "ExplosionAudio"
 	_audio_player.unit_size = 25.0
 	_audio_player.max_distance = 180.0
+	_audio_player.bus = SoundMix.EFFECTS
 	if _shared_stream == null:
 		_shared_stream = _build_explosion_stream()
 	_audio_player.stream = _shared_stream

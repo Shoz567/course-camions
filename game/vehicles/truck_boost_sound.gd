@@ -19,6 +19,7 @@ func _ready() -> void:
 	stream = _shared_stream
 	unit_size = 14.0
 	max_db = 2.0
+	bus = SoundMix.EFFECTS
 	var truck := get_parent() as Truck
 	if truck != null:
 		truck.boosted.connect(_on_boosted)

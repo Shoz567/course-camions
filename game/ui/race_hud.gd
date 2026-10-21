@@ -135,6 +135,7 @@ func _ready() -> void:
 			_beep_stream = MenuSound.build_tone(880.0, 1180.0, 0.06, 0.25)
 		_sound = AudioStreamPlayer.new()
 		_sound.name = "HitSound"
+		_sound.bus = SoundMix.EFFECTS
 		add_child(_sound)
 
 

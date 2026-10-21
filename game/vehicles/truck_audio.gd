@@ -90,6 +90,7 @@ func _player(stream: AudioStream, unit: float, db: float) -> AudioStreamPlayer3D
 	p.unit_size = unit
 	p.volume_db = db
 	p.max_db = 3.0
+	p.bus = SoundMix.EFFECTS
 	add_child(p)
 	return p
 

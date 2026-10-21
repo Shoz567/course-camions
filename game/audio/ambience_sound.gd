@@ -19,9 +19,13 @@ extends Node
 const RATE := 22050
 ## Duree d'une boucle (s) : deux vagues de 4 s sur la plage.
 const LOOP_S := 8.0
-## Volume de l'ambiance (dB), fondu d'entree.
+## Volume de l'ambiance (dB, avant le bus Ambiance de SoundMix), fondu d'entree.
 const VOLUME_DB := -14.0
-const FADE_IN_S := 1.5
+## La pluie de Cyber City, plus bas encore (2026-10-21 : « la pluie est
+## vachement forte, au début, avant que la course se lance » : sans musique ni
+## moteurs lances, elle couvrait tout).
+const CITY_TRIM_DB := -6.0
+const FADE_IN_S := 2.5
 
 @export var theme_id: int = TrackTheme.Id.CYBER_CITY
 
@@ -41,7 +45,7 @@ func _ready() -> void:
 		_streams[theme_id] = wav
 	_player = AudioStreamPlayer.new()
 	_player.name = "Ambience"
-	_player.bus = &"Master"
+	_player.bus = SoundMix.AMBIENCE
 	_player.stream = _streams[theme_id]
 	_player.volume_db = -60.0
 	add_child(_player)
@@ -52,7 +56,12 @@ func _process(delta: float) -> void:
 	if _player == null or _fade >= 1.0:
 		return
 	_fade = minf(_fade + delta / FADE_IN_S, 1.0)
-	_player.volume_db = VOLUME_DB + linear_to_db(maxf(_fade, 0.001))
+	_player.volume_db = volume_db_for(theme_id) + linear_to_db(maxf(_fade, 0.001))
+
+
+## Volume plein de l'ambiance de ce theme (dB).
+static func volume_db_for(id: int) -> float:
+	return VOLUME_DB + (CITY_TRIM_DB if id == TrackTheme.Id.CYBER_CITY else 0.0)
 
 
 ## Une boucle de LOOP_S secondes (mono, RATE Hz, crete 0,8).
@@ -65,7 +74,9 @@ static func build(id: int) -> PackedFloat32Array:
 
 static func _build_city() -> PackedFloat32Array:
 	var n := roundi(RATE * LOOP_S)
-	var bright := TruckAudio._looped_noise(n, 101, 0.6)
+	# pluie douce (2026-10-21) : souffle moins aigu, gouttes plus rares et plus
+	# sourdes ; les « tic » aigus serres s'entendaient comme un grésillement
+	var bright := TruckAudio._looped_noise(n, 101, 0.3)
 	var dull := TruckAudio._looped_noise(n, 101, 0.15)
 	var rumble := TruckAudio._looped_noise(n, 202, 0.004)
 	var out := PackedFloat32Array()
@@ -78,15 +89,16 @@ static func _build_city() -> PackedFloat32Array:
 		out[i] = rain * 0.9 + rumble[i] * 9.0
 	# gouttes sur la tole et les flaques : petits « tic » amortis
 	var lcg := 4242
-	for k in 260:
+	for k in 110:
 		lcg = (lcg * 1103515245 + 12345) & 0x7fffffff
 		var start := lcg % n
 		lcg = (lcg * 1103515245 + 12345) & 0x7fffffff
-		var f := 2200.0 + float(lcg % 2600)
-		var amp := 0.15 + 0.25 * float((lcg >> 8) % 100) / 100.0
-		for j in roundi(RATE * 0.025):
+		var f := 1300.0 + float(lcg % 1600)
+		var amp := 0.05 + 0.1 * float((lcg >> 8) % 100) / 100.0
+		for j in roundi(RATE * 0.03):
 			var u := float(j) / RATE
-			out[(start + j) % n] += sin(TAU * f * u) * exp(-u * 260.0) * amp
+			# attaque de 1 ms : plus de clic sec a l'impact
+			out[(start + j) % n] += sin(TAU * f * u) * exp(-u * 180.0) * minf(u * 1000.0, 1.0) * amp
 	return _normalize(out)
 
 
