@@ -89,7 +89,12 @@ func _test_tick(t: int) -> void:
 		# D : le joueur immobile et le bot 2 sortent aussi
 		for i: int in [0, 2]:
 			(_scene.get("lives") as Array)[i] = 1
-			TruckHealth.of(_truck(i)).damage(1000.0, &"test")
+	if k >= 1400:
+		# deja detruit par les bots (en attente de reapparition) : le coup
+		# serait ignore, on frappe des qu'il est revenu
+		for i: int in [0, 2]:
+			if not (_scene.get("eliminated") as Array).has(i) and not _truck(i).is_wrecked():
+				TruckHealth.of(_truck(i)).damage(1000.0, &"test")
 	if state == RaceManagerNode.State.FINISHED and not _seen.has("end"):
 		var first := (_scene.call("ranking") as Array)[0] as Object
 		_seen["end"] = [_players().find(first), String(_scene.call("standings_text"))]
