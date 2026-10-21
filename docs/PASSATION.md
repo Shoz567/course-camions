@@ -45,7 +45,9 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   - Contre-la-montre : seul, fantôme du meilleur tour sauvegardé
     (`user://ghosts`) ;
   - Arène stock-car : 3 arènes (une par habillage), 3 vies, le dernier debout
-    gagne, bots chasseurs.
+    gagne, bots chasseurs (ils reculent quand ils poussent sans avancer).
+    Tremplins en bosses (deux rampes dos à dos, flancs inclinés) ; départs,
+    réapparitions et bonus à l'écart des obstacles.
 
 ### Circuits
 - Trois circuits : Cyber City (nuit, néons), Playa Del Sol (île, pont de la

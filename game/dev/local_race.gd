@@ -213,6 +213,10 @@ const LOST_TICKS := 180
 ## Arene : depart a cet ecart du milieu de l'anneau (m), d'un cote puis de
 ## l'autre.
 const ARENA_SPAWN_LATERAL_M := 20.0
+## Arene : place laissee autour d'un depart ou d'une reapparition (m), et pas
+## de la recherche d'une place libre.
+const ARENA_CLEAR_M := 9.0
+const ARENA_FREE_STEP_M := 6.0
 const NOTICE_TICKS := 240
 ## Sans snapshot depuis ce nombre de ticks : « connexion instable ».
 const UNSTABLE_TICKS := 90
@@ -1312,9 +1316,22 @@ func start_transform(i: int) -> Transform3D:
 	var total := maxi(player_count + bot_count, 1)
 	var s := track.length() * (float(i) + 0.5) / total
 	var lateral := ARENA_SPAWN_LATERAL_M * (1.0 if i % 2 == 0 else -1.0)
-	var xf := track.frame_at(track.index_at_s(s), lateral, 0.6)
+	var xf := _arena_free(s, lateral, 0.6)
 	# pas de sens de course : un camion sur deux part dans l'autre sens
 	return xf.rotated_local(Vector3.UP, PI) if i % 2 == 1 else xf
+
+
+## Arene : la pose a l'abscisse `s` et l'ecart `lateral`, ou la plus proche
+## (pas de ARENA_FREE_STEP_M le long de l'anneau) a ARENA_CLEAR_M des
+## tremplins, barils, plaques et flaques (2026-10-21 : un camion partait sur
+## un baril, un autre pouvait reapparaitre dans une rampe).
+func _arena_free(s: float, lateral: float, lift: float) -> Transform3D:
+	for k in 25:
+		var d := ARENA_FREE_STEP_M * ceili(k / 2.0) * (1.0 if k % 2 == 0 else -1.0)
+		var xf := track.frame_at(track.index_at_s(s + d), lateral, lift)
+		if track.clear_spot(xf.origin, ARENA_CLEAR_M):
+			return xf
+	return track.frame_at(track.index_at_s(s), lateral, lift)
 
 
 ## Reapparition du camion : apres le dernier checkpoint (RaceLaps), ou en
@@ -1329,6 +1346,10 @@ func respawn_for(truck: Truck) -> Transform3D:
 ## tourne dans le sens ou il roulait.
 func arena_respawn(truck: Truck) -> Transform3D:
 	var xf := track.get_respawn_transform(truck.global_position)
+	if not track.clear_spot(xf.origin, ARENA_CLEAR_M):
+		var i := track.closest_sample(xf.origin)
+		var lat := (xf.origin - track.sample_position(i)).dot(track.sample_right(i))
+		xf = _arena_free(track.sample_s(i), lat, 1.0)
 	var heading := -truck.global_basis.z
 	if truck.linear_velocity.length() > 2.0:
 		heading = truck.linear_velocity

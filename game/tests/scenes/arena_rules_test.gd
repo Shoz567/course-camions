@@ -12,7 +12,10 @@ extends PhysicsTest
 ##   D. HUD : ni chrono de tour ni meilleur tour ; rang des vies ;
 ##   E. duree du menu : sans limite, pas de compte a rebours, bandeau
 ##      « SANS LIMITE » ; 3 min : 10 800 ticks ;
-##   F. reapparition la ou il est tombe, tourne dans le sens ou il roulait.
+##   F. reapparition la ou il est tombe, tourne dans le sens ou il roulait ;
+##   G. (2026-10-21) departs a l'ecart des tremplins, barils, plaques et
+##      flaques (un camion partait sur un baril) ; mini-carte sans ligne
+##      d'arrivee.
 
 var _scene: Node3D
 var _seen: Dictionary = {}
@@ -72,6 +75,8 @@ func _test_setup() -> void:
 		for j in range(i + 1, players.size()):
 			var o := (players[j] as Object).get("truck") as Truck
 			min_gap = minf(min_gap, t.global_position.distance_to(o.global_position))
+		if not track.clear_spot(t.global_position, 8.0):  # LocalRace : ARENA_CLEAR_M - 1
+			_seen["g_bad"] = int(_seen.get("g_bad", 0)) + 1
 	_seen["c"] = [min_gap, on_grid, backwards, players.size()]
 	_seen["limit"] = int(_scene.get("arena_limit_ticks"))
 
@@ -82,6 +87,7 @@ func _test_tick(t: int) -> void:
 	var players: Array = _scene.get("players")
 	var hud := (players[0] as Object).get("hud") as RaceHud
 	var ranking: Array = _scene.call("ranking")
+	_seen["g_map"] = hud.minimap.finish.size() if hud.minimap != null else -1
 	_seen["d"] = [hud.lap_times, (hud.get("_lap_time") as Label).visible, (hud.get("_times") as Label).visible,
 		hud.place_override == ranking.find(players[0]) + 1]
 	_seen["e"] = [int(_scene.call("arena_seconds_left")), String(_scene.call("ticker_text")).contains("SANS LIMITE")]
@@ -119,3 +125,5 @@ func _test_finish() -> void:
 		and _seen.get("e") == [-1, true], "%s %s" % [_seen.get("limit"), _seen.get("e")])
 	check("E 3 minutes : 10 800 ticks", int(_seen.get("e3", 0)) == 10800, str(_seen.get("e3")))
 	check("F reapparition sur place, dans le sens ou il roulait", _seen.get("f") == [true, true], str(_seen.get("f")))
+	check("G departs a l'ecart des obstacles ; mini-carte sans ligne d'arrivee",
+		int(_seen.get("g_bad", 0)) == 0 and _seen.get("g_map") == 0, "%s %s" % [_seen.get("g_bad", 0), _seen.get("g_map")])

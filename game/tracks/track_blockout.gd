@@ -100,6 +100,8 @@ const PICKUP_SEED := 7919
 const PICKUP_CLEAR_M := 14.0
 const PICKUP_EDGE_M := 3.5
 const PICKUP_START_M := 60.0
+## Arene : longueur (m) gardee libre de bonus de chaque cote d'une bosse.
+const PICKUP_JUMP_RUN_M := 40.0
 ## En deca de cet ecart d'abscisse (m), deux echantillons sont la meme portion
 ## de piste ; au-dela, une autre (circuit en 8 : l'autre branche).
 const SAME_SECTION_M := 160.0
@@ -158,6 +160,10 @@ const BRANCH_GATE_U := 0.08
 @export var jump_offset: float = 4.2
 ## Profondeur de la zone de declenchement, au sommet de la rampe.
 @export var jump_trigger_depth: float = 3.0
+## Flancs inclines (m de chaque cote, au sol ; 0 : flancs verticaux). En arene
+## (2026-10-21), on aborde un tremplin de tous les cotes : un flanc vertical
+## de 1,7 m arretait net un camion (ou sa remorque) qui le prenait de biais.
+@export var jump_side_run: float = 0.0
 
 @export_group("Ponts")
 ## Epaisseur du tablier sous le bord de la chaussee.
@@ -495,6 +501,33 @@ func jump_pad_transform(k: int) -> Transform3D:
 	return frame_at(index_at_s(_jumps[k].x), _jumps[k].y, 0.0)
 
 
+## Vrai si un camion pose en `p` est a `margin` m au moins (au sol) des
+## tremplins (rampes jumelles comprises), barils, plaques de boost et flaques.
+func clear_spot(p: Vector3, margin: float) -> bool:
+	_ensure_built()
+	for j in _jumps:
+		var i := index_at_s(j.x)
+		var a := _pos[i] + _right[i] * j.y
+		var f := Vector2(_fwd[i].x, _fwd[i].z).normalized()
+		var reach := (2.0 if jumps_both_ways else 1.0) * jump_length
+		var t := clampf(Vector2(p.x - a.x, p.z - a.z).dot(f), 0.0, reach)
+		if (Vector2(p.x - a.x, p.z - a.z) - f * t).length() < jump_width / 2.0 + jump_side_run + margin:
+			return false
+	for k in barrel_count():
+		var q := barrel_transform(k).origin
+		if Vector2(p.x - q.x, p.z - q.z).length() < ExplosiveBarrel.BARREL_RADIUS + margin:
+			return false
+	for k in boost_pad_count():
+		var q := boost_pad_transform(k).origin
+		if Vector2(p.x - q.x, p.z - q.z).length() < boost_pad_size.length() / 2.0 + margin:
+			return false
+	for k in puddle_count():
+		var q := puddle_transform(k).origin
+		if Vector2(p.x - q.x, p.z - q.z).length() < puddle_radius(k) + margin:
+			return false
+	return true
+
+
 ## Vrai si l'echantillon i est sur un tablier de pont (piles, vide dessous).
 func is_bridge_deck(i: int) -> bool:
 	_ensure_built()
@@ -641,7 +674,6 @@ func _build_centerline() -> bool:
 			fine_seg.append(k)
 			fine_u.append(float(j + 1) / n)
 	_length = s
-	_scatter_pickups()
 	var count := maxi(8, roundi(_length / sample_step))
 	var ds := _length / count
 	_pos.resize(count)
@@ -717,6 +749,8 @@ func _build_centerline() -> bool:
 	for i in count:
 		var low := _pos[i].y - absf(_right[i].y) * width / 2.0
 		_deck[i] = 1 if _bridge[i] > 0 and low - GROUND_Y > bridge_min_height else 0
+	# apres les reperes : en arene, les places se jugent au sol
+	_scatter_pickups()
 	return true
 
 
@@ -764,8 +798,18 @@ func _scatter_pickups() -> void:
 ## Une place de bonus (abscisse, decalage) loin des pieges ?
 func pickup_clear(s: float, lateral: float) -> bool:
 	for j in _jumps:
+		if jumps_both_ways:
+			# arene : la bosse (deux rampes dos a dos, en ligne droite) et les
+			# envols des deux cotes, au sol (sur un anneau de 160 m, l'abscisse
+			# ne mesure pas la distance loin du milieu)
+			var i := index_at_s(j.x)
+			var a := _pos[i] + _right[i] * j.y
+			var p := frame_at(index_at_s(s), lateral, 0.0).origin
+			var t := clampf((p - a).dot(_fwd[i]), -PICKUP_JUMP_RUN_M, 2.0 * jump_length + PICKUP_JUMP_RUN_M)
+			if (p - (a + _fwd[i] * t)).length() < jump_width / 2.0 + jump_side_run + PICKUP_CLEAR_M:
+				return false
 		# la rampe, puis l'envol et la reception
-		if s > j.x - PICKUP_CLEAR_M and s < j.x + jump_length + 50.0:
+		elif s > j.x - PICKUP_CLEAR_M and s < j.x + jump_length + 50.0:
 			return false
 	for b in _boosts + _barrels + _signs:
 		if Vector2(s - b.x, lateral - b.y).length() < PICKUP_CLEAR_M:
@@ -936,7 +980,14 @@ func _build_geometry() -> void:
 	for k in _jumps.size():
 		_build_jump(pads, _jumps[k].x, _jumps[k].y, k)
 		if jumps_both_ways:
-			_build_jump(pads, _jumps[k].x + 2.0 * jump_length, _jumps[k].y, k, -1.0, "B")
+			# rampe jumelle dos a dos, dans l'axe de la premiere, en ligne droite
+			# (avant : a l'abscisse s + 2 L ; sur un arc, decalee vers l'interieur
+			# elle chevauchait la premiere, vers l'exterieur elle s'en ecartait
+			# de travers)
+			var i := index_at_s(_jumps[k].x)
+			_build_ramp(pads, _pos[i] + _right[i] * _jumps[k].y + _fwd[i] * (2.0 * jump_length), -_fwd[i],
+				-_right[i], _up[i], jump_width / 2.0, jump_length, jump_length * tan(deg_to_rad(jump_angle_deg)),
+				"JumpPad%dB" % k, "JumpTrigger%dB" % k, k)
 	for k in _boosts.size():
 		_build_boost_pad(pads, _boosts[k].x, _boosts[k].y, k)
 	for k in _puddles.size():
@@ -1618,12 +1669,11 @@ func _on_jump_pad_body_entered(body: Node3D, index: int) -> void:
 
 ## Rampe de saut : prisme convexe, bord d'attaque au ras de la chaussee, face de
 ## roulement a chevrons bleus lumineux ; zone de declenchement au sommet.
-## `dir` -1 : rampe tournee vers l'arriere (jumelle d'une rampe d'arene).
-func _build_jump(parent: Node3D, s: float, offset: float, index: int, dir: float = 1.0, suffix: String = "") -> void:
+func _build_jump(parent: Node3D, s: float, offset: float, index: int) -> void:
 	var i := index_at_s(s)
-	_build_ramp(parent, _pos[i] + _right[i] * offset, _fwd[i] * dir, _right[i] * dir, _up[i], jump_width / 2.0,
-		jump_length, jump_length * tan(deg_to_rad(jump_angle_deg)), "JumpPad%d%s" % [index, suffix],
-		"JumpTrigger%d%s" % [index, suffix], index)
+	_build_ramp(parent, _pos[i] + _right[i] * offset, _fwd[i], _right[i], _up[i], jump_width / 2.0,
+		jump_length, jump_length * tan(deg_to_rad(jump_angle_deg)), "JumpPad%d" % index, "JumpTrigger%d" % index,
+		index)
 
 
 ## Rampe (corps convexe, face a chevrons) posee en `base` (milieu du bord
@@ -1631,10 +1681,11 @@ func _build_jump(parent: Node3D, s: float, offset: float, index: int, dir: float
 ## `top` m ; sa zone de declenchement emet jump_pad_entered(`index`).
 func _build_ramp(parent: Node3D, base: Vector3, f: Vector3, r: Vector3, u: Vector3, hw: float, length: float,
 		top: float, body_name: String, trigger_name: String, index: int) -> void:
+	var wide := hw + jump_side_run
 	var p := PackedVector3Array([
-		base - r * hw - u * 0.02, base + r * hw - u * 0.02,                        # attaque
-		base - r * hw + f * length + u * top, base + r * hw + f * length + u * top,  # sommet
-		base - r * hw + f * length - u * 0.3, base + r * hw + f * length - u * 0.3,  # pied arriere
+		base - r * wide - u * 0.02, base + r * wide - u * 0.02,                        # attaque
+		base - r * hw + f * length + u * top, base + r * hw + f * length + u * top,      # sommet
+		base - r * wide + f * length - u * 0.3, base + r * wide + f * length - u * 0.3,  # pied arriere
 	])
 	var face := SurfaceTool.new()
 	face.begin(Mesh.PRIMITIVE_TRIANGLES)
