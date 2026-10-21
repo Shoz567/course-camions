@@ -191,7 +191,8 @@ const ARENA_STUCK_TICKS := 45
 const ARENA_BACK_TICKS := 70
 const ARENA_IGNORE_TICKS := 90
 ## Arene (2026-10-21 : « les bots ont du mal : ils tapent murs et obstacles,
-## trop passifs ») : sous ARENA_REPAIR_PART de ses PV, il va chercher la
+## trop passifs ») : sous ARENA_REPAIR_PART de ses PV (selon le niveau, voir
+## plus bas), il va chercher la
 ## reparation la plus proche (a moins de ARENA_PICKUP_M, et pas plus d'une fois
 ## et demie plus loin que sa proie, sauf a moins de ARENA_PICKUP_NEAR_M) ; ses
 ## pouvoirs en recharge (plus de ARENA_POWER_WAIT_TICKS), une recharge plus
@@ -200,11 +201,11 @@ const ARENA_IGNORE_TICKS := 90
 ## les barils sur sa route (ARENA_BARREL_CLEAR_M de part et d'autre, jusqu'a
 ## ARENA_LOOK_S devant), et anticipe les murs : sa position dans
 ## ARENA_WALL_LOOK_S, pas celle d'a present.
-const ARENA_REPAIR_PART := 0.4
 const ARENA_PICKUP_M := 140.0
 const ARENA_PICKUP_NEAR_M := 60.0
 const ARENA_POWER_WAIT_TICKS := 240
 const ARENA_BARREL_CLEAR_M := 6.0
+const ARENA_WRECK_CLEAR_M := 8.0
 const ARENA_LOOK_S := 1.4
 const ARENA_WALL_LOOK_S := 0.7
 ## Ilot central : sa cible derriere lui, il le contourne par la tangente (a
@@ -217,7 +218,60 @@ const ARENA_ISLAND_CLEAR_M := 10.0
 ## plafonnee a ARENA_TOP_MS (176 km/h a la nitro, il ne pouvait plus tourner).
 const ARENA_TURN_ACCEL := 8.0
 const ARENA_WALL_MARGIN_M := 8.0
-const ARENA_TOP_MS := 33.0
+## Niveaux en arene (2026-10-21 : « les faciles ne vont pas chercher de heal et
+## utilisent leurs capacites pas tres souvent ; les moyens vont chercher du
+## heal, mais pas obligatoirement, et attaquent regulierement ; en hard, il
+## aggro le plus possible : proche d'un camion qu'il peut percuter, il active
+## son boost ») :
+##   - vitesse plafonnee a ARENA_TOP_MS du niveau (les degats d'un choc
+##     montent comme le carre de la vitesse : 24 m/s, la moitie de 33) ;
+##   - visee : la proie la ou elle est (facile), ARENA_LEAD_S devant (moyen),
+##     son point d'interception (dur, ARENA_INTERCEPT_MAX_S au plus) ;
+##   - proie : la plus proche ; en dur, la plus proche a ses PV pres (une
+##     abimee compte jusqu'a ARENA_WEAK_PART plus pres) ;
+##   - reparation : sous ARENA_REPAIR_PART, une fois sur ARENA_REPAIR_TAKE
+##     (suite fixe, decidee a chaque passage sous le seuil) ; recharge des
+##     pouvoirs : ARENA_REFILL ;
+##   - pouvoirs : au plus un tous les ARENA_POWER_TICKS ;
+##   - dur : sa proie a moins de ARENA_RAM_M, dans l'axe (ARENA_RAM_ANGLE) et
+##     loin des murs, il charge : nitro (il atteint son plafond plus tot), et
+##     bouclier juste avant s'il en a un pret (le choc ne lui coute rien).
+##     Plafond releve pendant la charge (144 km/h, essaye le 2026-10-21) : il
+##     depassait sa proie et repartait loin, a 100 m des autres en moyenne.
+const ARENA_TOP_MS := [24.0, 30.0, 33.0]
+const ARENA_LEAD_S := [0.0, 0.6, 0.0]
+const ARENA_INTERCEPT_MAX_S := 1.5
+const ARENA_WEAK_PART := 0.5
+const ARENA_REPAIR_PART := [0.0, 0.3, 0.45]
+const ARENA_REPAIR_TAKE := [0.0, 0.5, 1.0]
+const ARENA_REFILL := [false, true, true]
+const ARENA_POWER_TICKS := [1500, 300, 20]
+const ARENA_RAM_M := 45.0
+const ARENA_RAM_ANGLE := 0.2
+## Dur : un choc coute autant aux deux camions (TruckHealth : meme degat de
+## chaque cote). Il charge toujours (« aggro le plus possible »), mais choisit
+## sa proie : il gagne l'echange avec son bouclier actif, avec autant de PV
+## qu'elle ou plus, ou pour le coup de grace (elle sous ARENA_KILL_HP, lui
+## au-dessus) ; une proie qu'il ne bat pas compte ARENA_LOSING_FAR fois plus
+## loin. Essaye le 2026-10-21 et retire : ne pas charger une proie qu'il ne bat
+## pas (la harceler a distance), esquiver un camion qui fonce sur lui ; il
+## survivait un peu mieux, mais restait a 100 m des autres (entre bots durs,
+## chacun esquivait l'autre) : trop passif.
+const ARENA_KILL_HP := 40.0
+const ARENA_LOSING_FAR := 1.6
+## Il charge (dur), ce tick ; charges a la nitro lancees (tests) ; reparation decidee
+## (-1 : pas encore, sous le seuil) et passages sous le seuil ; nitro
+## demandee au tick d'avant.
+var ramming: bool = false
+var rams: int = 0
+## Departs vers une reparation (tests).
+var repair_trips: int = 0
+var _to_repair_was: bool = false
+var _repair_go: int = -1
+var _repair_times: int = 0
+var _arena_boost_was: bool = false
+var _spots: Array[Vector3] = []
+var _spot_clear: PackedFloat32Array = []
 var _island_c := Vector3.ZERO
 var _island_r: float = -1.0
 var _arena_stuck: int = 0
@@ -921,6 +975,7 @@ func _branch_traffic(v: float) -> Dictionary:
 ## milieu de l'anneau. Nitro en ligne droite sur sa proie.
 func _arena_drive(v: float) -> void:
 	_arena_shun_left = maxi(_arena_shun_left - 1, 0)
+	ramming = false
 	if _arena_back > 0:
 		# recule en braquant un peu, pour se degager de biais (a fond, la
 		# remorque se met en portefeuille et bloque)
@@ -937,6 +992,7 @@ func _arena_drive(v: float) -> void:
 		return
 	var prey: Truck = null
 	var best := INF
+	var best_score := INF
 	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
 		var t := n as Truck
 		if t == null or t == truck or t.is_wrecked():
@@ -944,7 +1000,15 @@ func _arena_drive(v: float) -> void:
 		if t == _arena_shunned and _arena_shun_left > 0:
 			continue
 		var d := t.global_position.distance_to(truck.global_position)
-		if d < best:
+		var score := d
+		if level == Level.HARD:
+			var h := TruckHealth.of(t)
+			if h != null:
+				score *= 1.0 - ARENA_WEAK_PART * (1.0 - clampf(h.hp / h.max_hp, 0.0, 1.0))
+			if not _wins_trade(t):
+				score *= ARENA_LOSING_FAR
+		if score < best_score:
+			best_score = score
 			best = d
 			prey = t
 	var fwd := -truck.global_basis.z
@@ -952,12 +1016,16 @@ func _arena_drive(v: float) -> void:
 	fwd = fwd.normalized()
 	var want := fwd
 	var pickup := _arena_pickup(best)
+	var to_repair := pickup != null and pickup.kind == TrackPickup.Kind.REPAIR
+	if to_repair and not _to_repair_was:
+		repair_trips += 1
+	_to_repair_was = to_repair
 	if pickup != null:
 		want = pickup.global_position - truck.global_position
 		want.y = 0.0
 		want = want.normalized() if want.length_squared() > 1.0 else fwd
 	elif prey != null:
-		want = prey.global_position + prey.linear_velocity * 0.6 - truck.global_position
+		want = _arena_aim(prey, best, v) - truck.global_position
 		want.y = 0.0
 		want = want.normalized() if want.length_squared() > 1.0 else fwd
 	want = _arena_avoid(want, v)
@@ -983,16 +1051,25 @@ func _arena_drive(v: float) -> void:
 	frame.steer = clampf(-angle * 2.0, -1.0, 1.0)
 	frame.throttle = 1.0 if absf(angle) < 1.8 else 0.6
 	frame.brake = 0.0
-	frame.boost = (prey != null or pickup != null) and absf(angle) < 0.15 and best > 40.0 and bool(BOOST[level]) \
-			and not near_wall
-	if v > ARENA_TOP_MS:
+	# dur : sa proie a portee, dans l'axe, loin des murs : il charge
+	ramming = level == Level.HARD and pickup == null and prey != null and best < ARENA_RAM_M \
+		and absf(angle) < ARENA_RAM_ANGLE and not near_wall and drift_out <= room * 0.5
+	var go := ramming or ((prey != null or pickup != null) and absf(angle) < 0.15 and best > 40.0
+		and bool(BOOST[level]) and not near_wall)
+	if v > float(ARENA_TOP_MS[level]):
 		frame.throttle = 0.0
-		frame.boost = false
+		go = false
 	# le mur approche trop vite pour le longer : freine aussi
 	if drift_out > room:
 		frame.throttle = 0.0
-		frame.boost = false
+		go = false
 		frame.brake = clampf((drift_out - room) / maxf(room, 4.0), 0.3, 1.0)
+	# nitro : un appui quand la jauge est pleine (elle part au front)
+	go = go and truck.get_boost_charge() >= 1.0 and not truck.is_boosting()
+	frame.boost = go and not _arena_boost_was
+	_arena_boost_was = go
+	if frame.boost and ramming:
+		rams += 1
 	# gaz a fond sans avancer : il pousse quelqu'un ou un mur, il recule
 	_arena_stuck = _arena_stuck + 1 if v < ARENA_STUCK_MS and RaceManager.state == RaceManagerNode.State.RACING else 0
 	if _arena_stuck >= ARENA_STUCK_TICKS:
@@ -1002,6 +1079,48 @@ func _arena_drive(v: float) -> void:
 		if prey != null and best < 15.0:
 			_arena_shunned = prey
 			_arena_shun_left = ARENA_IGNORE_TICKS
+
+
+## Arene : ira-t-il chercher une reparation, a son `times`-ieme passage sous
+## le seuil (suite fixe, comme takes_shortcut) ?
+static func seeks_repair(bot_level: int, phase: int, times: int) -> bool:
+	return fposmod(phase * 0.37 + times * GOLDEN, 1.0) < float(ARENA_REPAIR_TAKE[bot_level])
+
+
+## Arene : il gagne un choc contre `other` (toujours vrai sous le niveau dur,
+## qui fonce sans compter ; voir ARENA_KILL_HP).
+func _wins_trade(other: Truck) -> bool:
+	if level != Level.HARD:
+		return true
+	var me := TruckHealth.of(truck)
+	var h := TruckHealth.of(other)
+	if me == null or h == null or me.shield_ticks > 0:
+		return true
+	if h.shield_ticks > 0:
+		return false
+	return me.hp >= h.hp or (h.hp <= ARENA_KILL_HP and me.hp > ARENA_KILL_HP)
+
+
+## Arene : ou viser `prey` (a `d` m, lui a `v` m/s), selon le niveau.
+func _arena_aim(prey: Truck, d: float, v: float) -> Vector3:
+	var lead := float(ARENA_LEAD_S[level])
+	if level == Level.HARD:
+		# interception : le temps de combler l'ecart a la vitesse de rapprochement
+		var to := prey.global_position - truck.global_position
+		to.y = 0.0
+		var closing := (truck.linear_velocity - prey.linear_velocity).dot(to.normalized()) if d > 0.1 else v
+		lead = clampf(d / maxf(closing, 12.0), 0.0, ARENA_INTERCEPT_MAX_S)
+	var p := prey.global_position + prey.linear_velocity * lead
+	if lead <= 0.0:
+		return p
+	# point anticipe : pas derriere un mur (il y foncerait)
+	var j := _sample_of(p, index)
+	var r := track.sample_right(j)
+	var lat := (p - track.sample_position(j)).dot(r)
+	var lim := track.width / 2.0 - ARENA_EDGE_M
+	if absf(lat) > lim:
+		p -= r * (lat - signf(lat) * lim)
+	return p
 
 
 ## Arene : `want`, ou, si la ligne vers `goal` traverse l'ilot central, la
@@ -1058,10 +1177,17 @@ func _measure_island() -> void:
 func _arena_pickup(prey_d: float) -> TrackPickup:
 	var health := TruckHealth.of(truck)
 	var powers := TruckPowers.of(truck)
-	var want_repair := health != null and health.hp < health.max_hp * ARENA_REPAIR_PART
+	var low := health != null and health.hp < health.max_hp * float(ARENA_REPAIR_PART[level])
+	if not low:
+		_repair_go = -1
+	elif _repair_go < 0:
+		# repasse sous le seuil : il decide une fois s'il ira
+		_repair_go = 1 if seeks_repair(level, _phase, _repair_times) else 0
+		_repair_times += 1
+	var want_repair := low and _repair_go == 1
 	# une recharge : au moins un pouvoir, et tous ceux qu'il a en attente
 	var want_power := false
-	if powers != null:
+	if powers != null and bool(ARENA_REFILL[level]):
 		for k in 2:
 			if powers.slots[k] >= 0:
 				want_power = true
@@ -1088,27 +1214,40 @@ func _arena_pickup(prey_d: float) -> TrackPickup:
 
 
 ## Arene : `want` (horizontal, unitaire) decale pour contourner un baril
-## intact sur sa route.
+## intact ou une epave (une carcasse coute autant qu'un camion de plein
+## fouet ; pas en facile) sur sa route.
 func _arena_avoid(want: Vector3, v: float) -> Vector3:
 	var p := truck.global_position
 	var side := want.cross(Vector3.UP).normalized()
 	var look := clampf(v * ARENA_LOOK_S, 12.0, 45.0)
 	var out := want
+	var spots := _spots
+	spots.clear()
+	_spot_clear.clear()
 	for k in track.barrel_count():
 		var b := track.barrel_node(k)
-		if b == null or not is_instance_valid(b) or not b.visible or b.exploded_state:
-			continue
-		var rel := b.global_position - p
+		if b != null and is_instance_valid(b) and b.visible and not b.exploded_state:
+			spots.append(b.global_position)
+			_spot_clear.append(ARENA_BARREL_CLEAR_M)
+	if level != Level.EASY:
+		for n in truck.get_tree().get_nodes_in_group(DetachedTrailer.OBSTACLES):
+			var o := n as Node3D
+			if o != null and is_instance_valid(o) and o.visible:
+				spots.append(o.global_position)
+				_spot_clear.append(ARENA_WRECK_CLEAR_M)
+	for j in spots.size():
+		var rel := spots[j] - p
+		var clear := _spot_clear[j]
 		rel.y = 0.0
 		var along := rel.dot(want)
 		if along < 2.0 or along > look:
 			continue
 		var off := rel.dot(side)
-		if absf(off) >= ARENA_BARREL_CLEAR_M:
+		if absf(off) >= clear:
 			continue
 		# s'en ecarte du cote ou il est deja, d'autant plus qu'il est pres
 		var away := -signf(off) if absf(off) > 0.3 else (1.0 if _phase % 2 == 0 else -1.0)
-		out += side * away * (ARENA_BARREL_CLEAR_M - absf(off)) / ARENA_BARREL_CLEAR_M * (1.0 - along / look) * 2.0
+		out += side * away * (clear - absf(off)) / clear * (1.0 - along / look) * 2.0
 	out.y = 0.0
 	return out.normalized() if out.length_squared() > 1e-4 else want
 
@@ -1199,14 +1338,17 @@ func _powers() -> void:
 	if powers == null:
 		return
 	var health := TruckHealth.of(truck)
-	# un projectile arrive : le bouclier tout de suite, sans temps de reaction
+	var wait := int(ARENA_POWER_TICKS[level]) if arena else int(REACTION_TICKS[level])
+	# un projectile arrive, ou il charge (dur) : le bouclier tout de suite, sans
+	# temps de reaction
 	for k in 2:
-		if powers.slots[k] == PowerCatalog.Id.SHIELD and powers.cooldown[k] == 0 and _threatened():
+		if powers.slots[k] == PowerCatalog.Id.SHIELD and powers.cooldown[k] == 0 and (_threatened() or ramming) \
+				and (health == null or health.shield_ticks == 0):
 			if k == 0:
 				frame.power_left = true
 			else:
 				frame.power_right = true
-			_power_wait = int(REACTION_TICKS[level])
+			_power_wait = wait
 			return
 	if _power_wait > 0:
 		_power_wait -= 1
@@ -1236,5 +1378,5 @@ func _powers() -> void:
 				frame.power_left = true
 			else:
 				frame.power_right = true
-			_power_wait = int(REACTION_TICKS[level])
+			_power_wait = wait
 			return

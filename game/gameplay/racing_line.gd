@@ -71,14 +71,19 @@ var _lo: PackedFloat32Array = []
 var _hi: PackedFloat32Array = []
 
 
-## Ligne de `t`, calculee au premier appel puis gardee.
+## Ligne de `t`, calculee au premier appel puis gardee. La meme piste
+## rechargee (nouvelle partie) reprend la ligne gardee, rattachee a elle : la
+## piste d'avant est liberee (un profil de vitesse neuf, pour un autre niveau
+## de bots, plantait sur elle).
 static func of(t: TrackBlockout) -> RacingLine:
 	var key := "%s|%.2f|%.1f" % [t.name, t.length(), t.width]
 	if not _cache.has(key):
 		var l := RacingLine.new()
 		l._build(t)
 		_cache[key] = l
-	return _cache[key]
+	var line: RacingLine = _cache[key]
+	line.track = t
+	return line
 
 
 func _build(t: TrackBlockout) -> void:

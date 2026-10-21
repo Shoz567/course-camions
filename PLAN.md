@@ -1112,6 +1112,29 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
       pour longer le mur les y porterait : ils tournent, puis freinent) ;
       120 km/h au plus. 5 bots, 45 s : 0 à 3 chocs contre un mur pris seuls
       (17 avant), 5 bonus au moins, aucun coincé (`arena_bots_test`).
+    - **Niveaux des bots** (2026-10-21, « les faciles ne vont pas chercher de
+      heal et utilisent peu leurs capacités ; les moyens vont chercher du
+      heal, pas obligatoirement, et attaquent régulièrement ; en hard, il
+      aggro le plus possible et boost pour percuter ») :
+      - facile : 86 km/h au plus, vise la proie là où elle est, ne va jamais
+        chercher un bonus, un pouvoir toutes les 25 s au plus ;
+      - moyen : 108 km/h, vise un peu devant, va se réparer sous 30 % de PV
+        une fois sur deux (`BotInputSource.seeks_repair`, suite fixe), va aux
+        recharges, un pouvoir toutes les 5 s au plus ;
+      - dur : 119 km/h, vise le point d'interception (jamais derrière un
+        mur), préfère les proies abîmées ou qu'il bat à l'échange, charge à la
+        nitro à moins de 45 m dans l'axe (bouclier juste avant s'il l'a), se
+        répare sous 45 %, recharges, pouvoirs dès qu'ils sont prêts, évite les
+        épaves ;
+      - danger pour un bot moyen de référence, 45 s contre 4 bots : 2 PV
+        perdus contre des faciles, 41 contre des moyens, 63 contre des durs
+        (`arena_levels_test`).
+      - Essayé et retiré : le dur qui ne charge que s'il gagne l'échange et
+        harcèle sinon, ou qui esquive : trop passif (100 m des autres) ;
+        vitesse relevée pendant la charge : il dépassait sa proie.
+      - Corrigé au passage : la même piste rechargée (nouvelle partie) avec
+        un autre niveau de bots plantait (`RacingLine.of` gardait la piste
+        libérée).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille
