@@ -975,10 +975,13 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   (`trailer_drops_test`).
 - [x] **Retour de coup et portée** (2026-10-20) : chaque coup qui touche
   (camion ou remorque larguée) → chiffre de dégâts qui monte de la cible
-  (« BLOQUÉ » sous bouclier ; rafale et laser cumulés), croix sur le viseur,
-  son ; bip au changement de cible. Viseur : rouge si un pouvoir prêt
-  l'atteint, gris hors de portée, terne en recharge ; flèches ◄ ► par
-  emplacement, distance dessous (`hit_feedback_test`).
+  (rafale et laser cumulés), croix sur le viseur, son ; bip au changement de
+  cible. Viseur : rouge si un pouvoir prêt l'atteint, gris hors de portée ;
+  flèches ◄ ► par emplacement, distance dessous (`hit_feedback_test`).
+  2026-10-21 : plus de « BLOQUÉ » sous bouclier (ni chiffre : seulement le
+  son et la croix) ; plus de viseur pendant la recharge, il ne s'affiche que
+  quand un pouvoir qui vise est prêt (« la cible ne doit être affichée que
+  quand les capacités sont chargées »).
 - [x] **Bots tactiques** (2026-10-20, « larguer la remorque au bon moment,
   juste avant un virage, avec un poursuivant collé derrière ; bouclier quand un
   missile arrive ») : bouclier sans temps de réaction quand un missile ou un

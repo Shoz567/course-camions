@@ -378,17 +378,20 @@ func _process(_delta: float) -> void:
 
 ## Etat des deux emplacements de pouvoir (vide : rien).
 ## Viseur sur le camion que prendraient missile, boomerang, laser ou
-## mitrailleuse (TruckPowers.target_ahead), si un de ces pouvoirs est monte.
+## mitrailleuse (TruckPowers.target_ahead), seulement quand un de ces pouvoirs
+## est recharge et pret (2026-10-21 : « la cible ne doit être affichée que
+## quand les capacités sont chargées et prêtes à utiliser »).
 func _place_reticle(powers: TruckPowers) -> void:
 	_reticle.visible = false
 	_beep_cool = maxf(0.0, _beep_cool - get_process_delta_time())
 	if powers == null or camera == null or truck.is_wrecked():
 		_last_target = null
 		return
-	var armed := false
+	var any_ready := false
 	for k in 2:
-		armed = armed or TruckPowers.aims_at(powers.slots[k])
-	var t := powers.target_ahead() if armed else null
+		any_ready = any_ready or (TruckPowers.aims_at(powers.slots[k]) and powers.cooldown[k] == 0)
+	# en recharge, ni viseur ni bip ; il revient (et bipe) quand un pouvoir est pret
+	var t := powers.target_ahead() if any_ready else null
 	if t != _last_target:
 		_last_target = t
 		if t != null:
@@ -408,7 +411,6 @@ func _place_reticle(powers: TruckPowers) -> void:
 	# portee : par emplacement, fleche allumee si pret et a portee
 	var dist := truck.global_position.distance_to(TruckPowers.aim_point(t))
 	var lit := PackedInt32Array([-1, -1])
-	var any_ready := false
 	var reach := false
 	for k in 2:
 		var p := powers.slots[k]
@@ -416,11 +418,9 @@ func _place_reticle(powers: TruckPowers) -> void:
 			continue
 		var ready_k := powers.cooldown[k] == 0
 		var in_range := dist <= TruckPowers.power_range(p)
-		any_ready = any_ready or ready_k
 		reach = reach or (ready_k and in_range)
 		lit[k] = 1 if ready_k and in_range else 0
-	var state := TargetReticle.State.READY if reach else (TargetReticle.State.OUT_OF_RANGE if any_ready
-		else TargetReticle.State.RECHARGING)
+	var state := TargetReticle.State.READY if reach else TargetReticle.State.OUT_OF_RANGE
 	_reticle.place(camera.unproject_position(at), dist, state, lit)
 
 
@@ -439,30 +439,31 @@ func _on_hit(at: Vector3, amount: float, blocked: bool) -> void:
 	_reticle.flash()
 	hit_sounds += 1
 	_play(_hit_stream)
-	if camera == null or camera.is_position_behind(at):
+	# arrete par un bouclier : pas de chiffre (2026-10-21 : « je ne souhaite pas
+	# que ça affiche bloqué quand une cible est touchée avec un bouclier »)
+	if blocked or camera == null or camera.is_position_behind(at):
 		return
 	var pos := camera.unproject_position(at)
 	# rafale ou laser : le dernier chiffre encore frais additionne les coups
 	if not _numbers.is_empty():
 		var last := _numbers[-1]
-		if float(last.get_meta(&"age")) < MERGE_S and bool(last.get_meta(&"blocked")) == blocked:
+		if float(last.get_meta(&"age")) < MERGE_S:
 			last.set_meta(&"amount", float(last.get_meta(&"amount")) + amount)
 			last.set_meta(&"age", 0.0)
-			last.text = _number_text(float(last.get_meta(&"amount")), blocked)
+			last.text = _number_text(float(last.get_meta(&"amount")))
 			return
 	var l := _label(30, pos)
-	l.text = _number_text(amount, blocked)
-	l.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0) if blocked else UiKit.GOLD)
+	l.text = _number_text(amount)
+	l.add_theme_color_override("font_color", UiKit.GOLD)
 	l.set_meta(&"amount", amount)
 	l.set_meta(&"age", 0.0)
-	l.set_meta(&"blocked", blocked)
 	l.set_meta(&"origin", pos)
 	_numbers.append(l)
 	hit_numbers_shown += 1
 
 
-static func _number_text(amount: float, blocked: bool) -> String:
-	return "BLOQUÉ" if blocked else "-%d" % maxi(ceili(amount - 1e-3), 1)
+static func _number_text(amount: float) -> String:
+	return "-%d" % maxi(ceili(amount - 1e-3), 1)
 
 
 ## Les chiffres montent et s'effacent, puis disparaissent.
