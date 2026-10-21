@@ -21,6 +21,8 @@ signal wrong_way_changed(truck: Truck, wrong: bool)
 ## Tours d'une course (2026-10-20 : 3, circuits rallonges a 4,6-4,8 km).
 const DEFAULT_LAPS := 3
 @export var total_laps: int = DEFAULT_LAPS
+## Detection du mauvais sens (faux en arene : pas de sens de course).
+@export var wrong_way_enabled: bool = true
 ## Mauvais sens : vitesse a contre-sens (m/s) tenue pendant ce nombre de ticks.
 @export var wrong_way_speed_ms: float = 2.0
 @export var wrong_way_ticks: int = 45
@@ -132,7 +134,7 @@ func _physics_process(_delta: float) -> void:
 			r.wrong_count += 1
 		elif along > wrong_way_speed_ms:
 			r.wrong_count = 0
-		var wrong := r.wrong_count >= wrong_way_ticks
+		var wrong := wrong_way_enabled and r.wrong_count >= wrong_way_ticks
 		if wrong != r.wrong_way:
 			r.wrong_way = wrong
 			wrong_way_changed.emit(t, wrong)
@@ -162,6 +164,17 @@ func apply_remote(truck: Truck, lap: int, next_cp: int, last_cp: int, lap_start_
 		r.finished = true
 		r.finish_ticks = finish_ticks
 		race_finished.emit(truck, finish_ticks)
+
+
+## Arrivee decidee par le mode de jeu (vainqueur d'une elimination) : le
+## camion finit maintenant.
+func finish_now(truck: Truck) -> void:
+	var r := racer(truck)
+	if r == null or r.finished:
+		return
+	r.finished = true
+	r.finish_ticks = Engine.get_physics_frames() - start_tick
+	race_finished.emit(truck, r.finish_ticks)
 
 
 func racer_count() -> int:

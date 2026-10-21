@@ -17,6 +17,8 @@ extends CanvasLayer
 @export var ui_scale: float = 1.0
 ## Camera du joueur : projette le viseur des pouvoirs (null : pas de viseur).
 var camera: Camera3D
+## Remplace « TOUR n/N » (modes sans tours : vies en arene, elimination).
+var lap_override: String = ""
 
 var _lap: Label
 var _lap_time: Label
@@ -314,7 +316,7 @@ func _process(_delta: float) -> void:
 		var place := race.position(truck)
 		_pos.text = "%d%s/%d" % [place, "er" if place == 1 else "e", n]
 	_name.text = player_label
-	_lap.text = "TOUR %d/%d" % [race.display_lap(truck), race.total_laps]
+	_lap.text = lap_override if lap_override != "" else "TOUR %d/%d" % [race.display_lap(truck), race.total_laps]
 	_lap_time.text = "Tour  %s" % chrono(race.current_lap_ticks(truck))
 	_times.text = "Meilleur  %s     Dernier  %s" % [chrono(r.best_lap), chrono(r.last_lap)]
 	var charge := truck.get_boost_charge()

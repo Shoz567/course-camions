@@ -55,6 +55,13 @@ var player_buttons: Array[Button] = []
 var bot_buttons: Array[Button] = []
 var bot_level_buttons: Array[Button] = []
 var drop_buttons: Array[Button] = []
+var mode_buttons: Array[Button] = []
+const MODE_TIPS: PackedStringArray = [
+	"Course classique en 3 tours",
+	"Toutes les 20 s, le dernier saute : le dernier en piste gagne",
+	"Seul contre le chrono et le fantôme de ton meilleur tour",
+	"Arène fermée, 3 vies chacun : le dernier debout gagne",
+]
 const BOT_LEVELS: PackedStringArray = ["FACILE", "MOYEN", "DUR"]
 var speed_buttons: Array[Button] = []
 var track_buttons: Array[Button] = []
@@ -324,6 +331,7 @@ func _restyle() -> void:
 	bot_buttons.clear()
 	bot_level_buttons.clear()
 	drop_buttons.clear()
+	mode_buttons.clear()
 	speed_buttons.clear()
 	track_buttons.clear()
 	_join_slots.clear()
@@ -405,6 +413,16 @@ func select_bots(n: int, save: bool = true) -> void:
 		bot_buttons[k].disabled = k > room
 	for k in bot_level_buttons.size():
 		bot_level_buttons[k].disabled = GameState.bot_count == 0
+
+
+## Mode de jeu (GameStateNode.GameMode).
+func select_mode(k: int, save: bool = true) -> void:
+	GameState.game_mode = clampi(k, 0, GameStateNode.MODE_NAMES.size() - 1)
+	if save and is_node_ready():
+		GameState.save_settings()
+		MenuSound.play_select()
+	for i in mode_buttons.size():
+		mode_buttons[i].set_pressed_no_signal(i == GameState.game_mode)
 
 
 ## Largages de remorque par joueur et par course (0 a 5).
@@ -1161,7 +1179,24 @@ func _build_ui() -> void:
 	column.add_child(_column_gap(10))
 	column.add_child(subtitle)
 	select_track(GameState.selected_track)
-	column.add_child(_column_gap(18))
+	# mode de jeu (2026-10-20), sur une ligne
+	column.add_child(_column_gap(6))
+	var mode_row := _row("Modes")
+	var mode_label := _label("MODE", 18, 0)
+	mode_label.custom_minimum_size.x = 72
+	mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mode_row.add_child(mode_label)
+	var mode_group := ButtonGroup.new()
+	for k in GameStateNode.MODE_NAMES.size():
+		var mb := _choice("Mode%d" % k, GameStateNode.MODE_NAMES[k], mode_group, 15)
+		mb.custom_minimum_size.y = 36
+		mb.tooltip_text = MODE_TIPS[k]
+		mb.pressed.connect(select_mode.bind(k))
+		mode_row.add_child(mb)
+		mode_buttons.append(mb)
+	column.add_child(mode_row)
+	select_mode(GameState.game_mode, false)
+	column.add_child(_column_gap(10))
 
 	# joueurs
 	column.add_child(_section("Joueurs"))
@@ -1200,7 +1235,7 @@ func _build_ui() -> void:
 	var bots_group := ButtonGroup.new()
 	for k in LocalRace.MAX_PLAYERS:
 		var bb := _choice("Bots%d" % k, str(k), bots_group, 20)
-		bb.custom_minimum_size.y = 44
+		bb.custom_minimum_size.y = 40
 		bb.tooltip_text = "Aucun bot" if k == 0 else "%d bot%s pilote%s par l'ordinateur" % [k, "s" if k > 1 else "", "s" if k > 1 else ""]
 		bb.pressed.connect(select_bots.bind(k))
 		bots_row.add_child(bb)
@@ -1209,7 +1244,7 @@ func _build_ui() -> void:
 	var level_group := ButtonGroup.new()
 	for k in BOT_LEVELS.size():
 		var lb := _choice("BotLevel%d" % k, BOT_LEVELS[k], level_group, 16)
-		lb.custom_minimum_size = Vector2(96, 44)
+		lb.custom_minimum_size = Vector2(96, 40)
 		lb.size_flags_horizontal = Control.SIZE_FILL
 		lb.pressed.connect(select_bot_level.bind(k))
 		bots_row.add_child(lb)
@@ -1227,7 +1262,7 @@ func _build_ui() -> void:
 	var drops_group := ButtonGroup.new()
 	for k in GameStateNode.MAX_TRAILER_DROPS + 1:
 		var db := _choice("Drops%d" % k, str(k), drops_group, 20)
-		db.custom_minimum_size.y = 44
+		db.custom_minimum_size.y = 40
 		db.tooltip_text = "Aucun largage de remorque" if k == 0 \
 				else "%d largage%s de remorque par joueur et par course" % [k, "s" if k > 1 else ""]
 		db.pressed.connect(select_drops.bind(k))
@@ -1266,7 +1301,7 @@ func _build_ui() -> void:
 		var c: Dictionary = GameStateNode.SPEED_CLASSES[k]
 		var sbtn := _choice("Speed%d" % k, "%s  %s\n%s" % [c["cc"], ">".repeat(k + 1), String(c["name"]).to_upper()],
 			speed_group, 18)
-		sbtn.custom_minimum_size.y = 78
+		sbtn.custom_minimum_size.y = 54
 		sbtn.tooltip_text = "%s : %d km/h" % [c["name"], int(c["top_kmh"])]
 		sbtn.pressed.connect(select_speed.bind(k))
 		speed_row.add_child(sbtn)
@@ -1282,7 +1317,7 @@ func _build_ui() -> void:
 	start_button = Button.new()
 	start_button.name = "Start"
 	start_button.text = "PRÊT"
-	start_button.custom_minimum_size = Vector2(0, 88)
+	start_button.custom_minimum_size = Vector2(0, 72)
 	UiKit.style_primary(start_button, 52)
 	start_button.pressed.connect(open_selection)
 	column.add_child(start_button)
@@ -1382,7 +1417,7 @@ func _track_card(k: int, group: ButtonGroup) -> Button:
 	b.toggle_mode = true
 	b.button_group = group
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.custom_minimum_size = Vector2(0, 92)
+	b.custom_minimum_size = Vector2(0, 70)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	# trois circuits et plus : cartes plus etroites, nom plus petit
 	var many := GameStateNode.TRACKS.size() > 2
@@ -1428,7 +1463,7 @@ func _choice(button_name: String, text: String, group: ButtonGroup, font_size: i
 	b.toggle_mode = true
 	b.button_group = group
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.custom_minimum_size = Vector2(0, 62)
+	b.custom_minimum_size = Vector2(0, 48)
 	UiKit.style_choice(b, font_size)
 	return b
 

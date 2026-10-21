@@ -1007,6 +1007,18 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   redevient prêt), en rangées de 3 en travers (segment `"pickups"`), 4
   rangées par circuit ; reviennent après 15 s ; message au HUD ; en ligne,
   le host décide (Ev.PICKUP) (`pickup_test`).
+- [x] **Modes de jeu** (2026-10-20) : ligne MODE au menu (`GameState.game_mode`,
+  hors ligne pour l'instant).
+  - Élimination : après 30 s puis toutes les 20 s, le dernier saute (épave,
+    plus de réapparition, sa vue suit le premier) ; le dernier en piste gagne
+    (`elimination_test`).
+  - Contre-la-montre : seul, sans pouvoir ni largage ; meilleur tour par
+    circuit et cylindrée sauvegardé (`user://ghosts`) et rejoué en fantôme
+    transparent ; record au bandeau (`TimeTrial`, `time_trial_test`).
+  - Arène stock-car : `dev/arena*.tscn`, une par habillage (anneau de 160 m
+    autour d'un îlot, rampes, plaques, barils, bonus) ; 3 vies, le dernier
+    debout gagne, 4 min au plus (vies puis PV) ; bots chasseurs
+    (`BotInputSource.arena`) ; vies au HUD (`arena_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

@@ -122,6 +122,11 @@ var blocked_by: Node3D = null
 var line: RacingLine
 var _profile: PackedFloat32Array = []
 var _cargo: TruckCargo
+## Arene (2026-10-20) : il chasse le camion le plus proche au lieu de suivre
+## la piste (ses pouvoirs et largages restent).
+var arena: bool = false
+## Distance au bord de l'arene (m) ou il revient vers le milieu.
+const ARENA_EDGE_M := 22.0
 ## Largages faits (tests).
 var drops: int = 0
 ## Vitesse max du niveau (m/s) : au-dessus, il ne remet pas les gaz.
@@ -177,10 +182,13 @@ func poll(tick: int) -> InputFrame:
 	var v := truck.linear_velocity.length()
 	if RaceManager.state == RaceManagerNode.State.RACING:
 		_driven_m += v / Engine.physics_ticks_per_second
-	var traffic := _traffic(v)
-	_steer(v, float(traffic["lateral"]))
-	_speed(v, float(traffic["cap"]))
-	_boost(bool(traffic["clear"]))
+	if arena:
+		_arena_drive(v)
+	else:
+		var traffic := _traffic(v)
+		_steer(v, float(traffic["lateral"]))
+		_speed(v, float(traffic["cap"]))
+		_boost(bool(traffic["clear"]))
 	_powers()
 	_drop_tactic(v)
 	# bloque contre un mur, coince dans une epave : reset (comme un joueur)
@@ -445,6 +453,41 @@ func _boost(clear: bool) -> void:
 	# front : appui d'un tick, puis relache
 	frame.boost = press and not _boost_was
 	_boost_was = frame.boost
+
+
+## Arene : fonce sur le camion vivant le plus proche (vise un peu devant lui),
+## plein gaz ; trop pres d'un mur et en s'y dirigeant, il revient vers le
+## milieu de l'anneau. Nitro en ligne droite sur sa proie.
+func _arena_drive(v: float) -> void:
+	var prey: Truck = null
+	var best := INF
+	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
+		var t := n as Truck
+		if t == null or t == truck or t.is_wrecked():
+			continue
+		var d := t.global_position.distance_to(truck.global_position)
+		if d < best:
+			best = d
+			prey = t
+	var fwd := -truck.global_basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized()
+	var want := fwd
+	if prey != null:
+		want = prey.global_position + prey.linear_velocity * 0.6 - truck.global_position
+		want.y = 0.0
+		want = want.normalized() if want.length_squared() > 1.0 else fwd
+	# bord de l'anneau : vers le milieu de la chaussee
+	var lat := _lateral_of(truck.global_position, index)
+	var edge := track.width / 2.0 - ARENA_EDGE_M
+	if absf(lat) > edge and truck.linear_velocity.dot(track.sample_right(index)) * signf(lat) > 0.0:
+		want = (track.sample_position(index) - truck.global_position).normalized()
+		want.y = 0.0
+	var angle := atan2(fwd.cross(want).y, fwd.dot(want))
+	frame.steer = clampf(-angle * 2.0, -1.0, 1.0)
+	frame.throttle = 1.0 if absf(angle) < 1.8 else 0.6
+	frame.brake = 0.0
+	frame.boost = prey != null and absf(angle) < 0.15 and best > 40.0 and bool(BOOST[level])
 
 
 ## Un missile ou un boomerang qui le vise arrive (a moins de SHIELD_WARN_M),

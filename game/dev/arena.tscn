@@ -1,0 +1,38 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://dev/local_race.gd" id="1"]
+[ext_resource type="PackedScene" path="res://tracks/arena_01.tscn" id="2"]
+[ext_resource type="Script" path="res://gameplay/auto_reset.gd" id="3"]
+[ext_resource type="Script" path="res://gameplay/race_laps.gd" id="4"]
+[ext_resource type="Script" path="res://gameplay/pad_effects.gd" id="pads"]
+[ext_resource type="Environment" path="res://tracks/cyber_night.tres" id="env"]
+
+[node name="Race" type="Node3D"]
+script = ExtResource("1")
+player_count = 2
+players_from_menu = true
+game_mode = 3
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("env")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 40, 0)
+light_color = Color(0.55, 0.62, 1, 1)
+light_energy = 0.85
+shadow_enabled = true
+directional_shadow_max_distance = 150.0
+
+[node name="Track01" parent="." instance=ExtResource("2")]
+
+[node name="RaceLaps" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("4")
+track = NodePath("../Track01")
+
+[node name="AutoReset" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("3")
+track = NodePath("../Track01")
+
+[node name="PadEffects" type="Node" parent="." node_paths=PackedStringArray("track")]
+script = ExtResource("pads")
+track = NodePath("../Track01")

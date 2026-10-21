@@ -208,6 +208,10 @@ func repair(cab: float, trailer: float) -> void:
 	repaired.emit(c, tr)
 
 
+## Plus de reapparition (elimine, sans vie en arene) : l'epave reste.
+var no_respawn: bool = false
+
+
 ## Bouclier actif : ni PV, ni tole, ni pneus.
 func is_shielded() -> bool:
 	return shield_ticks > 0
@@ -238,7 +242,7 @@ func _physics_process(_delta: float) -> void:
 		_explode_trailer()
 	if _wreck_left > 0:
 		_wreck_left -= 1
-		if _wreck_left == 0:
+		if _wreck_left == 0 and not no_respawn:
 			_respawn()
 
 
