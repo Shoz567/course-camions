@@ -291,6 +291,10 @@ func _ready() -> void:
 				hud.flash("NOUVEAU RECORD !  %s" % RaceHud.chrono(ticks), UiKit.GOLD))
 	if split != null and (player_count == 3 or player_count == 5):
 		_add_leader_view()
+	# mini-carte de chaque ecran : tous les camions, a la couleur de leur joueur
+	for p in players:
+		if p.hud != null:
+			p.hud.show_minimap(track, minimap_markers(p))
 	for i in players.size():
 		# un bot est toujours pret
 		ready_flags.append(is_bot(i))
@@ -320,6 +324,16 @@ func _ready() -> void:
 		add_child(net)
 		net.setup(self, players, race)
 		NetSession.connection_lost.connect(_on_connection_lost)
+
+
+## Camions de la mini-carte vue par `me` : chacun a la couleur de son
+## joueur (sa case du lobby en ligne), le sien marque.
+func minimap_markers(me: Player) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for i in players.size():
+		out.append({"truck": players[i].truck, "color": UiKit.PLAYER_COLORS[slot_of(i) % UiKit.PLAYER_COLORS.size()],
+			"self": players[i] == me})
+	return out
 
 
 ## Machine qui simule la course : hors ligne, ou host en ligne.

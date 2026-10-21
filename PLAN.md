@@ -1045,7 +1045,12 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   (`menu_players_test`).
 - [x] **HUD de course** : cadran façon arcade (vitesse, nitro, cargo, recharges
   des pouvoirs, `HudDial`) et carte en haut à gauche (position, nom, tour,
-  temps, PV) (`race_hud_test`).
+  temps, PV) (`race_hud_test`). Mini-carte façon Mario Kart (2026-10-21, « une
+  mini map à la Mario Kart sur laquelle on peut voir les positions des
+  joueurs ») au milieu du bord gauche de chaque écran : tracé vu de dessus,
+  nord en haut, raccourcis, damier d'arrivée, ponts par-dessus ; une pastille
+  par camion à la couleur de son joueur, le sien en flèche dans son cap
+  (`MiniMap`, `minimap_test`).
 - [ ] À valider en jeu par l'équipe : équilibrage des nouveaux pouvoirs et des
   niveaux de bots, lisibilité du HUD à 5-6 joueurs.
 - [x] **Mixage** (2026-10-21, « un grésillement quand on lance le jeu, tous

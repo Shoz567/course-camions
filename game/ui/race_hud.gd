@@ -4,7 +4,8 @@ extends CanvasLayer
 ## HUD de course (tache 2.7, refait le 2026-10-19). Lit, ne decide rien
 ## (CLAUDE.md §7) : en haut a gauche une carte (position, nom, tour, temps,
 ## PV) ; en bas a droite un cadran facon arcade (HudDial : vitesse, nitro,
-## cargo, recharge des pouvoirs) ; un message central (compte a rebours,
+## cargo, recharge des pouvoirs) ; au milieu a gauche la mini-carte
+## (MiniMap) ; un message central (compte a rebours,
 ## mauvais sens, arrivee) et un bandeau poses par la scene.
 ## Les temps affiches derivent des ticks : 60 ticks = 1 s.
 
@@ -76,6 +77,8 @@ const NUMBER_RISE := 60.0
 
 ## Couleur du joueur (bordure de la carte, nom).
 @export var accent: Color = UiKit.CYAN
+## Mini-carte facon Mario Kart (show_minimap), null avant.
+var minimap: MiniMap
 
 
 func _ready() -> void:
@@ -542,3 +545,21 @@ func _label(size: int, pos: Vector2) -> Label:
 	l.add_theme_constant_override("outline_size", maxi(4, roundi(size / 6.0)))
 	add_child(l)
 	return l
+
+
+## Mini-carte (2026-10-21) : au milieu du bord gauche, le trace de `track` et
+## les camions de `list` (MiniMap.setup). Posee par la course, une fois tous
+## les camions crees.
+func show_minimap(track: TrackBlockout, list: Array[Dictionary]) -> void:
+	if minimap == null:
+		minimap = MiniMap.new()
+		minimap.name = "MiniMap"
+		minimap.ui_scale = ui_scale
+		add_child(minimap)
+	minimap.setup(track, list)
+	# cadre aux proportions du circuit, centre sur le bord gauche
+	minimap.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	minimap.offset_left = 16.0 * ui_scale
+	minimap.offset_right = minimap.offset_left + minimap.box.x
+	minimap.offset_top = -minimap.box.y / 2.0
+	minimap.offset_bottom = minimap.box.y / 2.0
