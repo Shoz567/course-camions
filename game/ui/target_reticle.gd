@@ -7,13 +7,13 @@ extends Control
 ## du joueur. Il tourne doucement. Rendu seulement : le HUD lit, il ne decide
 ## pas.
 ## Portee (2026-10-20 : « le viseur indique la portee ») : rouge vif quand un
-## pouvoir pret l'atteint, gris quand les pouvoirs prets sont trop courts,
-## terne pendant la recharge ; une fleche par emplacement (◄ gauche, ► droite)
+## pouvoir pret l'atteint, gris quand les pouvoirs prets sont trop courts ;
+## en recharge, pas de viseur (2026-10-21) ; une fleche par emplacement (◄ gauche, ► droite)
 ## allumee si son pouvoir est pret et a portee, et la distance dessous.
 ## Retour de coup : une croix eclate un instant quand un coup touche (flash) ;
 ## un changement de cible le fait battre (pulse).
 
-enum State { READY, OUT_OF_RANGE, RECHARGING }
+enum State { READY, OUT_OF_RANGE }
 
 ## Rayon du viseur (px, avant ui_scale) a 20 m et au loin.
 const NEAR_R := 46.0
@@ -77,12 +77,7 @@ func _process(delta: float) -> void:
 
 
 func _color() -> Color:
-	match state:
-		State.READY:
-			return RED
-		State.OUT_OF_RANGE:
-			return Color(GREY, 0.7)
-	return Color(RED, 0.45)
+	return RED if state == State.READY else Color(GREY, 0.7)
 
 
 func _draw() -> void:

@@ -5,11 +5,13 @@ extends PhysicsTest
 ## pourrait indiquer la portee ») :
 ##   A. mitrailleuse sur B (30 m) : un son par balle (20), des chiffres de
 ##      degats (« -N ») sur l'ecran du tireur, la croix de touche ;
-##   B. missile sur C sous bouclier : « BLOQUÉ » ;
+##   B. missile sur C sous bouclier : le son du coup, mais aucun chiffre ni
+##      « BLOQUÉ » (2026-10-21) ;
 ##   C. bip a l'acquisition de la cible, et a chaque changement (cycle) ;
 ##   D. portee : cible a 105 m, mitrailleuse (90 m) a gauche et laser (120 m)
 ##      a droite : viseur pret, fleche gauche eteinte, droite allumee ; au-dela
-##      de 120 m : gris (hors de portee) ; apres le tir : terne (recharge).
+##      de 120 m : gris (hors de portee) ; apres le tir de son seul pouvoir :
+##      plus de viseur (2026-10-21 : seulement quand un pouvoir est pret).
 
 var _a: Truck
 var _b: Truck
@@ -86,17 +88,17 @@ func _test_tick(t: int) -> void:
 			_seen["flash"] = _reticle(_hud_a).flashing() or _hud_a.hit_sounds > 0
 			_pr.use(0)
 		45:
-			_seen["recharge"] = [_reticle(_hud_a).state]
+			_seen["recharge"] = _reticle(_hud_a).visible
 			_pr.cycle_target()
 		47:
 			_seen["beeps1"] = _hud_r.beeps
 			_seen["far"] = _reticle(_hud_r).state
 		70:
-			var blocked := []
+			var shown := []
 			for n in _hud_c.get_children():
-				if n is Label and String((n as Label).text) == "BLOQUÉ":
-					blocked.append(true)
-			_seen["c"] = [_hud_c.hit_sounds, blocked.size()]
+				if n is Label and (String((n as Label).text) == "BLOQUÉ" or String((n as Label).text).begins_with("-")):
+					shown.append((n as Label).text)
+			_seen["c"] = [_hud_c.hit_sounds, shown]
 		200:
 			var texts := []
 			for n in _hud_a.get_children():
@@ -109,8 +111,8 @@ func _test_finish() -> void:
 	var a: Array = _seen.get("a", [0, 0, []])
 	check("A mitrailleuse : un son par balle, des chiffres « -N »", int(a[0]) == 20 and int(a[1]) >= 1, str(a))
 	check("A croix de touche", bool(_seen.get("flash", false)))
-	var c: Array = _seen.get("c", [0, 0])
-	check("B bouclier : « BLOQUÉ »", int(c[0]) == 1 and int(c[1]) == 1, str(c))
+	var c: Array = _seen.get("c", [0, ["?"]])
+	check("B bouclier : le son du coup, ni chiffre ni « BLOQUÉ »", int(c[0]) == 1 and (c[1] as Array).is_empty(), str(c))
 	check("C bip a l'acquisition, puis au changement de cible", int(_seen.get("beeps0", 0)) >= 1
 		and int(_seen.get("beeps1", 0)) > int(_seen.get("beeps0", 0)), "%s -> %s" % [_seen.get("beeps0"), _seen.get("beeps1")])
 	var r: Array = _seen.get("range", [-1, -1, -1, 0])
@@ -118,5 +120,5 @@ func _test_finish() -> void:
 		int(r[0]) == TargetReticle.State.READY and int(r[1]) == 0 and int(r[2]) == 1, str(r))
 	check("D au-dela de 120 m : gris, hors de portee", int(_seen.get("far", -1)) == TargetReticle.State.OUT_OF_RANGE,
 		str(_seen.get("far")))
-	check("D apres le tir : terne (recharge)", _seen.get("recharge") == [TargetReticle.State.RECHARGING],
+	check("D apres le tir de son seul pouvoir : plus de viseur", _seen.get("recharge") == false,
 		str(_seen.get("recharge")))
