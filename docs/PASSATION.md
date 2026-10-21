@@ -115,7 +115,7 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 
 - Les modes Élimination, Contre-la-montre et Arène ne se jouent pas encore en
   ligne (en ligne : course normale).
-- Les bots ne prennent pas les raccourcis.
+- Les bots prennent les raccourcis (2026-10-21), pas encore les bonus.
 - Les bots se larguent leurs remorques dessus dans le peloton : à juger en
   partie (nombre de largages réglable au menu).
 - Bots : dépassement dans l'épingle serrée de Sakura ; premiers tours en
@@ -127,7 +127,7 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 ## Suites possibles
 
 - Essai réel en ligne sur 2 PC ; modes en ligne.
-- Bots qui prennent les raccourcis et les bonus.
+- Bots qui vont chercher les bonus.
 - Vibrations de manette ; tutoriel des nouvelles commandes à la 1re course.
 - Relevé de fin de course (dégâts par pouvoir, largages) pour équilibrer.
 - Scinder `make test` en suite rapide / complète.

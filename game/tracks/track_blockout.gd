@@ -1666,7 +1666,7 @@ func _build_branches() -> void:
 			p.y = lerpf(a.y, b.y, smoothstep(0.0, 1.0, u))
 			pts.append(p)
 		_br.append({"name": String(spec.get("name", "Raccourci %d" % _br.size())), "s0": s0, "s1": s1, "w": w,
-			"a": a, "b": b, "dir": dir, "right": right, "len": length, "pts": pts, "spec": spec})
+			"a": a, "b": b, "dir": dir, "right": right, "len": length, "pts": pts, "spec": spec, "lat": lat})
 	# mur de la piste dans le raccourci (a plus d'1 m de son bord) : ouvert
 	for side in 2:
 		_wall_open[side].resize(n)
@@ -1713,6 +1713,54 @@ func branch_frame(k: int, u: float, lateral: float, lift: float) -> Transform3D:
 	var dir := bd["dir"] as Vector3
 	var right := bd["right"] as Vector3
 	return Transform3D(Basis(right, Vector3.UP, -dir), p + right * lateral + Vector3.UP * lift)
+
+
+## Decalage de l'axe du raccourci k par rapport a la ligne centrale de la
+## piste, a ses deux bouts (m, > 0 a droite).
+func branch_lateral(k: int) -> float:
+	_ensure_built()
+	return float(_br[k]["lat"])
+
+
+## Largeur de la chaussee du raccourci k (m).
+func branch_width_of(k: int) -> float:
+	_ensure_built()
+	return float(_br[k]["w"])
+
+
+## Part du raccourci k ou se trouve `p` (0 : son entree, 1 : sa sortie ; hors
+## de [0, 1] avant ou apres), a l'horizontale.
+func branch_u(k: int, p: Vector3) -> float:
+	var bd := _br[k]
+	var d := p - (bd["a"] as Vector3)
+	var dir := bd["dir"] as Vector3
+	return (d.x * dir.x + d.z * dir.z) / float(bd["len"])
+
+
+## Ecart de `p` a l'axe du raccourci k (m, > 0 a droite dans le sens de course).
+func branch_lateral_of(k: int, p: Vector3) -> float:
+	var bd := _br[k]
+	var d := p - (bd["a"] as Vector3)
+	var right := bd["right"] as Vector3
+	return d.x * right.x + d.z * right.z
+
+
+## Flaques du raccourci k : [[u, decalage, rayon], ...] (comme "puddles").
+func branch_puddles(k: int) -> Array:
+	_ensure_built()
+	return (_br[k]["spec"] as Dictionary).get("puddles", [])
+
+
+## Barils du raccourci k (noeuds ; null pour un baril absent).
+func branch_barrels(k: int) -> Array[ExplosiveBarrel]:
+	_ensure_built()
+	var out: Array[ExplosiveBarrel] = []
+	var first := _barrels.size()
+	for j in k:
+		first += ((_br[j]["spec"] as Dictionary).get("barrels", []) as Array).size()
+	for j in ((_br[k]["spec"] as Dictionary).get("barrels", []) as Array).size():
+		out.append(barrel_node(first + j))
+	return out
 
 
 ## Indice du raccourci sous `p` (sur sa chaussee, a `margin` m pres de ses
