@@ -973,6 +973,12 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   ligne) ; `TruckCargo.drops_left` posé au GO ; 20 s (`rearm_ticks`) après
   le retour d'une remorque ; HUD « largage dans N s », « PLUS DE LARGAGE »
   (`trailer_drops_test`).
+- [x] **Retour de coup et portée** (2026-10-20) : chaque coup qui touche
+  (camion ou remorque larguée) → chiffre de dégâts qui monte de la cible
+  (« BLOQUÉ » sous bouclier ; rafale et laser cumulés), croix sur le viseur,
+  son ; bip au changement de cible. Viseur : rouge si un pouvoir prêt
+  l'atteint, gris hors de portée, terne en recharge ; flèches ◄ ► par
+  emplacement, distance dessous (`hit_feedback_test`).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille

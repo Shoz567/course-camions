@@ -59,6 +59,11 @@ static func _play(s: AudioStreamWAV) -> void:
 		_player.play()
 
 
+## Bip glisse de `f1` a `f2` Hz (HUD de course : touche, cible).
+static func build_tone(f1: float, f2: float, duration_s: float, vol: float) -> AudioStreamWAV:
+	return _build_tone(f1, f2, duration_s, vol)
+
+
 static func _build_tone(f1: float, f2: float, duration_s: float, vol: float) -> AudioStreamWAV:
 	var n := roundi(RATE * duration_s)
 	var data := PackedByteArray()
