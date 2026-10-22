@@ -3,7 +3,9 @@ extends PhysicsTest
 ## Mixage (2026-10-21 : « un grésillement, tous les bruitages plutôt forts,
 ## la pluie vachement forte au début ») :
 ##   A. trois bus sous le Master (Effets, Ambiance, Musique) ; bruitages et
-##      ambiance plus bas que la musique ;
+##      ambiance plus bas que la musique ; bruitages 12 dB sous elle
+##      (2026-10-22 : « les bruitages sont trop forts par rapport a la
+##      musique » ; 6 avant) ;
 ##   B. un limiteur sur le Master, plafond sous 0 dB (plus d'ecretage) ;
 ##   C. setup() rejoue sans doubler bus ni limiteur ;
 ##   D. chaque son part sur son bus : foule et ambiance sur Ambiance, klaxon
@@ -34,8 +36,8 @@ func _test_finish() -> void:
 		levels.append(AudioServer.get_bus_volume_db(idx) if idx >= 0 else 99.0)
 		sends.append(AudioServer.get_bus_send(idx) if idx >= 0 else &"")
 	check("A trois bus vers le Master", sends == [&"Master", &"Master", &"Master"], str(sends))
-	check("A bruitages et ambiance sous la musique (dB)", float(levels[0]) < float(levels[2])
-		and float(levels[1]) < float(levels[2]) and float(levels[0]) <= -3.0, str(levels))
+	check("A bruitages et ambiance sous la musique, bruitages 12 dB sous elle (dB)", float(levels[0]) < float(levels[2])
+		and float(levels[1]) < float(levels[2]) and float(levels[2]) - float(levels[0]) >= 12.0, str(levels))
 	var lim := SoundMix.limiter()
 	check("B limiteur sur le Master, plafond < 0 dB", lim != null and lim.ceiling_db < 0.0,
 		str(lim.ceiling_db if lim != null else null))

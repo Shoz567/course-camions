@@ -7,7 +7,9 @@ extends Node
 ## --bots=N : bots durs du host ; --players=N : le host lance quand N joueurs
 ## sont la (2 par defaut) ; --track=N : circuit (GameState.TRACKS) ;
 ## --quality=N : qualite graphique (GraphicsSettings.Quality, 3 = extreme) ;
-## --offscreen : fenetre hors de l'ecran, muette (GameState.go_offscreen).
+## --offscreen : fenetre hors de l'ecran (GameState.go_offscreen), --mute :
+## sans le son ;
+## --audio-stats : niveau des bus Effets, Ambiance, Musique (ligne E2E).
 ## Toutes les 10 s, une ligne SAMPLE (tour affiche, place, vies, PV de chaque
 ## camion) a comparer entre les deux ; a 50 s, le host detruit le camion du
 ## client (vitesse de reapparition : launch_kmh). A la fin : une ligne E2E par
@@ -55,6 +57,13 @@ var _back: Array[int] = []
 var _launch_kmh: Array = []
 var _max_gap := 0
 var _done := false
+## --audio-stats : niveau de chaque bus (Effets, Ambiance, Musique) pendant la
+## course, lu a chaque image : energie moyenne et crete (dB). Le Master peut
+## etre muet (--offscreen) : les bus en dessous mixent quand meme.
+var audio_stats := false
+var _audio_sum: PackedFloat64Array = [0.0, 0.0, 0.0]
+var _audio_peak: PackedFloat64Array = [0.0, 0.0, 0.0]
+var _audio_n := 0
 
 
 func _ready() -> void:
@@ -76,6 +85,8 @@ func _ready() -> void:
 			snap = v
 		elif a.begins_with("--trace="):
 			trace = v
+		elif a == "--audio-stats":
+			audio_stats = true
 		elif a.begins_with("--track="):
 			track = v.to_int()
 		elif a.begins_with("--quality="):
@@ -203,6 +214,21 @@ func _hook(scene: Node) -> void:
 			p.set("input", d)
 
 
+const AUDIO_BUSES: Array[StringName] = [SoundMix.EFFECTS, SoundMix.AMBIENCE, SoundMix.MUSIC]
+
+
+func _process(_delta: float) -> void:
+	if not audio_stats or _go < 0 or _done:
+		return
+	_audio_n += 1
+	for b in 3:
+		var idx := AudioServer.get_bus_index(AUDIO_BUSES[b])
+		var lin := db_to_linear(maxf(AudioServer.get_bus_peak_volume_left_db(idx, 0),
+			AudioServer.get_bus_peak_volume_right_db(idx, 0)))
+		_audio_sum[b] += lin * lin
+		_audio_peak[b] = maxf(_audio_peak[b], lin)
+
+
 func _report(over: bool) -> void:
 	if snap != "" and DisplayServer.get_name() != "headless":
 		get_viewport().get_texture().get_image().save_png("%s_fin.png" % snap)
@@ -229,6 +255,10 @@ func _report(over: bool) -> void:
 			int(o.get("states_received")), _max_gap, float(o.call("interp_ticks")),
 			float(o.get("pop_sum")) / maxf(float(o.get("pop_count")), 1.0), float(o.get("pop_max")),
 			int(o.get("snaps")), int(o.get("corrections")), float(o.get("max_error_m"))]
+	if audio_stats:
+		for b in 3:
+			extra += " %s_db=%.1f %s_peak_db=%.1f" % [AUDIO_BUSES[b], linear_to_db(sqrt(_audio_sum[b] / maxf(_audio_n, 1.0))),
+				AUDIO_BUSES[b], linear_to_db(_audio_peak[b])]
 	extra += " phys_ms=%.2f phys_max=%.2f wall_ms_tick=%.2f" % [_phys_sum / maxf(_phys_n, 1.0), _phys_max,
 		(Time.get_ticks_usec() - _wall0) / 1000.0 / maxf(Engine.get_physics_frames() - _go, 1.0)]
 	print("E2E role=%s mode=%d over=%s state=%d ticks=%d%s launch_kmh=%s rows=%s" % [role, mode, over, RaceManager.state,

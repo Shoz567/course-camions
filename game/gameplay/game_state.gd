@@ -229,9 +229,10 @@ func _ready() -> void:
 	if persist:
 		read_settings(SETTINGS_PATH)
 	if offscreen:
-		# essai en arriere-plan : muet, et rien n'ecrit dans les reglages du joueur
-		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
+		# essai en arriere-plan : rien n'ecrit dans les reglages du joueur
 		persist = false
+	if OS.get_cmdline_user_args().has("--mute"):
+		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
 
 
 ## Haut du compteur (px sous le bord de l'ecran) : le menu le pose sous ses
@@ -260,7 +261,8 @@ func _style_fps() -> void:
 ## aussi ») : -- --offscreen. La fenetre, avant d'etre montree, quitte le
 ## plein ecran du projet, ne prend pas le focus et se pose hors de l'ecran,
 ## en 1920 x 1080 (l'ecran de reference) ; le rendu et les captures
-## continuent. Le son est coupe et les reglages ne sont pas reecrits (_ready).
+## continuent. Les reglages ne sont pas reecrits (_ready) ; -- --mute coupe le
+## son (separe : les essais du son le gardent, 2026-10-22).
 ## Lance par tools/hidden_run.ps1 (fenetre nee dans une fenetre cachee, sans
 ## meme l'ecran de demarrage : CW_HIDDEN_HOST), elle reste ou elle est.
 static func go_offscreen() -> void:
