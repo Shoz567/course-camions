@@ -981,8 +981,10 @@ func _refresh_online() -> void:
 				% GameStateNode.MODE_NAMES[NetSessionNode.online_mode(GameState.game_mode)]
 		if GameState.game_mode == GameStateNode.GameMode.TIME_TRIAL:
 			status += "\nLe contre-la-montre se joue seul, hors ligne : la partie sera une course."
-		if GameState.bot_count > 0:
-			status += "\nPas de bots en ligne : seuls les joueurs connectés prennent le départ."
+		var bots := mini(GameState.bot_count, LocalRace.MAX_PLAYERS - NetSession.members.size())
+		if bots > 0:
+			status += "\nBots : %d (%s), simulés par ce PC, en plus des joueurs (6 camions au plus)." % [
+				bots, BOT_LEVELS[GameState.bot_level]]
 	elif NetSession.is_client():
 		if NetSession.local_slot() < 0:
 			status = "Connexion à %s..." % ip_edit.text
@@ -1278,7 +1280,7 @@ func _build_ui() -> void:
 		_player_dots.add_child(dot)
 	column.add_child(_column_gap(8))
 	column.add_child(_player_dots)
-	# bots (hors ligne) : nombre et niveau, sur une ligne
+	# bots : nombre et niveau, sur une ligne (en ligne : ceux du host)
 	column.add_child(_column_gap(6))
 	var bots_row := _row("Bots")
 	var bots_label := _label("BOTS", 18, 0)

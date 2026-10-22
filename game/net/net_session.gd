@@ -41,7 +41,8 @@ const MAX_PLAYERS := 6
 ## 4 (2026-10-21) : mode de jeu au lancement, eliminations et vies dans l'etat
 ## de course.
 ## 5 (2026-10-21) : duree de l'arene au lancement.
-const PROTOCOL := 5
+## 6 (2026-10-22) : nombre et niveau des bots du host au lancement.
+const PROTOCOL := 6
 const MAX_NAME := 16
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
@@ -436,8 +437,8 @@ static func online_mode(mode: int) -> int:
 	return clampi(mode, 0, GameStateNode.MODE_NAMES.size() - 1)
 
 
-## Host : lance la course pour tous, sur le circuit, la categorie, le mode et
-## la duree de l'arene choisis au menu du host.
+## Host : lance la course pour tous, sur le circuit, la categorie, le mode,
+## la duree de l'arene et les bots (nombre, niveau) choisis au menu du host.
 func launch_race() -> void:
 	if not is_host():
 		return
@@ -445,14 +446,14 @@ func launch_race() -> void:
 	var mode := online_mode(GameState.game_mode)
 	for id in _guest_peers():
 		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
-			GameState.arena_minutes)
+			GameState.arena_minutes, GameState.bot_count, GameState.bot_level)
 	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
-		GameState.arena_minutes)
+		GameState.arena_minutes, GameState.bot_count, GameState.bot_level)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3, mode: int = 0,
-		arena_minutes: int = 4) -> void:
+		arena_minutes: int = 4, bots: int = 0, bot_level: int = 1) -> void:
 	# chargement de la course : chacun peut se figer quelques secondes
 	for m in members:
 		var id := int(m["peer"])
@@ -468,6 +469,9 @@ func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: 
 	GameState.game_mode = online_mode(mode)
 	# le compte a rebours de l'arene est le meme chez tous
 	GameState.arena_minutes = arena_minutes if GameStateNode.ARENA_MINUTES.has(arena_minutes) else 4
+	# les bots du host : il les simule, chacun les voit (LocalRace)
+	GameState.bot_count = clampi(bots, 0, MAX_PLAYERS - 1)
+	GameState.bot_level = clampi(bot_level, 0, 2)
 	members = _unpack(data)
 	race_launched.emit()
 	if auto_change_scene:

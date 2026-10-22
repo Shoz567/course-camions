@@ -1236,7 +1236,18 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     lisait « NON CLASSÉ, temps limite écoulé » ; il lit maintenant
     « ÉLIMINÉ » et sa place (aussi en solo et en ligne) ;
   - menu en ligne : le host qui a réglé des bots lit qu'il n'y en a pas en
-    ligne.
+    ligne (remplacé le jour même par les bots en ligne, ci-dessous).
+- [x] **Bots en ligne** (2026-10-22, « tout est bien disponible en
+  multijoueur en ligne, les bots également ») : le host simule les bots
+  choisis à son menu (nombre, niveau), en plus des joueurs (6 camions au
+  plus) ; le lancement les transmet (protocole 6) ; les clients les voient
+  en marionnettes, comme un joueur distant. Remorques et pouvoirs des bots
+  déterministes (même calcul partout) ; nom « BOT n COULEUR » et case libre.
+  Cases et noms de tous les camions figés au départ (`LocalRace._slots`) :
+  un joueur parti ne décale plus les couleurs des autres. Essai à deux
+  instances, 3 bots durs : course, élimination et arène, mêmes tours,
+  places, vies et PV des deux côtés ; `net_bots_test` ; `net_session_test`
+  vérifie les bots reçus au lancement.
 - [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
   « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
@@ -1268,7 +1279,7 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
 ajout discret au milieu d'une autre.
 
 - **IA / adversaires pilotés par l'ordinateur.** Bots hors ligne livrés le
-  2026-10-19 (phase 7.8) ; en ligne : pas encore.
+  2026-10-19 (phase 7.8) ; en ligne le 2026-10-22 (simulés par le host).
 - **Remorques** — tranché le 2026-09-28 (semi-remorque sur le même corps que le
   tracteur, inertie imposée), puis le 2026-09-29 : **articulée** à la sellette,
   ±35°, la caisse de collision pivote et balaie les adversaires (VEHICLE_SPEC

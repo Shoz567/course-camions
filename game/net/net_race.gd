@@ -199,7 +199,7 @@ func setup(scene: Node, list: Array, lap_counter: RaceLaps) -> void:
 			(n as TrackPickup).net_mirror = not NetSession.is_host()
 	if NetSession.is_host():
 		_hook_host_events()
-		for i in players.size():
+		for i in mini(players.size(), NetSession.members.size()):
 			var peer := int(NetSession.members[i]["peer"])
 			if peer != 1:
 				_peer_index[peer] = i
@@ -454,7 +454,8 @@ func _hook_host_events() -> void:
 			cargo.dropped.connect(func(t: DetachedTrailer) -> void: _send_event(Ev.DROP, [i, _register(t)]))
 		# chocs : les autres machines ne simulent pas ce camion, elles en
 		# rejouent les effets (creux, etincelles, pieces) ; la sienne les a deja
-		var owner := int(NetSession.members[i]["peer"])
+		# (un bot est simule ici, chez le host)
+		var owner := int(NetSession.members[i]["peer"]) if i < NetSession.members.size() else 1
 		truck.wall_impact_at.connect(func(v: float, rear: bool, at: Vector3, n: Vector3) -> void:
 			_send_event(Ev.IMPACT, [i, true, v, rear, at, n], owner))
 		truck.body_impact.connect(func(v: float, rear: bool, at: Vector3, n: Vector3) -> void:
