@@ -16,6 +16,9 @@ extends Node
 signal lap_completed(truck: Truck, lap: int, lap_ticks: int)
 signal race_finished(truck: Truck, total_ticks: int)
 signal wrong_way_changed(truck: Truck, wrong: bool)
+## L'etat d'un concurrent vient de changer (checkpoint, tour, arrivee), une
+## fois tout mis a jour : le host le recopie aux clients (NetRace).
+signal racer_updated(truck: Truck)
 
 @export var track: TrackBlockout
 ## Tours d'une course (2026-10-20 : 3, circuits rallonges a 4,6-4,8 km).
@@ -123,6 +126,7 @@ func _on_checkpoint(body: Node3D, index: int) -> void:
 				r.lap_start_tick = now
 	r.last_cp = index
 	r.next_cp = (index + 1) % track.checkpoint_count
+	racer_updated.emit(r.truck)
 
 
 func _physics_process(_delta: float) -> void:
@@ -150,12 +154,15 @@ func apply_remote(truck: Truck, lap: int, next_cp: int, last_cp: int, lap_start_
 	if r == null:
 		return
 	var lap_done := lap > r.lap and r.lap > 0
+	# arrivee sur la ligne : son dernier tour vient d'etre chronometre ;
+	# arrivee decidee par le mode (finish_now) : aucun tour de plus
+	var line_finish := finished and not r.finished and last_lap != r.last_lap
 	r.next_cp = next_cp
 	r.last_cp = last_cp
 	r.lap_start_tick = lap_start_tick
 	r.last_lap = last_lap
 	r.best_lap = best_lap
-	if lap_done or (finished and not r.finished):
+	if lap_done or line_finish:
 		if last_lap >= 0:
 			r.lap_times.append(last_lap)
 		lap_completed.emit(truck, r.lap, last_lap)
@@ -175,6 +182,7 @@ func finish_now(truck: Truck) -> void:
 	r.finished = true
 	r.finish_ticks = Engine.get_physics_frames() - start_tick
 	race_finished.emit(truck, r.finish_ticks)
+	racer_updated.emit(truck)
 
 
 func racer_count() -> int:

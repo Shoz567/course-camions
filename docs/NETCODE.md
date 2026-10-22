@@ -343,6 +343,12 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   élimination (ramené à l'horloge du client). L'épave d'un éliminé arrive par
   `Ev.WRECK` ; sans `Ev.RESPAWN`, il ne revient pas.
 
+- **Tours chez le client (2026-10-22)** : l'état d'un concurrent part à
+  chaque checkpoint (`RaceLaps.racer_updated`), une fois le tour compté ;
+  envoyé avant, à `lap_completed`, le client affichait un tour de retard.
+  Essai de bout en bout sur un PC : `dev/net_e2e.tscn` (deux instances,
+  bots aux commandes, lignes SAMPLE comparables).
+
 ### Pas encore fait
 
 - Essai sur 2 vrais PC, puis à 4 joueurs (critère de sortie de la phase 6).

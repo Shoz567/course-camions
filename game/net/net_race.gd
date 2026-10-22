@@ -204,8 +204,10 @@ func setup(scene: Node, list: Array, lap_counter: RaceLaps) -> void:
 			if peer != 1:
 				_peer_index[peer] = i
 		NetSession.member_left.connect(_on_member_left)
-		laps.lap_completed.connect(func(t: Truck, _l: int, _lt: int) -> void: _send_racer(_index_of(t)))
-		laps.race_finished.connect(func(t: Truck, _tt: int) -> void: _send_racer(_index_of(t)))
+		# a chaque checkpoint, une fois le tour compte (2026-10-22 : envoye a
+		# lap_completed, avant que le tour change, le client affichait un tour
+		# de retard, et ses checkpoints figes faussaient le classement)
+		laps.racer_updated.connect(func(t: Truck) -> void: _send_racer(_index_of(t)))
 		return
 	_frames.resize(InputFrame.SIZE * RemoteInputSource.BATCH)
 	_hist_tick.resize(HISTORY)
@@ -397,7 +399,11 @@ func encode_snapshot(tick: int) -> PackedByteArray:
 
 
 func _racer_data(i: int) -> Array:
-	var r := laps.racer(_truck(i))
+	return racer_data(laps.racer(_truck(i)))
+
+
+## Etat d'un concurrent envoye aux clients (_racer, RaceLaps.apply_remote).
+static func racer_data(r: RaceLaps.Racer) -> Array:
 	if r == null:
 		return []
 	return [r.lap, r.next_cp, r.last_cp, r.lap_start_tick, r.last_lap, r.best_lap, r.finished, r.finish_ticks]

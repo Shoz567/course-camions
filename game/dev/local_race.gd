@@ -1284,6 +1284,11 @@ func _process(delta: float) -> void:
 				place = "1er !"
 			p.hud.set_center_message("%s\n%s   meilleur tour %s%s" % [place,
 				RaceHud.chrono(r.finish_ticks), RaceHud.chrono(r.best_lap), more], Color.WHITE)
+		elif state == State.FINISHED and eliminated.has(i):
+			# elimine (2026-10-22 : a la fin, il lisait « temps limite ecoule »)
+			var again_e := "le host relance la course" if NetSession.is_client() else "Options / Entrée : rejouer"
+			p.hud.set_center_message("ÉLIMINÉ\n%de\n%s   Create / Échap : menu" % [
+				players.size() - eliminated.find(i), again_e], Color(1.0, 0.4, 0.2))
 		elif state == State.FINISHED:
 			# temps limite ecoule avant son arrivee
 			var again := "le host relance la course" if NetSession.is_client() else "Options / Entrée : rejouer"
