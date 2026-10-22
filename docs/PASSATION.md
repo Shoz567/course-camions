@@ -148,6 +148,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   boutons (il les recouvrait).
 
 ### Performance, rendu, son, build
+- Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,
+  style, qualité extrême, reflets) : `docs/VISUEL.md`.
 - Gros à-coups supprimés, budget V3 (#41) ; creux de carrosserie calculés
   sans figer l'image (#44) ; SDFGI coupé sur puce Intel (#56).
 - **Décor lointain allégé** (2026-10-22) : palmiers et cerisiers en 3D
