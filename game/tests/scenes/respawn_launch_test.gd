@@ -67,6 +67,9 @@ func _test_tick(t: int) -> void:
 		var drv := BotInputSource.new()
 		drv.setup(_scene.get("track") as TrackBlockout, (players[0] as Object).get("truck") as Truck,
 			BotInputSource.Level.HARD, 7)
+		# en arene, il conduit comme les bots de l'arene (LocalRace : bot.arena) ;
+		# sans ca, il roulait comme sur un circuit, au milieu de l'arene
+		drv.arena = arena
 		add_child(drv)
 		(players[0] as Object).set("input", drv)
 	for tr: Truck in _pending.keys():
