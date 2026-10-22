@@ -16,13 +16,11 @@ extends Node3D
 ##   J6 orange CARBO              manette 5 (livree : lave, carbone, cuivre)
 ##
 ## Chaque joueur a sa source d'input (sa manette, et AUCUNE autre : INPUT_SPEC
-## §4), son camion, sa camera, son HUD. Sas « READY ? » (2026-10-02) : chaque
-## vue montre le joueur et sa manette, et l'invite a appuyer sur CARRE (Maj au
-## clavier : la touche du boost, lue sur SA source d'input). Avant, chacun
-## choisit sa semi-remorque (2026-10-06) : gauche / droite de SA source font
-## defiler TrailerCatalog sur son camion (modele, caisse, stats) ; le choix est
-## fige une fois READY et garde pour la course suivante. Des que tous
-## sont READY, le compte a rebours commun demarre, puis la course (largage de
+## §4), son camion, sa camera, son HUD. Remorques et pouvoirs se choisissent
+## au menu (page de selection) ; l'ancien sas jaune de la course (« [CARRE]
+## POUR ETRE READY », remorque au stick) est retire le 2026-10-22. Hors ligne,
+## le compte a rebours part tout de suite ; en ligne, un sas sans invite
+## attend que chaque machine ait charge la course. Puis la course (largage de
 ## remorque verrouille les 5 premieres secondes, TruckCargo) :
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
@@ -179,8 +177,6 @@ class Player:
 	var power_left: int = -1
 	var power_right: int = -1
 
-## Stick ou fleches au-dela de ce seuil : remorque suivante / precedente.
-const TRAILER_STEER_THRESHOLD := 0.6
 
 
 @export_range(1, 6) var player_count: int = 2
@@ -246,12 +242,8 @@ var pause_menu: PauseMenu
 var _finish_order: Array[Truck]:
 	get:
 		return RaceManager.finish_order
-## Sas READY : joueur pret, Carre (boost) enfonce au tick precedent.
+## Sas en ligne : joueur pret (sa course chargee ; un bot l'est d'office).
 var ready_flags: Array[bool] = []
-var _square_was: Array[bool] = []
-## Sas READY : direction du stick au tick precedent (-1, 0, 1), pour ne
-## changer de remorque qu'une fois par poussee.
-var _steer_was: Array[int] = []
 ## Musique de course : demarre au GO, fondu a l'arrivee (inerte en headless).
 var music: RaceMusic
 ## Course en ligne (NetSession, phase 6) : un joueur par machine, dans l'ordre
@@ -387,8 +379,6 @@ func _ready() -> void:
 	for i in players.size():
 		# un bot est toujours pret
 		ready_flags.append(is_bot(i))
-		_square_was.append(false)
-		_steer_was.append(0)
 	# carrosseries deformables preparees pendant le chargement (~0,5 s par
 	# modele) : le sas READY ne prepare plus que les remorques changees, sans
 	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
@@ -399,10 +389,11 @@ func _ready() -> void:
 	# shaders des explosions, etincelles, fumees compiles avant le depart
 	# (tache 7.6 : la premiere explosion figeait l'image 370 ms a 4 joueurs)
 	_warmup = FxWarmup.start(self, quality)
-	# hors ligne, remorques et pouvoirs deja choisis au menu (page de selection) :
-	# pas de sas, compte a rebours tout de suite. En ligne, le sas reste, mais
-	# sans rien demander : il attend que chaque machine ait charge la course
-	var gate := ready_gate and (NetSession.is_online() or not GameState.loadout_locked)
+	# hors ligne, remorques et pouvoirs choisis au menu (page de selection) :
+	# pas de sas, compte a rebours tout de suite (meme scene lancee sans le
+	# menu : choix gardes). En ligne, le sas reste, mais sans rien demander :
+	# il attend que chaque machine ait charge la course
+	var gate := ready_gate and NetSession.is_online()
 	# sous l'ecran de chargement (hors ligne) : rien ne part avant qu'il
 	# s'efface (release_start) ; la grille attend, camions immobiles
 	_held = LoadingScreen.covering() and not NetSession.is_online()
@@ -875,18 +866,6 @@ static func help_for(text: String, arena_mode: bool) -> String:
 	return out
 
 
-static func trailer_text(index: int) -> String:
-	var t := TrailerCatalog.at(index)
-	return "◄  REMORQUE : %s  ►   (%d/%d)\n%s\nvitesse %s   accélération %s   adhérence %s   PV larguée %d" % [
-		t.display_name, posmod(index, TrailerCatalog.count()) + 1, TrailerCatalog.count(), t.tagline,
-		_pct(t.top_speed_mult), _pct(t.accel_mult), _pct(t.grip_mult), roundi(t.dropped_hp)]
-
-
-static func _pct(mult: float) -> String:
-	var d := roundi((mult - 1.0) * 100.0)
-	return "=" if d == 0 else "%+d %%" % d
-
-
 ## Modele, couleur de repli et livree du joueur `i` (course et showroom).
 static func dress(visual: TruckVisual, i: int) -> void:
 	visual.external_model = MODELS[i]
@@ -979,36 +958,15 @@ func _simulate(tick: int) -> void:
 			p.truck.set_input(_neutral)
 		return
 	if state == State.LOBBY:
-		# sas READY : camions immobiles ; gauche / droite (SA source) = remorque
-		# precedente / suivante, Carre (le boost de SA source) = pret
+		# sas en ligne : camions immobiles. Convoi choisi et PRET donne au salon
+		# (page de selection) : chacun est pret des que sa course est chargee,
+		# le sas ne fait qu'attendre les machines lentes
 		_neutral.tick = tick
-		var online := NetSession.is_online()
 		for i in players.size():
-			var f := _menu_frame(i, players[i].input.poll(tick), tick)
+			players[i].input.poll(tick)
 			players[i].truck.set_input(_neutral)
-			if online:
-				# en ligne, convoi choisi et PRET donne au salon (page de
-				# selection, 2026-10-22 : plus l'ancien sas jaune) : chacun est
-				# pret des que sa course est chargee ; le sas ne fait plus
-				# qu'attendre les machines lentes
-				if not ready_flags[i] and _loaded(i):
-					ready_flags[i] = true
-				continue
-			var dir := 0
-			if f.steer > TRAILER_STEER_THRESHOLD:
-				dir = 1
-			elif f.steer < -TRAILER_STEER_THRESHOLD:
-				dir = -1
-			if dir != 0 and dir != _steer_was[i] and not ready_flags[i]:
-				set_trailer(players[i], players[i].trailer + dir)
-				if is_local(i):
-					MenuSound.play_select()
-			_steer_was[i] = dir
-			if f.boost and not _square_was[i] and not ready_flags[i]:
+			if not ready_flags[i] and _loaded(i):
 				ready_flags[i] = true
-				if is_local(i):
-					MenuSound.play_confirm()
-			_square_was[i] = f.boost
 		if all_ready():
 			# carrosseries deformables preparees maintenant, pas au premier choc
 			for p in players:
@@ -1402,20 +1360,10 @@ func _process(delta: float) -> void:
 		if state == State.LOBBY and net != null and not net.is_host() and not net.host_ready:
 			# client : le host charge encore la course, l'invite READY attendra
 			p.hud.set_center_message("%s\nCONNEXION AU HOST..." % player_tag(i), Color.WHITE)
-		elif state == State.LOBBY and NetSession.is_online():
+		elif state == State.LOBBY:
 			# convoi choisi au salon : plus d'invite, on attend les autres machines
 			p.hud.set_center_message("%s\nEN ATTENTE DES AUTRES JOUEURS  %d/%d" % [player_tag(i),
 				ready_flags.count(true), players.size()], Color.WHITE)
-		elif state == State.LOBBY:
-			if ready_flags[i]:
-				p.hud.set_center_message("%s\nREADY !  remorque %s\nen attente des autres (%d/%d)" % [
-					player_tag(i), TrailerCatalog.at(p.trailer).display_name,
-					ready_flags.count(true), players.size()], Color(0.3, 1.0, 0.25))
-			else:
-				# invite clignotante (2 fois par seconde) ; la remorque reste lisible
-				var on := int(Time.get_ticks_msec() / 400) % 2 == 0
-				p.hud.set_center_message("%s\n%s\nAPPUYER SUR [CARRÉ] POUR ÊTRE READY" % [player_tag(i),
-					trailer_text(p.trailer)], Color(1.0, 0.85, 0.2, 1.0 if on else 0.6))
 		elif state == State.COUNTDOWN:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),

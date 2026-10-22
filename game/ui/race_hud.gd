@@ -56,7 +56,7 @@ const HELP_FADE_S := 1.5
 var _help_age: float = 0.0
 ## Pictos de l'aide (seul a l'ecran) et ligne du clavier.
 const PAD_PROMPTS := [["r2", "Accélérer"], ["l2", "Freiner"], ["cross", "Drift"], ["square", "Nitro"],
-	["triangle", "Remorque"], ["dpad_lr", "Pouvoirs"], ["dpad_ud", "Cible"], ["l1", "Derrière"], ["options", "Reset"]]
+	["triangle", "Remorque"], ["dpad_lr", "Pouvoirs"], ["dpad_ud", "Cible"], ["l1", "Derrière"], ["create", "Reset"], ["options", "Menu"]]
 const KEYS_HELP := "Clavier : ZQSD / flèches  ·  Espace drift  ·  Maj boost  ·  E remorque  ·  F / G pouvoirs  ·  T cible  ·  C caméra  ·  R reset  ·  Échap menu"
 var _standings: Label
 var _standings_card: PanelContainer

@@ -1517,6 +1517,19 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   n'affiche plus que « EN ATTENTE DES AUTRES JOUEURS n/N ». Hors ligne
   depuis le menu, il n'y avait déjà plus de sas (seules les scènes lancées
   sans le menu, outils de développement, le gardent). Test : `net_bots_test`.
+- [x] **Aide du HUD : Create = reset, Options = menu** (2026-10-22) : la barre
+  de pictos de la course affichait encore « OPT Reset » après le menu pause ;
+  nouveau picto `create` (`PadGlyph`).
+- [x] **Ancien sas jaune supprimé partout** (2026-10-22, « il y a toujours le
+  texte jaune que je ne veux pas. Maintenant, c'est le menu ») : il ne
+  restait que dans les scènes de course lancées sans le menu (captures,
+  outils). Supprimé : invite Carré, remorque au stick, `trailer_text`. Hors
+  ligne, le compte à rebours part toujours tout de suite ; le sas ne sert
+  plus qu'en ligne (attente du chargement, sans invite). `race_ready_test`
+  réécrit (plus de sas, rien ne bouge pendant le compte à rebours).
+  À noter : `docs/VEHICLE_SPEC.md` §5 bis dit encore « dans le sas READY,
+  chaque joueur choisit sa semi-remorque » (contrat : à corriger avec
+  l'accord de l’équipe ; le choix se fait à la page de sélection du menu).
 
 ## Questions de design ouvertes
 
