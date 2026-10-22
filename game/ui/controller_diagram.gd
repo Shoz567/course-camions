@@ -68,7 +68,7 @@ const CALLOUTS: Array[Dictionary] = [
 	{"key": "Stick gauche / L3", "text": "Diriger · L3 : klaxon", "anchors": [P_LSTICK], "side": -1, "row": 4, "ring": 30.0},
 	{"key": "R2", "text": "Accélérer (progressif)", "anchors": [P_R2], "side": 1, "row": 0, "ring": 11.0},
 	{"key": "R1", "text": "Frein à main / dérapage (drift)", "anchors": [P_R1], "side": 1, "row": 1, "ring": 10.0},
-	{"key": "Options", "text": "Reset sur la piste", "anchors": [P_OPTIONS], "side": 1, "row": 2,
+	{"key": "Options", "text": "Menu pause", "anchors": [P_OPTIONS], "side": 1, "row": 2,
 		"ring": 13.0, "via": [[Vector2(720, 150)]]},
 	{"key": "Triangle", "text": "Largage de remorque (recharge 30 s)", "anchors": [P_TRIANGLE], "side": 1,
 		"row": 3, "ring": 20.0, "icon": "triangle", "via": [[Vector2(770, 190)]]},

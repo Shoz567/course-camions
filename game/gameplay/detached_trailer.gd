@@ -212,7 +212,7 @@ func damage_for(approach_ms: float) -> float:
 ## long de la normale, AVANT le choc : vitesses des deux corps au debut d'un
 ## meme pas recent (la plus forte des trois).
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
-	var now := Engine.get_physics_frames()
+	var now := GameClock.now()
 	for i in state.get_contact_count():
 		var truck := state.get_contact_collider_object(i) as Truck
 		if truck == null:

@@ -99,7 +99,7 @@ func _on_barrel(truck: Truck, _index: int) -> void:
 
 func _fresh(truck: Truck, pad: String) -> bool:
 	var key := "%s:%d" % [pad, truck.get_instance_id()]
-	var now := Engine.get_physics_frames()
+	var now := GameClock.now()
 	if _last.has(key) and now - int(_last[key]) < cooldown_ticks:
 		return false
 	_last[key] = now

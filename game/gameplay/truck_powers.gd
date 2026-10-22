@@ -528,7 +528,7 @@ func _saw_tick() -> void:
 		saw_hit = t
 		var xw := _truck.global_transform
 		var push := _truck.global_basis.x * side
-		if _hit_sparks != null and (Engine.get_physics_frames() % 6) == 0:
+		if _hit_sparks != null and (GameClock.now() % 6) == 0:
 			_hit_sparks.global_position = xw * (cab_at if cab else trailer_at)
 			_hit_sparks.restart()
 		# PV a chaque tick, entailles dans la tole a chaque coup de lame

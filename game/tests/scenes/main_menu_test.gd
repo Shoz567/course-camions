@@ -171,38 +171,38 @@ func _test_tick(t: int) -> void:
 			_seen["diagram"] = diagram != null and diagram.is_visible_in_tree() and diagram.size.x >= 1000.0
 			if diagram != null:
 				_seen["callouts"] = diagram.callouts()
-			_menu.volume_slider.value = 50.0
+			_menu.settings.volume_slider.value = 50.0
 			_seen["volume_db"] = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
-			_menu.volume_slider.value = 100.0
+			_menu.settings.volume_slider.value = 100.0
 			# jauges Musique et Bruitages (2026-10-22)
-			_menu.music_slider.value = 40.0
-			_menu.effects_slider.value = 20.0
+			_menu.settings.music_slider.value = 40.0
+			_menu.settings.effects_slider.value = 20.0
 			_seen["jauges"] = [GameState.music_volume, GameState.effects_volume,
 				snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(SoundMix.MUSIC)), 0.01),
 				snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(SoundMix.EFFECTS)), 0.01)]
-			_menu.music_slider.value = SoundMix.DEFAULT_MUSIC
-			_menu.effects_slider.value = SoundMix.DEFAULT_EFFECTS
-			_seen["sound_check"] = _menu.sound_check.button_pressed
+			_menu.settings.music_slider.value = SoundMix.DEFAULT_MUSIC
+			_menu.settings.effects_slider.value = SoundMix.DEFAULT_EFFECTS
+			_seen["sound_check"] = _menu.settings.sound_check.button_pressed
 			var env := (_menu.get_node("WorldEnvironment") as WorldEnvironment).environment
 			var was := [GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
-			var low := _menu.quality_option.get_item_index(GraphicsSettings.Quality.LOW)
-			_menu.quality_option.select(low)
-			_menu.quality_option.item_selected.emit(low)
+			var low := _menu.settings.quality_option.get_item_index(GraphicsSettings.Quality.LOW)
+			_menu.settings.quality_option.select(low)
+			_menu.settings.quality_option.item_selected.emit(low)
 			_seen["quality"] = [was, GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
 			# extreme (2026-10-22) : en tete de liste, avertissement d'abord ;
 			# Annuler garde la qualite, Oui la passe en extreme
 			var order: Array[int] = []
-			for i in _menu.quality_option.item_count:
-				order.append(_menu.quality_option.get_item_id(i))
-			var ext := _menu.quality_option.get_item_index(GraphicsSettings.Quality.EXTREME)
-			_menu.quality_option.select(ext)
-			_menu.quality_option.item_selected.emit(ext)
-			var asked := [_menu.extreme_warning.visible, GameState.graphics_quality,
-				(_menu.extreme_warning.find_child("Message", true, false) as Label).text]
-			_menu.close_extreme_warning(false)
-			var kept := [_menu.extreme_warning.visible, GameState.graphics_quality]
-			_menu.quality_option.item_selected.emit(ext)
-			_menu.close_extreme_warning(true)
+			for i in _menu.settings.quality_option.item_count:
+				order.append(_menu.settings.quality_option.get_item_id(i))
+			var ext := _menu.settings.quality_option.get_item_index(GraphicsSettings.Quality.EXTREME)
+			_menu.settings.quality_option.select(ext)
+			_menu.settings.quality_option.item_selected.emit(ext)
+			var asked := [_menu.settings.extreme_warning.visible, GameState.graphics_quality,
+				(_menu.settings.extreme_warning.find_child("Message", true, false) as Label).text]
+			_menu.settings.close_extreme_warning(false)
+			var kept := [_menu.settings.extreme_warning.visible, GameState.graphics_quality]
+			_menu.settings.quality_option.item_selected.emit(ext)
+			_menu.settings.close_extreme_warning(true)
 			_seen["extreme"] = [order, asked, kept, GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled,
 				get_viewport().msaa_3d]
 			_menu.set_quality(GraphicsSettings.Quality.HIGH)
@@ -281,21 +281,21 @@ func _test_finish() -> void:
 	# des parametres l'allume et l'eteint
 	var label := GameState.get_node_or_null(^"FpsCounter/Fps") as Label
 	var off_first := not GameState.show_fps and label != null and not label.visible
-	_menu.fps_check.button_pressed = true
+	_menu.settings.fps_check.button_pressed = true
 	var on := GameState.show_fps and label.visible
-	_menu.fps_check.button_pressed = false
+	_menu.settings.fps_check.button_pressed = false
 	check("parametres : compteur FPS eteint par defaut, la case l'affiche puis le cache",
 		off_first and on and not label.visible and GameStateNode.fps_text(60.0) == "60 FPS  (16.7 ms)"
 		and GameStateNode.fps_text(60.0, 0.75) == "60 FPS  (16.7 ms)\n3D 75 %")
 	# resolution dynamique (2026-10-09) : active par defaut, la case la coupe
 	# et ramene la 3D a pleine resolution
-	var dyn_default := GameState.dynamic_resolution and _menu.dynres_check.button_pressed
+	var dyn_default := GameState.dynamic_resolution and _menu.settings.dynres_check.button_pressed
 	GameState.resolution.set_scale(0.7, [get_viewport()])
-	_menu.dynres_check.button_pressed = false
+	_menu.settings.dynres_check.button_pressed = false
 	GameState.resolution._process(0.016)
 	var dyn_off := not GameState.dynamic_resolution and GameState.resolution.scale == 1.0 \
 		and get_viewport().scaling_3d_scale == 1.0
-	_menu.dynres_check.button_pressed = true
+	_menu.settings.dynres_check.button_pressed = true
 	check("parametres : resolution dynamique active par defaut, la case la coupe (3D a 100 %)",
 		dyn_default and dyn_off and GameState.dynamic_resolution)
 	check("6 boutons de joueurs", _menu.player_buttons.size() == 6)
@@ -337,7 +337,7 @@ func _test_finish() -> void:
 		"Carré": "Nitro boost (recharge 6 s)",
 		"Triangle": "Largage de remorque (recharge 30 s)", "L1": "Regarder derrière (tenu)",
 		"Stick gauche / L3": "Diriger · L3 : klaxon",
-		"Croix directionnelle": "◄ ► pouvoirs · ▲ cible", "Stick droit / R3": "Regarder autour · R3 : vue", "Options": "Reset sur la piste",
+		"Croix directionnelle": "◄ ► pouvoirs · ▲ cible", "Stick droit / R3": "Regarder autour · R3 : vue", "Options": "Menu pause",
 		"Create / pavé tactile": "Reset sur la piste"}
 	var missing := []
 	for k: String in wanted:

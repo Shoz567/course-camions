@@ -145,11 +145,16 @@ func _test_device() -> void:
 	back.append(_pad0.looking_back())
 	check("L1 tenu : regarder derriere (hors InputFrame), relache : fini", back == [true, false, false], str(back))
 	var resets := 0
-	for b: JoyButton in [JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]:
+	for b: JoyButton in [JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]:
 		_send_button(0, b, true)
 		resets += 1 if _pad0.poll(13).reset else 0
 		_send_button(0, b, false)
-	check("Options, Create, pave tactile : reset", resets == 3, "%d / 3" % resets)
+	check("Create, pave tactile : reset", resets == 2, "%d / 2" % resets)
+	# Options ouvre le menu pause (LocalRace, 2026-10-22) : plus de reset
+	_send_button(0, JOY_BUTTON_START, true)
+	var opt := _pad0.poll(13).reset
+	_send_button(0, JOY_BUTTON_START, false)
+	check("Options : pas de reset (menu pause)", not opt)
 	check("reset : vrai un seul tick", not _pad0.poll(14).reset)
 	_send_button(0, JOY_BUTTON_B, true)
 	var fo := _pad0.poll(15)

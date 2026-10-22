@@ -380,6 +380,14 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   envoyé avant, à `lap_completed`, le client affichait un tour de retard.
   Essai de bout en bout sur un PC : `dev/net_e2e.tscn` (deux instances,
   bots aux commandes, lignes SAMPLE comparables).
+- **Menu pause en ligne, protocole 9 (2026-10-22)** : Options / Échap
+  ouvrent le menu sans figer la course ; tant qu'il est ouvert, le camion de
+  ce PC reçoit une frame neutre (`LocalRace._menu_frame`), envoyée telle
+  quelle au host. Un client y **quitte la partie** (`leave`, comme avant).
+  Le host y **arrête la course** : `NetSession.stop_race()` envoie
+  `_stop` (RPC fiable) à tous, chacun revient au salon du menu, la partie
+  reste ouverte (délais de coupure longs, comme au lancement). Signal
+  `race_stopped`. Test : `pause_menu_test`.
 
 ### Pas encore fait
 

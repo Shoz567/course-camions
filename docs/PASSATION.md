@@ -165,6 +165,12 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   Trois jauges dans les paramètres : général, musique, bruitages.
 - Vraies musiques (CC0, MintoDog, Git LFS) : une par circuit, version
   rapide au dernier tour, une pour le menu (`game/audio/music/`).
+- **Menu pause en course** (2026-10-22) : Options / Échap ouvrent REPRENDRE,
+  PARAMÈTRES (le même panneau qu'au menu, `SettingsPanel`), et la sortie
+  confirmée : quitter la course (local), quitter la partie (client), arrêter
+  la course pour tous (host, retour au salon). Pause hors ligne seulement ;
+  l'horloge de jeu `GameClock` retire les ticks figés. Options ne fait
+  plus reset (Create et pavé tactile le gardent) et n'est plus réaffectable.
 
 ### Performance, rendu, son, build
 - Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,

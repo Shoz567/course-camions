@@ -26,8 +26,8 @@ extends Node3D
 ## remorque verrouille les 5 premieres secondes, TruckCargo) :
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
-## arrives : Options / Entree relance, Create / Echap revient au menu (Echap a tout
-## moment). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous, celle
+## arrives : Options / Entree relance, Create / Echap revient au menu. Pendant la
+## course, Options / Echap ouvrent le menu pause (PauseMenu). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous, celle
 ## du circuit, puis sa version rapide au dernier tour (_update_music) ; elle
 ## disparait avec la scene (menu, rejouer).
 ##
@@ -140,7 +140,7 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 ]
 ## Aide des commandes. En arene, pas de largage (une remorque par vie) : les
 ## morceaux entre crochets y disparaissent (help_for).
-const HELP_SOLO := "Manette (DualSense, façon Forza) : R2 accélérer, L2 freiner / reculer, Croix ou R1 drift, Carré nitro (recharge 6 s),\n[Triangle remorque, ]L3 klaxon, stick droit regard, L1 derrière, R3 caméra, Options reset, croix gauche / droite pouvoirs, croix haut cible.   Clavier : ZQSD ou flèches, Espace drift, Maj boost, [E cargo, ]H klaxon, C caméra, B derrière, R reset, F / G pouvoirs, T cible.   Échap : menu"
+const HELP_SOLO := "Manette (DualSense, façon Forza) : R2 accélérer, L2 freiner / reculer, Croix ou R1 drift, Carré nitro (recharge 6 s),\n[Triangle remorque, ]L3 klaxon, stick droit regard, L1 derrière, R3 caméra, Create reset, croix gauche / droite pouvoirs, croix haut cible.   Clavier : ZQSD ou flèches, Espace drift, Maj boost, [E cargo, ]H klaxon, C caméra, B derrière, R reset, F / G pouvoirs, T cible.   Options / Échap : menu"
 const HELP_SPLIT: PackedStringArray = [
 	"J1 : manette 1, ou flèches + Ctrl droit (drift), Maj droite (boost), [; (cargo), ]Retour arrière (reset), K / L (pouvoirs)",
 	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), [E (cargo), ]R (reset), F / G (pouvoirs)",
@@ -225,7 +225,7 @@ var state: State:
 	get:
 		return int(RaceManager.state) as State
 	set(value):
-		RaceManager.enter(int(value) as RaceManagerNode.State, Engine.get_physics_frames())
+		RaceManager.enter(int(value) as RaceManagerNode.State, GameClock.now())
 ## Conteneur de l'ecran partage (VBoxContainer ou GridContainer), null en solo.
 var split: Container
 ## Camera de la case libre (la 4e a 3 joueurs, la 6e a 5) : suit le camion en
@@ -240,6 +240,9 @@ var _state_tick: int:
 		RaceManager.state_tick = value
 var _last_countdown_sec: int = -1
 var _neutral: InputFrame = InputFrame.new()
+## Menu de la course (Options / Echap) : pause hors ligne ; en ligne, la
+## course continue et le camion de ce PC roule a vide tant qu'il est ouvert.
+var pause_menu: PauseMenu
 var _finish_order: Array[Truck]:
 	get:
 		return RaceManager.finish_order
@@ -403,13 +406,18 @@ func _ready() -> void:
 	# s'efface (release_start) ; la grille attend, camions immobiles
 	_held = LoadingScreen.covering() and not NetSession.is_online()
 	_held_gate = gate
-	RaceManager.begin(true if _held else gate, Engine.get_physics_frames())
+	RaceManager.begin(true if _held else gate, GameClock.now())
 	if NetSession.is_online():
 		race.mirror = NetSession.is_client()
 		net = NetRace.new()
 		add_child(net)
 		net.setup(self, players, race)
 		NetSession.connection_lost.connect(_on_connection_lost)
+	pause_menu = PauseMenu.new()
+	pause_menu.name = "PauseMenu"
+	add_child(pause_menu)
+	pause_menu.quit_confirmed.connect(_on_quit_confirmed)
+	pause_menu.quality_changed.connect(func(_q: int) -> void: _apply_graphics())
 
 
 ## Camions de la mini-carte vue par `me` : chacun a la couleur de son
@@ -519,6 +527,12 @@ func _apply_graphics() -> void:
 	for n in find_children("*", "DirectionalLight3D", false, false):
 		GraphicsSettings.apply_sun(n as DirectionalLight3D, views, quality)
 	GraphicsSettings.apply_viewport(get_viewport(), quality)
+	# qualite changee en course (menu pause) : chaque vue de l'ecran partage
+	if split != null:
+		for c in split.get_children():
+			for vp in c.get_children():
+				if vp is SubViewport:
+					GraphicsSettings.apply_viewport(vp as SubViewport, quality)
 
 
 ## Une case de l'ecran partage : SubViewportContainer etire + SubViewport.
@@ -763,7 +777,7 @@ func release_start() -> void:
 	if not _held:
 		return
 	_held = false
-	RaceManager.begin(_held_gate, Engine.get_physics_frames())
+	RaceManager.begin(_held_gate, GameClock.now())
 
 
 func _prewarm_bodies() -> void:
@@ -912,6 +926,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			or (pad_down and pad.button_index == JOY_BUTTON_START)
 	var to_menu := (key_down and key.physical_keycode == KEY_ESCAPE) \
 			or (pad_down and pad.button_index == JOY_BUTTON_BACK and state == State.FINISHED)
+	# pendant la course, Options / Echap ouvrent le menu pause (2026-10-22 :
+	# « ca ne quitte pas la course directement ») ; a l'arrivee de tous, ils
+	# relancent / reviennent au menu comme avant
+	var open_menu := (key_down and key.physical_keycode == KEY_ESCAPE) \
+			or (pad_down and pad.button_index == JOY_BUTTON_START)
+	if open_menu and state != State.FINISHED and _lost_reason == "" and pause_menu != null:
+		pause_menu.open()
+		get_viewport().set_input_as_handled()
+		return
 	if to_menu:
 		# en ligne : quitter la course, c'est quitter la partie (le host la ferme)
 		NetSession.leave()
@@ -932,7 +955,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	var tick := Engine.get_physics_frames()
+	var tick := GameClock.now()
 	if _lost_reason != "":
 		# partie perdue : course figee, message, puis menu
 		if tick - _lost_tick >= LOST_TICKS:
@@ -959,7 +982,7 @@ func _simulate(tick: int) -> void:
 		# precedente / suivante, Carre (le boost de SA source) = pret
 		_neutral.tick = tick
 		for i in players.size():
-			var f := players[i].input.poll(tick)
+			var f := _menu_frame(i, players[i].input.poll(tick), tick)
 			players[i].truck.set_input(_neutral)
 			var dir := 0
 			if f.steer > TRAILER_STEER_THRESHOLD:
@@ -1012,8 +1035,9 @@ func _simulate(tick: int) -> void:
 	# temps limite apres la premiere arrivee (une course se termine toujours)
 	_check_all_finished()
 	_update_catchup()
-	for p in players:
-		var f := p.input.poll(tick)
+	for i in players.size():
+		var p := players[i]
+		var f := _menu_frame(i, p.input.poll(tick), tick)
 		p.truck.set_input(f)
 		if f.reset and not p.truck.is_wrecked():
 			_relaunch(p.truck)
@@ -1050,6 +1074,8 @@ func _countdown_beeps(tick: int) -> void:
 func _client_tick(tick: int) -> void:
 	var local := _local_player()
 	var f := local.input.poll(tick) if local != null else _neutral
+	if pause_menu != null and pause_menu.visible:
+		f = _neutral    # menu ouvert : le camion roule a vide
 	if local != null:
 		_neutral.tick = tick
 		# sas READY et compte a rebours : camion immobile, comme chez le host
@@ -1060,6 +1086,26 @@ func _client_tick(tick: int) -> void:
 	net.client_tick(tick, f)
 	if state == State.COUNTDOWN:
 		_countdown_beeps(tick)
+
+
+## Sortie confirmee au menu pause : le host arrete la course pour tous
+## (retour au salon, la partie reste ouverte), un client quitte la partie,
+## hors ligne retour au menu.
+func _on_quit_confirmed() -> void:
+	if NetSession.is_host():
+		NetSession.stop_race()
+		return
+	NetSession.leave()
+	get_tree().change_scene_to_file(MENU_SCENE)
+
+
+## Frame du joueur `i` : neutre tant que le menu pause de ce PC est ouvert
+## (en ligne, la course continue ; ses touches pilotent le menu, pas le camion).
+func _menu_frame(i: int, f: InputFrame, tick: int) -> InputFrame:
+	if pause_menu == null or not pause_menu.visible or not is_local(i):
+		return f
+	_neutral.tick = tick
+	return _neutral
 
 
 func _local_player() -> Player:
@@ -1106,7 +1152,7 @@ func apply_net_state(s: Array) -> void:
 	var next: int = clampi(int(s[0]), 0, State.size() - 1)
 	if next == int(state):
 		return
-	var now := Engine.get_physics_frames()
+	var now := GameClock.now()
 	if next == State.COUNTDOWN:
 		# comme chez le host : carrosserie de NOTRE camion (predit, il se cabosse
 		# ici) preparee maintenant, pas au premier choc (~0,5 s d'a-coup)
@@ -1144,7 +1190,7 @@ func mark_abandoned(i: int) -> void:
 func _on_connection_lost(reason: String) -> void:
 	if _lost_reason == "":
 		_lost_reason = reason if reason != "" else "Connexion perdue"
-		_lost_tick = Engine.get_physics_frames()
+		_lost_tick = GameClock.now()
 		music.fade_out()
 
 ## Joueurs par position courante (1er d'abord).
@@ -1197,12 +1243,12 @@ func ticker_text() -> String:
 			if not eliminated.has(players.find(p)):
 				names.append(player_name(players.find(p)))
 		parts.append("ÉLIMINATION DANS %d s  ·  dernier : %s" % [elim, names[-1] if not names.is_empty() else "?"])
-	if _notice != "" and Engine.get_physics_frames() < _notice_until:
+	if _notice != "" and GameClock.now() < _notice_until:
 		parts.append(_notice.replace("\n", "  "))
 	if not _finish_order.is_empty():
 		parts.append("1er : %s  ·  %d/%d arrivés" % [player_name(players.find(_find_player(_finish_order[0]))),
 			_finish_order.size(), players.size()])
-	var left := RaceManager.deadline_left(Engine.get_physics_frames())
+	var left := RaceManager.deadline_left(GameClock.now())
 	if left >= 0:
 		parts.append("FIN DANS %d s" % ceili(left / 60.0))
 	return "  ·  ".join(parts)
@@ -1290,9 +1336,9 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	_update_slowmo(delta)
 	_update_music()
-	var elapsed := Engine.get_physics_frames() - _state_tick
+	var elapsed := GameClock.now() - _state_tick
 	var standings := standings_text()
-	if _notice != "" and Engine.get_physics_frames() < _notice_until:
+	if _notice != "" and GameClock.now() < _notice_until:
 		standings = _notice + ("\n\n" + standings if standings != "" else "")
 	var unstable := net != null and not net.is_host() and net.host_ready and _lost_reason == "" \
 			and net.ticks_since_snapshot() > UNSTABLE_TICKS
@@ -1399,7 +1445,7 @@ func _process(delta: float) -> void:
 
 
 func _on_race_finished(truck: Truck, _total: int) -> void:
-	RaceManager.record_finish(truck, Engine.get_physics_frames())
+	RaceManager.record_finish(truck, GameClock.now())
 	_check_all_finished()
 
 
@@ -1469,7 +1515,7 @@ func _on_arena_destroyed(i: int) -> void:
 			h.no_respawn = true
 		eliminated.append(i)
 		_notice = "%s ÉLIMINÉ" % player_name(i)
-		_notice_until = Engine.get_physics_frames() + 120
+		_notice_until = GameClock.now() + 120
 
 
 func _arena_tick(tick: int) -> void:
@@ -1598,7 +1644,7 @@ func _arena_running() -> bool:
 func arena_seconds_left() -> int:
 	if not _arena_running() or arena_limit_ticks <= 0:
 		return -1
-	return maxi(ceili((arena_limit_ticks - (Engine.get_physics_frames() - _state_tick)) / 60.0), 0)
+	return maxi(ceili((arena_limit_ticks - (GameClock.now() - _state_tick)) / 60.0), 0)
 
 
 ## Musique : version du dernier tour quand le plus avance des joueurs de ce
@@ -1628,13 +1674,13 @@ func _alive() -> Array[Player]:
 func elimination_seconds_left() -> int:
 	if game_mode != GameStateNode.GameMode.ELIMINATION or state != State.RACING or _next_elim < 0:
 		return -1
-	return maxi(ceili((_next_elim - Engine.get_physics_frames()) / 60.0), 0)
+	return maxi(ceili((_next_elim - GameClock.now()) / 60.0), 0)
 
 
 ## Tous arrives (ou partis, en ligne), ou temps limite ecoule apres la
 ## premiere arrivee : resultats. Le client attend le host (apply_net_state).
 func _check_all_finished() -> void:
-	var tick := Engine.get_physics_frames()
+	var tick := GameClock.now()
 	if is_authority() and RaceManager.should_finish(tick, players.size(), _abandoned.size() + eliminated.size()):
 		RaceManager.finish(tick, RaceManager.deadline_left(tick) == 0 \
 				and _finish_order.size() + _abandoned.size() < players.size())

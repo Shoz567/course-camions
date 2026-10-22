@@ -506,7 +506,7 @@ func apply_puddle_slip(ticks: int = 60) -> void:
 		var up := xf.basis.y
 		var v_fwd := linear_velocity.dot(-xf.basis.z)
 		if absf(v_fwd) > 2.0:
-			var kick_dir := 1.0 if (int(Engine.get_physics_frames()) % 2 == 0) else -1.0
+			var kick_dir := 1.0 if (int(GameClock.now()) % 2 == 0) else -1.0
 			apply_torque_impulse(up * kick_dir * mass * 0.8)
 
 
@@ -1467,7 +1467,7 @@ func _shove(angle: float, rel: float, up: Vector3, com: Vector3) -> float:
 	var hits := get_world_3d().direct_space_state.intersect_shape(_trailer_query, 4)
 	if hits.is_empty():
 		return rel
-	var now := Engine.get_physics_frames()
+	var now := GameClock.now()
 	var tb := global_basis * Basis(Vector3.UP, angle)
 	var kingpin := global_transform * TruckSpec.KINGPIN
 	var reach := trailer_box_center.z + trailer_box_size.z / 2.0 - TruckSpec.KINGPIN.z

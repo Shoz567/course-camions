@@ -46,6 +46,8 @@ static func _ensure_init() -> void:
 	_player = AudioStreamPlayer.new()
 	_player.name = "MenuSoundPlayer"
 	_player.bus = SoundMix.EFFECTS
+	# joue aussi la course en pause (menu pause, 2026-10-22)
+	_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null and tree.root != null:
 		# differe : au _ready du menu, la racine est occupee a ajouter la scene

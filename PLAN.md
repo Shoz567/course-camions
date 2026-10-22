@@ -1484,6 +1484,31 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   le touche à 46 km/h). Les tirs restent secondaires : un pouvoir part sur
   le camion qui se trouve devant, sans détour pour l'atteindre, au rythme
   du niveau. Test : `bot_start_test`.
+- [x] **Menu pause en course** (2026-10-22, « quand on appuie sur la touche
+  option pour la manette et échappe pour clavier souris, ça ne quitte pas la
+  course directement, mais ça ouvre un menu et ça met le jeu en pause. Et
+  quand c'est en multijoueur […] ça met pas le jeu en pause ») :
+  - `PauseMenu` : REPRENDRE, PARAMÈTRES, puis QUITTER LA COURSE (local),
+    QUITTER LA PARTIE (client) ou ARRÊTER LA COURSE (host : chacun revient
+    au salon, la partie reste ouverte ; `NetSession.stop_race`, protocole
+    9), avec confirmation (ANNULER par défaut). Options, Échap ou Rond le
+    referment. Fin de course inchangée : Options / Entrée rejouent,
+    Create / Échap ramènent au menu ;
+  - hors ligne, l'arbre est figé ; en ligne, la course continue et le camion
+    de ce PC roule à vide tant que le menu est ouvert ;
+  - les paramètres du menu principal sortent dans `SettingsPanel` (schéma
+    de la manette, touches, réaffectation, trois jauges, qualité, FPS,
+    résolution dynamique), partagé par le menu et la course ; une qualité
+    changée en course s'applique tout de suite (pas la densité du décor
+    extrême, posée au chargement) ;
+  - Options quitte le reset (Create et pavé tactile le gardent) et rejoint
+    les boutons réservés : retiré des profils enregistrés ;
+  - `GameClock` : le compteur du moteur avançait pendant la pause, et le
+    test l'a montré (départ dès la reprise, au lieu des 180 ticks du compte à
+    rebours). Le code de jeu lit maintenant `GameClock.now()`, qui retire
+    les ticks figés ; mesuré : départ après 180 ticks de jeu exactement ;
+  - test : `pause_menu_test` (16 vérifications) ; `main_menu_test`,
+    `settings_remap_test`, `input_frame_test` adaptés.
 
 ## Questions de design ouvertes
 

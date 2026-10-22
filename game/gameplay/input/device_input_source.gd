@@ -24,7 +24,7 @@ extends InputSource
 ##   camera           R3 : signal local
 ##   regard           stick droit (petite amplitude) et L1 maintenu : regarder
 ##                    derriere ; local, hors InputFrame (look, looking_back)
-##   reset            Options, Create ou pave tactile
+##   reset            Create ou pave tactile (Options : menu pause, LocalRace)
 ##   pouvoirs         fleches gauche / droite de la croix (4.5.8)
 ##   cible suivante   fleche haut de la croix (2026-10-20)
 
@@ -59,7 +59,7 @@ signal camera_toggle_requested
 ## Cible suivante des pouvoirs (2026-10-20) : fleche haut de la croix.
 @export var buttons_target: Array[JoyButton] = [JOY_BUTTON_DPAD_UP]
 @export var buttons_camera: Array[JoyButton] = [JOY_BUTTON_RIGHT_STICK]
-@export var buttons_reset: Array[JoyButton] = [JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]
+@export var buttons_reset: Array[JoyButton] = [JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]
 ## Gachette d'accelerateur analogique (R2).
 @export var axis_accelerate: JoyAxis = JOY_AXIS_TRIGGER_RIGHT
 ## Gachette de frein analogique (L2).

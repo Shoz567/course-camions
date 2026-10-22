@@ -47,24 +47,24 @@ func _test_tick(t: int) -> void:
 	match t:
 		2:
 			_menu.toggle_settings()
-			_menu.toggle_remap()
-			_menu.begin_remap("boost")
-			_seen["waiting_text"] = (_menu._remap_buttons["boost"] as Button).text
+			_menu.settings.toggle_remap()
+			_menu.settings.begin_remap("boost")
+			_seen["waiting_text"] = (_menu.settings._remap_buttons["boost"] as Button).text
 			_pad(2, JOY_BUTTON_GUIDE, true)
 		3:
 			_pad(2, JOY_BUTTON_GUIDE, false)
-			_seen["after_ps"] = _menu.remap_waiting
+			_seen["after_ps"] = _menu.settings.remap_waiting
 			_pad(2, JOY_BUTTON_LEFT_STICK, true)
 		4:
 			_pad(2, JOY_BUTTON_LEFT_STICK, false)
 			_seen["bindings"] = GameState.pad_bindings.duplicate(true)
-			_seen["boost_text"] = (_menu._remap_buttons["boost"] as Button).text
-			_seen["honk_text"] = (_menu._remap_buttons["honk"] as Button).text
-			_menu.begin_remap("camera")
+			_seen["boost_text"] = (_menu.settings._remap_buttons["boost"] as Button).text
+			_seen["honk_text"] = (_menu.settings._remap_buttons["honk"] as Button).text
+			_menu.settings.begin_remap("camera")
 			_key(KEY_ESCAPE, true)
 		5:
 			_key(KEY_ESCAPE, false)
-			_seen["cancel"] = [_menu.remap_waiting, _menu.remap_panel.visible,
+			_seen["cancel"] = [_menu.settings.remap_waiting, _menu.settings.remap_panel.visible,
 				PadBindings.list_name(GameState.pad_bindings["camera"])]
 			# en course : le profil reaffecte suit la manette du joueur
 			_input = LocalInputSource.new()
@@ -80,10 +80,10 @@ func _test_tick(t: int) -> void:
 			var f := _input.poll(t)
 			_seen["square"] = [f.boost, f.honk]
 			_pad(0, JOY_BUTTON_X, false)
-			_menu.reset_remap()
+			_menu.settings.reset_remap()
 			_seen["reset"] = str(GameState.pad_bindings) == str(PadBindings.defaults())
-			_menu.toggle_remap()
-			_seen["closed"] = not _menu.remap_panel.visible
+			_menu.settings.toggle_remap()
+			_seen["closed"] = not _menu.settings.remap_panel.visible
 
 
 func _test_finish() -> void:
@@ -114,7 +114,7 @@ func _test_finish() -> void:
 	var broken := PadBindings.sanitized({"boost": PackedInt32Array(), "camera": [200, -1], "honk": [JOY_BUTTON_DPAD_DOWN]})
 	check("profil abime : actions vides ou hors bornes -> defaut, le reste garde",
 		_list(broken, "boost") == "Carré" and _list(broken, "camera") == "R3" and _list(broken, "honk") == "Bas"
-		and _list(broken, "reset") == "Options, Create, Pavé tactile", str(broken))
+		and _list(broken, "reset") == "Create, Pavé tactile", str(broken))
 	# D
 	_round_trip()
 	# E

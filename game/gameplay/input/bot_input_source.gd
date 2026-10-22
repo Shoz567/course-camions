@@ -735,7 +735,7 @@ func _choose_side(other_lat: float, reach: float, want: float, half: float) -> f
 ## 6,6 ms par tick sur 15,7, la moitie du budget d'un tick). Chacun y saute
 ## son propre camion.
 func _others() -> Array[Dictionary]:
-	var f := Engine.get_physics_frames()
+	var f := GameClock.now()
 	if f != _shared_frame or _shared_track != track:
 		if _shared_track != track:
 			_shared_hints.clear()
@@ -1272,7 +1272,7 @@ func _arena_drive(v: float) -> void:
 		if _hunters_of(t) >= ARENA_MAX_ON_ONE:
 			score *= ARENA_CROWD_FAR
 		# il vient de reapparaitre : repit
-		if Engine.get_physics_frames() - int(t.get_meta(TruckHealth.RESPAWNED_META, -100000)) < RESPAWN_GRACE_TICKS:
+		if GameClock.now() - int(t.get_meta(TruckHealth.RESPAWNED_META, -100000)) < RESPAWN_GRACE_TICKS:
 			score *= ARENA_GRACE_FAR
 		# sa proie actuelle : il la garde, sauf beaucoup mieux ailleurs
 		if t == arena_prey:
