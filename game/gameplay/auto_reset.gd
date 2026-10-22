@@ -44,6 +44,9 @@ signal truck_crashed(truck: Truck)
 ## par exemple RaceLaps.respawn_transform, qui ne fait jamais sauter de
 ## checkpoint. Par defaut : la piste, au plus pres.
 var respawn_provider: Callable
+## Optionnel : vitesse de lancement (Transform3D -> float, m/s, vers l'avant).
+## Par defaut : a l'arret.
+var launch_provider: Callable
 
 var _trucks: Array[Truck] = []
 var _zones: Dictionary = {}       # Truck -> nombre de zones chevauchees
@@ -144,7 +147,8 @@ func is_off_track(t: Truck) -> bool:
 
 func _reset(t: Truck, reason: StringName) -> void:
 	var xf: Transform3D = respawn_provider.call(t) if respawn_provider.is_valid() 			else track.get_respawn_transform(t.global_position)
-	t.reset_to(xf)
+	var launch := float(launch_provider.call(xf)) if launch_provider.is_valid() else 0.0
+	t.reset_to(xf, -xf.basis.z.normalized() * launch)
 	_in_zone[t] = 0
 	_flipped[t] = 0
 	truck_reset.emit(t, reason)

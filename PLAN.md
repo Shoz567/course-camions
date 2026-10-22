@@ -1200,6 +1200,22 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   dans le vide ; la place doit maintenant être sur la chaussée
   (`TruckHealth.spot_ok`, `LocalRace.on_road`), sinon un peu plus loin ou
   plus tôt (`respawn_branch_test`).
+- [x] **Réapparition lancée** (2026-10-22, « pour que cela soit plus
+  dynamique, que lorsque l'on réapparaît on soit lancé, de même pour les
+  bots ») : après une destruction, une sortie de piste ou un reset, joueurs
+  et bots repartent vers l'avant à 80 km/h, moins si un virage arrive trop
+  vite pour un bot facile (profil de la ligne de course) ; à contresens
+  (arène), le plus lent du profil à 60 m de part et d'autre ; la moitié sur
+  un raccourci (`LocalRace.launch_for`, `Truck.reset_to(xf, velocity)`). En
+  ligne, le client reprend la vitesse du host. CLAUDE.md §6 : la remise en
+  piste fixe les vitesses (à zéro ou à cette vitesse), jamais l'élan d'avant.
+  `respawn_launch_test` et `respawn_launch_arena_test` : 8 réapparitions
+  chacun, vitesse prévue, aucune destruction ni choc de mur notable juste
+  après (2 PV en course, 0 en arène). Banc de 6 manches d'arène, sans / avec
+  lancement : PV infligés à la référence par les durs 570 / 602, part du
+  temps où ils la visent 0,55 / 0,52 (moyens 0,39), pouvoirs 66 / 66 ; la
+  manche d'`arena_levels_test` basculait de justesse (C, E2 : marge de
+  0,8 et 0,85).
 - [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
   « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec

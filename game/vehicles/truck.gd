@@ -292,6 +292,7 @@ var _reset_pending: bool = false
 ## de la nouvelle position, sinon le camion "glisse" a l'ecran jusqu'a elle.
 var _reset_applied: bool = false
 var _reset_xf: Transform3D = Transform3D.IDENTITY
+var _reset_vel: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
@@ -363,10 +364,12 @@ func get_input() -> InputFrame:
 	return _input
 
 
-## Remet le camion a `xf`, vitesses nulles, au prochain pas physique.
-## Passe par state.transform (CLAUDE.md §6) : jamais global_position.
-func reset_to(xf: Transform3D) -> void:
+## Remet le camion a `xf` au prochain pas physique, a la vitesse `velocity`
+## (nulle par defaut : lance a la reapparition, LocalRace.launch_for), sans
+## rotation. Passe par state.transform (CLAUDE.md §6) : jamais global_position.
+func reset_to(xf: Transform3D, velocity: Vector3 = Vector3.ZERO) -> void:
 	_reset_xf = xf
+	_reset_vel = velocity
 	_reset_pending = true
 	_slip_ticks = 0
 
@@ -906,7 +909,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 func _apply_reset(state: PhysicsDirectBodyState3D) -> void:
 	_reset_pending = false
 	state.transform = _reset_xf
-	state.linear_velocity = Vector3.ZERO
+	state.linear_velocity = _reset_vel
 	state.angular_velocity = Vector3.ZERO
 	# la vitesse d'avant le reset (chute) ne compte pas dans les impacts d'apres
 	_vel_hist.fill(Vector3.ZERO)
