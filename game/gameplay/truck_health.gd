@@ -46,8 +46,10 @@ const BARREL_DAMAGE := 15.0
 const TRAILER_EXPLOSION_DAMAGE := 20.0
 ## PV de remorque sans TrailerType.
 const DEFAULT_TRAILER_HP := 50.0
-## Decalages lateraux essayes pour reapparaitre a cote d'un obstacle (m).
+## Decalages lateraux essayes pour reapparaitre a cote d'un obstacle (m), a
+## sa hauteur puis un peu plus loin ou plus tot (RESPAWN_ALONG).
 const RESPAWN_OFFSETS: PackedFloat32Array = [0.0, 7.0, -7.0, 14.0, -14.0, 21.0, -21.0]
+const RESPAWN_ALONG: PackedFloat32Array = [0.0, 14.0, -14.0, 28.0]
 
 @export var max_hp: float = 100.0
 @export var wall_damage_min: float = 1.0
@@ -70,6 +72,10 @@ var trailer_max_hp: float = DEFAULT_TRAILER_HP
 ## Transformation de reapparition (Truck -> Transform3D). Par defaut : sur
 ## place, a plat, 1 m au-dessus.
 var respawn_provider: Callable
+## Place sur la route ? (Vector3 -> bool ; invalide : toute place libre.)
+## 2026-10-22 : sur un raccourci etroit, a cote de sa carcasse, le decalage de
+## 14 m passait le mur et le camion reapparaissait dans le vide.
+var spot_ok: Callable
 ## Hors piste (AutoReset) : ni les murs ni les obstacles ne blessent, le
 ## camion va etre replace.
 var off_track: bool = false
@@ -378,7 +384,7 @@ func _respawn() -> void:
 	else:
 		var f := -_truck.global_basis.z
 		xf = Transform3D(Basis(Vector3.UP, atan2(-f.x, -f.z)), _truck.global_position + Vector3.UP)
-	xf = _free_spot(xf)
+	xf = free_spot(xf)
 	_truck.set_wrecked(false)
 	_truck.reset_to(xf)
 	# camion neuf : remorque neuve attelee
@@ -393,18 +399,22 @@ func _respawn() -> void:
 
 ## `xf`, ou la place libre la plus proche sur sa transversale : jamais dans la
 ## carcasse ni dans une remorque laissee sur la route.
-func _free_spot(xf: Transform3D) -> Transform3D:
+func free_spot(xf: Transform3D) -> Transform3D:
 	var space := _truck.get_world_3d().direct_space_state
-	for dx in RESPAWN_OFFSETS:
-		var cand := xf.translated(xf.basis.x.normalized() * dx)
-		# boite au-dessus de la chaussee, de l'avant du tracteur au bout de la
-		# remorque
-		_respawn_query.transform = cand * Transform3D(Basis.IDENTITY, Vector3(0.0, 2.4, 6.5))
-		var blocked := false
-		for h: Dictionary in space.intersect_shape(_respawn_query, 4):
-			if h["collider"] != _truck:
-				blocked = true
-				break
-		if not blocked:
-			return cand
+	for dz in RESPAWN_ALONG:
+		for dx in RESPAWN_OFFSETS:
+			# l'avant du camion est -Z
+			var cand := xf.translated(xf.basis.x.normalized() * dx - xf.basis.z.normalized() * dz)
+			if spot_ok.is_valid() and not bool(spot_ok.call(cand.origin)):
+				continue
+			# boite au-dessus de la chaussee, de l'avant du tracteur au bout de
+			# la remorque
+			_respawn_query.transform = cand * Transform3D(Basis.IDENTITY, Vector3(0.0, 2.4, 6.5))
+			var blocked := false
+			for h: Dictionary in space.intersect_shape(_respawn_query, 4):
+				if h["collider"] != _truck:
+					blocked = true
+					break
+			if not blocked:
+				return cand
 	return xf

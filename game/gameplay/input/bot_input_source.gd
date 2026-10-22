@@ -54,10 +54,10 @@ const BOT_BRAKE := 9.9
 ## Par niveau : part de l'adherence en virage, part de la vitesse max, part
 ## du freinage, part de la ligne de course (le reste : ligne centrale),
 ## nitro, reaction aux pouvoirs (ticks).
-const GRIP := [0.6, 0.75, 0.95]
-const SPEED := [0.84, 0.94, 1.0]
-const BRAKE := [0.5, 0.65, 0.95]
-const LINE := [0.35, 0.75, 1.0]
+const GRIP := [0.75, 0.85, 1.0]
+const SPEED := [0.91, 0.95, 1.0]
+const BRAKE := [0.66, 0.78, 1.0]
+const LINE := [0.6, 0.85, 1.0]
 const BOOST := [false, true, true]
 const REACTION_TICKS := [150, 70, 25]
 ## Bouclier : distance (m) d'un projectile qui le vise a laquelle il le sort
@@ -106,8 +106,17 @@ const CREEP_MS := 4.0
 ## braquant, sans plafond du trafic.
 const ASTRAY_DOT := 0.65
 const ASTRAY_MS := 8.0
-## Vitesse de changement d'ecart lateral (m par tick).
+## Vitesse de changement d'ecart lateral (m par tick). Essayes le 2026-10-22
+## et retires (18 courses de 5 bots : des tours de 160 a 200 s, bots coinces
+## dans le trafic) : la ralentir a haute vitesse, limiter le freinage en
+## butee de direction, plafonner le braquage a l'adherence.
 const LANE_RATE_M := 0.2
+## Plaques de boost (2026-10-22 : +40 km/h a 130 juste avant le S des docks,
+## il y arrivait a 176 et partait en tete-a-queue) : une plaque sur sa route
+## a moins de PAD_LOOK_S devant, alors que la vitesse qu'elle donne depasse ce
+## que demande la suite (profil et freinage), il passe a cote.
+const PAD_LOOK_S := 2.5
+const PAD_EXTRA_MS := 40.0 / 3.6
 ## Voie de grille effacee sur ces premiers metres.
 const START_BLEND_M := 250.0
 ## Ecart (m) vers l'exterieur, direction en butee, qui fait lever le pied.
@@ -157,8 +166,22 @@ const BRANCH_BRAKE := 0.6
 ## Saut d'un raccourci : il ne le prend que si sa vitesse max depasse d'autant
 ## la vitesse conseillee (TrackBlockout.branch_jump_min_kmh).
 const JUMP_SPEED_MARGIN := 1.1
+## Et au plus JUMP_SPEED_MAX fois cette vitesse, de JUMP_RUNUP_M avant le vide
+## jusqu'a la reception (2026-10-21 : a 178 km/h nitro comprise, un bot
+## volait au-dela de la reception de la marina et tombait du bord).
+const JUMP_SPEED_MAX := 1.3
+const JUMP_RUNUP_M := 30.0
 const BRANCH_BOOST_CLEAR_M := 250.0
 const PUDDLE_COST_M := 8.0
+## Bonus en course (2026-10-21 : « base-toi sur le hard ») : un bonus dont il a
+## besoin (reparation sous RACE_REPAIR_PART de PV, tete ou remorque ; recharge
+## si un pouvoir attend) entre RACE_PICKUP_MIN_M et RACE_PICKUP_LOOK_M devant,
+## a moins de RACE_PICKUP_DETOUR_M de sa ligne : il passe dessus (jamais en
+## facile ; le moyen ne s'ecarte que d'un peu).
+const RACE_REPAIR_PART := [0.0, 0.5, 0.7]
+const RACE_PICKUP_DETOUR_M := [0.0, 3.0, 8.0]
+const RACE_PICKUP_MIN_M := 8.0
+const RACE_PICKUP_LOOK_M := 160.0
 ## Nombre d'or : passages successifs repartis regulierement dans [0, 1).
 const GOLDEN := 0.618034
 
@@ -232,7 +255,8 @@ const ARENA_WALL_MARGIN_M := 8.0
 ##   - reparation : sous ARENA_REPAIR_PART, une fois sur ARENA_REPAIR_TAKE
 ##     (suite fixe, decidee a chaque passage sous le seuil) ; recharge des
 ##     pouvoirs : ARENA_REFILL ;
-##   - pouvoirs : au plus un tous les ARENA_POWER_TICKS ;
+##   - pouvoirs : au plus un tous les POWER_GAP_TICKS (en course aussi depuis
+##     le 2026-10-21 : un facile tirait des que son pouvoir revenait) ;
 ##   - dur : sa proie a moins de ARENA_RAM_M, dans l'axe (ARENA_RAM_ANGLE) et
 ##     loin des murs, il charge : nitro (il atteint son plafond plus tot), et
 ##     bouclier juste avant s'il en a un pret (le choc ne lui coute rien).
@@ -245,7 +269,7 @@ const ARENA_WEAK_PART := 0.5
 const ARENA_REPAIR_PART := [0.0, 0.3, 0.45]
 const ARENA_REPAIR_TAKE := [0.0, 0.5, 1.0]
 const ARENA_REFILL := [false, true, true]
-const ARENA_POWER_TICKS := [1500, 300, 20]
+const POWER_GAP_TICKS := [1500, 300, 20]
 const ARENA_RAM_M := 45.0
 const ARENA_RAM_ANGLE := 0.2
 ## Dur : un choc coute autant aux deux camions (TruckHealth : meme degat de
@@ -313,6 +337,12 @@ var _boost_was: bool = false
 ## Ticks avant que le bot puisse reagir a nouveau avec un pouvoir.
 var _power_wait: int = 0
 var _phase: int = 0
+## Bonus de la piste : echantillon et ecart lateral de chacun (fixes).
+var _pk_i: PackedInt32Array = []
+var _pk_lat: PackedFloat32Array = []
+## Plaques de boost : echantillon et ecart lateral de chacune.
+var _pad_i: PackedInt32Array = []
+var _pad_lat: PackedFloat32Array = []
 
 
 ## `number` : son rang parmi les bots (voie et rythme propres).
@@ -329,6 +359,9 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 	# profil sans plafond de vitesse : il ne freine que pour un virage (au-dessus
 	# de sa vitesse max, apres un pad ou la nitro, il garde son elan)
 	_grip = BOT_LATERAL_G * float(GRIP[level]) * TruckSpec.GRAVITY
+	# adherence de sa remorque (chasse-neige +6 %, porte-voitures -4 %)
+	if tr.trailer_type != null and tr.trailer_type.grip_mult > 0.0:
+		_grip *= tr.trailer_type.grip_mult
 	_profile = line.speed_profile(_grip,
 		BOT_BRAKE * float(BRAKE[level]), PROFILE_CEILING_MS)
 	index = t.closest_sample(tr.global_position)
@@ -339,6 +372,20 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 		_blend_m.append(_best_blend(k))
 		_exit_m.append(_best_exit(k))
 	_cargo = tr.get_node_or_null(^"Cargo") as TruckCargo
+	_pad_i.clear()
+	_pad_lat.clear()
+	for k in t.boost_pad_count():
+		var at := t.boost_pad_transform(k).origin
+		var j := t.closest_sample(at)
+		_pad_i.append(j)
+		_pad_lat.append(_lateral_of(at, j))
+	_pk_i.clear()
+	_pk_lat.clear()
+	for k in t.pickup_count():
+		var pk := t.pickup_node(k)
+		var j := t.closest_sample(pk.global_position) if pk != null else 0
+		_pk_i.append(j)
+		_pk_lat.append(_lateral_of(pk.global_position, j) if pk != null else 0.0)
 
 
 func poll(tick: int) -> InputFrame:
@@ -425,6 +472,9 @@ func _traffic(v: float) -> Dictionary:
 		want = _approach_lat(_branch, track.sample_ahead(index, 8.0 + v * 0.38))
 	elif _exit >= 0:
 		want = _exit_lat(_exit, track.sample_ahead(index, 8.0 + v * 0.38))
+	if _branch < 0 and _exit < 0:
+		want = _race_pickup_lat(want)
+	want = _avoid_pads(want, v)
 	var cap := INF
 	var clear := true
 	var half := track.width / 2.0 - 4.0
@@ -526,6 +576,82 @@ func _traffic(v: float) -> Dictionary:
 	return {"lateral": clampf(want, -half, half), "cap": cap, "clear": clear}
 
 
+## `want`, ou a cote d'une plaque de boost sur sa route qui le lancerait trop
+## vite pour la suite (voir PAD_LOOK_S).
+func _avoid_pads(want: float, v: float) -> float:
+	if _pad_i.is_empty():
+		return want
+	var brake := BOT_BRAKE * float(BRAKE[level])
+	var half_pad := track.boost_pad_size.x / 2.0 + HALF_WIDTH_M + 0.5
+	var half := track.width / 2.0 - 4.0
+	var out := want
+	for k in _pad_i.size():
+		var gap := _s_gap(index, _pad_i[k])
+		if gap < 2.0 or gap > maxf(v * PAD_LOOK_S, 30.0):
+			continue
+		if absf(_pad_lat[k] - out) >= half_pad:
+			continue
+		# vitesse en sortie de plaque, et ce que la suite permet
+		var after := minf(v + PAD_EXTRA_MS, _top + PAD_EXTRA_MS)
+		var reach := after * after / (2.0 * brake)
+		var ok := true
+		var d := 0.0
+		while d <= reach:
+			var p := _profile_at(gap + d)
+			if sqrt(p * p + 2.0 * brake * d) < after - 1.0:
+				ok = false
+				break
+			d += PLAN_STEP_M
+		if ok:
+			continue
+		# du cote le plus proche de sa ligne, dans la chaussee
+		var left := _pad_lat[k] - half_pad
+		var right := _pad_lat[k] + half_pad
+		if absf(left) > half:
+			out = right
+		elif absf(right) > half:
+			out = left
+		else:
+			out = left if absf(left - want) < absf(right - want) else right
+	return out
+
+
+## Course : `want`, ou l'ecart lateral du bonus dont il a besoin juste devant
+## (voir RACE_PICKUP_DETOUR_M).
+func _race_pickup_lat(want: float) -> float:
+	var detour := float(RACE_PICKUP_DETOUR_M[level])
+	if detour <= 0.0 or _pk_i.is_empty():
+		return want
+	var health := TruckHealth.of(truck)
+	var powers := TruckPowers.of(truck)
+	var part := float(RACE_REPAIR_PART[level])
+	var want_repair := health != null and (health.hp < health.max_hp * part
+		or (not truck.is_trailer_detached() and health.trailer_hp < health.trailer_max_hp * part))
+	var want_power := false
+	if powers != null:
+		for k in 2:
+			if powers.slots[k] >= 0 and powers.cooldown[k] > 0:
+				want_power = true
+	if not want_repair and not want_power:
+		return want
+	var best := INF
+	var out := want
+	for k in _pk_i.size():
+		var pk := track.pickup_node(k)
+		if pk == null or not pk.available():
+			continue
+		if not ((pk.kind == TrackPickup.Kind.REPAIR and want_repair) or (pk.kind == TrackPickup.Kind.POWER and want_power)):
+			continue
+		var gap := _s_gap(index, _pk_i[k])
+		if gap < RACE_PICKUP_MIN_M or gap > RACE_PICKUP_LOOK_M:
+			continue
+		var off := absf(_pk_lat[k] - want)
+		if off <= detour and gap < best:
+			best = gap
+			out = _pk_lat[k]
+	return out
+
+
 ## Cote du depassement : celui qui garde la place dans la chaussee et colle le
 ## mieux a la ligne visee (-1 gauche, +1 droite, 0 aucun).
 func _choose_side(other_lat: float, reach: float, want: float, half: float) -> float:
@@ -624,7 +750,9 @@ func _speed(v: float, cap: float) -> void:
 	# l'exterieur (il ne tient pas le virage) : il leve le pied
 	var drift := (_my_lat() - _lat_now) * signf(frame.steer)
 	if absf(frame.steer) > 0.97 and drift < -SATURATION_DRIFT_M:
-		target_speed = minf(target_speed, v * 0.92)
+		# jamais sous ASTRAY_MS : en butee pour faire demi-tour, la consigne
+		# fondait de 8 % par tick et il tournait en rond au pas (docks)
+		target_speed = minf(target_speed, maxf(v * 0.92, ASTRAY_MS))
 	var err := target_speed - v
 	frame.throttle = clampf(err / 1.5, 0.0, 1.0)
 	frame.brake = clampf(-err / 2.0, 0.0, 1.0)
@@ -725,8 +853,14 @@ func _profile_at(d: float) -> float:
 	if _branch >= 0 and d >= _to_entry:
 		var blen := track.branch_length(_branch)
 		if d <= _to_entry + blen:
-			var c := track.branch_curvature(_branch, (d - _to_entry) / blen)
-			return minf(PROFILE_CEILING_MS, sqrt(_grip * BRANCH_CURVE_GRIP / maxf(c, 1e-5)))
+			var u := (d - _to_entry) / blen
+			var c := track.branch_curvature(_branch, u)
+			var p := minf(PROFILE_CEILING_MS, sqrt(_grip * BRANCH_CURVE_GRIP / maxf(c, 1e-5)))
+			# saut : pas trop vite non plus (il volait au-dela de la reception)
+			var jump := track.branch_jump(_branch)
+			if jump.x >= 0.0 and u >= jump.x - JUMP_RUNUP_M / blen and u <= jump.y:
+				p = minf(p, track.branch_jump_min_kmh(_branch) * JUMP_SPEED_MAX / 3.6)
+			return p
 		var past := d - _to_entry - blen
 		var j := track.index_at_s(track.branch_span(_branch).y + past)
 		if past > _exit_m[_branch] + 20.0:
@@ -1338,7 +1472,7 @@ func _powers() -> void:
 	if powers == null:
 		return
 	var health := TruckHealth.of(truck)
-	var wait := int(ARENA_POWER_TICKS[level]) if arena else int(REACTION_TICKS[level])
+	var wait := int(POWER_GAP_TICKS[level])
 	# un projectile arrive, ou il charge (dur) : le bouclier tout de suite, sans
 	# temps de reaction
 	for k in 2:

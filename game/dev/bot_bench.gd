@@ -29,6 +29,9 @@ var _vmax := 0.0
 ## a la ligne, braquage, du 1er bot, apres son 1er tour.
 var _sect: Dictionary = {}
 var _last_blk: Node3D = null
+## Par camion : ses 12 derniers etats (un toutes les 30 ticks), affiches avec
+## un SLOW.
+var _hist: Dictionary = {}
 
 
 func _ready() -> void:
@@ -52,9 +55,13 @@ func _ready() -> void:
 		var tr := scene.get("track") as TrackBlockout
 		var i := tr.closest_sample(t.global_position)
 		var d := t.global_position - tr.sample_position(i)
-		print("CRASH %s tick=%d s=%.0f lat=%.1f v=%.0f zone=%s off=%s up=%.1f y=%.1f" % [t.name, ticks, tr.sample_s(i),
-			d.dot(tr.sample_right(i)), t.linear_velocity.length() * 3.6, ar._zones.get(t, 0), ar.is_off_track(t),
-			d.dot(tr.sample_up(i)), t.global_position.y]))
+		var k := tr.on_branch(t.global_position, 10.0)
+		print("CRASH %s tick=%d s=%.0f lat=%.1f v=%.0f zone=%s off=%s up=%.1f y=%.1f branch=%d u=%.2f jump=%s" % [t.name,
+			ticks, tr.sample_s(i), d.dot(tr.sample_right(i)), t.linear_velocity.length() * 3.6, ar._zones.get(t, 0),
+			ar.is_off_track(t), d.dot(tr.sample_up(i)), t.global_position.y, k,
+			tr.branch_u(k, t.global_position) if k >= 0 else -1.0, tr.branch_jump(k) if k >= 0 else Vector2(-1, -1)])
+		for line: String in (_hist.get(t, []) as Array).slice(-14):
+			print(line))
 	(scene.get("race") as RaceLaps).lap_completed.connect(_on_lap)
 
 
@@ -110,6 +117,24 @@ func _physics_process(_d: float) -> void:
 					if _last_blk != null:
 						print("BLK s=%.0f %s me_lat=%.1f line=%.1f v=%.0f" % [tk.sample_s(bt.index), _last_blk.name,
 							bt._lateral_of(t.global_position, bt.index), bt.line.offset[bt.index], t.linear_velocity.length() * 3.6])
+			if ticks % 30 == 0:
+				var tr2 := scene.get("track") as TrackBlockout
+				var j := tr2.closest_sample(t.global_position)
+				var bt2: BotInputSource = null
+				for p: Object in ps:
+					if p.get("truck") == t:
+						bt2 = p.get("input") as BotInputSource
+				var h: Array = _hist.get(t, [])
+				var kb := tr2.on_branch(t.global_position, 1.0)
+				h.append("   t=%d s=%.0f lat=%.1f y=%.1f v=%.0f br=%d on=%d u=%.2f steer=%.2f thr=%.2f brk=%.2f fwd=%.2f tgt=%.0f lat_now=%.1f blk=%s" % [
+					ticks, tr2.sample_s(j), (t.global_position - tr2.sample_position(j)).dot(tr2.sample_right(j)),
+					t.global_position.y, t.linear_velocity.length() * 3.6, bt2._branch, kb,
+					tr2.branch_u(kb, t.global_position) if kb >= 0 else -1.0, bt2.frame.steer, bt2.frame.throttle,
+					bt2.frame.brake, (-t.global_basis.z).dot(tr2.sample_forward(j)), bt2.target_speed * 3.6, bt2._lat_now,
+					bt2.blocked_by.name if bt2.blocked_by != null else "-"])
+				if h.size() > 40:
+					h.pop_front()
+				_hist[t] = h
 			# lent (< 20 km/h) plus de 3 s : ou et pourquoi
 			var slow := t.linear_velocity.length() * 3.6 < 20.0 and not t.is_wrecked()
 			_slow[t] = int(_slow.get(t, 0)) + 1 if slow else 0
@@ -123,6 +148,8 @@ func _physics_process(_d: float) -> void:
 				print("SLOW %s s=%.0f lat=%.1f tgt=%.0f thr=%.1f brk=%.1f steer=%.2f fwd_dot=%.2f" % [t.name, tr.sample_s(i),
 					(t.global_position - tr.sample_position(i)).dot(tr.sample_right(i)), bot.target_speed * 3.6, bot.frame.throttle,
 					bot.frame.brake, bot.frame.steer, (-t.global_basis.z).dot(tr.sample_forward(i))])
+				for line: String in _hist.get(t, []):
+					print(line)
 				if bot.blocked_by != null:
 					var b := bot.blocked_by
 					var bi := tr.closest_sample(b.global_position)

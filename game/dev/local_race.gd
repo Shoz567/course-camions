@@ -85,10 +85,12 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
 	},
 ]
-const HELP_SOLO := "Manette (DualSense, facon Forza) : R2 accelerer, L2 freiner / reculer, Croix ou R1 drift, Carre nitro (recharge 6 s),\nTriangle remorque, L3 klaxon, stick droit regard, L1 derriere, R3 camera, Options reset, croix gauche / droite pouvoirs, croix haut cible.   Clavier : ZQSD ou fleches, Espace drift, Maj boost, E cargo, H klaxon, C camera, B derriere, R reset, F / G pouvoirs, T cible.   Echap : menu"
+## Aide des commandes. En arene, pas de largage (une remorque par vie) : les
+## morceaux entre crochets y disparaissent (help_for).
+const HELP_SOLO := "Manette (DualSense, façon Forza) : R2 accélérer, L2 freiner / reculer, Croix ou R1 drift, Carré nitro (recharge 6 s),\n[Triangle remorque, ]L3 klaxon, stick droit regard, L1 derrière, R3 caméra, Options reset, croix gauche / droite pouvoirs, croix haut cible.   Clavier : ZQSD ou flèches, Espace drift, Maj boost, [E cargo, ]H klaxon, C caméra, B derrière, R reset, F / G pouvoirs, T cible.   Échap : menu"
 const HELP_SPLIT: PackedStringArray = [
-	"J1 : manette 1, ou fleches + Ctrl droit (drift), Maj droite (boost), ; (cargo), Retour arriere (reset), K / L (pouvoirs)",
-	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), E (cargo), R (reset), F / G (pouvoirs)",
+	"J1 : manette 1, ou flèches + Ctrl droit (drift), Maj droite (boost), [; (cargo), ]Retour arrière (reset), K / L (pouvoirs)",
+	"J2 : manette 2, ou ZQSD + Espace (drift), Maj gauche (boost), [E (cargo), ]R (reset), F / G (pouvoirs)",
 	"J3 : manette 3",
 	"J4 : manette 4",
 	"J5 : manette 5",
@@ -476,7 +478,10 @@ func _add_player(i: int) -> Player:
 	elif is_bot(i):
 		# bot : remorque et pouvoirs selon son numero (deterministe)
 		var b := i - player_count
-		choice = posmod(3 * b + 1, TrailerCatalog.count())
+		# (en arene, toutes a tour de role : les niveaux y tiennent au comportement,
+		# et des remorques plus vives y faisaient taper les murs, 2026-10-22)
+		choice = posmod(3 * b + 1, TrailerCatalog.count()) if game_mode == GameStateNode.GameMode.ARENA \
+			else bot_trailer(bot_level, b)
 		p.power_left = posmod(b + 1, PowerCatalog.count())
 		p.power_right = posmod(b + 2, PowerCatalog.count())
 	else:
@@ -503,6 +508,7 @@ func _add_player(i: int) -> Player:
 	var health := TruckHealth.of(t)
 	if health != null and is_authority():
 		health.respawn_provider = respawn_for
+		health.spot_ok = on_road
 	if is_bot(i):
 		# bot : il conduit seul, sans camera ni HUD
 		var bot := BotInputSource.new()
@@ -578,7 +584,7 @@ func _add_player(i: int) -> Player:
 	hud.race = race
 	hud.player_label = player_name(i)
 	hud.accent = UiKit.PLAYER_COLORS[slot_of(i)]
-	hud.help_text = HELP_SOLO if split == null else HELP_SPLIT[i]
+	hud.help_text = help_for(HELP_SOLO if split == null else HELP_SPLIT[i], game_mode == GameStateNode.GameMode.ARENA)
 	hud.ui_scale = HUD_SCALE[0 if split == null else player_count - 1]
 	hud.camera = cam.get_camera()
 	view_parent.add_child(hud)
@@ -692,6 +698,35 @@ func set_trailer(p: Player, index: int) -> void:
 
 
 ## Ligne du sas READY : « ◄ CITERNE ►  2/9 » puis ses stats.
+## Remorques des bots par niveau (2026-10-21 : « base-toi sur le hard, qu'ils
+## soient vraiment durs, et rends-les plus simples petit a petit ») : les durs
+## tirent les plus vives (chariot elevateur, chasse-neige, conteneur, grue,
+## pompier), les faciles les plus lourdes (citerne, porte-voitures,
+## betaillere...), les moyens toutes a tour de role. Avant : selon le numero
+## seul, un bot dur pouvait tirer la citerne (-4 % de vitesse, -8 % d'accel).
+const BOT_TRAILERS := [[1, 3, 2, 5, 4], [1, 4, 7, 2, 5], [7, 6, 0, 4, 5]]
+
+
+static func bot_trailer(level: int, number: int) -> int:
+	var list: Array = BOT_TRAILERS[clampi(level, 0, 2)]
+	return int(list[posmod(number, list.size())])
+
+
+## Aide `text` du mode : en arene, sans les morceaux [entre crochets] ;
+## ailleurs, les crochets seuls s'effacent.
+static func help_for(text: String, arena_mode: bool) -> String:
+	var out := ""
+	var skip := false
+	for c in text:
+		if c == "[":
+			skip = arena_mode
+		elif c == "]":
+			skip = false
+		elif not skip:
+			out += c
+	return out
+
+
 static func trailer_text(index: int) -> String:
 	var t := TrailerCatalog.at(index)
 	return "◄  REMORQUE : %s  ►   (%d/%d)\n%s\nvitesse %s   accélération %s   adhérence %s   PV larguée %d" % [
@@ -1347,6 +1382,17 @@ func respawn_for(truck: Truck) -> Transform3D:
 	if game_mode == GameStateNode.GameMode.ARENA:
 		return arena_respawn(truck)
 	return race.respawn_transform(truck)
+
+
+## `p` est sur la chaussee (piste ou raccourci), a 2,5 m au moins de ses
+## bords : une place de reapparition (TruckHealth.spot_ok).
+func on_road(p: Vector3) -> bool:
+	var kb := track.on_branch(p)
+	if kb >= 0:
+		return absf(track.branch_lateral_of(kb, p)) <= track.branch_width_of(kb) / 2.0 - 2.5
+	var i := track.closest_sample(p)
+	var d := p - track.sample_position(i)
+	return absf(d.dot(track.sample_right(i))) <= track.width / 2.0 - 2.5 and absf(d.dot(track.sample_up(i))) < 4.0
 
 
 ## Arene : reapparition la ou il est tombe (pas de checkpoint a respecter),

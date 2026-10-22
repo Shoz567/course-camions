@@ -54,6 +54,11 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
     soin, pouvoirs rares), moyen (soin une fois sur deux, attaque
     régulière), dur (charge à la nitro, interception, proies abîmées, soin
     systématique) ; `arena_levels_test` mesure le danger de chaque niveau.
+- **Bots en course** (2026-10-22) : échelle repartie du dur (environ +7 %
+  par tour en moyen, +18 % en facile), remorques par niveau, bonus pris par
+  le dur et le moyen, plaques de boost et sauts maîtrisés. Outil :
+  `dev/bot_bench` (historique des 20 dernières secondes avant un blocage ou
+  une chute).
 
 ### Circuits
 - Trois circuits : Cyber City (nuit, néons), Playa Del Sol (île, pont de la
