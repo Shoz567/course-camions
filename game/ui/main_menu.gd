@@ -58,6 +58,8 @@ var drop_buttons: Array[Button] = []
 ## Duree de l'arene (GameState.ARENA_MINUTES), ligne visible en mode arene.
 var arena_time_buttons: Array[Button] = []
 var arena_time_row: Control
+## Ligne LARGAGES : cachee en arene et en contre-la-montre (aucun largage).
+var drops_row: Control
 var mode_buttons: Array[Button] = []
 const MODE_TIPS: PackedStringArray = [
 	"Course classique en 3 tours",
@@ -436,6 +438,9 @@ func select_mode(k: int, save: bool = true) -> void:
 		mode_buttons[i].set_pressed_no_signal(i == GameState.game_mode)
 	if arena_time_row != null:
 		arena_time_row.visible = GameState.game_mode == GameStateNode.GameMode.ARENA
+	if drops_row != null:
+		drops_row.visible = GameState.game_mode != GameStateNode.GameMode.ARENA \
+				and GameState.game_mode != GameStateNode.GameMode.TIME_TRIAL
 	_update_subtitle()
 
 
@@ -1300,7 +1305,7 @@ func _build_ui() -> void:
 	select_bot_level(GameState.bot_level, false)
 	# largages de remorque par joueur dans la course (2026-10-20)
 	column.add_child(_column_gap(6))
-	var drops_row := _row("Drops")
+	drops_row = _row("Drops")
 	var drops_label := _label("LARGAGES", 18, 0)
 	drops_label.custom_minimum_size.x = 112
 	drops_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1316,6 +1321,7 @@ func _build_ui() -> void:
 		drop_buttons.append(db)
 	column.add_child(drops_row)
 	select_drops(GameState.trailer_drops, false)
+	select_mode(GameState.game_mode, false)
 	# manettes detectees a gauche ; salle d'attente (chacun rejoint avec SA
 	# manette ou son jeu de touches) a droite, sur la meme ligne
 	var pads_row := HBoxContainer.new()

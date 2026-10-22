@@ -175,7 +175,7 @@ func host(port: int = DEFAULT_PORT) -> Error:
 	var p := ENetMultiplayerPeer.new()
 	var err := p.create_server(port, MAX_PLAYERS - 1)
 	if err != OK:
-		last_error = "Impossible d'ouvrir le port %d (deja utilise ?)" % port
+		last_error = "Impossible d'ouvrir le port %d (déjà utilisé ?)" % port
 		return err
 	_attach(p)
 	mode = Mode.HOST
@@ -277,14 +277,14 @@ func _on_connected() -> void:
 
 
 func _on_connection_failed() -> void:
-	var reason := "Aucun host ne repond a cette adresse"
+	var reason := "Aucun host ne répond à cette adresse"
 	leave()
 	last_error = reason
 	join_failed.emit(reason)
 
 
 func _on_server_disconnected() -> void:
-	var reason := last_error if last_error != "" else "Le host a quitte la partie"
+	var reason := last_error if last_error != "" else "Le host a quitté la partie"
 	leave()
 	last_error = reason
 	connection_lost.emit(reason)
@@ -300,9 +300,9 @@ func _hello(name_in: String, protocol: int) -> void:
 		return
 	var refuse := ""
 	if protocol != PROTOCOL:
-		refuse = "Version du jeu differente de celle du host"
+		refuse = "Version du jeu différente de celle du host"
 	elif members.size() >= MAX_PLAYERS:
-		refuse = "Partie complete (%d joueurs)" % MAX_PLAYERS
+		refuse = "Partie complète (%d joueurs)" % MAX_PLAYERS
 	if refuse != "":
 		_refused.rpc_id(id, refuse)
 		# apres l'envoi du refus (disconnect_peer le perdrait)

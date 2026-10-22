@@ -490,6 +490,13 @@ func _add_player(i: int) -> Player:
 		p.power_left = GameState.power_left[i] if i < GameState.power_left.size() else -1
 		p.power_right = GameState.power_right[i] if i < GameState.power_right.size() else -1
 	set_trailer(p, choice)
+	# arene : une remorque par vie, des le sas (le HUD annoncait « REMORQUE
+	# PRETE » jusqu'au depart) ; le depart le repose
+	if game_mode == GameStateNode.GameMode.ARENA:
+		var cg := t.get_node_or_null(^"Cargo") as TruckCargo
+		if cg != null:
+			cg.one_per_life = true
+			cg.drops_left = 0
 	# cibles des pouvoirs : tous les camions de la course ; pouvoirs choisis
 	# sur la page de selection (hors ligne), simules sur la machine qui fait foi
 	t.add_to_group(TruckPowers.TARGETS)
@@ -1223,18 +1230,18 @@ func _process(delta: float) -> void:
 				String(c["name"]).to_upper(), c["cc"]], Color(1.0, 0.85, 0.2))
 		elif r != null and r.finished and game_mode == GameStateNode.GameMode.ARENA and not lives.is_empty():
 			var rank_a := ranking().find(p) + 1
-			var more_a := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \
+			var more_a := "\nOptions / Entrée : rejouer   Create / Échap : menu" if state == State.FINISHED \
 					else "\nen attente des autres"
 			if state == State.FINISHED and NetSession.is_client():
-				more_a = "\nle host relance la course   Create / Echap : quitter la partie"
+				more_a = "\nle host relance la course   Create / Échap : quitter la partie"
 			p.hud.set_center_message("%s\n%s%s" % ["VAINQUEUR !" if rank_a == 1 else "%de" % rank_a,
 				"%d vie%s" % [lives[i], "s" if lives[i] > 1 else ""], more_a], Color.WHITE)
 		elif r != null and r.finished:
 			var rank := _finish_order.find(p.truck) + 1
-			var more := "\nOptions / Entree : rejouer   Create / Echap : menu" if state == State.FINISHED \
+			var more := "\nOptions / Entrée : rejouer   Create / Échap : menu" if state == State.FINISHED \
 					else "\nen attente des autres"
 			if state == State.FINISHED and NetSession.is_client():
-				more = "\nle host relance la course   Create / Echap : quitter la partie"
+				more = "\nle host relance la course   Create / Échap : quitter la partie"
 			var place := ("%de" % rank) if players.size() > 1 else "ARRIVEE"
 			if players.size() > 1 and rank == 1:
 				place = "1er !"
@@ -1242,7 +1249,7 @@ func _process(delta: float) -> void:
 				RaceHud.chrono(r.finish_ticks), RaceHud.chrono(r.best_lap), more], Color.WHITE)
 		elif state == State.FINISHED:
 			# temps limite ecoule avant son arrivee
-			var again := "le host relance la course" if NetSession.is_client() else "Options / Entree : rejouer"
+			var again := "le host relance la course" if NetSession.is_client() else "Options / Entrée : rejouer"
 			p.hud.set_center_message("NON CLASSÉ\ntemps limite écoulé\n%s   Create / Échap : menu" % again,
 				Color(1.0, 0.6, 0.35))
 		elif still:
