@@ -5,9 +5,8 @@ extends PhysicsTest
 ## dans le menu ») :
 ##   A. les camions du plateau sont muets : ni moteur (boucle a 55 Hz au
 ##      ralenti, le bruit sourd), ni klaxon, ni boost ;
-##   B. le menu porte sa musique (MenuMusic) ;
-##   C. musique rendue : boucle de 16 mesures a 104 BPM, ni muette ni
-##      ecretee, la meme a chaque rendu (rendu court a 8 kHz pour le test).
+##   B. le menu porte sa musique (MenuMusic) : Racing Game Title de MintoDog
+##      (CC0), en boucle ; aucun lecteur en headless.
 
 var _menu: MainMenu
 
@@ -28,20 +27,8 @@ func _test_finish() -> void:
 				sounds.append("%s/%s" % [t.name, n])
 	check("A camions du plateau muets (moteur, klaxon, boost)", sounds.is_empty() and _menu.trucks.size() == 6
 		and MainMenu.SHOWROOM_MUTED.has("Audio"), str(sounds))
-	check("B le menu porte sa musique", _menu.get_node_or_null(^"MenuMusic") is MenuMusic)
-	var rate := 8000
-	var a := MenuMusic.render(rate, 2)
-	var b := MenuMusic.render(rate, 2)
-	var step := roundi(rate * 60.0 / MenuMusic.BPM / 4.0)
-	var n := a.size() / 4
-	var peak := 0
-	var sum := 0.0
-	for i in n:
-		var v := a.decode_s16(i * 4)
-		peak = maxi(peak, absi(v))
-		sum += float(v) * v
-	var rms_db := linear_to_db(sqrt(sum / maxf(n, 1.0)) / 32767.0)
-	check("C 2 mesures = 32 doubles croches a 104 BPM, stereo 16 bits", n == 2 * 16 * step, "%d / %d" % [n, 2 * 16 * step])
-	check("C ni muette ni ecretee (crete sous 90 %, energie au-dessus de -30 dB)",
-		peak < roundi(0.9 * 32767) and rms_db > -30.0, "crete %d, %.1f dB" % [peak, rms_db])
-	check("C deterministe", a == b)
+	var music := _menu.get_node_or_null(^"MenuMusic") as MenuMusic
+	var s := load(MenuMusic.STREAM) as AudioStream
+	check("B le menu porte sa musique, en boucle (> 30 s), sans lecteur en headless",
+		music != null and s != null and bool(s.get("loop")) and s.get_length() > 30.0 and not music.is_playing()
+		and music.get_child_count() == 0, "%s" % [s.get_length() if s != null else "absente"])

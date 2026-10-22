@@ -56,3 +56,8 @@ Assets_Visuels/**/*.glb filter=lfs diff=lfs merge=lfs -text
 # baseline.json est versionne et relu a chaque fin de phase : on veut un diff
 # propre dessus (cf. CLAUDE.md §8).
 game/tests/baseline.json text eol=lf diff
+
+# --- Musiques (2026-10-22) : morceaux CC0 de MintoDog (OpenGameArt), 3 a 7 Mo
+# chacun, en Git LFS comme les modeles de l'equipe (game/audio/music/CREDITS.md).
+game/audio/music/*.ogg filter=lfs diff=lfs merge=lfs -text
+game/audio/music/*.mp3 filter=lfs diff=lfs merge=lfs -text

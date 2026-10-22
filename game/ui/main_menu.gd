@@ -167,9 +167,7 @@ func _ready() -> void:
 	_build_ui()
 	set_quality(GameState.graphics_quality)
 	set_sound(not AudioServer.is_bus_mute(_master_bus()))
-	# musique de course rendue en fond pendant le menu (sans effet en headless)
-	RaceMusic.prepare()
-	# musique du menu (2026-10-22), en fondu des que son rendu est pret
+	# musique du menu (2026-10-22), en fondu
 	var music := MenuMusic.new()
 	music.name = "MenuMusic"
 	add_child(music)

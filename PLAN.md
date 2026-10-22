@@ -1447,6 +1447,25 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   précédent. Bus Effets et Ambiance à 0 dB pour la jauge à 100 %, musique
   à +5 dB ; jauges par défaut : musique 80 % (+3 dB), bruitages 50 % (-6 dB,
   le niveau d'origine). Une jauge déjà enregistrée garde son pourcentage.
+- [x] **Vraies musiques, une par circuit, version rapide au dernier tour**
+  (2026-10-22, « une par map […] la musique change uniquement au dernier
+  tour […] sur la version avec un plus gros BPM […] pour du local, la
+  musique de la personne la plus avancée ») : morceaux CC0 de MintoDog
+  (OpenGameArt) choisis par l'utilisateur, en Git LFS
+  (`game/audio/music/CREDITS.md`) :
+  - menu : Racing Game Title ; Cyber City : Neon sign Circuit ; Playa :
+    Sunny City ; Sakura : Blossom Mountain [Remake] ; chacun avec sa
+    version Climax au dernier tour (fondu croisé de 1,2 s) ; l'arène prend
+    celle de son habillage ;
+  - `RaceMusic.final_due` : course et contre-la-montre, dernier tour du
+    plus avancé des joueurs de ce PC (en ligne : le sien) ; arène et
+    élimination, dernière minute ou 2 camions restants (pas une manche à
+    deux) ;
+  - musiques procédurales (`RaceMusic`, `MenuMusic`) remplacées ;
+    `sakura_last_lap` fourni en FLAC (illisible par Godot) : remplacé par
+    le Climax du Remake en OGG, téléchargé avec l'accord de l'utilisateur ;
+  - tests : `race_music_test` (réécrit : fichiers en boucle, règle du
+    dernier tour, course en un tour), `menu_music_test`.
 
 ## Questions de design ouvertes
 
