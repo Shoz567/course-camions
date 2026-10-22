@@ -158,7 +158,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - **Menus rangés en pages** (2026-10-22) : accueil à quatre tuiles, partie
   locale par étapes, menu en ligne à part (`OnlineMenu` : héberger ou
   rejoindre, puis salon avec les règles du host vues par tous) ; réglages
-  du local et de l'en ligne séparés (`GameState.use_profile`).
+  du local et de l'en ligne séparés (`GameState.use_profile`). Circuit en
+  premier, au menu déroulant (local et salon).
 
 ### Performance, rendu, son, build
 - Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,

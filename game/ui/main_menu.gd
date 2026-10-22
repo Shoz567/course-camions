@@ -6,9 +6,9 @@ extends Node3D
 ## separe ») :
 ##   ACCUEIL       logo et quatre tuiles : JOUER EN LOCAL, JOUER EN LIGNE,
 ##                 PARAMETRES, QUITTER ;
-##   PARTIE LOCALE par etapes : 1 mode de jeu, 2 circuit, 3 joueurs et bots
-##                 (manettes, salle d'attente), 4 regles (vitesse, duree de
-##                 l'arene ou largages), puis PRET ;
+##   PARTIE LOCALE par etapes : 1 circuit (menu deroulant), 2 mode de jeu,
+##                 3 joueurs et bots (manettes, salle d'attente), 4 regles
+##                 (vitesse, duree de l'arene ou largages), puis PRET ;
 ##   EN LIGNE      menu a part (OnlineMenu) : heberger ou rejoindre, puis le
 ##                 salon (regles du host, joueurs).
 ## Local et en ligne gardent chacun leurs reglages (GameState.use_profile).
@@ -78,7 +78,9 @@ const MODE_TIPS: PackedStringArray = [
 ]
 const BOT_LEVELS: PackedStringArray = ["FACILE", "MOYEN", "DUR"]
 var speed_buttons: Array[Button] = []
-var track_buttons: Array[Button] = []
+## Circuit : menu deroulant (2026-10-22, « plus des cases, mais un menu
+## deroulant »).
+var track_option: OptionButton
 var subtitle: Label
 var title: Label
 var start_button: Button
@@ -316,10 +318,10 @@ func select_track(k: int) -> void:
 	if is_node_ready() and GameState.selected_track != prev:
 		MenuSound.play_select()
 		GameState.save_settings()
-	for i in track_buttons.size():
-		track_buttons[i].set_pressed_no_signal(i == GameState.selected_track)
+	if track_option != null:
+		track_option.select(GameState.selected_track)
 	# ambiance du circuit : decor et ciel tout de suite, interface a la fin de
-	# l'image (le bouton clique ne se libere pas pendant son propre signal)
+	# l'image (le controle clique ne se libere pas pendant son propre signal)
 	if is_node_ready() and GameState.selected_track != _ambiance:
 		apply_ambiance(GameState.selected_track)
 		call_deferred(&"_restyle")
@@ -386,7 +388,6 @@ func _restyle() -> void:
 	arena_time_buttons.clear()
 	mode_buttons.clear()
 	speed_buttons.clear()
-	track_buttons.clear()
 	_join_slots.clear()
 	_remap_buttons.clear()
 	_build_ui()
@@ -402,7 +403,7 @@ func _restyle() -> void:
 		_refresh_join()
 	show_page([title_page, local_page, online][maxi(which, 0)])
 	if local_page.visible:
-		track_buttons[GameState.selected_track].grab_focus()
+		track_option.grab_focus()
 	elif online.visible:
 		online.focus_default()
 	elif title_page.visible:
@@ -636,8 +637,8 @@ func _refresh_local_choices() -> void:
 ## Ambiance du circuit `track` (decor tout de suite, interface reconstruite a
 ## la fin de l'image).
 func _follow_track(track: int) -> void:
-	for i in track_buttons.size():
-		track_buttons[i].set_pressed_no_signal(i == track)
+	if track_option != null:
+		track_option.select(track)
 	if track != _ambiance:
 		apply_ambiance(track)
 		call_deferred(&"_restyle")
@@ -1208,7 +1209,8 @@ const COLUMN_W := 700
 ## marge ; espace garde au minimum entre VITESSE et PRET.
 const COLUMN_H := 960.0
 const START_GAP := 14
-## Fond des cartes de circuit (Cyber City : nuit violette ; Playa : lagon).
+## Teinte de chaque circuit : pastille du menu deroulant (Cyber City : nuit
+## violette ; Playa : lagon ; Sakura : cerisier).
 const TRACK_TINTS: Array[Color] = [Color(0.36, 0.1, 0.62), Color(0.0, 0.5, 0.58), Color(0.86, 0.3, 0.48)]
 
 
@@ -1478,10 +1480,10 @@ static func _tile_text(tile: Button, sub: String) -> void:
 	line.visible = sub != ""
 
 
-## Partie locale, par etapes : 1 MODE (et son explication), 2 CIRCUIT, 3
-## JOUEURS (pastilles, bots, manettes et salle d'attente), 4 REGLES (vitesse,
-## duree de l'arene ou largages), puis RETOUR et le gros PRET qui ouvre la
-## page de selection (LoadoutSelect).
+## Partie locale, par etapes : 1 CIRCUIT (menu deroulant, 2026-10-22), 2 MODE
+## (et son explication), 3 JOUEURS (pastilles, bots, manettes et salle
+## d'attente), 4 REGLES (vitesse, duree de l'arene ou largages), puis RETOUR
+## et le gros PRET qui ouvre la page de selection (LoadoutSelect).
 func _build_local() -> Control:
 	var p := _blank_page("Local")
 	var column := VBoxContainer.new()
@@ -1502,8 +1504,20 @@ func _build_local() -> Control:
 	head.add_child(head_sub)
 	column.add_child(_column_gap(22))
 
-	# 1. mode de jeu
-	column.add_child(_section("1  ·  Mode de jeu"))
+	# 1. circuit : menu deroulant, son ambiance dessous
+	column.add_child(_section("1  ·  Circuit"))
+	column.add_child(_column_gap(8))
+	track_option = track_dropdown(24, 64)
+	track_option.item_selected.connect(select_track)
+	column.add_child(track_option)
+	subtitle = UiKit.label("", 17, TEXT_DIM, 600, false)
+	column.add_child(_column_gap(6))
+	column.add_child(subtitle)
+	select_track(GameState.selected_track)
+	column.add_child(_column_gap(30))
+
+	# 2. mode de jeu
+	column.add_child(_section("2  ·  Mode de jeu"))
 	column.add_child(_column_gap(8))
 	var mode_row := _row("Modes")
 	var mode_group := ButtonGroup.new()
@@ -1519,24 +1533,6 @@ func _build_local() -> Control:
 	mode_tip.name = "ModeTip"
 	column.add_child(_column_gap(6))
 	column.add_child(mode_tip)
-	column.add_child(_column_gap(30))
-
-	# 2. circuit : une carte par circuit
-	column.add_child(_section("2  ·  Circuit"))
-	column.add_child(_column_gap(8))
-	var track_row := _row("Tracks")
-	track_row.add_theme_constant_override("separation", 16)
-	column.add_child(track_row)
-	var track_group := ButtonGroup.new()
-	for k in GameStateNode.TRACKS.size():
-		var tb := _track_card(k, track_group)
-		tb.pressed.connect(select_track.bind(k))
-		track_row.add_child(tb)
-		track_buttons.append(tb)
-	subtitle = UiKit.label("", 17, TEXT_DIM, 600, false)
-	column.add_child(_column_gap(6))
-	column.add_child(subtitle)
-	select_track(GameState.selected_track)
 	column.add_child(_column_gap(30))
 
 	# 3. joueurs et bots
@@ -1709,35 +1705,43 @@ func _row_label(text: String, width: int) -> Label:
 	return l
 
 
-## Carte de circuit : fond a la teinte du circuit, nom en grand, ambiance
-## dessous ; choisie = liseré rose lumineux.
-func _track_card(k: int, group: ButtonGroup) -> Button:
-	var t: Dictionary = GameStateNode.TRACKS[k]
-	var b := Button.new()
-	b.name = "Track%d" % k
-	b.text = String(t["name"]).to_upper()
-	b.toggle_mode = true
-	b.button_group = group
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	b.custom_minimum_size = Vector2(0, 70)
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	# trois circuits et plus : cartes plus etroites, nom plus petit
-	var many := GameStateNode.TRACKS.size() > 2
-	UiKit.style_choice(b, 21 if many else 28)
-	var margin := 18 if many else 30
-	var tint: Color = TRACK_TINTS[k % TRACK_TINTS.size()]
-	for st: String in ["normal", "hover"]:
-		var sb := UiKit.box(tint.darkened(0.45 if st == "normal" else 0.3), Color(1, 1, 1, 0.12), 1)
-		sb.content_margin_left = margin
-		b.add_theme_stylebox_override(st, sb)
-	for st: String in ["pressed", "hover_pressed"]:
-		var sb := UiKit.box(tint.lightened(0.05 if st == "pressed" else 0.15), ACCENT, 3, -1.0, -1, Color(ACCENT, 0.5), 14)
-		sb.content_margin_left = margin
-		b.add_theme_stylebox_override(st, sb)
-	# fonds teintes sombres : texte clair, quel que soit l'habillage
-	for c: String in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color", "font_hover_pressed_color"]:
-		b.add_theme_color_override(c, UiKit.TEXT)
-	return b
+## Menu deroulant des circuits (partie locale, salon en ligne) : une ligne
+## par circuit, nom en capitales precede d'une pastille a sa teinte ;
+## l'ambiance en infobulle. L'index de la ligne est celui du circuit.
+static func track_dropdown(font_size: int, height: int) -> OptionButton:
+	var o := OptionButton.new()
+	o.name = "Track"
+	o.custom_minimum_size = Vector2(0, height)
+	o.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	o.fit_to_longest_item = false
+	for k in GameStateNode.TRACKS.size():
+		var t: Dictionary = GameStateNode.TRACKS[k]
+		o.add_icon_item(_track_swatch(TRACK_TINTS[k % TRACK_TINTS.size()], font_size), String(t["name"]).to_upper(), k)
+		o.set_item_tooltip(k, String(t["tagline"]))
+	UiKit.style_option(o, font_size)
+	for st: String in ["normal", "hover", "pressed", "focus"]:
+		var sb := o.get_theme_stylebox(st) as StyleBoxFlat
+		if sb != null:
+			sb.content_margin_left = 18
+			sb.content_margin_right = 18
+	o.add_theme_constant_override("h_separation", 14)
+	var popup := o.get_popup()
+	popup.add_theme_constant_override("v_separation", 14)
+	# liste ouverte sur le circuit choisi : la croix part de lui (sans ca, la
+	# premiere fleche ne faisait que surligner la premiere ligne)
+	popup.about_to_popup.connect(func() -> void: popup.set_focused_item.call_deferred(o.selected))
+	return o
+
+
+## Pastille carree d'un circuit (icone du menu deroulant).
+static func _track_swatch(tint: Color, font_size: int) -> Texture2D:
+	var s := maxi(12, roundi(font_size * 0.9))
+	var img := Image.create(s, s, false, Image.FORMAT_RGBA8)
+	img.fill(tint.lightened(0.15))
+	for i in s:
+		for edge: Vector2i in [Vector2i(i, 0), Vector2i(i, s - 1), Vector2i(0, i), Vector2i(s - 1, i)]:
+			img.set_pixelv(edge, Color(1, 1, 1, 0.7))
+	return ImageTexture.create_from_image(img)
 
 
 ## Picto seul (aide de commande composee).

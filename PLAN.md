@@ -1395,6 +1395,14 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     dans les deux sens et dans settings.cfg, salon, partie ouverte),
     `net_session_test` (règles reçues avant le lancement), `main_menu_test`
     (accueil d'abord, clic sur JOUER EN LOCAL).
+- [x] **Circuit d'abord, en menu déroulant** (2026-10-22, « inverse mode de
+  jeu et map […] la sélection des maps ne soit plus des cases, mais un menu
+  déroulant ») : partie locale 1 circuit, 2 mode ; salon en ligne : CIRCUIT
+  au-dessus de MODE. Une ligne par circuit, pastille à sa teinte, ambiance
+  en infobulle (`MainMenu.track_dropdown`) ; la liste s'ouvre sur le
+  circuit choisi (la première flèche ne faisait que surligner la première
+  ligne). T et Triangle font toujours défiler les circuits.
+  `main_menu_test` : clic, flèche bas et Entrée choisissent Playa.
 
 ## Questions de design ouvertes
 
