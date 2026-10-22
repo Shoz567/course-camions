@@ -1364,6 +1364,37 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   - en ligne, host et client (course et arène sur Sakura) : mêmes tours,
     places, vies et PV. Aucun décor n'a de collision.
   - `net_e2e` : `--track=N`, `--quality=N`, captures toutes les 10 s.
+- [x] **Menus rangés, en ligne à part** (2026-10-22, « améliorer tout ce qui
+  est menu […] quand on sélectionne en ligne, que ça ouvre un autre menu
+  dans lequel on peut choisir toutes les caractéristiques séparées. Le mode
+  en ligne et local […] pas très bien séparé ») :
+  - **accueil** : logo et quatre tuiles, JOUER EN LOCAL, JOUER EN LIGNE,
+    PARAMÈTRES, QUITTER ; Rond / Échap reviennent d'une page à l'accueil,
+    Échap y quitte ; après une course locale, retour sur la partie locale ;
+  - **partie locale** par étapes : 1 mode (et son explication), 2 circuit,
+    3 joueurs et bots (manettes, salle d'attente), 4 règles (vitesse, durée
+    de l'arène ou largages), RETOUR et PRÊT ; ses raccourcis (1-6, T, L1/R1,
+    Triangle, Options) ne marchent que sur sa page ;
+  - **en ligne** (`OnlineMenu`, `ui/online_menu.gd`, sorti de
+    `main_menu.gd`) : pseudo, puis deux cartes HÉBERGER / REJOINDRE (erreur
+    dessous) ; dans une partie, le salon : règles à gauche (le host choisit
+    mode, circuit, vitesse, durée ou largages, bots jusqu'à 11, niveau,
+    connexion lente ; le contre-la-montre n'est plus proposé), joueurs à
+    droite (pastille de couleur, convoi, adresse à donner, débit du host),
+    ce qu'on attend écrit au-dessus de CHOISIR MON CONVOI / LANCER /
+    QUITTER LA PARTIE. Partie ouverte : JOUER EN LOCAL grisée, JOUER EN
+    LIGNE ramène au salon ;
+  - **réglages séparés** : local et en ligne ont chacun circuit, vitesse,
+    mode, durée, largages et bots (`GameState.use_profile`, sections
+    `[race]` et `[online]` de settings.cfg ; l'en ligne part de ceux du
+    local la première fois) ;
+  - **protocole 8** : les règles du host partent avec le lobby
+    (`NetSession.host_rules`, `push_rules`) : chacun les voit en direct,
+    l'ambiance du menu suit le circuit du host ;
+  - tests : `menu_pages_test` (nouveau : pages, Échap, réglages séparés
+    dans les deux sens et dans settings.cfg, salon, partie ouverte),
+    `net_session_test` (règles reçues avant le lancement), `main_menu_test`
+    (accueil d'abord, clic sur JOUER EN LOCAL).
 
 ## Questions de design ouvertes
 

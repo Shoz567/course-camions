@@ -84,7 +84,7 @@ func _test_tick(t: int) -> void:
 		4:
 			var a := Rect2(_panel(0).global_position, LoadoutPanel.DESIGN * _panel(0).scale)
 			var b := Rect2(_panel(1).global_position, LoadoutPanel.DESIGN * _panel(1).scale)
-			_seen["open"] = [_sel.visible, _menu.home.visible, _sel.panels.size()]
+			_seen["open"] = [_sel.visible, _menu.local_page.visible, _sel.panels.size()]
 			_seen["side"] = a.end.x <= b.position.x and absf(a.position.y - b.position.y) < 1.0 and _rects_ok(2)
 			_seen["devices"] = [_panel(0).device_text, _panel(1).device_text]
 		6: _key(KEY_DOWN, true)
@@ -150,7 +150,7 @@ func _test_tick(t: int) -> void:
 			_seen["three"] = [_rects_ok(3), absf(c.get_center().x - mid) < 2.0]
 		190: _key(KEY_ESCAPE, true)
 		191: _key(KEY_ESCAPE, false)
-		194: _seen["escape"] = [_sel.visible, _menu.home.visible]
+		194: _seen["escape"] = [_sel.visible, _menu.local_page.visible]
 
 
 func _test_finish() -> void:

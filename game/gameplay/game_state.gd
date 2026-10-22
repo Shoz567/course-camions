@@ -129,6 +129,53 @@ var arena_minutes: int = 4
 const MODE_NAMES: PackedStringArray = ["COURSE", "ÉLIMINATION", "CONTRE-LA-MONTRE", "ARÈNE"]
 var game_mode: int = GameMode.RACE
 
+## Reglages de partie du local et de l'en ligne, separes (2026-10-22 : « le
+## mode en ligne et local [...] pas tres bien separe ») : circuit, vitesse,
+## mode, duree de l'arene, largages, bots. Les champs ci-dessus sont ceux du
+## profil actif (la course les lit) ; use_profile range ceux-ci et sort les
+## autres. Le menu passe en ONLINE a l'ouverture de l'en ligne, en LOCAL a
+## celle de la partie locale.
+enum Profile { LOCAL, ONLINE }
+const RULE_KEYS: PackedStringArray = ["track", "speed_class", "mode", "arena_minutes", "trailer_drops", "bots",
+	"bot_level"]
+var profile: int = Profile.LOCAL
+var _profiles: Array[Dictionary] = [{}, {}]
+
+
+## Reglages de partie du profil actif.
+func rules() -> Dictionary:
+	return {"track": selected_track, "speed_class": speed_class, "mode": game_mode, "arena_minutes": arena_minutes,
+		"trailer_drops": trailer_drops, "bots": bot_count, "bot_level": bot_level}
+
+
+## Ecrit `r` (cles absentes : inchangees) dans les champs, ramenes dans leurs
+## bornes. Jusqu'a 11 bots en ligne (12 camions), 5 en local (`online` : -1
+## selon le profil actif, 0 local, 1 en ligne).
+func apply_rules(r: Dictionary, online: int = -1) -> void:
+	var max_bots := 11 if (online == 1 or (online < 0 and profile == Profile.ONLINE)) else 5
+	selected_track = clampi(int(r.get("track", selected_track)), 0, TRACKS.size() - 1)
+	speed_class = clampi(int(r.get("speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
+	game_mode = clampi(int(r.get("mode", game_mode)), 0, MODE_NAMES.size() - 1)
+	var minutes := int(r.get("arena_minutes", arena_minutes))
+	arena_minutes = minutes if ARENA_MINUTES.has(minutes) else 4
+	trailer_drops = clampi(int(r.get("trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
+	bot_count = clampi(int(r.get("bots", bot_count)), 0, max_bots)
+	bot_level = clampi(int(r.get("bot_level", bot_level)), 0, 2)
+
+
+## Passe au profil `p` : les reglages actuels restent a l'autre, ceux de `p`
+## reviennent (la premiere fois : ceux du moment). Vrai si le circuit change.
+func use_profile(p: int) -> bool:
+	p = clampi(p, 0, 1)
+	if p == profile:
+		return false
+	var track := selected_track
+	_profiles[profile] = rules()
+	profile = p
+	if not _profiles[p].is_empty():
+		apply_rules(_profiles[p])
+	return selected_track != track
+
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
 static func track_scene(index: int) -> String:
@@ -215,14 +262,14 @@ func write_settings(path: String) -> Error:
 	cfg.set_value("video", "quality", graphics_quality)
 	cfg.set_value("video", "show_fps", show_fps)
 	cfg.set_value("video", "dynamic_resolution", dynamic_resolution)
-	cfg.set_value("race", "track", selected_track)
-	cfg.set_value("race", "speed_class", speed_class)
+	# reglages de partie : [race] pour le local, [online] pour l'en ligne
+	_profiles[profile] = rules()
+	for p in 2:
+		var section := "online" if p == Profile.ONLINE else "race"
+		var r: Dictionary = _profiles[p] if not _profiles[p].is_empty() else rules()
+		for k: String in RULE_KEYS:
+			cfg.set_value(section, k, int(r[k]))
 	cfg.set_value("race", "trailers", trailer_choice)
-	cfg.set_value("race", "bots", bot_count)
-	cfg.set_value("race", "trailer_drops", trailer_drops)
-	cfg.set_value("race", "mode", game_mode)
-	cfg.set_value("race", "arena_minutes", arena_minutes)
-	cfg.set_value("race", "bot_level", bot_level)
 	for a: String in PadBindings.ACTIONS:
 		cfg.set_value("pad", a, pad_bindings[a])
 	return cfg.save(path)
@@ -242,14 +289,18 @@ func read_settings(path: String) -> Error:
 	graphics_quality = clampi(int(cfg.get_value("video", "quality", graphics_quality)), 0, GraphicsSettings.NAMES.size() - 1)
 	show_fps = bool(cfg.get_value("video", "show_fps", show_fps))
 	dynamic_resolution = bool(cfg.get_value("video", "dynamic_resolution", dynamic_resolution))
-	selected_track = clampi(int(cfg.get_value("race", "track", selected_track)), 0, TRACKS.size() - 1)
-	speed_class = clampi(int(cfg.get_value("race", "speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
-	bot_count = clampi(int(cfg.get_value("race", "bots", bot_count)), 0, 5)
-	trailer_drops = clampi(int(cfg.get_value("race", "trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
-	game_mode = clampi(int(cfg.get_value("race", "mode", game_mode)), 0, MODE_NAMES.size() - 1)
-	var minutes := int(cfg.get_value("race", "arena_minutes", arena_minutes))
-	arena_minutes = minutes if ARENA_MINUTES.has(minutes) else 4
-	bot_level = clampi(int(cfg.get_value("race", "bot_level", bot_level)), 0, 2)
+	# reglages de partie des deux profils ; l'en ligne, jamais enregistre (fichier
+	# d'avant le 2026-10-22), part de ceux du local
+	var defaults := rules()
+	for p in 2:
+		var section := "online" if p == Profile.ONLINE else "race"
+		var r := {}
+		for k: String in RULE_KEYS:
+			r[k] = cfg.get_value(section if cfg.has_section_key(section, k) else "race",
+				k, defaults[k])
+		apply_rules(r, p)
+		_profiles[p] = rules()
+	apply_rules(_profiles[profile])
 	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
 	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():
 		trailer_choice = trailers

@@ -2,6 +2,9 @@ extends PhysicsTest
 
 ## Menu principal (ui/main_menu.tscn), par les vrais chemins d'entree
 ## (Input.parse_input_event : clavier, manette, clics souris) :
+##   - accueil d'abord (2026-10-22, menu range en pages) : focus sur JOUER EN
+##     LOCAL, la touche 3 n'y fait rien ; un clic sur la tuile ouvre la
+##     partie locale, ou se passe tout ce qui suit ;
 ##   - titre dans la colonne de gauche (les camions sont exposes a droite),
 ##     entierement a l'ecran ; 6 boutons de joueurs, 1 joueur par defaut ;
 ##   - showroom : les camions sont sur le plateau tournant, qui tourne, et les
@@ -103,6 +106,16 @@ func _test_tick(t: int) -> void:
 			var tr := _menu.title.get_global_rect()
 			_seen["title_left"] = title_center < vp.size.x / 2.0 and vp.encloses(tr)
 			_seen["plate_yaw"] = _menu.showroom.turntable.rotation.y
+			# accueil d'abord (2026-10-22) : tuiles, focus sur JOUER EN LOCAL ; la
+			# touche 3 n'y change rien
+			_seen["title_page"] = [_menu.title_page.visible, _menu.local_page.visible, _menu.local_tile.has_focus()]
+			_key(KEY_3, true)
+		4:
+			_key(KEY_3, false)
+			_seen["title_keys"] = _menu.selected_players
+		5: _click(_menu.local_tile, true)
+		6: _click(_menu.local_tile, false)
+		8: _seen["local_open"] = [_menu.title_page.visible, _menu.local_page.visible, _menu.start_button.has_focus()]
 		10: _key(KEY_3, true)
 		11: _key(KEY_3, false)
 		14:
@@ -214,12 +227,12 @@ func _test_tick(t: int) -> void:
 		110: _pad(JOY_BUTTON_START, true)
 		111: _pad(JOY_BUTTON_START, false)
 		114:
-			_seen["start"] = [_menu.loadout.visible, _menu.loadout.panels.size(), _menu.home.visible,
+			_seen["start"] = [_menu.loadout.visible, _menu.loadout.panels.size(), _menu.local_page.visible,
 				_launches.duplicate()]
 			_pad(JOY_BUTTON_B, true)
 		115: _pad(JOY_BUTTON_B, false)
 		118:
-			_seen["back_home"] = [_menu.loadout.visible, _menu.home.visible, _menu.start_button.has_focus()]
+			_seen["back_home"] = [_menu.loadout.visible, _menu.local_page.visible, _menu.start_button.has_focus()]
 			_pad(JOY_BUTTON_A, true)
 		120: _pad(JOY_BUTTON_A, false)
 		122: _seen["cross_opens"] = [_menu.loadout.visible, _launches.duplicate()]
@@ -346,10 +359,15 @@ func _test_finish() -> void:
 	circle.button_index = JOY_BUTTON_B
 	check("Croix valide, Rond revient (ui_accept / ui_cancel)", InputMap.action_has_event("ui_accept", cross)
 		and InputMap.action_has_event("ui_cancel", circle))
+	check("accueil d'abord : tuiles, focus sur JOUER EN LOCAL, touche 3 sans effet",
+		_seen.get("title_page", []) == [true, false, true] and _seen.get("title_keys", 0) == 1,
+		str([_seen.get("title_page"), _seen.get("title_keys")]))
+	check("clic sur JOUER EN LOCAL : la partie locale, focus sur PRET", _seen.get("local_open", []) == [false, true, true],
+		str(_seen.get("local_open")))
 	check("PRET : bouton d'or, libelle PRET", _menu.start_button.text == "PRÊT")
 	check("Options : ouvre la selection (3 cartes, accueil cache), pas encore de depart",
 		_seen["start"] == [true, 3, false, []], str(_seen["start"]))
-	check("Rond : retour a l'accueil, focus sur PRET", _seen.get("back_home", []) == [false, true, true],
+	check("Rond : retour a la partie locale, focus sur PRET", _seen.get("back_home", []) == [false, true, true],
 		str(_seen.get("back_home")))
 	check("Croix sur PRET : rouvre la selection", _seen.get("cross_opens", []) == [true, []], str(_seen.get("cross_opens")))
 	check("3 joueurs : Croix x 3 chacun, tous prets", _seen.get("all_ready", false))
