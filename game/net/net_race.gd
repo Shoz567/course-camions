@@ -363,6 +363,15 @@ func _scene_ready() -> void:
 		_racer.rpc_id(id, i, _racer_data(i))
 
 
+## Host : le joueur `i` (un client) a annonce sa course chargee
+## (_scene_ready, ecran de chargement leve) : il est pret pour le depart.
+func is_loaded(i: int) -> bool:
+	for id: int in _ready_peers:
+		if int(_peer_index.get(id, -1)) == i:
+			return true
+	return false
+
+
 ## Client -> host : la frame du tick et les precedentes. Un peer ne pilote que
 ## SON camion : son id vient de l'ENet, jamais du message (NETCODE.md §6).
 @rpc("any_peer", "call_remote", "unreliable_ordered", 1)

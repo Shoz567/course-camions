@@ -1509,6 +1509,14 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     les ticks figés ; mesuré : départ après 180 ticks de jeu exactement ;
   - test : `pause_menu_test` (16 vérifications) ; `main_menu_test`,
     `settings_remap_test`, `input_frame_test` adaptés.
+- [x] **Plus de sas jaune en ligne** (2026-10-22, « il y avait l'ancien menu
+  de sélection des remorques en jaune […] maintenant c'est le même qu'en
+  solo ») : en ligne, la course affichait encore « REMORQUE : … / APPUYER
+  SUR [CARRÉ] POUR ÊTRE READY », alors que convoi et PRÊT sont donnés au
+  salon. Chacun est maintenant prêt dès que sa course est chargée ; le sas
+  n'affiche plus que « EN ATTENTE DES AUTRES JOUEURS n/N ». Hors ligne
+  depuis le menu, il n'y avait déjà plus de sas (seules les scènes lancées
+  sans le menu, outils de développement, le gardent). Test : `net_bots_test`.
 
 ## Questions de design ouvertes
 

@@ -8,7 +8,11 @@ extends PhysicsTest
 ##   A. 1 joueur + 3 bots ; chaque bot a son pilote (BotInputSource), un nom
 ##      « BOT n COULEUR » et une case libre, differente de celle du joueur ;
 ##   B. le snapshot porte les 4 camions ;
-##   C. 10 s apres le depart, chaque bot a roule plus de 100 m.
+##   C. 10 s apres le depart, chaque bot a roule plus de 100 m ;
+##   D. sas en ligne (2026-10-22, « l'ancien menu de selection des remorques
+##      en jaune ») : personne n'appuie sur rien, la course part (convoi
+##      choisi au salon), et l'invite « [CARRE] POUR ETRE READY » ne
+##      s'affiche jamais.
 
 const PORT := 7795
 
@@ -17,6 +21,8 @@ var _saved: Array = []
 var _go := -1
 var _starts: Array[Vector3] = []
 var _snapshot_trucks := -1
+## Textes du centre de l'ecran du joueur pendant le sas.
+var _lobby_texts := {}
 
 
 func _test_setup() -> void:
@@ -34,10 +40,14 @@ func _test_setup() -> void:
 
 
 func _test_tick(t: int) -> void:
-	# le joueur du host passe le sas READY (les bots y sont prets d'office)
-	var flags: Array = _race.get("ready_flags")
-	if not flags.is_empty():
-		flags[0] = true
+	# le joueur du host n'appuie sur rien : en ligne, il est pret des que sa
+	# course est chargee (convoi choisi au salon), les bots d'office
+	var players: Array = _race.get("players")
+	if int(_race.get("state")) == 3 and not players.is_empty():    # LocalRace.State.LOBBY
+		var hud := (players[0] as Object).get("hud") as Object
+		if hud != null:
+			_race.call("_process", 0.0)    # message du sas, sans attendre l'image
+			_lobby_texts[String(hud.get("_center_text"))] = true
 	if RaceManager.state == RaceManagerNode.State.RACING and _go < 0:
 		_go = t
 		var net := _race.get("net") as NetRace
@@ -63,6 +73,11 @@ func _test_finish() -> void:
 	var moved := []
 	for i in range(1, players.size()):
 		moved.append(roundi(((players[i] as Object).get("truck") as Truck).global_position.distance_to(_starts[i])))
+	var prompt := false
+	for s: String in _lobby_texts:
+		prompt = prompt or s.contains("CARRÉ")
+	check("D sas en ligne : depart sans rien presser, jamais d'invite [CARRE]", _go >= 0 and not prompt,
+		"textes du sas %s" % [_lobby_texts.keys()])
 	check("C les bots roulent", _go >= 0 and moved.all(func(m: int) -> bool: return m > 100), "%s m" % [moved])
 	GameState.bot_count = _saved[0]
 	GameState.bot_level = _saved[1]
