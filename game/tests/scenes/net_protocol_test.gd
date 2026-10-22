@@ -222,16 +222,20 @@ func _test_interpolation() -> void:
 	nr.sample(0, 1010.0, out)
 	check_near("extrapole 4 ticks par la vitesse (m)", out.position.x, 10.0, 0.05)
 	nr.sample(0, 1100.0, out)
-	check_near("extrapolation bornee a 15 ticks, puis gel (m)", out.position.x,
+	check_near("extrapolation bornee (EXTRAPOLATE_MAX_TICKS), puis gel (m)", out.position.x,
 		6.0 + 60.0 * NetRace.EXTRAPOLATE_MAX_TICKS / 60.0, 0.05)
 	# 10 snapshots perdus d'affilee (NETCODE.md §9) : extrapolation bornee, gel,
 	# puis reprise propre (interpolation) des que le suivant arrive
-	nr.sample(0, 1030.0, out)
+	# (2026-10-22 : borne de 15 a 24 ticks, l'affichage au present extrapole
+	# deja jusqu'a 18 ticks)
+	var lost := NetRace.EXTRAPOLATE_MAX_TICKS + 10
+	nr.sample(0, 1006.0 + lost, out)
 	var frozen := out.position.x
-	nr.receive_snapshot(_snap(1036, 36.0, 60.0), 36)
-	nr.sample(0, 1030.0, out)
-	check("10 snapshots perdus : gel a 15 ticks, puis reprise interpolee",
-		is_equal_approx(frozen, 21.0) and absf(out.position.x - 30.0) < 0.01, "gel=%.2f reprise=%.2f" % [frozen, out.position.x])
+	nr.receive_snapshot(_snap(1012 + lost, 12.0 + lost, 60.0), 12 + lost)
+	nr.sample(0, 1006.0 + lost, out)
+	check("snapshots perdus : gel a la borne, puis reprise interpolee",
+		is_equal_approx(frozen, 6.0 + NetRace.EXTRAPOLATE_MAX_TICKS) and absf(out.position.x - (6.0 + lost)) < 0.01,
+		"gel=%.2f reprise=%.2f" % [frozen, out.position.x])
 	# snapshot en retard sur un plus recent, paquet tronque : ignores
 	nr.receive_snapshot(_snap(1001, 99.0, 0.0), 9)
 	var bad := _snap(1009, 99.0, 0.0)

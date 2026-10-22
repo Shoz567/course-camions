@@ -1248,6 +1248,25 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   instances, 3 bots durs : course, élimination et arène, mêmes tours,
   places, vies et PV des deux côtés ; `net_bots_test` ; `net_session_test`
   vérifie les bots reçus au lancement.
+- [x] **Moins de latence en ligne** (2026-10-22, « le moins de latence
+  possible, le plus fluide ; inspire-toi du netcode d'autres jeux ») :
+  - autres camions au présent du joueur local (façon Rocket League) : son
+    camion est prédit en avance d'un aller-retour sur le host ; les autres
+    étaient montrés dans le passé (latence + 2 ticks), ils sont extrapolés
+    d'autant (aller-retour mesuré sur l'ack des snapshots, borné à 300 ms),
+    sur leur courbe (la vitesse tourne avec le lacet), lissés à l'affichage
+    (`NetRace.render_tick`, `TruckState.extrapolate`) ;
+  - bonus pris par son camion : disparaît tout de suite chez le client, le
+    host confirme (sinon il revient après 1 s) ;
+  - mesure (`dev/net_e2e.tscn`, option `--trace`, et gigue simulée
+    `--net-jitter`) : position relative d'un autre camion par rapport au
+    sien, chez le client contre chez le host à la même frame (camions à
+    moins de 40 m) : réseau local 2,65 → 0,58 m, 80 ms d'aller-retour 6,9 →
+    0,9 m, 160 ms avec 2 % de perte 9,2 → 2,0 m. En contrepartie, petites
+    corrections visibles un peu plus fréquentes (1 à 6 cm par image en
+    moyenne, contre 1 à 4) ;
+  - `net_present_test` ; `net_protocol_test` suit la borne d'extrapolation
+    (15 → 24 ticks).
 - [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
   « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec

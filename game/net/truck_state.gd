@@ -124,13 +124,31 @@ func interpolate(a: TruckState, b: TruckState, t: float) -> void:
 
 ## Etat de `from` projete de `ticks` ticks par ses vitesses (snapshot en
 ## retard ou perdu, NETCODE.md §4).
+## Pose dans `ticks` ticks : la vitesse tourne avec le lacet (un camion en
+## virage suit sa courbe, au lieu de filer tout droit : 2026-10-22, a 25 m/s
+## dans un virage de 60 m, 16 ticks plus tard : 0 au lieu de 37 cm), la caisse
+## tourne a sa vitesse angulaire.
 func extrapolate(from: TruckState, ticks: float, tick_s: float) -> void:
 	copy_from(from)
-	var dt := ticks * tick_s
-	position = from.position + from.linear_velocity * dt
 	var w := from.angular_velocity
-	if w.length_squared() > 1e-8:
-		rotation = (Quaternion(w.normalized(), w.length() * dt) * from.rotation).normalized()
+	var n := ceili(ticks)
+	if n <= 0 or w.length_squared() < 1e-8:
+		position = from.position + from.linear_velocity * ticks * tick_s
+		return
+	var dt := ticks * tick_s / n
+	var turn := Quaternion(w.normalized(), w.length() * dt)
+	var yaw := Quaternion(Vector3.UP, w.y * dt)
+	var p := from.position
+	var v := from.linear_velocity
+	var r := from.rotation
+	for k in n:
+		var v2 := yaw * v
+		p += (v + v2) * 0.5 * dt
+		v = v2
+		r = turn * r
+	position = p
+	linear_velocity = v
+	rotation = r.normalized()
 
 
 func write_to(buf: PackedByteArray, offset: int) -> void:

@@ -81,6 +81,9 @@ var debug_latency_ms: int = 0
 ## machine jette au lieu de les envoyer (les messages reliable ne sont jamais
 ## perdus : ENet les renvoie). Ligne de commande : -- --net-loss=2.
 var debug_loss_percent: float = 0.0
+## Tests seulement : gigue (ms), de 0 a cette valeur en plus de la latence,
+## tiree pour chaque paquet (l'ordre d'envoi est garde). -- --net-jitter=15.
+var debug_jitter_ms: int = 0
 
 var _peer: ENetMultiplayerPeer
 var _api: MultiplayerAPI
@@ -95,6 +98,8 @@ func _ready() -> void:
 			debug_latency_ms = maxi(a.get_slice("=", 1).to_int(), 0)
 		elif a.begins_with("--net-loss="):
 			debug_loss_percent = clampf(a.get_slice("=", 1).to_float(), 0.0, 100.0)
+		elif a.begins_with("--net-jitter="):
+			debug_jitter_ms = maxi(a.get_slice("=", 1).to_int(), 0)
 
 
 static func default_name() -> String:

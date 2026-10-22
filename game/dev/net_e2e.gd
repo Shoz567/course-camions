@@ -30,6 +30,8 @@ var mode := 0
 var port := 7781
 var secs := 120
 var bots := 0
+var trace := ""
+var _trace: FileAccess
 var _launched := false
 var _loadout_sent := false
 var _race: Node
@@ -58,6 +60,8 @@ func _ready() -> void:
 			secs = v.to_int()
 		elif a.begins_with("--bots="):
 			bots = v.to_int()
+		elif a.begins_with("--trace="):
+			trace = v
 	NetSession.player_name = role
 	GameState.game_mode = mode
 	GameState.selected_track = 0
@@ -118,7 +122,24 @@ func _physics_process(_delta: float) -> void:
 		print("SAMPLE %s t=%d %s" % [role, (Engine.get_physics_frames() - _go) / 60, rows])
 	if RaceManager.state == RaceManagerNode.State.RACING and _go < 0:
 		_go = Engine.get_physics_frames()
+		if trace != "":
+			_trace = FileAccess.open(trace, FileAccess.WRITE)
+	if _trace != null:
+		var frame := Engine.get_physics_frames() % 65536
+		if role == "host" and players.size() > 1:
+			var src := (players[1] as Object).get("input") as RemoteInputSource
+			frame = src.applied_tick if src != null else -1
+		var line := "%.1f;%d" % [Time.get_unix_time_from_system() * 1000.0, frame]
+		for i in players.size():
+			var t := (players[i] as Object).get("truck") as Truck
+			var p := t.global_position
+			line += ";%.3f,%.3f,%.3f,%d" % [p.x, p.y, p.z, 1 if t.is_net_puppet() else 0]
+		_trace.store_line(line)
 	var net: Variant = _race.get("net")
+	if net != null and role == "client" and _go >= 0 and Engine.get_physics_frames() - _go == 1:
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--present="):
+				(net as Object).set("present_part", a.get_slice("=", 1).to_float())
 	if net != null and role == "client" and _go >= 0:
 		_max_gap = maxi(_max_gap, int((net as Object).call("ticks_since_snapshot")))
 	var over := RaceManager.state == RaceManagerNode.State.FINISHED
@@ -168,9 +189,14 @@ func _report(over: bool) -> void:
 			t.global_position.round(), String(_race.call("player_name", i)), int(_race.call("slot_of", i))])
 	var net: Variant = _race.get("net")
 	var extra := ""
+	if _trace != null:
+		_trace.close()
 	if net != null and role == "client":
-		extra = " states=%d max_gap=%d interp=%.1f" % [int((net as Object).get("states_received")), _max_gap,
-			float((net as Object).call("interp_ticks"))]
+		var o := net as Object
+		extra = " states=%d max_gap=%d interp=%.1f pop_avg=%.3f pop_max=%.2f snaps=%d corr=%d err_max=%.2f" % [
+			int(o.get("states_received")), _max_gap, float(o.call("interp_ticks")),
+			float(o.get("pop_sum")) / maxf(float(o.get("pop_count")), 1.0), float(o.get("pop_max")),
+			int(o.get("snaps")), int(o.get("corrections")), float(o.get("max_error_m"))]
 	print("E2E role=%s mode=%d over=%s state=%d ticks=%d%s launch_kmh=%s rows=%s" % [role, mode, over, RaceManager.state,
 		Engine.get_physics_frames() - _go if _go >= 0 else -1, extra, _launch_kmh, rows])
 	# le client part le premier : le host ne voit pas de coupure avant sa fin

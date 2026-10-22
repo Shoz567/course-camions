@@ -33,7 +33,27 @@ extends Node
 ## Le client ne valide rien (tours, classement) : il affiche ce que le host a
 ## valide.
 
-const EXTRAPOLATE_MAX_TICKS := 15
+const EXTRAPOLATE_MAX_TICKS := 24
+## Autres camions dans le PRESENT du joueur local (2026-10-22, « le moins de
+## latence possible », facon Rocket League) : son camion est predit en avance
+## sur le host de la duree d'un aller-retour (lead : envoi de sa frame, file
+## du host, snapshot de retour) ; les autres sont extrapoles d'autant depuis
+## le dernier snapshot, sur leur courbe (TruckState.extrapolate). Un contact
+## se joue la ou le host le jouera. Avant : affiches dans le passe (latence +
+## 2 ticks d'interpolation). Position relative autre camion - le sien, chez le
+## client contre chez le host a la meme frame : 2,65 -> 0,56 m en moyenne sur
+## un reseau local, 6,9 -> 0,76 m a 80 ms d'aller-retour (dev/net_e2e.tscn).
+## present_part : 0 = l'ancien rendu interpole.
+## Au-dela de MAX_LEAD_TICKS (300 ms), le reste est du retard (a 160 ms
+## d'aller-retour et 20 ms de gigue : 2,9 m d'ecart aux contacts a 200 ms
+## d'avance, 2,0 m a 300 ms, 1,6 m a 400 ms, mais plus de corrections visibles).
+const MAX_LEAD_TICKS := 18.0
+## Lissage de l'affichage : un nouveau snapshot deplace l'extrapolation ;
+## l'ecart avec la pose affichee (avancee d'un tick) se resorbe, garde a
+## SMOOTH_KEEP par tick (~3 ticks de demi-vie), au lieu d'un saut. Au-dela de
+## SMOOTH_MAX_M, saut assume.
+const SMOOTH_KEEP := 0.8
+const SMOOTH_MAX_M := 4.0
 ## Ecart au-dela duquel une marionnette saute (reapparition, reset) au lieu
 ## d'etre interpolee depuis l'ancienne position.
 const TELEPORT_DISTANCE := 8.0
@@ -94,6 +114,12 @@ var _offset_known: bool = false
 var _dev: float = 0.0
 var _interval: float = 1.0
 var _interp_ticks: float = MIN_INTERP_TICKS
+## Aller-retour mesure (ticks) : avance de notre prediction sur le dernier
+## snapshot acquitte (tick local - 1 - ack), moyenne glissante.
+var _lead: float = 0.0
+var _lead_known: bool = false
+## Part de l'aller-retour dont on avance les autres camions (1 : present).
+var present_part: float = 1.0
 var _pose: Array[TruckState] = []
 var _tmp: TruckState = TruckState.new()
 ## Prediction : historique par tick (cle : tick % HISTORY).
@@ -144,6 +170,9 @@ var pop_count: int = 0
 var pop_max: float = 0.0
 var _last_pose_pos: Array[Vector3] = []
 var _last_pose_vel: Array[Vector3] = []
+var _last_pose_rot: Array[Quaternion] = []
+var _last_pose_ang: Array[Vector3] = []
+var _shown: TruckState = TruckState.new()
 ## Obstacles nes en course (remorques larguees, carcasses), meme id partout :
 ## id -> noeud ; host : instance_id -> id.
 var _objects: Dictionary = {}
@@ -187,6 +216,8 @@ func setup(scene: Node, list: Array, lap_counter: RaceLaps) -> void:
 		_pose.append(TruckState.new())
 		_last_pose_pos.append(Vector3.INF)
 		_last_pose_vel.append(Vector3.ZERO)
+		_last_pose_rot.append(Quaternion.IDENTITY)
+		_last_pose_ang.append(Vector3.ZERO)
 		_last_flags.append(0)
 	for n in race_scene.find_children("*", "", true, false):
 		if n is ExplosiveBarrel:
@@ -256,8 +287,14 @@ func _send(inputs: bool, peer: int, bytes: PackedByteArray) -> void:
 	if NetSession.debug_loss_percent > 0.0 and _loss_rng.randf() * 100.0 < NetSession.debug_loss_percent:
 		packets_lost += 1
 		return
-	if NetSession.debug_latency_ms > 0:
-		_delayed.append([Time.get_ticks_msec() + NetSession.debug_latency_ms, inputs, peer, bytes])
+	if NetSession.debug_latency_ms > 0 or NetSession.debug_jitter_ms > 0:
+		var due := Time.get_ticks_msec() + NetSession.debug_latency_ms
+		if NetSession.debug_jitter_ms > 0:
+			due += _loss_rng.randi_range(0, NetSession.debug_jitter_ms)
+			# jamais avant le paquet precedent : la gigue ne reordonne pas
+			if not _delayed.is_empty():
+				due = maxi(due, int(_delayed[-1][0]))
+		_delayed.append([due, inputs, peer, bytes])
 	elif inputs:
 		_inputs.rpc_id(peer, bytes)
 	else:
@@ -836,15 +873,27 @@ func _check_predicted_drop(truck: Truck) -> void:
 func apply_poses(tick: int) -> void:
 	if _snaps.is_empty():
 		return
-	var at := float(tick) + _offset - _interp_ticks
+	var at := render_tick(tick)
 	var mine: Truck = _truck(_local) if _local >= 0 and not _truck(_local).is_net_puppet() else null
 	for i in players.size():
 		var truck := _truck(i)
 		if truck == null or not truck.is_net_puppet() or not sample(i, at, _pose[i]):
 			continue
 		var s := _pose[i]
-		var xf := Transform3D(Basis(s.rotation), s.position)
 		var jump := truck.global_position.distance_to(s.position) > TELEPORT_DISTANCE
+		if not jump and _last_pose_pos[i].is_finite():
+			# pose affichee au tick d'avant, avancee d'un tick : l'ecart a la
+			# nouvelle cible se resorbe en douceur
+			_tmp.position = _last_pose_pos[i]
+			_tmp.rotation = _last_pose_rot[i]
+			_tmp.linear_velocity = _last_pose_vel[i]
+			_tmp.angular_velocity = _last_pose_ang[i]
+			_shown.extrapolate(_tmp, 1.0, TICK_S)
+			var e := _shown.position - s.position
+			if e.length() < SMOOTH_MAX_M:
+				s.position += e * SMOOTH_KEEP
+				s.rotation = s.rotation.slerp(_shown.rotation, SMOOTH_KEEP)
+		var xf := Transform3D(Basis(s.rotation), s.position)
 		# obstacle physique pres de notre camion (contact possible), exact loin
 		truck.set_net_near(mine != null and mine.global_position.distance_to(s.position) < NEAR_DISTANCE)
 		if not jump and _last_pose_pos[i].is_finite():
@@ -854,9 +903,26 @@ func apply_poses(tick: int) -> void:
 			pop_max = maxf(pop_max, pop)
 		_last_pose_pos[i] = s.position
 		_last_pose_vel[i] = s.linear_velocity
+		_last_pose_rot[i] = s.rotation
+		_last_pose_ang[i] = s.angular_velocity
 		truck.set_net_pose(xf, s.steer_deg, s.trailer_angle_deg, s.flags & TruckState.FLAG_BOOSTING != 0,
 			s.flags & TruckState.FLAG_HANDBRAKE != 0, s.flags & TruckState.FLAG_TRAILER_DETACHED != 0, jump,
 			s.linear_velocity, s.angular_velocity)
+
+
+## Instant (ticks du host) auquel les autres camions sont montres au tick
+## local `tick` : le present de notre prediction (avance de l'aller-retour,
+## bornee), ou, avant la premiere mesure et avec present_part = 0, le passe
+## interpole.
+func render_tick(tick: int) -> float:
+	if present_part > 0.0 and _lead_known:
+		return float(tick) + _offset + present_part * minf(_lead, MAX_LEAD_TICKS)
+	return float(tick) + _offset - _interp_ticks
+
+
+## Aller-retour mesure (ticks), -1 avant la premiere mesure.
+func lead_ticks() -> float:
+	return _lead if _lead_known else -1.0
 
 
 ## Etat du camion `i` a l'instant `at` (ticks du host) : interpole entre les
@@ -933,6 +999,10 @@ func receive_snapshot(bytes: PackedByteArray, local_tick: int) -> void:
 	if bytes.decode_u8(7) != 0 and _local >= 0 and _local < count:
 		snap["ack"] = bytes.decode_u16(5)
 		_ack_snap = snap
+		var lead := float(posmod(local_tick - 1 - int(snap["ack"]), 65536))
+		if lead < 120.0:
+			_lead = lead if not _lead_known else lerpf(_lead, lead, 0.1)
+			_lead_known = true
 	_track_clock(float(tick) - float(local_tick))
 
 
