@@ -129,6 +129,10 @@ static func _multimesh(node_name: String, xfs: Array[Transform3D], data: PackedC
 	mmi.name = node_name
 	mmi.multimesh = mm
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# hors de l'eclairage global (2026-10-22, « en haute et extreme les
+	# batiments deviennent blancs ») : les milliers de fenetres lumineuses
+	# l'alimentaient et il rallumait toute la ville en gris clair
+	mmi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	return mmi
 
 
@@ -195,8 +199,10 @@ static func around_track(track: TrackBlockout, seed_value: int) -> Node3D:
 ## Fusionnes par case de DETAIL_CELL m (RoadsideDressing.Batch).
 const DETAIL_CELL := 300.0
 const DETAIL_VIEW := 1400.0
-const CONCRETE := Color(0.16, 0.17, 0.21)
-const ROOF_GREY := Color(0.3, 0.31, 0.35)
+## Noir mat comme les facades (2026-10-22 : en gris clair, les corniches
+## rayaient les tours de blanc en qualite extreme)
+const CONCRETE := Color(0.03, 0.033, 0.045)
+const ROOF_GREY := Color(0.05, 0.052, 0.06)
 const SIGN_NEON: Array[Color] = [Color(0.1, 0.95, 1.0), Color(1.0, 0.15, 0.75), Color(0.6, 0.3, 1.0), Color(1.0, 0.85, 0.15),
 	Color(0.3, 1.0, 0.5)]
 
@@ -212,7 +218,8 @@ func build_details(near: int) -> Node3D:
 		_detail_tower(batches[key], xf, facings[k] if k < facings.size() else Vector3.ZERO)
 	var solid := StandardMaterial3D.new()
 	solid.vertex_color_use_as_albedo = true
-	solid.roughness = 0.8
+	solid.roughness = 0.92
+	solid.metallic_specular = 0.1
 	var glow := ShaderMaterial.new()
 	glow.shader = preload("res://tracks/materials/dress_glow.gdshader")
 	glow.set_shader_parameter("glow", 2.6)
@@ -264,12 +271,12 @@ func _detail_tower(batch: RoadsideDressing.Batch, xf: Transform3D, facing: Vecto
 		batch.box("solid", Transform3D(b, p + Vector3(0, 0.7, 0)), Vector3(1.2, 0.1, 1.2), Color(0.12, 0.12, 0.14))
 	var corner := top + ux * w * 0.28 - uz * d * 0.25
 	if rand() < 0.5:
-		batch.tube("solid", corner, corner + Vector3(0, 3.2, 0), 1.5, 10, Color(0.38, 0.3, 0.24))
-		batch.cone("solid", corner + Vector3(0, 3.2, 0), 1.6, 0.9, 10, Color(0.24, 0.2, 0.17))
+		batch.tube("solid", corner, corner + Vector3(0, 3.2, 0), 1.5, 10, Color(0.08, 0.06, 0.05))
+		batch.cone("solid", corner + Vector3(0, 3.2, 0), 1.6, 0.9, 10, Color(0.05, 0.04, 0.035))
 		for leg: Vector3 in [ux, -ux, uz, -uz]:
 			batch.box("solid", Transform3D(b, corner + leg * 1.1 - Vector3(0, 0.0, 0)), Vector3(0.15, 0.6, 0.15), CONCRETE)
 	else:
-		batch.box("solid", Transform3D(b, corner + Vector3(0, 1.6, 0)), Vector3(3.5, 3.2, 3.5), CONCRETE.lightened(0.08))
+		batch.box("solid", Transform3D(b, corner + Vector3(0, 1.6, 0)), Vector3(3.5, 3.2, 3.5), CONCRETE)
 	# enseigne verticale sur la face tournee vers la piste
 	if facing == Vector3.ZERO or h < 18.0:
 		return
