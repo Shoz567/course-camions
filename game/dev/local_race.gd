@@ -229,6 +229,8 @@ const UNSTABLE_TICKS := 90
 
 
 func _ready() -> void:
+	# compteur d'images par seconde en haut (le menu l'avait descendu)
+	GameState.set_fps_top(10.0)
 	if NetSession.is_online():
 		player_count = clampi(NetSession.members.size(), 1, MAX_PLAYERS)
 		ready_gate = true

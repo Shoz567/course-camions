@@ -14,6 +14,12 @@ extends Node3D
 ##   - SUR la face interieure des murs, comme les panneaux de bord de piste :
 ##     ecrans holographiques animes (Cyber City), panneaux de sponsors
 ##     (Playa), rideaux de fete rouges et blancs (Sakura) ;
+##   - SUR les ponts (2026-10-22, « pont vide ») : un garde-corps sur le haut
+##     des murs - laque vermillon a giboshi de bronze et lanternes bonbori
+##     (Sakura), poteaux de bois flotte, cordages, bouees et reverberes
+##     (Playa) ;
+##   - aux bouts des murs ouverts par un raccourci : un pilier qui cache la
+##     coupe (2026-10-22, « soucis de texture aux joints ») ;
 ##   - AU PIED des murs, la ou la route est au sol : distributeurs lumineux et
 ##     ecrans holographiques, planches de surf, tours de sauveteur, paillotes,
 ##     touffes d'herbe de dune et buissons, palissades de bambou et azalees.
@@ -43,6 +49,11 @@ var _style: int = 0
 var _half: float = 0.0
 var _beyond: float = 0.0
 var _state: int = 1
+## Qualite extreme (GraphicsSettings.extreme_assets) : decor plus serre, vu de
+## plus loin (EXTREME_DENSITY, EXTREME_VIEW).
+var _x: bool = false
+const EXTREME_DENSITY := 0.75
+const EXTREME_VIEW := 1.5
 var _batches: Dictionary = {}
 var _labels: Array[Label3D] = []
 var _blocked: Array[Vector2] = []
@@ -79,6 +90,7 @@ func _generate(track: TrackBlockout) -> void:
 	_track = track
 	_style = track.theme_id
 	_state = maxi(decor_seed, 1)
+	_x = GraphicsSettings.extreme_assets()
 	_half = track.width / 2.0
 	_beyond = _half + track.wall_thickness + track.wall_lean
 	_blocked.clear()
@@ -98,13 +110,20 @@ func _generate(track: TrackBlockout) -> void:
 	var s := 70.0
 	while s < L - STANDS_BEFORE:
 		_try_span(s)
-		s += span_spacing + _range(-15.0, 15.0)
+		s += span_spacing * _dense() + _range(-15.0, 15.0)
 	_wall_props(L)
+	_bridge_rails(L)
+	_wall_ends()
 	_wall_boards(L)
 	_ground_props(L)
 	_commit()
 	set_meta(&"spans", spans)
 	set_meta(&"props", props)
+
+
+## Part du pas entre deux objets : moins en qualite extreme (plus d'objets).
+func _dense() -> float:
+	return EXTREME_DENSITY if _x else 1.0
 
 
 func _circ(a: float, b: float) -> float:
@@ -203,7 +222,7 @@ func _draw_cable(batch: Batch, ta: Vector3, tb: Vector3, sag: float, r: float, c
 
 ## Haut des murs, sur toute la piste.
 func _wall_props(L: float) -> void:
-	var step := 20.0 if _style != TrackTheme.Id.PLAYA_DEL_SOL else 24.0
+	var step := (20.0 if _style != TrackTheme.Id.PLAYA_DEL_SOL else 24.0) * _dense()
 	var s := 10.0
 	var k := 0
 	while s < L:
@@ -211,7 +230,8 @@ func _wall_props(L: float) -> void:
 		var side := 1.0 if k % 2 == 0 else -1.0
 		var f := _frame(s)
 		var i: int = f["i"]
-		if not _wall_open(i, side) and not (_in_stands(s) and _style == TrackTheme.Id.CYBER_CITY):
+		var railed := _track.is_bridge_deck(i) and _style != TrackTheme.Id.CYBER_CITY
+		if not _wall_open(i, side) and not railed and not (_in_stands(s) and _style == TrackTheme.Id.CYBER_CITY):
 			var prof: PackedVector3Array = _track._wall_profile(i, side)
 			var foot := (prof[1] + prof[2]) / 2.0
 			if _clear_box(foot + Vector3(0, 2.5, 0), Vector3(0.6, 2.5, 0.6)):
@@ -219,17 +239,177 @@ func _wall_props(L: float) -> void:
 				match _style:
 					TrackTheme.Id.PLAYA_DEL_SOL: _flag_pole(batch, foot, f, side, k)
 					TrackTheme.Id.SAKURA:
-						# fete par troncons : bannieres nobori, sinon lanternes ;
-						# sur un pont, une lanterne a chaque poteau du parapet
-						if _track.is_bridge_deck(i):
-							_lantern_post(batch, foot, f, side)
-						elif int(s / 320.0) % 2 == 0:
+						# fete par troncons : bannieres nobori, sinon lanternes
+						if int(s / 320.0) % 2 == 0:
 							_nobori(batch, foot, f, side, k)
 						elif k % 2 == 0:
 							_lantern_post(batch, foot, f, side)
 					_: _neon_bollard(batch, foot, f, side, k)
 				props.append(foot)
 		s += step
+
+
+## Garde-corps des tabliers de pont (Sakura, Playa ; Cyber City n'en a pas) :
+## un poteau tous les RAIL_STEP m sur le haut de chaque mur, relie au
+## precedent.
+const RAIL_STEP := 4.0
+const LACQUER := Color(0.78, 0.16, 0.07)
+const BRONZE := Color(0.36, 0.45, 0.33)
+const SUMI := Color(0.08, 0.06, 0.05)
+const DRIFTWOOD := Color(0.62, 0.52, 0.4)
+const ROPE := Color(0.84, 0.74, 0.54)
+const CORAL := Color(1.0, 0.42, 0.3)
+const SHELL_WHITE := Color(0.98, 0.97, 0.93)
+
+
+func _bridge_rails(L: float) -> void:
+	if _style == TrackTheme.Id.CYBER_CITY:
+		return
+	var step := RAIL_STEP if _style == TrackTheme.Id.SAKURA else 3.0
+	for side: float in [-1.0, 1.0]:
+		var prev := Vector3.INF
+		var k := 0
+		var s := 0.0
+		while s < L:
+			var i := _track.index_at_s(s)
+			if not _track.is_bridge_deck(i) or _wall_open(i, side):
+				prev = Vector3.INF
+				s += step
+				continue
+			var prof: PackedVector3Array = _track._wall_profile(i, side)
+			var foot := (prof[1] + prof[2]) / 2.0
+			var f := _frame(s)
+			var batch := _batch(foot)
+			if _style == TrackTheme.Id.SAKURA:
+				_rail_sakura(batch, foot, prev, f, side, k)
+			else:
+				_rail_playa(batch, foot, prev, f, side, k)
+			props.append(foot)
+			prev = foot
+			k += 1
+			s += step
+
+
+## Poutre de section w x h de a a b (lisse de garde-corps).
+func _beam(batch: Batch, a: Vector3, b: Vector3, w: float, h: float, col: Color) -> void:
+	var d := b - a
+	var length := d.length()
+	if length < 0.01:
+		return
+	var z := d / length
+	var x := Vector3.UP.cross(z).normalized()
+	var y := z.cross(x)
+	batch.box("solid", Transform3D(Basis(x, y, z), (a + b) / 2.0), Vector3(w, h, length), col)
+
+
+## Garde-corps de Sakura (pont de Kintai, de Shinkyo) : poteaux de laque
+## vermillon sur socle noir, giboshi de bronze patine un poteau sur deux,
+## main courante, lisse du milieu, lisse basse noire ; une lanterne bonbori
+## sur un poteau sur huit.
+func _rail_sakura(batch: Batch, foot: Vector3, prev: Vector3, f: Dictionary, _side: float, k: int) -> void:
+	var h := 1.25
+	var t: Vector3 = f["t"]
+	var b := Basis(t.cross(Vector3.UP).normalized(), Vector3.UP, t)
+	batch.box("solid", Transform3D(b, foot + Vector3(0, h / 2.0, 0)), Vector3(0.26, h, 0.26), LACQUER)
+	batch.box("solid", Transform3D(b, foot + Vector3(0, 0.06, 0)), Vector3(0.38, 0.12, 0.38), SUMI)
+	if k % 2 == 0:
+		batch.box("solid", Transform3D(b, foot + Vector3(0, h + 0.04, 0)), Vector3(0.3, 0.08, 0.3), BRONZE)
+		batch.blob("solid", foot + Vector3(0, h + 0.25, 0), Basis.from_scale(Vector3(0.19, 0.2, 0.19)), BRONZE, 8, 5)
+		batch.cone("solid", foot + Vector3(0, h + 0.4, 0), 0.07, 0.24, 8, BRONZE)
+	else:
+		batch.box("solid", Transform3D(b, foot + Vector3(0, h + 0.03, 0)), Vector3(0.32, 0.06, 0.32), SUMI)
+	if prev != Vector3.INF:
+		_beam(batch, prev + Vector3(0, h - 0.1, 0), foot + Vector3(0, h - 0.1, 0), 0.17, 0.14, LACQUER)
+		_beam(batch, prev + Vector3(0, 0.66, 0), foot + Vector3(0, 0.66, 0), 0.1, 0.1, LACQUER)
+		_beam(batch, prev + Vector3(0, 0.2, 0), foot + Vector3(0, 0.2, 0), 0.12, 0.08, SUMI)
+	if k % 8 == 3:
+		var top := foot + Vector3(0, h, 0)
+		batch.box("solid", Transform3D(b, top + Vector3(0, 0.5, 0)), Vector3(0.12, 1.0, 0.12), SUMI)
+		batch.box("glow", Transform3D(b, top + Vector3(0, 1.32, 0)), Vector3(0.46, 0.62, 0.46),
+			Color(PAPER_WHITE if k % 16 == 3 else PAPER_RED, 0.75))
+		batch.box("solid", Transform3D(b, top + Vector3(0, 1.66, 0)), Vector3(0.6, 0.08, 0.6), SUMI)
+		batch.cone("solid", top + Vector3(0, 1.7, 0), 0.4, 0.24, 6, SUMI)
+
+
+## Garde-corps de Playa (promenade de bord de mer) : poteaux de bois flotte,
+## deux cordages qui pendent entre eux, une bouee un poteau sur dix, un
+## reverbere blanc un poteau sur quatorze.
+func _rail_playa(batch: Batch, foot: Vector3, prev: Vector3, f: Dictionary, side: float, k: int) -> void:
+	var h := 1.15
+	var t: Vector3 = f["t"]
+	var inward := -(f["r"] as Vector3) * side
+	batch.tube("solid", foot, foot + Vector3(0, h, 0), 0.11, 6, DRIFTWOOD)
+	batch.cone("solid", foot + Vector3(0, h, 0), 0.11, 0.07, 6, DRIFTWOOD.darkened(0.2))
+	if prev != Vector3.INF:
+		for hy: float in [h - 0.12, 0.6]:
+			var a := prev + Vector3(0, hy, 0)
+			var b := foot + Vector3(0, hy, 0)
+			for q in 4:
+				batch.tube("solid", _cable(a, b, 0.14, q / 4.0), _cable(a, b, 0.14, (q + 1) / 4.0), 0.035, 5, ROPE)
+	if k % 10 == 5:
+		_life_ring(batch, foot + Vector3(0, 0.62, 0) + inward * 0.2, t)
+	if k % 14 == 0:
+		var top := foot + Vector3(0, 4.2, 0)
+		var white := Color(0.95, 0.95, 0.92)
+		batch.tube("solid", foot, top, 0.07, 6, white)
+		batch.tube("solid", top, top + inward * 0.7, 0.04, 4, white)
+		var lamp := top + inward * 0.7
+		batch.box("glow", Transform3D(Basis.IDENTITY, lamp - Vector3(0, 0.28, 0)), Vector3(0.28, 0.38, 0.28), Color(1.0, 0.9, 0.65, 0.8))
+		batch.cone("solid", lamp - Vector3(0, 0.08, 0), 0.26, 0.18, 6, Color(0.05, 0.4, 0.46))
+
+
+## Bouee de sauvetage (anneau corail et blanc) dans le plan vertical de la
+## piste, en `c`.
+func _life_ring(batch: Batch, c: Vector3, t: Vector3) -> void:
+	var n := 12
+	for q in n:
+		var a0 := TAU * q / n
+		var a1 := TAU * (q + 1) / n
+		var p0 := c + (t * cos(a0) + Vector3.UP * sin(a0)) * 0.32
+		var p1 := c + (t * cos(a1) + Vector3.UP * sin(a1)) * 0.32
+		batch.tube("solid", p0, p1, 0.08, 6, CORAL if int(q / 3.0) % 2 == 0 else SHELL_WHITE)
+
+
+## Piliers aux bouts des murs ouverts par un raccourci : la coupe du mur
+## ne se voit plus. Acier a bandeau neon (Cyber City), beton blanc a tete
+## rouge (Playa), poteau de bois sombre a giboshi (Sakura).
+func _wall_ends() -> void:
+	for side: float in [-1.0, 1.0]:
+		var opened: PackedByteArray = _track._wall_open[0 if side < 0.0 else 1]
+		if opened.is_empty():
+			continue
+		var n := opened.size()
+		for i in n:
+			var built_before := opened[posmod(i - 1, n)] == 0 and opened[i] == 0
+			var built_after := opened[i] == 0 and opened[(i + 1) % n] == 0
+			if built_before == built_after:
+				continue
+			var prof: PackedVector3Array = _track._wall_profile(i, side)
+			var top := (prof[1] + prof[2]) / 2.0
+			var bottom := minf(prof[0].y, prof[3].y)
+			var t := (_track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
+			var b := Basis(t.cross(Vector3.UP).normalized(), Vector3.UP, t)
+			var width := prof[1].distance_to(prof[2]) + 0.5
+			var h := top.y + 0.45 - bottom
+			var c := Vector3(top.x, bottom + h / 2.0, top.z)
+			var batch := _batch(c)
+			match _style:
+				TrackTheme.Id.PLAYA_DEL_SOL:
+					batch.box("solid", Transform3D(b, c), Vector3(width, h, 0.9), Color(0.92, 0.91, 0.88))
+					batch.box("solid", Transform3D(b, Vector3(c.x, top.y + 0.2, c.z)), Vector3(width + 0.04, 0.5, 0.94), CORAL)
+					batch.box("solid", Transform3D(b, Vector3(c.x, top.y + 0.5, c.z)), Vector3(width + 0.1, 0.1, 1.0),
+						Color(0.05, 0.75, 0.8))
+				TrackTheme.Id.SAKURA:
+					batch.box("solid", Transform3D(b, c + Vector3(0, 0.3, 0)), Vector3(0.7, h + 0.6, 0.7), Color(0.2, 0.12, 0.07))
+					var cap := Vector3(c.x, bottom + h + 0.6, c.z)
+					batch.box("solid", Transform3D(b, cap + Vector3(0, 0.05, 0)), Vector3(0.78, 0.1, 0.78), BRONZE)
+					batch.blob("solid", cap + Vector3(0, 0.36, 0), Basis.from_scale(Vector3(0.36, 0.34, 0.36)), BRONZE, 8, 5)
+					batch.cone("solid", cap + Vector3(0, 0.62, 0), 0.12, 0.4, 8, BRONZE)
+				_:
+					batch.box("solid", Transform3D(b, c), Vector3(width, h, 0.9), Color(0.1, 0.11, 0.14))
+					var neon := NEON[0] if side < 0.0 else NEON[1]
+					batch.box("glow", Transform3D(b, Vector3(c.x, top.y + 0.1, c.z)), Vector3(width + 0.06, 0.16, 0.96), neon)
+			props.append(top)
 
 
 ## Panneaux sur la face interieure des murs, le long de la courbe du mur.
@@ -254,7 +434,7 @@ func _wall_boards(L: float) -> void:
 		var i1 := _track.index_at_s(s + length)
 		if not skip and not _wall_open(i0, side) and not _wall_open(i1, side):
 			_board(s, length, side, k)
-		s += spacing + _range(-6.0, 6.0)
+		s += spacing * _dense() + _range(-6.0, 6.0)
 
 
 func _board(s: float, length: float, side: float, k: int) -> void:
@@ -313,7 +493,7 @@ func _ground_props(L: float) -> void:
 	while s < L:
 		var f := _frame(s)
 		var i: int = f["i"]
-		var step := 12.0
+		var step := 12.0 * _dense()
 		# une autre partie de la piste a cote (croisement, echangeur) : rien
 		if f["low"] and not _in_stands(s) and _track.other_section_distance(f["p"], s) > _track.width + 30.0:
 			for side: float in [-1.0, 1.0]:
@@ -670,7 +850,7 @@ func _label(text: String, at: Vector3, basis: Basis, color: Color, size: int, pi
 	l.shaded = _style != TrackTheme.Id.CYBER_CITY
 	l.double_sided = false
 	l.transform = Transform3D(basis, at)
-	l.visibility_range_end = VIEW_END
+	l.visibility_range_end = VIEW_END * (EXTREME_VIEW if _x else 1.0)
 	_labels.append(l)
 
 
@@ -711,7 +891,7 @@ func _commit() -> void:
 		mi.name = "Cell%d" % n
 		mi.mesh = batch.commit(mats)
 		mi.position = batch.origin
-		mi.visibility_range_end = VIEW_END
+		mi.visibility_range_end = VIEW_END * (EXTREME_VIEW if _x else 1.0)
 		mi.visibility_range_end_margin = 60.0
 		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		root.add_child(mi)

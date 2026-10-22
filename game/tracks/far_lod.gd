@@ -22,6 +22,10 @@ const CELL := 120.0
 const NEAR_END := 250.0
 const FAR_BEGIN := 145.0
 const FAR_FADE := 25.0
+## Qualite extreme (2026-10-22) : arbres 3D (detailles) jusqu'a 420 m, sprites
+## au-dela de 300 m - meme garantie sans trou (420 - 85 > 300 + 25).
+const EXTREME_NEAR_END := 420.0
+const EXTREME_FAR_BEGIN := 300.0
 
 ## Sprites : photo carree de `size` m de cote (taille de reference), base du
 ## modele a `bottom` m sous le bas de l'image ; modele de reference de
@@ -29,9 +33,17 @@ const FAR_FADE := 25.0
 const KINDS := {
 	"palm": {"path": "res://tracks/impostors/palm.png", "size": 20.0, "bottom": 0.5, "ref": 12.0},
 	"cherry": {"path": "res://tracks/impostors/cherry.png", "size": 15.0, "bottom": 0.5, "ref": 5.5},
+	# arbres detailles de la qualite extreme (TreeKit), photos plus fines
+	"palm_hd": {"path": "res://tracks/impostors/palm_hd.png", "size": 20.0, "bottom": 0.5, "ref": 12.0, "res": 512},
+	"cherry_hd": {"path": "res://tracks/impostors/cherry_hd.png", "size": 15.0, "bottom": 0.5, "ref": 5.5, "res": 512},
 }
 
 static var _materials: Dictionary = {}
+
+
+## Fin des cases 3D : plus loin en qualite extreme.
+static func near_end() -> float:
+	return EXTREME_NEAR_END if GraphicsSettings.extreme_assets() else NEAR_END
 
 
 ## Ajoute sous `root` les couches 3D `layers` ([{name, mesh, xfs, colors,
@@ -79,7 +91,7 @@ static func _add_chunks(root: Node3D, layer_name: String, mesh: Mesh, xfs: Array
 		mmi.position = center
 		# sans fondu : un objet en fondu passe dans la passe transparente (cher) ;
 		# le sprite est deja la quand la case disparait
-		mmi.visibility_range_end = NEAR_END
+		mmi.visibility_range_end = near_end()
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows \
 				else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		# hors de l'eclairage global : il ne revoxelise plus des centaines
@@ -126,7 +138,7 @@ static func material(kind: String) -> ShaderMaterial:
 	var path := String(KINDS[kind]["path"])
 	if ResourceLoader.exists(path):
 		m.set_shader_parameter("albedo", load(path))
-	m.set_shader_parameter("fade_begin", FAR_BEGIN)
+	m.set_shader_parameter("fade_begin", EXTREME_FAR_BEGIN if kind.ends_with("_hd") else FAR_BEGIN)
 	m.set_shader_parameter("fade_length", FAR_FADE)
 	_materials[kind] = m
 	return m

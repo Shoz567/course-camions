@@ -13,7 +13,7 @@ const RES := 256
 
 var _f := 0
 var _view: SubViewport
-var _queue: Array[String] = ["palm", "cherry"]
+var _queue: Array[String] = ["palm", "cherry", "palm_hd", "cherry_hd"]
 var _kind: String = ""
 var _stage: Node3D
 
@@ -47,6 +47,8 @@ func _process(_d: float) -> bool:
 			print("sprites ecrits dans res://tracks/impostors/")
 			return true
 		_kind = _queue.pop_front()
+		var res := int(FarLod.KINDS[_kind].get("res", RES))
+		_view.size = Vector2i(res, res)
 		_build(_kind)
 		_f = 2
 		return false
@@ -81,6 +83,16 @@ func _build(kind: String) -> void:
 			var cs := ref * 0.48
 			_stage.add_child(_one(PlayaBackdrop._crown_mesh(), Transform3D(Basis.IDENTITY.scaled(Vector3(cs, cs, cs)),
 				b * Vector3(0.14, 1.0, 0.0)), Color.WHITE))
+		"palm_hd":
+			var b := Basis.IDENTITY.scaled(Vector3(ref, ref, ref))
+			_stage.add_child(_one(TreeKit.palm_trunk(), Transform3D(b, Vector3.ZERO), Color.WHITE))
+			var cs := ref * 0.48
+			_stage.add_child(_one(TreeKit.palm_crown(), Transform3D(Basis.IDENTITY.scaled(Vector3(cs, cs, cs)),
+				b * Vector3(0.14, 1.0, 0.0)), Color.WHITE))
+		"cherry_hd":
+			var tree := TreeKit.cherry(SakuraBackdrop._wood(), TreeKit.blossom_material())
+			_stage.add_child(_one(tree, Transform3D(Basis.IDENTITY.scaled(Vector3(ref, ref, ref)), Vector3.ZERO),
+				Color(1.0, 0.97, 0.97)))
 		"cherry":
 			# cerisier de reference, couronne blanche (le jeu la teinte)
 			var trunk := SakuraBackdrop._trunk_mesh()

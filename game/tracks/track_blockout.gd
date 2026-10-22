@@ -2279,6 +2279,10 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 		var qb := roundi(jump[1] * count) if not jump.is_empty() else count + 1
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		# chaussee ordinaire (COLOR.r = 0) : sans couleur, les shaders de Playa
+		# et de Sakura y lisaient 1 et dessinaient un pont de bois (joints
+		# visibles avec la piste, 2026-10-22)
+		st.set_color(Color.BLACK)
 		var tris := PackedVector3Array()
 		for q in count:
 			if q >= qa and q < qb:
@@ -2301,6 +2305,8 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 			var col := 0 if side < 0.0 else cols
 			var wst := SurfaceTool.new()
 			wst.begin(Mesh.PRIMITIVE_TRIANGLES)
+			# mur ordinaire, comme celui de la piste (pas de garde-corps de pont)
+			wst.set_color(Color.BLACK)
 			var wtris := PackedVector3Array()
 			var nst := SurfaceTool.new()
 			nst.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -2346,6 +2352,7 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 func _build_branch_cliffs(walls: Node3D, kb: int, verts: PackedVector3Array, cols: int, qa: int, qb: int) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(Color.BLACK)
 	var tris := PackedVector3Array()
 	for row: int in [qa, qb]:
 		for c in cols:

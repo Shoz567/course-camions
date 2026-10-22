@@ -1279,6 +1279,21 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     dessous du pont vermillon en bois sombre (il teintait l'avenue en rouge).
   - Essayé puis retiré : couper murs, sol et talus en cases d'affichage
     (peu de triangles en moins, +190 appels de dessin à 4 joueurs).
+- [x] **Assets « pauvres » refaits dans le style du jeu, qualité extrême**
+  (2026-10-22, « tout ce que je mets en PJ c'est peut mieux faire, à
+  refaire / stylisé […] un dernier setting Extreme avec plus d'assets et
+  plus détaillés pour la 4K […] un warning avant ») :
+  - HUD de course à l'habillage du circuit (cadran, tuiles de pouvoirs,
+    plaquette du largage, barre d'aide qui s'efface), boutons ronds du menu
+    et compteur FPS (qui recouvrait la roue des paramètres) ;
+  - fumée des dégâts stylisée (plus de tache noire de jour) ;
+  - ponts habillés (garde-corps, lanternes, bouées), tablier de Sakura ;
+  - joints des raccourcis : couleur de sommet manquante (pont de bois
+    dessiné à tort), piliers aux bouts des murs ;
+  - qualité extrême : effets au maximum à 4 vues, avertissement avant de
+    l'activer, arbres détaillés (`TreeKit`), plus d'arbres, maisons et tours
+    ouvragées, décor plus dense et vu plus loin (`extreme_quality_test`,
+    `main_menu_test`).
 
 ## Questions de design ouvertes
 

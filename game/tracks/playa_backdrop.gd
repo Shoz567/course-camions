@@ -16,6 +16,8 @@ extends Node3D
 @export var decor_seed: int = 5
 ## Ecart entre deux palmiers de bordure, le long de la piste (m).
 @export var palm_spacing: float = 12.0
+## Qualite extreme : pas entre deux rangees de palmiers (part de palm_spacing).
+const EXTREME_SPACING := 0.72
 
 ## Un test peut forcer la generation en headless.
 static var generate_in_headless: bool = false
@@ -54,6 +56,8 @@ func _generate(track: TrackBlockout) -> void:
 	var half := track.width / 2.0
 	var beyond := half + track.wall_thickness + track.wall_lean
 
+	# qualite extreme : palmiers et parasols plus serres, palmiers detailles
+	var hd := GraphicsSettings.extreme_assets()
 	var palms: Array[Transform3D] = []
 	var crowns: Array[Transform3D] = []
 	var parasols: Array[Transform3D] = []
@@ -101,7 +105,7 @@ func _generate(track: TrackBlockout) -> void:
 						c + Vector3(0.0, 2.3, 0.0)))
 					parasol_colors.append(tints[int(_rand() * tints.size()) % tints.size()])
 					poles.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.07, 2.5, 0.07)), c + Vector3(0.0, 1.25, 0.0)))
-		s += palm_spacing
+		s += palm_spacing * (EXTREME_SPACING if hd else 1.0)
 
 	# rochers et ilots au large, tout autour de l'ile
 	var rocks: Array[Transform3D] = []
@@ -132,8 +136,9 @@ func _generate(track: TrackBlockout) -> void:
 		bases.append(xf.origin)
 		scales.append(xf.basis.y.length() / float(FarLod.KINDS["palm"]["ref"]))
 	FarLod.add(root, "Palm", [
-		{"name": "PalmTrunks", "mesh": _trunk_mesh(), "xfs": palms},
-		{"name": "PalmCrowns", "mesh": _crown_mesh(), "xfs": crowns}], "palm", bases, scales)
+		{"name": "PalmTrunks", "mesh": TreeKit.palm_trunk() if hd else _trunk_mesh(), "xfs": palms},
+		{"name": "PalmCrowns", "mesh": TreeKit.palm_crown() if hd else _crown_mesh(), "xfs": crowns}],
+		"palm_hd" if hd else "palm", bases, scales)
 	FarLod.add(root, "Parasol", [
 		{"name": "Parasols", "mesh": _parasol_mesh(), "xfs": parasols, "colors": parasol_colors},
 		{"name": "ParasolPoles", "mesh": _pole_mesh(), "xfs": poles, "shadows": false}])

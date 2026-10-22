@@ -89,6 +89,14 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   Sakura et Playa : les arbres longent aussi les portions hautes, au pied
   du talus (`TrackBlockout.embankment_reach`) ; Sakura passe de 760 à 1 700
   cerisiers.
+- **Ponts** (2026-10-22, « pont vide ») : garde-corps sur les murs des
+  tabliers - laque vermillon à giboshi de bronze et lanternes bonbori
+  (Sakura), poteaux de bois flotté, cordages, bouées, réverbères (Playa) ;
+  tablier de Sakura en hinoki patiné (poutres cloutées tous les 6 m).
+- **Joints des raccourcis** : leur chaussée et leurs murs n'avaient pas de
+  couleur de sommet, les shaders de Playa et Sakura y dessinaient un pont de
+  bois ; corrigé (chaussée et murs ordinaires), et un pilier à l'habillage
+  du circuit cache chaque bout de mur ouvert.
 
 ### Camions, dégâts
 - Dégâts visibles : tôle cabossée, pièces arrachées, éclats, pneus qui
@@ -128,6 +136,16 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - Écran de chargement avant chaque course (#42).
 - HUD de course : cadran façon arcade, carte du pilote (#53) ; boutons de
   joueurs à leur couleur (#51).
+- **HUD, boutons et compteur à l'habillage du circuit** (2026-10-22, « ça
+  blend pas, fait tache ») : cadran en diodes néon (Cyber City), en bouée
+  corail et blanche sur un lagon (Playa), en laque noire cerclée d'or avec
+  une fleur de cerisier en tête de jauge (Sakura) ; pouvoirs en tuiles
+  (parallélogrammes néon, bois flotté, ema de bois à cordon rouge) qui se
+  remplissent par le bas ; état du largage sur une plaquette ; aide des
+  commandes en barre de pictos manette + ligne clavier, effacée après 14 s
+  (`HudDial`, `RaceHud`). Menu : boutons ronds Son / Paramètres à
+  l'habillage (`UiKit.style_icon`), compteur FPS en plaquette sous ces
+  boutons (il les recouvrait).
 
 ### Performance, rendu, son, build
 - Gros à-coups supprimés, budget V3 (#41) ; creux de carrosserie calculés
@@ -142,6 +160,25 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   (Playa) et −24 à −36 % (Sakura) par rapport à `main`, temps GPU inchangé
   à ±0,3 ms : ici le GPU est limité par les effets plein écran, pas par la
   géométrie ; le gain compte sur une carte plus modeste.
+- **Qualité « extrême »** (2026-10-22, en tête de la liste des paramètres,
+  après un avertissement « requiert un GPU ») : tous les effets jusqu'à
+  4 vues, réglages au maximum (occlusion et éclairage indirect ultra à
+  pleine résolution, ombres douces ultra sur 8192 px, reflets à 128 pas,
+  éclairage global à 128 rayons), MSAA 4x + SMAA, détail maximal, filtrage
+  16x, ombre du soleil 1,6 fois plus loin (`GraphicsSettings`). Le décor se
+  construit plus riche (`GraphicsSettings.extreme_assets`) : palmiers et
+  cerisiers détaillés (`TreeKit` : folioles, branches, grappes de fleurs à
+  cinq pétales ; ~5 700 et ~8 500 triangles), 3D jusqu'à 420 m et sprites
+  photographiés sur ces modèles (`impostors/*_hd.png`), +38 % de palmiers,
+  +35 % de cerisiers, maisons de Sakura ouvragées (lattis, noren, lanterne,
+  chevrons, fenêtres à barreaux, faîtage ; clochettes des pagodes), tours de
+  Cyber City détaillées (corniches, acrotère, toits équipés, enseignes
+  verticales) et plus nombreuses, décor de bord de piste plus serré et vu
+  jusqu'à 690 m (`extreme_quality_test`). Sur ce PC portable, la qualité
+  extrême fait chuter les images par seconde : c'est attendu.
+- Fumée des dégâts redessinée : bouffées rondes à bord net, éclairage en
+  deux tons, gris qui s'éclaircit en montant (plus de tache noire en plein
+  jour).
 - Sons de tour, d'arrivée, de largage, foule des tribunes (#36, #40).
 - Export Windows et Linux préparé (#38).
 

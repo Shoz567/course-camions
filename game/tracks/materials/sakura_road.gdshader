@@ -73,16 +73,25 @@ void fragment() {
 	float cover = max(pa, pb) * k + dens * 0.7 * (1.0 - k);
 	vec3 far_col = mix(white, pink, 0.55);
 
-	// platelage laque du pont : planches de 0,6 m, lames de 9 m decalees
+	// platelage du pont : bois de hinoki patine, gris-brun (2026-10-22 : le
+	// laque brun-rouge virait au saumon sous le ciel rose, et la laque
+	// vermillon est au garde-corps), planches de 0,6 m, lames de 9 m
+	// decalees ; une poutre sombre tous les 6 m, cloutee de fer
 	float row = floor(s / 0.6);
 	float board = floor((x + 4.5 * mod(row, 2.0)) / 9.0);
 	float tone = a_hash(vec2(row, board));
-	vec3 wood = mix(vec3(0.34, 0.12, 0.07), vec3(0.5, 0.2, 0.1), tone);
+	vec3 wood = mix(vec3(0.3, 0.22, 0.16), vec3(0.47, 0.36, 0.26), tone);
 	float vein = a_noise(vec2(x * 0.6, s * 14.0 + tone * 50.0));
 	wood *= 0.82 + 0.3 * vein;
 	float fs = fract(s / 0.6);
 	float gap = 1.0 - smoothstep(0.0, 0.06, fs) * (1.0 - smoothstep(0.94, 1.0, fs));
 	wood *= 1.0 - 0.7 * gap;
+	float bs = abs(fract(s / 6.0 + 0.5) - 0.5) * 6.0;
+	float beam = 1.0 - smoothstep(0.16, 0.2, bs);
+	// clous : un rond de 4 cm tous les 0,9 m sur l'axe de la poutre
+	float stud = 1.0 - smoothstep(0.03, 0.045, length(vec2((fract(x / 0.9) - 0.5) * 0.9, bs)));
+	wood = mix(wood, vec3(0.14, 0.1, 0.08), beam * 0.85);
+	wood = mix(wood, vec3(0.32, 0.31, 0.3), stud);
 	vec3 col = mix(asphalt, wood, wood_k);
 	rough = mix(rough, 0.55 + 0.1 * vein, wood_k);
 	h = mix(h, vein * 0.5 - gap * 1.5, wood_k);

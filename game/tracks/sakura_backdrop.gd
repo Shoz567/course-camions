@@ -27,6 +27,8 @@ extends Node3D
 ## jusqu'a ce nombre. Au loin ce ne sont plus que des sprites (FarLod) : 1700
 ## au lieu de 760, pour moins de triangles qu'avant.
 @export var tree_target: int = 1700
+## Qualite extreme : arbres en plus (part de tree_target).
+const EXTREME_TREES := 1.35
 
 ## Un test peut forcer la generation en headless.
 static var generate_in_headless: bool = false
@@ -137,7 +139,9 @@ func _in_stands(s: float) -> bool:
 func _kit(at: Vector3) -> JapanKit:
 	var key := Vector2i(floori(at.x / CHUNK), floori(at.z / CHUNK))
 	if not _kits.has(key):
-		_kits[key] = JapanKit.new()
+		var kit := JapanKit.new()
+		kit.detail = GraphicsSettings.extreme_assets()
+		_kits[key] = kit
 	return _kits[key]
 
 
@@ -345,7 +349,9 @@ func _groves(track: TrackBlockout) -> void:
 	lo -= Vector3(220, 0, 220)
 	hi += Vector3(220, 0, 220)
 	var tries := 0
-	while _trees.size() < tree_target and tries < 6000:
+	# qualite extreme : un tiers d'arbres en plus (detailles, TreeKit)
+	var target := roundi(tree_target * (EXTREME_TREES if GraphicsSettings.extreme_assets() else 1.0))
+	while _trees.size() < target and tries < 9000:
 		tries += 1
 		var c := Vector3(_range(lo.x, hi.x), TrackBlockout.GROUND_Y, _range(lo.z, hi.z))
 		if not _clear(c, beyond + 10.0, 3.5):
@@ -387,6 +393,18 @@ func _add_trees(root: Node3D) -> void:
 	for xf in _trees:
 		bases.append(xf.origin)
 		scales.append(xf.basis.y.length() / float(FarLod.KINDS["cherry"]["ref"]))
+	if GraphicsSettings.extreme_assets():
+		# qualite extreme : l'arbre detaille entier (tronc, branches, grappes
+		# de fleurs), a l'echelle de son tronc, aussi large que sa couronne
+		var xfs: Array[Transform3D] = []
+		for k in _trees.size():
+			var h := _trees[k].basis.y.length()
+			var spread := _crowns[k].basis.x.length() / (h * 1.1)
+			xfs.append(Transform3D(_trees[k].basis.orthonormalized() * Basis.from_scale(Vector3(spread, 1.0, spread) * h),
+				_trees[k].origin))
+		FarLod.add(root, "Trees", [{"name": "Crowns", "mesh": TreeKit.cherry(bark, TreeKit.blossom_material()), "xfs": xfs,
+			"colors": _crown_colors}], "cherry_hd", bases, scales, _crown_colors)
+		return
 	FarLod.add(root, "Trees", [
 		{"name": "Trunks", "mesh": trunk, "xfs": _trees},
 		{"name": "Crowns", "mesh": crown, "xfs": _crowns, "colors": _crown_colors}], "cherry", bases, scales, _crown_colors)
@@ -536,8 +554,14 @@ func _materials(track: TrackBlockout) -> Dictionary:
 	paper.emission_enabled = true
 	paper.emission = Color(1.0, 0.75, 0.4)
 	paper.emission_energy_multiplier = 1.4
+	# tissu des noren (details de la qualite extreme) : couleur de sommet
+	var cloth := StandardMaterial3D.new()
+	cloth.vertex_color_use_as_albedo = true
+	cloth.roughness = 0.9
+	cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
 	return {JapanKit.Mat.PLASTER: house, JapanKit.Mat.WOOD: _wood(), JapanKit.Mat.LACQUER: track.theme.arch_tubes[0],
-		JapanKit.Mat.ROOF: roof, JapanKit.Mat.STONE: stone, JapanKit.Mat.GOLD: gold, JapanKit.Mat.PAPER: paper}
+		JapanKit.Mat.ROOF: roof, JapanKit.Mat.STONE: stone, JapanKit.Mat.GOLD: gold, JapanKit.Mat.PAPER: paper,
+		JapanKit.Mat.CLOTH: cloth}
 
 
 static func _wood() -> StandardMaterial3D:
