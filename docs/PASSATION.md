@@ -222,6 +222,11 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 
 - **Essai en ligne sur un seul PC** : `dev/net_e2e.tscn`, host et client
   pilotés par des bots, journal comparable des deux côtés (#92).
+- **Trailer de 30 s** : `make trailer` → `builds/trailer.avi` (1080p,
+  60 i/s, MJPEG + son, Movie Maker de Godot, ~1 min 30). Réalisateur :
+  `dev/trailer.gd` (plans, actions, caméras, ralentis), habillage :
+  `dev/trailer_overlay.gd`. Aperçu rapide sans vidéo : `--fixed-fps 60
+  res://dev/trailer.tscn -- --snaps=t1,t2 --snap-dir=…` (captures PNG).
 
 - **Barre d'état Claude Code** : `~/.claude/statusline.js` (modèle, branche,
   coût, jauges du contexte et des quotas). Paquet à partager :
