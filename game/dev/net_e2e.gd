@@ -4,7 +4,8 @@ extends Node
 ## client, ENet sur 127.0.0.1), chacune pilotee par un bot dur.
 ##   godot --headless --path game res://dev/net_e2e.tscn -- --role=host --mode=3 --port=7781 --secs=120
 ## Le client passe --role=client et le meme port (modes : GameState.GameMode) ;
-## --bots=N : bots durs du host.
+## --bots=N : bots durs du host ; --players=N : le host lance quand N joueurs
+## sont la (2 par defaut).
 ## Toutes les 10 s, une ligne SAMPLE (tour affiche, place, vies, PV de chaque
 ## camion) a comparer entre les deux ; a 50 s, le host detruit le camion du
 ## client (vitesse de reapparition : launch_kmh). A la fin : une ligne E2E par
@@ -30,6 +31,12 @@ var mode := 0
 var port := 7781
 var secs := 120
 var bots := 0
+var expected := 2
+var snap := ""
+var _wall0 := 0
+var _phys_sum := 0.0
+var _phys_n := 0
+var _phys_max := 0.0
 var trace := ""
 var _trace: FileAccess
 var _launched := false
@@ -60,6 +67,10 @@ func _ready() -> void:
 			secs = v.to_int()
 		elif a.begins_with("--bots="):
 			bots = v.to_int()
+		elif a.begins_with("--players="):
+			expected = v.to_int()
+		elif a.begins_with("--snap="):
+			snap = v
 		elif a.begins_with("--trace="):
 			trace = v
 	NetSession.player_name = role
@@ -82,7 +93,7 @@ func _physics_process(_delta: float) -> void:
 	if not _loadout_sent and NetSession.members.size() >= 1 and (role == "host" or NetSession.local_slot() >= 0):
 		_loadout_sent = true
 		NetSession.set_loadout(1 if role == "host" else 4, 0, 2)
-	if role == "host" and not _launched and NetSession.members.size() == 2 and NetSession.all_ready():
+	if role == "host" and not _launched and NetSession.members.size() == expected and NetSession.all_ready():
 		_launched = true
 		NetSession.launch_race()
 	var scene := get_tree().current_scene
@@ -110,6 +121,11 @@ func _physics_process(_delta: float) -> void:
 	# le host detruit le camion du client a 50 s : il doit reapparaitre lance
 	if role == "host" and _go >= 0 and Engine.get_physics_frames() - _go == 3000:
 		TruckHealth.of((players[1] as Object).get("truck") as Truck).crash(&"essai")
+	# captures du rendu (fenetre seulement) : --snap=prefixe, au depart et a 20 s
+	if snap != "" and DisplayServer.get_name() != "headless" and _go >= 0:
+		var k := Engine.get_physics_frames() - _go
+		if k == 1 or k == 1200 or k == secs * 60 - 2:
+			get_viewport().get_texture().get_image().save_png("%s_%d.png" % [snap, k / 60])
 	if _go >= 0 and (Engine.get_physics_frames() - _go) % 600 == 0:
 		var race := _race.get("race") as RaceLaps
 		var lives: Array = _race.get("lives")
@@ -120,8 +136,15 @@ func _physics_process(_delta: float) -> void:
 			rows.append([race.display_lap(t), race.position(t), lives[i] if i < lives.size() else -1,
 				roundi(h.hp) if h else -1])
 		print("SAMPLE %s t=%d %s" % [role, (Engine.get_physics_frames() - _go) / 60, rows])
+	if _go >= 0:
+		# cout de la physique de cette machine (ms par tick)
+		var ms := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+		_phys_sum += ms
+		_phys_n += 1
+		_phys_max = maxf(_phys_max, ms)
 	if RaceManager.state == RaceManagerNode.State.RACING and _go < 0:
 		_go = Engine.get_physics_frames()
+		_wall0 = Time.get_ticks_usec()
 		if trace != "":
 			_trace = FileAccess.open(trace, FileAccess.WRITE)
 	if _trace != null:
@@ -167,13 +190,15 @@ func _hook(scene: Node) -> void:
 		if bool(scene.call("is_local", i)):
 			var d := Driver.new()
 			d.bot = BotInputSource.new()
-			d.bot.setup(scene.get("track") as TrackBlockout, t, BotInputSource.Level.HARD, 3 if role == "host" else 4)
+			d.bot.setup(scene.get("track") as TrackBlockout, t, BotInputSource.Level.HARD, 3 + maxi(NetSession.local_slot(), 0))
 			add_child(d.bot)
 			add_child(d)
 			p.set("input", d)
 
 
 func _report(over: bool) -> void:
+	if snap != "" and DisplayServer.get_name() != "headless":
+		get_viewport().get_texture().get_image().save_png("%s_fin.png" % snap)
 	_done = true
 	var players: Array = _race.get("players")
 	var race := _race.get("race") as RaceLaps
@@ -197,6 +222,8 @@ func _report(over: bool) -> void:
 			int(o.get("states_received")), _max_gap, float(o.call("interp_ticks")),
 			float(o.get("pop_sum")) / maxf(float(o.get("pop_count")), 1.0), float(o.get("pop_max")),
 			int(o.get("snaps")), int(o.get("corrections")), float(o.get("max_error_m"))]
+	extra += " phys_ms=%.2f phys_max=%.2f wall_ms_tick=%.2f" % [_phys_sum / maxf(_phys_n, 1.0), _phys_max,
+		(Time.get_ticks_usec() - _wall0) / 1000.0 / maxf(Engine.get_physics_frames() - _go, 1.0)]
 	print("E2E role=%s mode=%d over=%s state=%d ticks=%d%s launch_kmh=%s rows=%s" % [role, mode, over, RaceManager.state,
 		Engine.get_physics_frames() - _go if _go >= 0 else -1, extra, _launch_kmh, rows])
 	# le client part le premier : le host ne voit pas de coupure avant sa fin

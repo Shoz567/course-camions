@@ -1267,6 +1267,31 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     moyenne, contre 1 à 4) ;
   - `net_present_test` ; `net_protocol_test` suit la borne d'extrapolation
     (15 → 24 ticks).
+- [x] **12 joueurs en ligne** (2026-10-22, « monter le nombre de joueurs max
+  en ligne à 12 ») : `NetSession.MAX_PLAYERS` 6 → 12, `LocalRace.MAX_TRUCKS`
+  = 12 camions en ligne, joueurs et bots (l'écran partagé reste à 6) ;
+  protocole 7 (une version à 6 couleurs plantait sur les cases 6 à 11) :
+  - 6 couleurs de plus (ROSE, CYAN, BLANC, CITRON, BRONZE, MENTHE), avec
+    modèle repris et livrée ;
+  - grille de départ : un rang de 4, un rang de 2 en quinconce, en
+    alternance (12 camions en 4 rangs) ; avant, les places 6 et 7 tombaient
+    sur les 4 et 5 ;
+  - coût d'un tick chez le host (`--fixed-fps`, course) : 12 camions dont
+    11 bots, 17,7 → 13,2 ms, 6 camions 10,6 → 9,1 ms ; arène à 12 : 9,7 ms.
+    Les bots en prenaient 9,6 : chacun refaisait la liste des obstacles et
+    la recherche de leur échantillon ; elle est faite une fois par tick pour
+    tous (`BotInputSource._others`). Hors raccourci, la vitesse cible se lit
+    directement sur le profil (déjà freinage compris). 12 joueurs humains,
+    sans bot : ~7 ms ;
+  - débit d'envoi du host affiché au salon (`NetSession.host_uplink_kbps`) :
+    12 joueurs, 2,6 Mbit/s à 60 Hz, 0,9 à 20 Hz (« Connexion lente »
+    conseillée au-delà de 1 Mbit/s) ;
+  - essais réels à 12 instances du jeu sur ce PC (host et 11 clients, bots
+    aux commandes) : course 90 s, arène 2 min, mêmes vies, PV et places chez
+    le host et les clients ; classement, bandeau, mini-carte et salon à 12
+    vérifiés en capture ; `net_twelve_test` (grilles des 3 circuits,
+    couleurs, course hébergée à 12) ; `split_modes_arena_test` : au moins un
+    joueur sorti (« 2 camions » basculait avec le nouveau calcul des bots).
 - [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
   « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec

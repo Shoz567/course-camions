@@ -981,10 +981,17 @@ func _refresh_online() -> void:
 				% GameStateNode.MODE_NAMES[NetSessionNode.online_mode(GameState.game_mode)]
 		if GameState.game_mode == GameStateNode.GameMode.TIME_TRIAL:
 			status += "\nLe contre-la-montre se joue seul, hors ligne : la partie sera une course."
-		var bots := mini(GameState.bot_count, LocalRace.MAX_PLAYERS - NetSession.members.size())
+		var bots := mini(GameState.bot_count, LocalRace.MAX_TRUCKS - NetSession.members.size())
 		if bots > 0:
-			status += "\nBots : %d (%s), simulés par ce PC, en plus des joueurs (6 camions au plus)." % [
-				bots, BOT_LEVELS[GameState.bot_level]]
+			status += "\nBots : %d (%s), simulés par ce PC, en plus des joueurs (%d camions au plus)." % [
+				bots, BOT_LEVELS[GameState.bot_level], LocalRace.MAX_TRUCKS]
+		# debit d'envoi de ce PC (2026-10-22 : jusqu'a 12 joueurs, il croit
+		# avec le carre du nombre de joueurs)
+		var n := NetSession.members.size()
+		if n >= 2:
+			var mbps := NetSessionNode.host_uplink_kbps(n, n + bots, NetSession.snapshot_ticks) / 1000.0
+			status += "\nEnvoi de ce PC : %.1f Mbit/s pour %d joueurs%s." % [mbps, n,
+				"  ·  trop pour une ADSL : cochez « Connexion lente »" if mbps > 1.0 else ""]
 	elif NetSession.is_client():
 		if NetSession.local_slot() < 0:
 			status = "Connexion à %s..." % ip_edit.text

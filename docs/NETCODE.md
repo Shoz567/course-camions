@@ -354,6 +354,10 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   joueurs distants. Leur remorque et leurs pouvoirs se déduisent du niveau
   et de leur numéro, le même calcul partout. Case (couleur) et nom de chaque
   camion figés au départ (`LocalRace._slots`, `_names`).
+- **Protocole 7 (2026-10-22) : 12 joueurs** (`NetSession.MAX_PLAYERS`), 12
+  camions en ligne avec les bots (`LocalRace.MAX_TRUCKS`). Le débit montant
+  du host croît avec le carré du nombre de joueurs : 12 joueurs, ~2,6 Mbit/s
+  à 60 Hz, ~0,9 à 20 Hz (`NetSession.host_uplink_kbps`, affiché au salon).
 - **Élimination et arène** : le host seul décide qui saute et qui perd une
   vie. L'état de course (`LocalRace.net_state`, renvoyé à chaque changement)
   porte trois champs de plus : éliminés, vies, tick de la prochaine
