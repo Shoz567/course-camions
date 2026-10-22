@@ -4,7 +4,8 @@ extends Node3D
 
 ## Decor de Playa Del Sol autour de la piste parente : palmiers en bordure de
 ## piste et sur l'ile, parasols sur le sable, rochers et ilots au large, un
-## phare. Purement visuel (aucune collision : un camion qui passe le mur tombe
+## phare. Palmiers et parasols en 3D pres de la camera seulement ; au loin,
+## les palmiers sont des sprites tournes (FarLod, 2026-10-22). Purement visuel (aucune collision : un camion qui passe le mur tombe
 ## dans une zone de reset, il ne percute rien) ; en headless (tests), rien
 ## n'est genere, sauf si un test le force.
 ##
@@ -68,18 +69,19 @@ func _generate(track: TrackBlockout) -> void:
 		var p := track.sample_position(i)
 		var t := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
 		var r := t.cross(Vector3.UP).normalized()
-		# la ou la route est haute (talus, pont), pas de palmier au pied du mur
 		var low := p.y < 2.0 and not track.is_bridge_deck(i)
 		# les tribunes occupent le bord de piste autour de la ligne de depart
 		var stands := s < 124.0 or s > length - 116.0
 		for side: float in [-1.0, 1.0]:
-			# bordure : un palmier pres du mur, un autre plus loin
+			# bordure : un palmier pres du mur (au pied du talus si la route
+			# est haute ; rien sous un pont), un autre plus loin
+			var foot := track.embankment_reach(i, side)
 			for row in 2:
-				if row == 0 and (not low or stands):
+				if row == 0 and (track.is_bridge_deck(i) or stands):
 					continue
 				if row == 1 and _rand() < 0.45:
 					continue
-				var lat := beyond + (_range(3.0, 9.0) if row == 0 else _range(22.0, 70.0))
+				var lat := beyond + (foot + _range(3.0, 9.0) if row == 0 else _range(22.0, 70.0))
 				if row == 1 and not low:
 					lat += 55.0
 				if row == 1 and stands:
@@ -122,10 +124,19 @@ func _generate(track: TrackBlockout) -> void:
 		rocks.append(Transform3D(Basis(Vector3.UP, _rand() * TAU).scaled(Vector3(w, h, w * _range(0.7, 1.3))),
 			c + Vector3(0.0, -h * 0.15, 0.0)))
 
-	root.add_child(_multimesh("PalmTrunks", _trunk_mesh(), palms, PackedColorArray(), true))
-	root.add_child(_multimesh("PalmCrowns", _crown_mesh(), crowns, PackedColorArray(), true))
-	root.add_child(_multimesh("Parasols", _parasol_mesh(), parasols, parasol_colors, true))
-	root.add_child(_multimesh("ParasolPoles", _pole_mesh(), poles, PackedColorArray(), false))
+	# palmiers : 3D pres de la camera, sprite tourne au loin (FarLod) ;
+	# parasols : 3D pres seulement (au loin, ils ne se voient plus)
+	var bases := PackedVector3Array()
+	var scales := PackedFloat32Array()
+	for xf in palms:
+		bases.append(xf.origin)
+		scales.append(xf.basis.y.length() / float(FarLod.KINDS["palm"]["ref"]))
+	FarLod.add(root, "Palm", [
+		{"name": "PalmTrunks", "mesh": _trunk_mesh(), "xfs": palms},
+		{"name": "PalmCrowns", "mesh": _crown_mesh(), "xfs": crowns}], "palm", bases, scales)
+	FarLod.add(root, "Parasol", [
+		{"name": "Parasols", "mesh": _parasol_mesh(), "xfs": parasols, "colors": parasol_colors},
+		{"name": "ParasolPoles", "mesh": _pole_mesh(), "xfs": poles, "shadows": false}])
 	root.add_child(_multimesh("Rocks", _rock_mesh(), rocks, PackedColorArray(), true))
 	_add_lighthouse(root, track, beyond)
 	# positions gardees a part : le rendu factice du headless ne relit pas les

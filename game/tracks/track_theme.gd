@@ -41,6 +41,9 @@ var embankment: Material
 ## Dessous des ponts et piles.
 var bridge_concrete: Material
 var bridge_wood: Material
+## Dessous des tabliers (null : la matiere du pont). Sakura : bois sombre
+## (le vermillon des piles, en plafond, teintait toute l'avenue de rouge).
+var bridge_under: Material
 ## Vrai : le sol recoit un masque terre / mer calcule sur le trace (ile).
 var coast: bool = false
 ## Rayon de terre autour du trace, et de baie creusee sous les ponts (m).
@@ -135,6 +138,7 @@ static func _sakura() -> TrackTheme:
 	t.embankment = _shader(preload("res://tracks/materials/sakura_stone.gdshader"))
 	t.bridge_concrete = _metal(Color(0.56, 0.54, 0.5), 0.0, 0.85)
 	t.bridge_wood = lacquer
+	t.bridge_under = _metal(Color(0.16, 0.09, 0.06), 0.0, 0.9)
 	t.barrel_style = 1
 	var paper := StandardMaterial3D.new()
 	paper.albedo_color = Color(0.85, 0.1, 0.06)

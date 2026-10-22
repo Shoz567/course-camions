@@ -78,6 +78,17 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   retour après 15 s (#71).
 - Pièges : flaques, panneaux éjectables, barils explosifs (dégâts visuels),
   plaques de boost, tremplins.
+- **Décor près de la route** (2026-10-22, `RoadsideDressing`, nœud de chaque
+  scène de circuit) : câbles tendus au-dessus de la piste (enseignes néon de
+  Cyber City, fanions et banderoles de Playa, lanternes et shimenawa de
+  Sakura), objets sur les murs (bornes, drapeaux, nobori, lanternes),
+  panneaux sur leur face intérieure (écrans holo, sponsors, rideaux de fête)
+  et au pied des murs (distributeurs, planches de surf, tours de sauveteur,
+  paillotes, herbes de dune, azalées, palissades de bambou). Purement
+  visuel, sans collision, généré à graine fixe (`track_dressing_test`).
+  Sakura et Playa : les arbres longent aussi les portions hautes, au pied
+  du talus (`TrackBlockout.embankment_reach`) ; Sakura passe de 760 à 1 700
+  cerisiers.
 
 ### Camions, dégâts
 - Dégâts visibles : tôle cabossée, pièces arrachées, éclats, pneus qui
@@ -121,6 +132,16 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 ### Performance, rendu, son, build
 - Gros à-coups supprimés, budget V3 (#41) ; creux de carrosserie calculés
   sans figer l'image (#44) ; SDFGI coupé sur puce Intel (#56).
+- **Décor lointain allégé** (2026-10-22) : palmiers et cerisiers en 3D
+  jusqu'à 250 m seulement (cases de 120 m), au-delà un sprite par arbre qui
+  tourne face à la caméra (`FarLod`, `impostor.gdshader`). Le sprite est
+  une photo du modèle 3D : `godot --path game -s res://dev/bake_impostors.gd`
+  (fenêtré) refait `tracks/impostors/*.png` si le modèle change. Foule des
+  tribunes : 9 triangles par spectateur au-delà de 250 m au lieu de 56
+  (`CrowdFar`). Mesuré (tour de piste, cette machine) : triangles −45 %
+  (Playa) et −24 à −36 % (Sakura) par rapport à `main`, temps GPU inchangé
+  à ±0,3 ms : ici le GPU est limité par les effets plein écran, pas par la
+  géométrie ; le gain compte sur une carte plus modeste.
 - Sons de tour, d'arrivée, de largage, foule des tribunes (#36, #40).
 - Export Windows et Linux préparé (#38).
 

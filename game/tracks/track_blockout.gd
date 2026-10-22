@@ -1137,7 +1137,19 @@ func _build_bridges(parent: Node3D) -> void:
 		under[kind].generate_normals()
 		mi.mesh = under[kind].commit()
 		mi.material_override = theme.bridge_concrete if kind == 0 else theme.bridge_wood
+		if theme.bridge_under != null:
+			mi.material_override = theme.bridge_under
 		parent.add_child(mi)
+
+
+## Largeur au sol du talus au-dela du haut exterieur du mur (m), au pire de
+## son ondulation ; 0 sans talus (route basse, pont). Pour planter le decor
+## a son pied plutot que dedans.
+func embankment_reach(i: int, side: float) -> float:
+	if theme.embankment == null or _deck[i] != 0:
+		return 0.0
+	var h := _wall_profile(i, side)[2].y - 0.2 - GROUND_Y
+	return (h * 1.25 + 3.0) * 1.3 if h > wall_height + 1.0 else 0.0
 
 
 ## Talus : sous les portions hautes (hors ponts), une pente de roche descend

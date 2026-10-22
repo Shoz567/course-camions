@@ -1261,6 +1261,24 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   ambiances, plus douce (gouttes plus rares et sourdes : énergie aiguë de
   0,65 à 0,10), fondu d'entrée de 2,5 s (`sound_mix_test`). À confirmer à
   l'oreille : le grésillement venait-il de l'écrêtage ou des gouttes ?
+- [x] **Décor proche, décor lointain** (2026-10-22, « des graphismes plus
+  immersifs ou proches […] rendre moins vide les graphismes proche des
+  routes ou au-dessus des routes […] pour les assets de loin, fais du trick
+  en 2D tourné, sans que ça fasse tache ») :
+  - près de la route (`RoadsideDressing`) : câbles au-dessus de la piste
+    (14,5 m de hauteur libre au moins, jamais aux arches ni aux tribunes),
+    objets et panneaux sur les murs, objets au pied des murs, aux couleurs
+    de chaque circuit ; aucun sur la chaussée, aucune collision
+    (`track_dressing_test`) ;
+  - arbres le long des rampes du pont et des corniches, au pied du talus ;
+    Sakura : 1 700 cerisiers (760 avant), la plaine dominée par les rampes
+    se remplit ;
+  - au loin (`FarLod`) : arbres 3D jusqu'à 250 m, puis sprites tournés
+    (photo du modèle, fondu tramé, quad écrasé de près : aucun pixel
+    calculé) ; foule lointaine allégée (`CrowdFar`, `track_decor_test`) ;
+    dessous du pont vermillon en bois sombre (il teintait l'avenue en rouge).
+  - Essayé puis retiré : couper murs, sol et talus en cases d'affichage
+    (peu de triangles en moins, +190 appels de dessin à 4 joueurs).
 
 ## Questions de design ouvertes
 

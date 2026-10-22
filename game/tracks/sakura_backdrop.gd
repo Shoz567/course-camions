@@ -18,12 +18,15 @@ extends Node3D
 ## de pierre des portions hautes, rien sous le pont (les deux branches du 8
 ## sont evitees), rien sur les tribunes. Placement deterministe (generateur a
 ## graine fixe, CLAUDE.md §7). Lots fusionnes par case de 320 m (un appel de
-## rendu par materiau et par case, coupes hors champ) ; arbres en MultiMesh.
+## rendu par materiau et par case, coupes hors champ) ; arbres en MultiMesh
+## 3D pres de la camera, en sprites tournes au loin (FarLod, 2026-10-22).
 ## En headless (tests), rien n'est genere, sauf si un test le force.
 
 @export var decor_seed: int = 7
-## Arbres au total (bords de piste et bosquets).
-@export var tree_target: int = 760
+## Arbres au total : les bosquets completent les rangees de bord de piste
+## jusqu'a ce nombre. Au loin ce ne sont plus que des sprites (FarLod) : 1700
+## au lieu de 760, pour moins de triangles qu'avant.
+@export var tree_target: int = 1700
 
 ## Un test peut forcer la generation en headless.
 static var generate_in_headless: bool = false
@@ -168,7 +171,6 @@ func _generate(track: TrackBlockout) -> void:
 		mi.mesh = kit.commit(mats)
 		mi.visibility_range_end = VISIBILITY_END
 		mi.visibility_range_end_margin = 120.0
-		mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		root.add_child(mi)
 		k += 1
 	_add_trees(root)
@@ -286,8 +288,9 @@ func _lanterns(track: TrackBlockout) -> void:
 		s += 24.0
 
 
-## Cerisiers en bord de piste : rangee pres du mur (portions basses), puis
-## d'autres plus loin. Avenue dense le long de la droite de depart.
+## Cerisiers en bord de piste : rangee pres du mur (au pied du talus si la
+## route est haute), puis d'autres plus loin. Avenue dense le long de la
+## droite de depart.
 func _roadside_trees(track: TrackBlockout) -> void:
 	var beyond := track.width / 2.0 + track.wall_thickness + track.wall_lean
 	var length := track.length()
@@ -298,23 +301,30 @@ func _roadside_trees(track: TrackBlockout) -> void:
 		var p := track.sample_position(i)
 		var t := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
 		var r := t.cross(Vector3.UP).normalized()
-		var low := p.y < 2.0 and not track.is_bridge_deck(i)
 		var avenue := s < avenue_end
 		var stands := _in_stands(s)
 		for side: float in [-1.0, 1.0]:
-			for row in 3:
+			# portion haute sans pont : les rangees passent au pied du talus
+			# (sinon un pre vide le long des rampes du pont), et la plaine
+			# qu'on domine de la-haut se remplit de bosquets plus loin
+			var foot := track.embankment_reach(i, side)
+			var high := foot > 0.0
+			for row in 4:
 				var lat := beyond
 				var chance := 0.0
 				match row:
 					0:
-						lat += _range(6.0, 9.0)
-						chance = 0.0 if (not low or stands) else (0.95 if avenue else 0.6)
+						lat += foot + _range(6.0, 9.0)
+						chance = 0.0 if (stands or track.is_bridge_deck(i)) else (0.95 if avenue else 0.85)
 					1:
-						lat += _range(15.0, 24.0) + (40.0 if stands else 0.0)
-						chance = 0.8 if avenue else 0.45
+						lat += foot + _range(15.0, 24.0) + (40.0 if stands else 0.0)
+						chance = 0.8 if avenue else 0.62
 					2:
-						lat += _range(36.0, 80.0) + (30.0 if stands else 0.0)
-						chance = 0.35
+						lat += foot + _range(36.0, 80.0) + (30.0 if stands else 0.0)
+						chance = 0.7 if high else 0.35
+					3:
+						lat += foot + _range(80.0, 150.0)
+						chance = 0.6 if high else 0.0
 				if _rand() > chance:
 					continue
 				var c := p + r * side * lat + t * _range(-4.0, 4.0)
@@ -361,15 +371,8 @@ func _add_tree(at: Vector3, pine: bool) -> void:
 	_taken.append(Vector3(at.x, at.z, 2.5))
 
 
+## Arbres : 3D pres de la camera, sprites tournes au loin (FarLod).
 func _add_trees(root: Node3D) -> void:
-	# MultiMesh par case : coupes hors champ, distance de vue bornee
-	var by_chunk := {}
-	for k in _trees.size():
-		var o := _trees[k].origin
-		var key := Vector2i(floori(o.x / CHUNK), floori(o.z / CHUNK))
-		if not by_chunk.has(key):
-			by_chunk[key] = []
-		(by_chunk[key] as Array).append(k)
 	var trunk := _trunk_mesh()
 	var crown := _crown_mesh()
 	var blossom := ShaderMaterial.new()
@@ -379,32 +382,14 @@ func _add_trees(root: Node3D) -> void:
 	bark.albedo_color = Color(0.2, 0.13, 0.1)
 	bark.roughness = 0.95
 	trunk.surface_set_material(0, bark)
-	var c := 0
-	for key: Vector2i in by_chunk:
-		var ids: Array = by_chunk[key]
-		var tm := MultiMesh.new()
-		tm.transform_format = MultiMesh.TRANSFORM_3D
-		tm.mesh = trunk
-		tm.instance_count = ids.size()
-		var cm := MultiMesh.new()
-		cm.transform_format = MultiMesh.TRANSFORM_3D
-		cm.use_colors = true
-		cm.mesh = crown
-		cm.instance_count = ids.size()
-		for j in ids.size():
-			var k: int = ids[j]
-			tm.set_instance_transform(j, _trees[k])
-			cm.set_instance_transform(j, _crowns[k])
-			cm.set_instance_color(j, _crown_colors[k])
-		for pair: Array in [["Trunks%d" % c, tm], ["Crowns%d" % c, cm]]:
-			var mmi := MultiMeshInstance3D.new()
-			mmi.name = pair[0]
-			mmi.multimesh = pair[1]
-			mmi.visibility_range_end = VISIBILITY_END
-			mmi.visibility_range_end_margin = 120.0
-			mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-			root.add_child(mmi)
-		c += 1
+	var bases := PackedVector3Array()
+	var scales := PackedFloat32Array()
+	for xf in _trees:
+		bases.append(xf.origin)
+		scales.append(xf.basis.y.length() / float(FarLod.KINDS["cherry"]["ref"]))
+	FarLod.add(root, "Trees", [
+		{"name": "Trunks", "mesh": trunk, "xfs": _trees},
+		{"name": "Crowns", "mesh": crown, "xfs": _crowns, "colors": _crown_colors}], "cherry", bases, scales, _crown_colors)
 
 
 ## Guirlandes de lanternes de papier rouges sur l'avenue de depart : un mat
