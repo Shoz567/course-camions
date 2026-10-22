@@ -9,8 +9,12 @@ varying vec3 lp;
 varying vec3 ln;
 varying vec4 cd;
 
+// hachage sans sinus (2026-10-22 : sin() d'un grand argument est imprecis
+// sur certaines cartes, motifs au lieu du hasard)
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 vec3 neon(float k) {
@@ -44,5 +48,7 @@ void fragment() {
 	float m = max(text, frame) * face;
 	ALBEDO = vec3(0.02) + col * 0.1;
 	EMISSION = col * (m * 3.2 + sweep * face) * flicker;
-	ROUGHNESS = 0.4;
+	// mat : pas de reflet de la ville sur le panneau (grain en haute qualite)
+	ROUGHNESS = 0.85;
+	SPECULAR = 0.1;
 }
