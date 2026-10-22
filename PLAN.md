@@ -1517,6 +1517,9 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   n'affiche plus que « EN ATTENTE DES AUTRES JOUEURS n/N ». Hors ligne
   depuis le menu, il n'y avait déjà plus de sas (seules les scènes lancées
   sans le menu, outils de développement, le gardent). Test : `net_bots_test`.
+- [x] **Aide du HUD : Create = reset, Options = menu** (2026-10-22) : la barre
+  de pictos de la course affichait encore « OPT Reset » après le menu pause ;
+  nouveau picto `create` (`PadGlyph`).
 
 ## Questions de design ouvertes
 
