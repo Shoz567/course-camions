@@ -62,6 +62,11 @@ var show_fps: bool = false:
 ## active par defaut, sans effet tant que la carte tient 60 images/s.
 var dynamic_resolution: bool = true
 
+## Jauges Musique et Bruitages des parametres (0 a 100 %, SoundMix) ; la
+## jauge generale est le volume du Master.
+var music_volume: float = 100.0
+var effects_volume: float = 100.0
+
 ## Regle l'echelle 3D de toutes les vues (enfant de l'autoload).
 var resolution: DynamicResolution
 
@@ -207,6 +212,7 @@ func _ready() -> void:
 		go_offscreen()
 	# bus Effets / Ambiance / Musique et limiteur, avant le premier son
 	SoundMix.setup()
+	SoundMix.apply_user_volumes(music_volume, effects_volume)
 	resolution = DynamicResolution.new()
 	resolution.name = "DynamicResolution"
 	add_child(resolution)
@@ -285,6 +291,8 @@ func write_settings(path: String) -> Error:
 	var bus := AudioServer.get_bus_index("Master")
 	cfg.set_value("audio", "on", not AudioServer.is_bus_mute(bus))
 	cfg.set_value("audio", "volume", db_to_linear(AudioServer.get_bus_volume_db(bus)))
+	cfg.set_value("audio", "music", music_volume)
+	cfg.set_value("audio", "effects", effects_volume)
 	cfg.set_value("video", "quality", graphics_quality)
 	cfg.set_value("video", "show_fps", show_fps)
 	cfg.set_value("video", "dynamic_resolution", dynamic_resolution)
@@ -312,6 +320,9 @@ func read_settings(path: String) -> Error:
 	AudioServer.set_bus_mute(bus, not bool(cfg.get_value("audio", "on", true)))
 	var vol := clampf(float(cfg.get_value("audio", "volume", 1.0)), 0.0, 1.0)
 	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(vol, 0.00001)))
+	music_volume = clampf(float(cfg.get_value("audio", "music", 100.0)), 0.0, 100.0)
+	effects_volume = clampf(float(cfg.get_value("audio", "effects", 100.0)), 0.0, 100.0)
+	SoundMix.apply_user_volumes(music_volume, effects_volume)
 	graphics_quality = clampi(int(cfg.get_value("video", "quality", graphics_quality)), 0, GraphicsSettings.NAMES.size() - 1)
 	show_fps = bool(cfg.get_value("video", "show_fps", show_fps))
 	dynamic_resolution = bool(cfg.get_value("video", "dynamic_resolution", dynamic_resolution))

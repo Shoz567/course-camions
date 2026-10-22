@@ -93,6 +93,9 @@ var settings: Control
 ## Ecran des parametres : case du son (miroir du bouton du menu), volume.
 var sound_check: CheckButton
 var volume_slider: HSlider
+## Jauges Musique et Bruitages (2026-10-22), sous le volume general.
+var music_slider: HSlider
+var effects_slider: HSlider
 var quality_option: OptionButton
 ## Avertissement avant la qualite extreme, et ses deux boutons.
 var extreme_warning: Control
@@ -835,6 +838,23 @@ func set_volume(percent: float) -> void:
 		GameState.save_settings()
 
 
+## Jauge de la musique (0 a 100 %), gardee dans GameState.
+func set_music_volume(percent: float) -> void:
+	GameState.music_volume = clampf(percent, 0.0, 100.0)
+	SoundMix.apply_user_volumes(GameState.music_volume, GameState.effects_volume)
+	if is_node_ready():
+		GameState.save_settings()
+
+
+## Jauge des bruitages et de l'ambiance (0 a 100 %) ; un bip pour l'entendre.
+func set_effects_volume(percent: float) -> void:
+	GameState.effects_volume = clampf(percent, 0.0, 100.0)
+	SoundMix.apply_user_volumes(GameState.music_volume, GameState.effects_volume)
+	if is_node_ready():
+		GameState.save_settings()
+		MenuSound.play_select()
+
+
 # --- salle d'attente (tache 4.2) ------------------------------------------------
 
 ## Ouvre ou ferme la salle d'attente ; a l'ouverture, elle repart de la liste
@@ -1093,6 +1113,37 @@ func _refresh_remap() -> void:
 			b.text = "appuyez sur un bouton…  (Échap : annuler)"
 		else:
 			b.text = PadBindings.list_name(GameState.pad_bindings[a])
+
+
+## Ligne d'une jauge de volume des parametres : intitule, curseur (0 a 100 %,
+## par pas de 5), pourcentage ; ajoutee a `box`, rend le curseur.
+func _volume_row(box: Container, slider_name: String, text: String, value: float, on_change: Callable) -> HSlider:
+	var row := HBoxContainer.new()
+	# texte aligne sur celui des interrupteurs (marge de 6 px)
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(UiKit.gap(0))
+	var l := UiKit.label(text, 19, UiKit.TEXT, 600, false)
+	l.custom_minimum_size.x = 150
+	row.add_child(l)
+	var s := HSlider.new()
+	s.name = slider_name
+	s.min_value = 0.0
+	s.max_value = 100.0
+	s.step = 5.0
+	s.value = value
+	s.custom_minimum_size = Vector2(200, 0)
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	UiKit.style_slider(s)
+	row.add_child(s)
+	var pct := UiKit.label("%d %%" % roundi(value), 17, UiKit.DIM, 600, false)
+	pct.custom_minimum_size.x = 58
+	pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(pct)
+	s.value_changed.connect(func(v: float) -> void: pct.text = "%d %%" % roundi(v))
+	s.value_changed.connect(on_change)
+	box.add_child(row)
+	return s
 
 
 ## Panneau : une ligne par action (nom, boutons actuels a cliquer), PAR
@@ -1875,30 +1926,11 @@ func _build_settings() -> Control:
 	UiKit.style_toggle(sound_check, 19)
 	sound_check.toggled.connect(set_sound)
 	opts.add_child(sound_check)
-	var vol := HBoxContainer.new()
-	# texte aligne sur celui des interrupteurs (marge de 6 px)
-	vol.add_theme_constant_override("separation", 6)
-	vol.add_child(UiKit.gap(0))
-	vol.add_child(UiKit.label("Volume", 19, UiKit.TEXT, 600, false))
-	vol.add_child(UiKit.gap(0))
-	volume_slider = HSlider.new()
-	volume_slider.name = "Volume"
-	volume_slider.min_value = 0.0
-	volume_slider.max_value = 100.0
-	volume_slider.step = 5.0
-	volume_slider.value = roundf(db_to_linear(AudioServer.get_bus_volume_db(_master_bus())) * 100.0)
-	volume_slider.custom_minimum_size = Vector2(260, 0)
-	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	volume_slider.value_changed.connect(set_volume)
-	UiKit.style_slider(volume_slider)
-	vol.add_child(volume_slider)
-	opts.add_child(vol)
-	var rumble := CheckButton.new()
-	rumble.text = "Vibrations manette (bientôt)"
-	rumble.button_pressed = true
-	UiKit.style_toggle(rumble, 19)
-	opts.add_child(rumble)
+	# trois jauges : generale (Master), musique, bruitages (2026-10-22)
+	volume_slider = _volume_row(opts, "Volume", "Volume général",
+		roundf(db_to_linear(AudioServer.get_bus_volume_db(_master_bus())) * 100.0), set_volume)
+	music_slider = _volume_row(opts, "MusicVolume", "Musique", GameState.music_volume, set_music_volume)
+	effects_slider = _volume_row(opts, "EffectsVolume", "Bruitages", GameState.effects_volume, set_effects_volume)
 	quality_option = OptionButton.new()
 	quality_option.name = "Quality"
 	# de la plus riche a la plus legere ; l'identifiant de chaque ligne est la

@@ -1432,6 +1432,16 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     tâches (« je veux quand même pouvoir y accéder ») ; `--mute` séparé de
     `--offscreen` ;
   - tests : `menu_music_test` (nouveau), `sound_mix_test` (12 dB).
+- [x] **Trois jauges de volume** (2026-10-22, « c'est un peu faible […] une
+  jauge pour la musique et une jauge pour les bruitages. Et une jauge
+  générale ») : paramètres, Son et réglages : Volume général (Master),
+  Musique, Bruitages (Effets et Ambiance), de 0 à 100 % avec leur
+  pourcentage, gardées dans settings.cfg (`GameState.music_volume`,
+  `effects_volume`, `SoundMix.apply_user_volumes`, par-dessus le niveau de
+  chaque bus) ; musique +3 dB par défaut (bus Musique 0 → +3). La ligne
+  « Vibrations manette (bientôt) », qui ne faisait rien, est retirée : la
+  page débordait sur la barre d'aide. Tests : `sound_mix_test`,
+  `settings_remap_test`, `main_menu_test` (jauges, page qui tient).
 
 ## Questions de design ouvertes
 
