@@ -1470,6 +1470,20 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   spectateurs […] un peu brouillon et ça sert à rien ») : `CrowdSound` et
   son test supprimés ; `track_decor_test` vérifie que les tribunes sont
   muettes. Les spectateurs restent visibles.
+- [x] **Bots : la course d'abord** (2026-10-22, « leur objectif principal,
+  c'est de finir la course et pas d'attaquer le joueur. Car au début, on le
+  voit, ils foncent sur le joueur […] numéro 2, dès qu'ils peuvent tirer ») :
+  en course, la conduite des bots ne vise jamais personne ; mais au départ,
+  chacun visait une voie tirée de son numéro (-4 / 4 / 0 / -8 / 8 m), sans
+  rapport avec sa place sur la grille à 12 (#95) : au GO, il traversait la
+  grille, parfois vers le joueur. Sa voie de départ est maintenant sa place
+  réelle (`BotInputSource.lane`, au premier poll) : il part droit et
+  rejoint sa ligne sur 250 m. Joueur immobile sur la grille, 5 bots durs,
+  10 s : chocs subis 1 / 3 / 3 → 0 / 0 / 0 (Cyber City, Playa, Sakura) ;
+  moyens 0, faciles 0 / 1 / 0 (un facile, coincé derrière le camion arrêté,
+  le touche à 46 km/h). Les tirs restent secondaires : un pouvoir part sur
+  le camion qui se trouve devant, sans détour pour l'atteindre, au rythme
+  du niveau. Test : `bot_start_test`.
 
 ## Questions de design ouvertes
 

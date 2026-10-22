@@ -196,8 +196,15 @@ const GOLDEN := 0.618034
 var track: TrackBlockout
 var truck: Truck
 var level: int = Level.MEDIUM
-## Voie de depart (m, > 0 a droite de la ligne de course).
+## Voie de depart (m, > 0 a droite de la ligne de course) : sa place sur la
+## grille, prise au premier poll (2026-10-22 : « au debut, ils foncent sur le
+## joueur a la place de partir pour faire la course » ; la voie venait du
+## numero du bot, -4 / 4 / 0 / -8 / 8 m, sans rapport avec sa place depuis la
+## grille a 12 en rangs de 4 : au GO, il traversait la grille vers elle, parfois
+## celle du joueur). Il part droit devant et rejoint sa ligne sur
+## START_BLEND_M.
 var lane: float = 0.0
+var _lane_set: bool = false
 var index: int = -1
 var target_speed: float = 0.0
 ## Ce qui le gene devant (trafic), ou null.
@@ -397,8 +404,6 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 	track = t
 	truck = tr
 	level = clampi(bot_level, Level.EASY, Level.HARD)
-	var lanes := [-4.0, 4.0, 0.0, -8.0, 8.0]
-	lane = lanes[number % lanes.size()]
 	_phase = number * 37
 	_power_wait = int(START_POWER_TICKS[level]) + number * START_POWER_STEP_TICKS
 	line = RacingLine.of(t)
@@ -452,6 +457,9 @@ func poll(tick: int) -> InputFrame:
 		frame.steer = 0.0
 		return frame
 	index = _sample_of(truck.global_position, index)
+	if not _lane_set:
+		_lane_set = true
+		lane = _lateral_of(truck.global_position, index) - _line_at(index)
 	var v := truck.linear_velocity.length()
 	if RaceManager.state == RaceManagerNode.State.RACING:
 		_driven_m += v / Engine.physics_ticks_per_second
