@@ -1442,6 +1442,11 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   « Vibrations manette (bientôt) », qui ne faisait rien, est retirée : la
   page débordait sur la barre d'aide. Tests : `sound_mix_test`,
   `settings_remap_test`, `main_menu_test` (jauges, page qui tient).
+- [x] **Bruitages plus forts à 100 %** (2026-10-22, « je trouve les bruitages
+  faibles, même à 100 % ») : 100 % ne rendait que le -12 dB du réglage
+  précédent. Bus Effets et Ambiance à 0 dB pour la jauge à 100 %, musique
+  à +5 dB ; jauges par défaut : musique 80 % (+3 dB), bruitages 50 % (-6 dB,
+  le niveau d'origine). Une jauge déjà enregistrée garde son pourcentage.
 
 ## Questions de design ouvertes
 

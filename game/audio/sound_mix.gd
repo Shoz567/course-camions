@@ -16,11 +16,16 @@ extends RefCounted
 const EFFECTS := &"Effets"
 const AMBIENCE := &"Ambiance"
 const MUSIC := &"Musique"
-## Volume de chaque bus (dB), sous le Master, jauges a 100 %. Bruitages -6 ->
-## -12 dB (2026-10-22 : « les bruitages sont trop forts par rapport a la
-## musique » : en course, les chocs montaient a -7 dB, plus haut que la
-## musique, -9) ; musique 0 -> +3 dB (« c'est un peu faible »).
-const LEVELS := {EFFECTS: -12.0, AMBIENCE: -6.0, MUSIC: 3.0}
+## Volume de chaque bus (dB), sous le Master, jauge a 100 % ; les jauges
+## partent de DEFAULT_MUSIC et DEFAULT_EFFECTS. Historique du 2026-10-22 :
+## « les bruitages sont trop forts par rapport a la musique » (bruitages -6 ->
+## -12, musique +3), puis « je trouve les bruitages faibles, meme a 100 % » :
+## 100 % ne faisait que rendre ce -12. Maintenant 100 % = 0 dB, le defaut
+## (50 %) = -6 dB, le niveau d'origine, et la musique a pris 5 dB depuis.
+const LEVELS := {EFFECTS: 0.0, AMBIENCE: 0.0, MUSIC: 5.0}
+## Jauges au premier lancement (%) : musique +3 dB, bruitages et ambiance -6.
+const DEFAULT_MUSIC := 80.0
+const DEFAULT_EFFECTS := 50.0
 ## Plafond du limiteur du Master (dB).
 const CEILING_DB := -1.0
 
