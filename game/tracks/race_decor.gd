@@ -302,11 +302,6 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 			var out := r * side
 			stand.transform = Transform3D(Basis(out.cross(Vector3.UP) * -1.0, Vector3.UP, out), p + out * beyond)
 			stands.add_child(stand)
-			# rumeur de la foule, au milieu des gradins (tache 7.3)
-			var voice := CrowdSound.new()
-			voice.name = "CrowdSound"
-			voice.position = Vector3(0.0, 1.2 + rows * row_rise / 2.0, rows * row_depth / 2.0)
-			stand.add_child(voice)
 			for k in rows:
 				var y := 1.2 + k * row_rise
 				_box(stand, Vector3(length, y, row_depth), Vector3(0.0, y / 2.0, k * row_depth + row_depth / 2.0), concrete)

@@ -8,8 +8,8 @@ extends PhysicsTest
 ##      ils montent a 0 dB (« faibles, meme a 100 % ») ;
 ##   B. un limiteur sur le Master, plafond sous 0 dB (plus d'ecretage) ;
 ##   C. setup() rejoue sans doubler bus ni limiteur ;
-##   D. chaque son part sur son bus : foule et ambiance sur Ambiance, klaxon
-##      et boost sur Effets ;
+##   D. chaque son part sur son bus : klaxon et boost sur Effets (la foule
+##      des tribunes, sur Ambiance, est retiree le 2026-10-22) ;
 ##   F. jauges Musique et Bruitages (2026-10-22) : par-dessus le niveau du
 ##      bus ; la jauge des bruitages regle aussi l'ambiance ; 0 % : muet ;
 ##   E. la pluie de Cyber City sous les autres ambiances, et plus douce :
@@ -21,13 +21,11 @@ var _seen: Dictionary = {}
 
 func _test_setup() -> void:
 	duration_ticks = 2
-	var crowd := CrowdSound.new()
-	add_child(crowd)
 	var horn := TruckHorn.new()
 	add_child(horn)
 	var boost := TruckBoostSound.new()
 	add_child(boost)
-	_seen["buses"] = [crowd.bus, horn.bus, boost.bus]
+	_seen["buses"] = [horn.bus, boost.bus]
 
 
 func _test_finish() -> void:
@@ -51,8 +49,7 @@ func _test_finish() -> void:
 	var master := AudioServer.get_bus_index(&"Master")
 	check("C setup() idempotent", AudioServer.bus_count == count and AudioServer.get_bus_effect_count(master) == 1,
 		"%d bus, %d effet(s)" % [AudioServer.bus_count, AudioServer.get_bus_effect_count(master)])
-	check("D foule : Ambiance ; klaxon, boost : Effets",
-		_seen.get("buses") == [SoundMix.AMBIENCE, SoundMix.EFFECTS, SoundMix.EFFECTS], str(_seen.get("buses")))
+	check("D klaxon, boost : Effets", _seen.get("buses") == [SoundMix.EFFECTS, SoundMix.EFFECTS], str(_seen.get("buses")))
 	check("E pluie sous les autres ambiances (dB)",
 		AmbienceSound.volume_db_for(TrackTheme.Id.CYBER_CITY) < AmbienceSound.volume_db_for(TrackTheme.Id.PLAYA_DEL_SOL),
 		"%.1f / %.1f" % [AmbienceSound.volume_db_for(TrackTheme.Id.CYBER_CITY),

@@ -208,7 +208,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - Fumée des dégâts redessinée : bouffées rondes à bord net, éclairage en
   deux tons, gris qui s'éclaircit en montant (plus de tache noire en plein
   jour).
-- Sons de tour, d'arrivée, de largage, foule des tribunes (#36, #40).
+- Sons de tour, d'arrivée, de largage (#36, #40) ; la foule des tribunes,
+  jugée brouillonne, est muette depuis le 2026-10-22.
 - Export Windows et Linux préparé (#38).
 
 ## Outils hors du jeu
