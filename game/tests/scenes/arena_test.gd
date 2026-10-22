@@ -5,7 +5,10 @@ extends PhysicsTest
 ## dev/arena.tscn, 1 joueur immobile et 3 bots durs, 2 vies (au lieu de 3) :
 ##   A. l'arene : anneau de 160 m autour d'un ilot, mode arene, bots chasseurs ;
 ##      le menu lance l'arene de l'habillage du circuit choisi ;
-##   B. les bots chassent : ils restent au contact de leur proie (moins de 60 m
+##   B. les bots chassent : ils restent au contact de leur proie (moins de 90 m
+##      de celle qu'ils visent, elan apres chaque charge compris : 75 a 80 m
+##      mesures le 2026-10-22, quand le dur vise d'abord le joueur ; avant, moins
+##      de 60 m du camion le plus proche)
 ##      en moyenne sur 15 s, dans une arene de 340 m) et la percutent (5 chocs
 ##      au moins ; 10 avant le 2026-10-21 : ce compte varie de 6 a 10 au gre
 ##      du deroule, tremplins, departs degages, recul quand ca pousse) ;
@@ -48,16 +51,17 @@ func _truck(i: int) -> Truck:
 	return (_players()[i] as Object).get("truck") as Truck
 
 
-## Distance moyenne de chaque bot a son camion le plus proche.
+## Distance moyenne de chaque bot a sa proie (2026-10-22 : le dur vise un
+## joueur humain d'abord, pas forcement le camion le plus proche).
 func _hunt_gap() -> float:
 	var sum := 0.0
+	var n := 0
 	for i in range(1, 4):
-		var best := INF
-		for j in 4:
-			if j != i:
-				best = minf(best, _truck(i).global_position.distance_to(_truck(j).global_position))
-		sum += best
-	return sum / 3.0
+		var prey := ((_players()[i] as Object).get("input") as BotInputSource).arena_prey
+		if prey != null and not _truck(i).is_wrecked():
+			sum += _truck(i).global_position.distance_to(prey.global_position)
+			n += 1
+	return sum / maxf(n, 1)
 
 
 func _test_tick(t: int) -> void:
@@ -108,7 +112,7 @@ func _test_finish() -> void:
 	check("A le menu lance l'arene de l'habillage choisi", String(_seen.get("menu_scene", "")) == "res://dev/arena_playa.tscn",
 		str(_seen.get("menu_scene")))
 	var h: Array = _seen.get("hunt", [INF, 0])
-	check("B les bots chassent : au contact, des chocs", float(h[0]) < 60.0 and int(h[1]) >= 5,
+	check("B les bots chassent : au contact, des chocs", float(h[0]) < 90.0 and int(h[1]) >= 5,
 		"%.0f m en moyenne, %d chocs" % [float(h[0]), int(h[1])])
 	check("C detruit une fois : reapparu, une vie de moins", _seen.get("one") == [1, false], str(_seen.get("one")))
 	check("C la seconde : sorti, l'epave reste", _seen.get("out") == [0, true, true], str(_seen.get("out")))

@@ -286,6 +286,7 @@ func _ready() -> void:
 	if game_mode == GameStateNode.GameMode.ARENA:
 		for i in players.size():
 			lives.append(arena_lives)
+			players[i].truck.set_meta(BotInputSource.LIVES_META, arena_lives)
 			var h := TruckHealth.of(players[i].truck)
 			if h != null:
 				h.destroyed.connect(_on_arena_destroyed.bind(i))
@@ -500,6 +501,7 @@ func _add_player(i: int) -> Player:
 	# cibles des pouvoirs : tous les camions de la course ; pouvoirs choisis
 	# sur la page de selection (hors ligne), simules sur la machine qui fait foi
 	t.add_to_group(TruckPowers.TARGETS)
+	t.set_meta(BotInputSource.HUMAN_META, not is_bot(i))
 	# client en ligne : pouvoirs en miroir (effets et recharges du host)
 	var tp := TruckPowers.setup(t, p.power_left, p.power_right, not is_authority())
 	# son propre camion : le tir part a l'appui, sans attendre le host
@@ -1329,6 +1331,7 @@ func _on_arena_destroyed(i: int) -> void:
 	if eliminated.has(i) or not is_authority():
 		return
 	lives[i] = maxi(lives[i] - 1, 0)
+	players[i].truck.set_meta(BotInputSource.LIVES_META, lives[i])
 	if lives[i] == 0:
 		var h := TruckHealth.of(players[i].truck)
 		if h != null:

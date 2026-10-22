@@ -171,6 +171,8 @@ const JUMP_SPEED_MARGIN := 1.1
 ## volait au-dela de la reception de la marina et tombait du bord).
 const JUMP_SPEED_MAX := 1.3
 const JUMP_RUNUP_M := 30.0
+## Ecart (m) devant lui sous lequel un autre camion lui fait laisser le saut.
+const JUMP_SPACING_M := 120.0
 const BRANCH_BOOST_CLEAR_M := 250.0
 const PUDDLE_COST_M := 8.0
 ## Bonus en course (2026-10-21 : « base-toi sur le hard ») : un bonus dont il a
@@ -283,10 +285,25 @@ const ARENA_RAM_ANGLE := 0.2
 ## chacun esquivait l'autre) : trop passif.
 const ARENA_KILL_HP := 40.0
 const ARENA_LOSING_FAR := 1.6
+## Dur, choix de la proie (2026-10-22 : 4 manches sur 9, un joueur immobile
+## finissait en tete contre des bots durs qui se detruisaient entre eux, sa
+## remorque detruite et ses PV pleins le faisant eviter) : une proie a qui il
+## reste 1, 2, 3 vies (LIVES_META, pose par LocalRace) compte ARENA_LIVES_NEAR
+## fois sa distance. Essaye et retire : une proie lente comptee plus pres (un
+## camion coince attirait tous les durs, qui s'y empilaient).
+const LIVES_META := &"arena_lives"
+const ARENA_LIVES_NEAR := [0.5, 0.75, 1.0]
+## Un joueur humain (HUMAN_META, pose par LocalRace) compte ARENA_HUMAN_NEAR
+## fois sa distance : les durs s'eliminaient entre eux (un choc coute autant
+## aux deux), et le joueur, plus loin, n'etait jamais touche.
+const HUMAN_META := &"human"
+const ARENA_HUMAN_NEAR := 0.65
 ## Il charge (dur), ce tick ; charges a la nitro lancees (tests) ; reparation decidee
 ## (-1 : pas encore, sous le seuil) et passages sous le seuil ; nitro
 ## demandee au tick d'avant.
 var ramming: bool = false
+## Arene : sa proie de ce tick (tests), null sans proie.
+var arena_prey: Truck = null
 var rams: int = 0
 ## Departs vers une reparation (tests).
 var repair_trips: int = 0
@@ -788,6 +805,28 @@ static func takes_shortcut(bot_level: int, phase: int, pass_index: int) -> bool:
 	return fposmod(phase * 0.37 + pass_index * GOLDEN, 1.0) < float(SHORTCUT_TAKE[bot_level])
 
 
+## Le raccourci k n'a pas de saut, ou personne ne l'y gene : aucun camion
+## dessus avant le vide, ni devant lui a moins de JUMP_SPACING_M sur la route
+## de son entree (a `gap` m). Sinon il passe par la route a ce passage
+## (2026-10-22 : 5 bots durs sur la rampe de la marina, un ralenti tombait).
+func _jump_clear(k: int, gap: float) -> bool:
+	var jump := track.branch_jump(k)
+	if jump.x < 0.0:
+		return true
+	for n in truck.get_tree().get_nodes_in_group(TruckPowers.TARGETS):
+		var t := n as Truck
+		if t == null or t == truck or t.is_wrecked():
+			continue
+		if track.on_branch(t.global_position, 1.0) == k:
+			if track.branch_u(k, t.global_position) < jump.y:
+				return false
+			continue
+		var ahead := _s_gap(index, track.closest_sample(t.global_position))
+		if ahead > 0.0 and ahead < minf(gap, JUMP_SPACING_M):
+			return false
+	return true
+
+
 ## Le raccourci k n'a pas de saut, ou il va assez vite pour le franchir.
 func _can_jump(k: int) -> bool:
 	return _top * 3.6 >= track.branch_jump_min_kmh(k) * JUMP_SPEED_MARGIN
@@ -839,7 +878,7 @@ func _update_branch() -> void:
 			continue
 		_branch_seen = k
 		_passes += 1
-		if takes_shortcut(level, _phase, _passes) and _can_jump(k):
+		if takes_shortcut(level, _phase, _passes) and _can_jump(k) and _jump_clear(k, gap):
 			_branch = k
 			_to_entry = gap
 			shortcuts_taken += 1
@@ -1141,10 +1180,18 @@ func _arena_drive(v: float) -> void:
 				score *= 1.0 - ARENA_WEAK_PART * (1.0 - clampf(h.hp / h.max_hp, 0.0, 1.0))
 			if not _wins_trade(t):
 				score *= ARENA_LOSING_FAR
+			# moins il lui reste de vies, plus l'achever compte
+			var lives_left := int(t.get_meta(LIVES_META, 0))
+			if lives_left > 0:
+				score *= ARENA_LIVES_NEAR[mini(lives_left, ARENA_LIVES_NEAR.size()) - 1]
+			# un joueur humain d'abord
+			if bool(t.get_meta(HUMAN_META, false)):
+				score *= ARENA_HUMAN_NEAR
 		if score < best_score:
 			best_score = score
 			best = d
 			prey = t
+	arena_prey = prey
 	var fwd := -truck.global_basis.z
 	fwd.y = 0.0
 	fwd = fwd.normalized()
