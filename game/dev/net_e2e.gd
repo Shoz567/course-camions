@@ -24,6 +24,9 @@ class Driver extends InputSource:
 		var f := bot.poll(tick)
 		frame.copy_from(f)
 		frame.tick = tick
+		# sas en ligne : Croix (frein a main) = pret
+		if RaceManager.state == RaceManagerNode.State.LOBBY:
+			frame.handbrake = (tick / 10) % 2 == 0
 		return frame
 
 

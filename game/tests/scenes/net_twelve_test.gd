@@ -76,6 +76,10 @@ func _check_colors() -> void:
 
 
 func _test_tick(t: int) -> void:
+	# le joueur du host passe le sas (Croix ; son propre test : net_bots_test)
+	var flags: Array = _race.get("ready_flags")
+	if not flags.is_empty():
+		flags[0] = true
 	if RaceManager.state == RaceManagerNode.State.RACING and _go < 0:
 		_go = t
 	if _go >= 0 and t - _go >= 600:

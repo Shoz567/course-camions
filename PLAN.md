@@ -1520,6 +1520,17 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
 - [x] **Aide du HUD : Create = reset, Options = menu** (2026-10-22) : la barre
   de pictos de la course affichait encore « OPT Reset » après le menu pause ;
   nouveau picto `create` (`PadGlyph`).
+- [x] **Sas « PRÊT ? » en ligne, nouveau style** (2026-10-22, « pour être sûr
+  que tout le monde est là et qu'il a bien chargé la course, une touche à
+  appuyer pour se mettre prêt. Mais […] dans le nouveau style graphique,
+  pas du texte jaune ») : carte `ReadyGate` (UiKit) au centre de l'écran,
+  une ligne par joueur à sa couleur (CHARGEMENT… / EN ATTENTE / PRÊT, bots
+  exclus), compteur « n / N PRÊTS », invite à pictos (Croix, Espace) ; une
+  fois prêt, « PRÊT ! » et l'attente des autres. On ne peut se mettre prêt
+  qu'une fois sa course chargée ; départ quand tous le sont. Protocole 10
+  (course chargée de chacun dans l'état de course). Hors ligne : pas de
+  sas. Test : `net_bots_test` (D : la course attend sans appui, Croix la
+  lance) ; `net_modes_test` (9 champs).
 - [x] **Ancien sas jaune supprimé partout** (2026-10-22, « il y a toujours le
   texte jaune que je ne veux pas. Maintenant, c'est le menu ») : il ne
   restait que dans les scènes de course lancées sans le menu (captures,

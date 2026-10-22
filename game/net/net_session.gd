@@ -51,7 +51,7 @@ const MAX_PLAYERS := 12
 ## plantait sur ces cases).
 ## 8 (2026-10-22) : regles du host dans le lobby (menu en ligne : chacun voit
 ## mode, circuit, vitesse et bots avant le lancement).
-const PROTOCOL := 9
+const PROTOCOL := 10
 ## Menu principal : retour au salon quand le host arrete la course.
 const MENU_SCENE := "res://ui/main_menu.tscn"
 const MAX_NAME := 16

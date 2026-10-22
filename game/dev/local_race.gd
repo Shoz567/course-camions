@@ -242,8 +242,12 @@ var pause_menu: PauseMenu
 var _finish_order: Array[Truck]:
 	get:
 		return RaceManager.finish_order
-## Sas en ligne : joueur pret (sa course chargee ; un bot l'est d'office).
+## Sas en ligne : joueur pret (Croix / Espace, une fois sa course chargee ;
+## un bot l'est d'office) et course chargee chez lui.
 var ready_flags: Array[bool] = []
+var loaded_flags: Array[bool] = []
+## Carte du sas en ligne (ReadyGate), nulle hors ligne.
+var ready_gate_ui: ReadyGate
 ## Musique de course : demarre au GO, fondu a l'arrivee (inerte en headless).
 var music: RaceMusic
 ## Course en ligne (NetSession, phase 6) : un joueur par machine, dans l'ordre
@@ -379,6 +383,7 @@ func _ready() -> void:
 	for i in players.size():
 		# un bot est toujours pret
 		ready_flags.append(is_bot(i))
+		loaded_flags.append(is_bot(i))
 	# carrosseries deformables preparees pendant le chargement (~0,5 s par
 	# modele) : le sas READY ne prepare plus que les remorques changees, sans
 	# figer la course (en ligne, un client fige n'envoie plus ses inputs)
@@ -405,6 +410,10 @@ func _ready() -> void:
 		add_child(net)
 		net.setup(self, players, race)
 		NetSession.connection_lost.connect(_on_connection_lost)
+	if NetSession.is_online():
+		ready_gate_ui = ReadyGate.new()
+		ready_gate_ui.name = "ReadyGate"
+		add_child(ready_gate_ui)
 	pause_menu = PauseMenu.new()
 	pause_menu.name = "PauseMenu"
 	add_child(pause_menu)
@@ -958,15 +967,19 @@ func _simulate(tick: int) -> void:
 			p.truck.set_input(_neutral)
 		return
 	if state == State.LOBBY:
-		# sas en ligne : camions immobiles. Convoi choisi et PRET donne au salon
-		# (page de selection) : chacun est pret des que sa course est chargee,
-		# le sas ne fait qu'attendre les machines lentes
+		# sas en ligne (ReadyGate) : camions immobiles. Convoi choisi au salon ;
+		# une fois sa course chargee, chacun confirme qu'il est la (Croix /
+		# Espace : le frein a main de SA source, lu aussi pour un client)
 		_neutral.tick = tick
 		for i in players.size():
-			players[i].input.poll(tick)
+			var f := _menu_frame(i, players[i].input.poll(tick), tick)
 			players[i].truck.set_input(_neutral)
-			if not ready_flags[i] and _loaded(i):
+			if not loaded_flags[i] and _loaded(i):
+				loaded_flags[i] = true
+			if loaded_flags[i] and not ready_flags[i] and f.handbrake:
 				ready_flags[i] = true
+				if is_local(i):
+					MenuSound.play_confirm()
 		if all_ready():
 			# carrosseries deformables preparees maintenant, pas au premier choc
 			for p in players:
@@ -1055,6 +1068,30 @@ func _client_tick(tick: int) -> void:
 		_countdown_beeps(tick)
 
 
+## Carte du sas en ligne : les joueurs (pas les bots ni les partis), leur
+## etat ; cachee hors du sas.
+func _update_ready_gate() -> void:
+	if ready_gate_ui == null:
+		return
+	if state != State.LOBBY or _lost_reason != "":
+		if ready_gate_ui.visible:
+			ready_gate_ui.hide_gate()
+		return
+	var rows: Array = []
+	var me_ready := false
+	for i in players.size():
+		if is_bot(i) or _abandoned.has(i):
+			continue
+		var status := ReadyGate.Status.READY if ready_flags[i] \
+				else (ReadyGate.Status.WAITING if loaded_flags[i] else ReadyGate.Status.LOADING)
+		rows.append({"name": player_name(i), "color": UiKit.PLAYER_COLORS[slot_of(i) % UiKit.PLAYER_COLORS.size()],
+			"status": status, "me": is_local(i)})
+		if is_local(i):
+			me_ready = ready_flags[i]
+	var connecting := net != null and not net.is_host() and not net.host_ready
+	ready_gate_ui.show_gate(rows, me_ready, connecting)
+
+
 ## En ligne, host : la course du joueur `i` est chargee (son ecran de
 ## chargement leve ; un client l'annonce, NetRace.is_loaded).
 func _loaded(i: int) -> bool:
@@ -1098,14 +1135,17 @@ func net_state() -> Array:
 	for p in players:
 		trailers.append(p.trailer)
 	return [int(state), _state_tick, ready_flags.duplicate(), trailers, race.start_tick,
-		eliminated.duplicate(), lives.duplicate(), _next_elim]
+		eliminated.duplicate(), lives.duplicate(), _next_elim, loaded_flags.duplicate()]
 
 
 ## Client : applique l'etat recu du host (net_state). Les ticks du host sont
 ## ramenes a l'horloge de cette machine.
 func apply_net_state(s: Array) -> void:
-	if s.size() != 8:
+	if s.size() != 9:
 		return
+	var loaded := s[8] as Array
+	for i in mini(loaded_flags.size(), loaded.size()):
+		loaded_flags[i] = bool(loaded[i])
 	# modes : le host decide qui saute et qui perd une vie, ce PC affiche
 	eliminated.assign(s[5] as Array)
 	if not (s[6] as Array).is_empty():
@@ -1157,6 +1197,7 @@ func mark_abandoned(i: int) -> void:
 		return
 	_abandoned.append(i)
 	ready_flags[i] = true
+	loaded_flags[i] = true
 	_check_all_finished()
 
 
@@ -1317,6 +1358,7 @@ func _process(delta: float) -> void:
 		standings = _notice + ("\n\n" + standings if standings != "" else "")
 	var unstable := net != null and not net.is_host() and net.host_ready and _lost_reason == "" \
 			and net.ticks_since_snapshot() > UNSTABLE_TICKS
+	_update_ready_gate()
 	for i in players.size():
 		var p := players[i]
 		if p.hud == null:
@@ -1357,13 +1399,8 @@ func _process(delta: float) -> void:
 			p.hud.set_center_message("MANETTE DÉCONNECTÉE\nrebranchez-la pour reprendre votre camion",
 				Color(1.0, 0.6, 0.3))
 			continue
-		if state == State.LOBBY and net != null and not net.is_host() and not net.host_ready:
-			# client : le host charge encore la course, l'invite READY attendra
-			p.hud.set_center_message("%s\nCONNEXION AU HOST..." % player_tag(i), Color.WHITE)
-		elif state == State.LOBBY:
-			# convoi choisi au salon : plus d'invite, on attend les autres machines
-			p.hud.set_center_message("%s\nEN ATTENTE DES AUTRES JOUEURS  %d/%d" % [player_tag(i),
-				ready_flags.count(true), players.size()], Color.WHITE)
+		if state == State.LOBBY:
+			p.hud.set_center_message("")    # le sas en ligne a sa carte (ReadyGate)
 		elif state == State.COUNTDOWN:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),
