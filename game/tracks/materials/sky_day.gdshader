@@ -44,9 +44,11 @@ void sky() {
 	// disque solaire (tres lumineux : il bave dans le glow)
 	float disc = smoothstep(cos(radians(sun_size_deg)), cos(radians(sun_size_deg * 0.8)), mu);
 	col += sun_col * disc * 30.0;
-	// sous l'horizon : la mer au loin
+	// sous l'horizon : la mer au loin, en degrade doux sur ~25 deg
+	// (2026-10-22) : les vaguelettes qui penchent le reflet sous l'horizon y
+	// prenaient un bleu nuit a bord net - des taches sombres sur l'eau
 	if (d.y < 0.0) {
-		col = mix(horizon_color * 0.85, sea_color, smoothstep(0.0, 0.08, -d.y));
+		col = mix(horizon_color * 0.85, sea_color, smoothstep(0.0, 0.45, -d.y));
 	}
 	COLOR = col;
 }

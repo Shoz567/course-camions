@@ -29,6 +29,8 @@ var signs: Array[Transform3D] = []
 var sign_data: PackedColorArray = []
 ## Emprises posees : (x, z, rayon).
 var footprints: PackedVector3Array = []
+## Face de chaque tour tournee vers la piste (ZERO : couronne de l'horizon).
+var facings: PackedVector3Array = []
 
 var _state: int
 
@@ -55,6 +57,7 @@ func try_building(center: Vector3, w: float, d: float, h: float, yaw: float, fac
 		if Vector2(center.x - f.x, center.z - f.y).length() < radius + f.z + GAP:
 			return false
 	footprints.append(Vector3(center.x, center.z, radius))
+	facings.append(facing.normalized() if facing != Vector3.ZERO else Vector3.ZERO)
 	var b := Basis(Vector3.UP, yaw)
 	buildings.append(Transform3D(b.scaled_local(Vector3(w, h, d)), center + Vector3(0.0, h / 2.0, 0.0)))
 	building_data.append(Color(rand(), floorf(rand() * 4.0) / 4.0 + 0.01, rand_range(0.22, 0.6),
@@ -151,6 +154,9 @@ static func around_track(track: TrackBlockout, seed_value: int) -> Node3D:
 	for c in coarse:
 		lo = lo.min(c)
 		hi = hi.max(c)
+	# qualite extreme : tours plus serrees, couronne plus fournie, et les tours
+	# des rangees detaillees (build_details)
+	var x := GraphicsSettings.extreme_assets()
 	var s := 0.0
 	while s < length:
 		var i := track.index_at_s(s)
@@ -170,11 +176,123 @@ static func around_track(track: TrackBlockout, seed_value: int) -> Node3D:
 				if _min_distance(Vector2(c.x, c.z), coarse) < clear + radius:
 					continue
 				cb.try_building(c, w, d, h, atan2(-t.x, -t.z), -r * side)
-		s += 24.0
+		s += 18.0 if x else 24.0
 	var center := Vector3((lo.x + hi.x) / 2.0, TrackBlockout.GROUND_Y, (lo.y + hi.y) / 2.0)
 	var span := maxf(hi.x - lo.x, hi.y - lo.y)
-	cb.add_ring(center, span / 2.0 + 420.0, span / 2.0 + 1050.0, 170, 70.0, 230.0)
-	return cb.build()
+	var near := cb.buildings.size()
+	cb.add_ring(center, span / 2.0 + 420.0, span / 2.0 + 1050.0, 240 if x else 170, 70.0, 230.0)
+	var city := cb.build()
+	if x:
+		city.add_child(cb.build_details(near))
+	return city
+
+
+## Qualite extreme (2026-10-22, « les buildings trop simples, detaille-les ») :
+## sur les `near` premieres tours (les rangees le long de la piste), une
+## corniche a chaque etage tout autour, un acrotere, des blocs de
+## climatisation, un chateau d'eau ou un edicule d'escalier, et une enseigne
+## verticale lumineuse sur la face tournee vers la piste (a la japonaise).
+## Fusionnes par case de DETAIL_CELL m (RoadsideDressing.Batch).
+const DETAIL_CELL := 300.0
+const DETAIL_VIEW := 1400.0
+const CONCRETE := Color(0.16, 0.17, 0.21)
+const ROOF_GREY := Color(0.3, 0.31, 0.35)
+const SIGN_NEON: Array[Color] = [Color(0.1, 0.95, 1.0), Color(1.0, 0.15, 0.75), Color(0.6, 0.3, 1.0), Color(1.0, 0.85, 0.15),
+	Color(0.3, 1.0, 0.5)]
+
+
+func build_details(near: int) -> Node3D:
+	var batches := {}
+	for k in mini(near, buildings.size()):
+		var xf := buildings[k]
+		var key := Vector2i(floori(xf.origin.x / DETAIL_CELL), floori(xf.origin.z / DETAIL_CELL))
+		if not batches.has(key):
+			batches[key] = RoadsideDressing.Batch.new(Vector3((key.x + 0.5) * DETAIL_CELL, 0.0,
+				(key.y + 0.5) * DETAIL_CELL))
+		_detail_tower(batches[key], xf, facings[k] if k < facings.size() else Vector3.ZERO)
+	var solid := StandardMaterial3D.new()
+	solid.vertex_color_use_as_albedo = true
+	solid.roughness = 0.8
+	var glow := ShaderMaterial.new()
+	glow.shader = preload("res://tracks/materials/dress_glow.gdshader")
+	glow.set_shader_parameter("glow", 2.6)
+	var mats := {"solid": solid, "glow": glow}
+	var root := Node3D.new()
+	root.name = "Details"
+	var n := 0
+	for key: Vector2i in batches:
+		var batch: RoadsideDressing.Batch = batches[key]
+		var mi := MeshInstance3D.new()
+		mi.name = "Cell%d" % n
+		mi.mesh = batch.commit(mats)
+		mi.position = batch.origin
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		mi.visibility_range_end = DETAIL_VIEW
+		root.add_child(mi)
+		n += 1
+	return root
+
+
+func _detail_tower(batch: RoadsideDressing.Batch, xf: Transform3D, facing: Vector3) -> void:
+	var ux := xf.basis.x.normalized()
+	var uy := Vector3.UP
+	var uz := xf.basis.z.normalized()
+	var w := xf.basis.x.length()
+	var h := xf.basis.y.length()
+	var d := xf.basis.z.length()
+	var b := Basis(ux, uy, uz)
+	var base := xf.origin - Vector3(0, h / 2.0, 0)
+	var top := base + Vector3(0, h, 0)
+	# corniches d'etage (au plus 14, reparties sur la hauteur)
+	var step := maxf(4.2, (h - 8.0) / 14.0)
+	var y := 6.0
+	while y < h - 2.5:
+		var at := base + Vector3(0, y, 0)
+		for sgn: float in [-1.0, 1.0]:
+			batch.box("solid", Transform3D(b, at + uz * sgn * (d / 2.0 + 0.15)), Vector3(w + 0.6, 0.22, 0.3), CONCRETE)
+			batch.box("solid", Transform3D(b, at + ux * sgn * (w / 2.0 + 0.15)), Vector3(0.3, 0.22, d + 0.6), CONCRETE)
+		y += step
+	# acrotere
+	for sgn: float in [-1.0, 1.0]:
+		batch.box("solid", Transform3D(b, top + Vector3(0, 0.5, 0) + uz * sgn * (d / 2.0 - 0.18)), Vector3(w, 1.0, 0.36), CONCRETE)
+		batch.box("solid", Transform3D(b, top + Vector3(0, 0.5, 0) + ux * sgn * (w / 2.0 - 0.18)), Vector3(0.36, 1.0, d), CONCRETE)
+	# toit : climatisation, chateau d'eau ou edicule
+	for q in 2 + int(rand() * 3.0):
+		var p := top + ux * rand_range(-0.3, 0.3) * w + uz * rand_range(-0.3, 0.3) * d + Vector3(0, 0.65, 0)
+		batch.box("solid", Transform3D(b, p), Vector3(2.2, 1.3, 1.6), ROOF_GREY)
+		batch.box("solid", Transform3D(b, p + Vector3(0, 0.7, 0)), Vector3(1.2, 0.1, 1.2), Color(0.12, 0.12, 0.14))
+	var corner := top + ux * w * 0.28 - uz * d * 0.25
+	if rand() < 0.5:
+		batch.tube("solid", corner, corner + Vector3(0, 3.2, 0), 1.5, 10, Color(0.38, 0.3, 0.24))
+		batch.cone("solid", corner + Vector3(0, 3.2, 0), 1.6, 0.9, 10, Color(0.24, 0.2, 0.17))
+		for leg: Vector3 in [ux, -ux, uz, -uz]:
+			batch.box("solid", Transform3D(b, corner + leg * 1.1 - Vector3(0, 0.0, 0)), Vector3(0.15, 0.6, 0.15), CONCRETE)
+	else:
+		batch.box("solid", Transform3D(b, corner + Vector3(0, 1.6, 0)), Vector3(3.5, 3.2, 3.5), CONCRETE.lightened(0.08))
+	# enseigne verticale sur la face tournee vers la piste
+	if facing == Vector3.ZERO or h < 18.0:
+		return
+	var fx := ux.dot(facing)
+	var fz := uz.dot(facing)
+	var out := ux * signf(fx) if absf(fx) > absf(fz) else uz * signf(fz)
+	var along := uz if absf(fx) > absf(fz) else ux
+	var half_out := (w if absf(fx) > absf(fz) else d) / 2.0
+	var half_along := (d if absf(fx) > absf(fz) else w) / 2.0
+	var sh := clampf(h * 0.45, 6.0, 26.0)
+	var c := base + Vector3(0, h * 0.28 + sh / 2.0, 0) + out * (half_out + 0.9) + along * half_along * 0.62 * (1.0 if rand() < 0.5 else -1.0)
+	var sb := Basis(along, uy, out)
+	var col: Color = SIGN_NEON[int(rand() * SIGN_NEON.size()) % SIGN_NEON.size()]
+	batch.box("solid", Transform3D(sb, c - out * 0.12), Vector3(1.9, sh + 0.5, 0.3), Color(0.05, 0.05, 0.07))
+	batch.box("glow", Transform3D(sb, c + out * 0.06), Vector3(1.5, sh, 0.12), col)
+	# separations sombres : des caracteres empiles
+	var chars := maxi(3, roundi(sh / 2.4))
+	for q in range(1, chars):
+		batch.box("solid", Transform3D(sb, c + out * 0.14 + Vector3(0, -sh / 2.0 + sh * q / chars, 0)), Vector3(1.55, 0.18, 0.06),
+			Color(0.05, 0.05, 0.07))
+	# potences qui la tiennent au mur
+	for q: float in [-0.4, 0.4]:
+		batch.box("solid", Transform3D(sb, c + Vector3(0, sh * q, 0) - out * 0.55), Vector3(0.12, 0.12, 0.9), CONCRETE)
 
 
 static func _min_distance(p: Vector2, pts: PackedVector2Array) -> float:

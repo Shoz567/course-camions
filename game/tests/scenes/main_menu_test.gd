@@ -161,9 +161,26 @@ func _test_tick(t: int) -> void:
 			_seen["sound_check"] = _menu.sound_check.button_pressed
 			var env := (_menu.get_node("WorldEnvironment") as WorldEnvironment).environment
 			var was := [GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
-			_menu.quality_option.select(GraphicsSettings.Quality.LOW)
-			_menu.quality_option.item_selected.emit(GraphicsSettings.Quality.LOW)
+			var low := _menu.quality_option.get_item_index(GraphicsSettings.Quality.LOW)
+			_menu.quality_option.select(low)
+			_menu.quality_option.item_selected.emit(low)
 			_seen["quality"] = [was, GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
+			# extreme (2026-10-22) : en tete de liste, avertissement d'abord ;
+			# Annuler garde la qualite, Oui la passe en extreme
+			var order: Array[int] = []
+			for i in _menu.quality_option.item_count:
+				order.append(_menu.quality_option.get_item_id(i))
+			var ext := _menu.quality_option.get_item_index(GraphicsSettings.Quality.EXTREME)
+			_menu.quality_option.select(ext)
+			_menu.quality_option.item_selected.emit(ext)
+			var asked := [_menu.extreme_warning.visible, GameState.graphics_quality,
+				(_menu.extreme_warning.find_child("Message", true, false) as Label).text]
+			_menu.close_extreme_warning(false)
+			var kept := [_menu.extreme_warning.visible, GameState.graphics_quality]
+			_menu.quality_option.item_selected.emit(ext)
+			_menu.close_extreme_warning(true)
+			_seen["extreme"] = [order, asked, kept, GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled,
+				get_viewport().msaa_3d]
 			_menu.set_quality(GraphicsSettings.Quality.HIGH)
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
@@ -307,6 +324,16 @@ func _test_finish() -> void:
 	check("parametres : qualite haute par defaut (tout), basse choisie : gardee, plus aucun effet",
 		_seen.get("quality", []) == [[GraphicsSettings.Quality.HIGH, true, true, true], GraphicsSettings.Quality.LOW,
 		false, false, false], str(_seen.get("quality", [])))
+	var ex: Array = _seen.get("extreme", [[], [false, -1, ""], [true, -1], -1, false, false, 0])
+	var asked: Array = ex[1]
+	var kept: Array = ex[2]
+	check("parametres : extreme en tete, avertissement avant de l'activer, Annuler garde la qualite",
+		ex[0] == [GraphicsSettings.Quality.EXTREME, GraphicsSettings.Quality.HIGH, GraphicsSettings.Quality.MEDIUM,
+		GraphicsSettings.Quality.LOW] and asked[0] and asked[1] == GraphicsSettings.Quality.LOW
+		and String(asked[2]) == GraphicsSettings.EXTREME_WARNING and not kept[0] and kept[1] == GraphicsSettings.Quality.LOW,
+		str(ex))
+	check("parametres : Oui passe en extreme, tous les effets, MSAA 4x", ex[3] == GraphicsSettings.Quality.EXTREME
+		and ex[4] and ex[5] and ex[6] == Viewport.MSAA_4X, str(ex))
 	check("RETOUR ramene au menu", _seen.get("back", false))
 	check_above("camera en orbite : deplacement en 97 ticks (m)", _seen["cam_moved"], 3.0)
 	check_below("orbite a distance constante (ecart m)", _cam_dist.max() - _cam_dist.min(), 0.01)

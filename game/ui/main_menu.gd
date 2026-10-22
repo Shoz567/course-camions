@@ -80,6 +80,10 @@ var settings: Control
 var sound_check: CheckButton
 var volume_slider: HSlider
 var quality_option: OptionButton
+## Avertissement avant la qualite extreme, et ses deux boutons.
+var extreme_warning: Control
+var _warn_yes: Button
+var _warn_no: Button
 ## Compteur d'images par seconde (GameState.show_fps).
 var fps_check: CheckButton
 ## Resolution dynamique de la 3D (GameState.dynamic_resolution).
@@ -219,6 +223,8 @@ static func _setup_menu_input() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if loadout != null and loadout.visible:
 		return    # la page de selection lit ses entrees elle-meme
+	if extreme_warning != null and extreme_warning.visible:
+		return    # l'avertissement de la qualite extreme attend sa reponse
 	var key := event as InputEventKey
 	var pad := event as InputEventJoypadButton
 	if key != null and key.pressed and not key.echo:
@@ -589,12 +595,101 @@ func set_dynamic_resolution(on: bool) -> void:
 	GameState.save_settings()
 
 
+## Ligne choisie dans la liste des qualites : l'extreme demande d'abord
+## confirmation (2026-10-22 : « on met un warning avant que la personne
+## selectionne Extreme »), la liste reste sur l'ancienne qualite en attendant.
+func _on_quality_item(index: int) -> void:
+	var q := quality_option.get_item_id(index)
+	if q == GraphicsSettings.Quality.EXTREME and GameState.graphics_quality != q:
+		quality_option.select(quality_option.get_item_index(GameState.graphics_quality))
+		show_extreme_warning()
+		return
+	set_quality(q)
+
+
+## Avertissement de la qualite extreme : par-dessus tout le menu.
+func show_extreme_warning() -> void:
+	extreme_warning.visible = true
+	_warn_no.grab_focus()
+	MenuSound.play_select()
+
+
+## Ferme l'avertissement ; `accept` : passe en qualite extreme.
+func close_extreme_warning(accept: bool) -> void:
+	if extreme_warning == null or not extreme_warning.visible:
+		return
+	extreme_warning.visible = false
+	if accept:
+		set_quality(GraphicsSettings.Quality.EXTREME)
+		MenuSound.play_confirm()
+	else:
+		MenuSound.play_toggle()
+	if quality_option != null and quality_option.is_visible_in_tree():
+		quality_option.grab_focus()
+
+
+## Carte d'avertissement a l'habillage du circuit : voile, cadre or, texte,
+## « Oui, activer » / « Annuler » (Annuler par defaut).
+func _build_extreme_warning() -> Control:
+	var layer := Control.new()
+	layer.name = "ExtremeWarning"
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.visible = false
+	var dim := ColorRect.new()
+	dim.color = Color(UiKit.NIGHT, 0.75)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(center)
+	var card := UiKit.card(UiKit.GOLD, 780.0)
+	center.add_child(card)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 18)
+	card.add_child(col)
+	col.add_child(UiKit.section("Qualité extrême", 22))
+	var msg := UiKit.label(GraphicsSettings.EXTREME_WARNING, 26, UiKit.TEXT, 800, false)
+	msg.name = "Message"
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	msg.custom_minimum_size = Vector2(720, 0)
+	col.add_child(msg)
+	var more := UiKit.label("Reflets, ombres et éclairage au maximum, décor plus dense et plus détaillé (arbres, bâtiments) : "
+		+ "fait pour les grands écrans et la 4K. Sur un PC portable, les images par seconde chutent.", 18, UiKit.DIM, 600, false)
+	more.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	more.custom_minimum_size = Vector2(720, 0)
+	col.add_child(more)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 24)
+	row.alignment = BoxContainer.ALIGNMENT_END
+	col.add_child(row)
+	_warn_no = Button.new()
+	_warn_no.name = "Cancel"
+	_warn_no.text = "ANNULER"
+	_warn_no.custom_minimum_size = Vector2(220, 60)
+	UiKit.style_choice(_warn_no, 22)
+	_warn_no.pressed.connect(close_extreme_warning.bind(false))
+	row.add_child(_warn_no)
+	_warn_yes = Button.new()
+	_warn_yes.name = "Accept"
+	_warn_yes.text = "OUI, ACTIVER"
+	_warn_yes.custom_minimum_size = Vector2(260, 60)
+	UiKit.style_primary(_warn_yes, 22)
+	_warn_yes.pressed.connect(close_extreme_warning.bind(true))
+	row.add_child(_warn_yes)
+	_warn_no.focus_neighbor_right = _warn_no.get_path_to(_warn_yes)
+	_warn_yes.focus_neighbor_left = _warn_yes.get_path_to(_warn_no)
+	return layer
+
+
 ## Qualite graphique (GraphicsSettings.Quality), gardee dans GameState pour les
 ## courses ; appliquee tout de suite au decor du menu (une seule vue).
 func set_quality(q: int) -> void:
 	GameState.graphics_quality = clampi(q, 0, GraphicsSettings.NAMES.size() - 1)
 	if quality_option != null:
-		quality_option.select(GameState.graphics_quality)
+		quality_option.select(quality_option.get_item_index(GameState.graphics_quality))
 	var world := get_node_or_null("WorldEnvironment") as WorldEnvironment
 	if world != null:
 		GraphicsSettings.apply_environment(world.environment, GameState.graphics_quality, 1)
@@ -664,6 +759,14 @@ func launch_join() -> void:
 ## joueur 1 lance ; clavier : Entree (fleches) et Espace (ZQSD) rejoignent, Retour
 ## arriere fait repartir le dernier, Echap ferme.
 func _input(event: InputEvent) -> void:
+	if extreme_warning != null and extreme_warning.visible:
+		var k := event as InputEventKey
+		var b := event as InputEventJoypadButton
+		if (k != null and k.pressed and not k.echo and k.physical_keycode == KEY_ESCAPE) \
+				or (b != null and b.pressed and b.button_index == JOY_BUTTON_B):
+			close_extreme_warning(false)
+			get_viewport().set_input_as_handled()
+		return
 	if remap_panel != null and remap_panel.visible:
 		_remap_input(event)
 		return
@@ -1429,6 +1532,8 @@ func _build_ui() -> void:
 	corner.offset_right = -36
 	corner.add_theme_constant_override("separation", 12)
 	home.add_child(corner)
+	# compteur d'images par seconde sous ces boutons (il les recouvrait)
+	GameState.set_fps_top(corner.offset_top + 56.0 + 14.0)
 	sound_button = Button.new()
 	sound_button.name = "Sound"
 	sound_button.toggle_mode = true
@@ -1444,6 +1549,7 @@ func _build_ui() -> void:
 	settings_button.pressed.connect(toggle_settings)
 	corner.add_child(settings_button)
 	_gear = GearIcon.new()
+	_gear.color = UiKit.icon_color()
 	_gear.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_gear.offset_left = 13
 	_gear.offset_top = 13
@@ -1468,6 +1574,8 @@ func _build_ui() -> void:
 	root.add_child(join_panel)
 	remap_panel = _build_remap()
 	root.add_child(remap_panel)
+	extreme_warning = _build_extreme_warning()
+	root.add_child(extreme_warning)
 
 
 ## Carte de circuit : fond a la teinte du circuit, nom en grand, ambiance
@@ -1643,12 +1751,15 @@ func _build_settings() -> Control:
 	opts.add_child(rumble)
 	quality_option = OptionButton.new()
 	quality_option.name = "Quality"
-	for q: String in GraphicsSettings.NAMES:
-		quality_option.add_item("Qualité graphique : %s" % q)
-	quality_option.tooltip_text = "Haute : reflets, éclairage indirect, occlusion. Moyenne : occlusion. Basse : aucun effet."
+	# de la plus riche a la plus legere ; l'identifiant de chaque ligne est la
+	# qualite (GraphicsSettings.Quality), pas sa place dans la liste
+	for q: int in GraphicsSettings.MENU_ORDER:
+		quality_option.add_item("Qualité graphique : %s" % GraphicsSettings.NAMES[q], q)
+	quality_option.tooltip_text = "Extrême : tout au maximum et décor plus riche (carte graphique dédiée). " \
+		+ "Haute : reflets, éclairage indirect, occlusion. Moyenne : occlusion. Basse : aucun effet."
 	UiKit.style_option(quality_option, 19)
-	quality_option.select(GameState.graphics_quality)
-	quality_option.item_selected.connect(set_quality)
+	quality_option.select(quality_option.get_item_index(GameState.graphics_quality))
+	quality_option.item_selected.connect(_on_quality_item)
 	opts.add_child(quality_option)
 	fps_check = CheckButton.new()
 	fps_check.name = "FpsCheck"

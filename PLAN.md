@@ -1316,6 +1316,54 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   ambiances, plus douce (gouttes plus rares et sourdes : énergie aiguë de
   0,65 à 0,10), fondu d'entrée de 2,5 s (`sound_mix_test`). À confirmer à
   l'oreille : le grésillement venait-il de l'écrêtage ou des gouttes ?
+- [x] **Décor proche, décor lointain** (2026-10-22, « des graphismes plus
+  immersifs ou proches […] rendre moins vide les graphismes proche des
+  routes ou au-dessus des routes […] pour les assets de loin, fais du trick
+  en 2D tourné, sans que ça fasse tache ») :
+  - près de la route (`RoadsideDressing`) : câbles au-dessus de la piste
+    (14,5 m de hauteur libre au moins, jamais aux arches ni aux tribunes),
+    objets et panneaux sur les murs, objets au pied des murs, aux couleurs
+    de chaque circuit ; aucun sur la chaussée, aucune collision
+    (`track_dressing_test`) ;
+  - arbres le long des rampes du pont et des corniches, au pied du talus ;
+    Sakura : 1 700 cerisiers (760 avant), la plaine dominée par les rampes
+    se remplit ;
+  - au loin (`FarLod`) : arbres 3D jusqu'à 250 m, puis sprites tournés
+    (photo du modèle, fondu tramé, quad écrasé de près : aucun pixel
+    calculé) ; foule lointaine allégée (`CrowdFar`, `track_decor_test`) ;
+    dessous du pont vermillon en bois sombre (il teintait l'avenue en rouge).
+  - Essayé puis retiré : couper murs, sol et talus en cases d'affichage
+    (peu de triangles en moins, +190 appels de dessin à 4 joueurs).
+- [x] **Assets « pauvres » refaits dans le style du jeu, qualité extrême**
+  (2026-10-22, « tout ce que je mets en PJ c'est peut mieux faire, à
+  refaire / stylisé […] un dernier setting Extreme avec plus d'assets et
+  plus détaillés pour la 4K […] un warning avant ») :
+  - HUD de course à l'habillage du circuit (cadran, tuiles de pouvoirs,
+    plaquette du largage, barre d'aide qui s'efface), boutons ronds du menu
+    et compteur FPS (qui recouvrait la roue des paramètres) ;
+  - fumée des dégâts stylisée (plus de tache noire de jour) ;
+  - ponts habillés (garde-corps, lanternes, bouées), tablier de Sakura ;
+  - joints des raccourcis : couleur de sommet manquante (pont de bois
+    dessiné à tort), piliers aux bouts des murs ;
+  - qualité extrême : effets au maximum à 4 vues, avertissement avant de
+    l'activer, arbres détaillés (`TreeKit`), plus d'arbres, maisons et tours
+    ouvragées, décor plus dense et vu plus loin (`extreme_quality_test`,
+    `main_menu_test`).
+- [x] **Intégration de `visuel/decor-style-extreme` dans `main`**
+  (2026-10-22, après #95, « implémente le tout en veillant à ne créer aucun
+  problème ») : fusion sans conflit avec les bots en ligne, la latence et
+  les 12 joueurs. Vérifié contre `main` :
+  - 132 tests sur 132 ;
+  - chargement d'un circuit : +0 à +0,3 s (extrême : 0,5 à 1,3 s), loin du
+    délai de chargement en ligne (15 s) ;
+  - coût d'un tick du host à 12 camions (headless) : ~+0,7 ms (12,4 contre
+    11,7, budget 16,7) ; cadran du HUD : +0,1 à +0,3 ms de processeur par
+    image et par joueur (habillage Sakura le plus cher) ;
+  - fenêtré, qualité haute, 1 joueur et 5 bots : 60 images/s sur les
+    3 circuits, comme `main` ; captures des 3 circuits correctes ;
+  - en ligne, host et client (course et arène sur Sakura) : mêmes tours,
+    places, vies et PV. Aucun décor n'a de collision.
+  - `net_e2e` : `--track=N`, `--quality=N`, captures toutes les 10 s.
 
 ## Questions de design ouvertes
 

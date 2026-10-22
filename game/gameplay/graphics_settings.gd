@@ -12,6 +12,16 @@ extends RefCounted
 ## phares dans la bruine). Ici, on en retire selon la qualite choisie et le
 ## nombre de vues de l'ecran partage :
 ##
+##   EXTREME  (2026-10-22, « pour les PC avec GPU, la 4K ») tout, a toutes
+##            les vues jusqu'a EXTREME_MAX_VIEWS, reglages des effets au
+##            maximum (apply_render_quality : occlusion et eclairage indirect
+##            ultra a pleine resolution, ombres douces ultra sur un atlas de
+##            8192, reflets a 128 pas, eclairage global a 128 rayons), MSAA
+##            4x + SMAA, detail maximal des maillages, filtrage anisotrope
+##            16x ; ombre du soleil a 4 cascades et 1,6 fois plus loin. Le
+##            decor se construit alors plus dense et plus detaille
+##            (extreme_assets : arbres a branches et fleurs, batiments
+##            ouvrages, plus de 3D au loin). Le menu demande confirmation ;
 ##   HAUTE    tout, MSAA 2x + SMAA (lisse aussi les nervures des
 ##            conteneurs, sans trainee sur la pluie comme le TAA) ;
 ##            l'eclairage global est coupe au-dela de SDFGI_MAX_VIEWS vues
@@ -29,9 +39,18 @@ extends RefCounted
 ## 3D (FSR 1) quand le GPU ne tient plus 60 images/s ; les cases de l'ecran
 ## partage passees ici sont suivies (groupe DynamicResolution.GROUP).
 
-enum Quality { HIGH, MEDIUM, LOW }
+## EXTREME en dernier : les valeurs deja enregistrees (0 a 2) ne bougent pas.
+enum Quality { HIGH, MEDIUM, LOW, EXTREME }
 
-const NAMES: PackedStringArray = ["haute", "moyenne", "basse"]
+const NAMES: PackedStringArray = ["haute", "moyenne", "basse", "extrême"]
+## Ordre d'affichage dans les parametres : de la plus riche a la plus legere.
+const MENU_ORDER: Array[int] = [Quality.EXTREME, Quality.HIGH, Quality.MEDIUM, Quality.LOW]
+## Avertissement avant de passer en extreme (menu).
+const EXTREME_WARNING := "Attention, ce paramètre requiert un GPU pour tourner stable, voulez-vous poursuivre ?"
+## En extreme, tous les effets restent actifs jusqu'a ce nombre de vues.
+const EXTREME_MAX_VIEWS := 4
+## Ombre du soleil : portee multipliee en extreme.
+const EXTREME_SHADOW_REACH := 1.6
 ## Au-dela, l'eclairage indirect est coupe meme en qualite haute.
 const SSIL_MAX_VIEWS := 2
 ## Au-dela, les reflets sont coupes meme en qualite haute.
@@ -76,16 +95,80 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 	if env == null:
 		return
 	var high := quality == Quality.HIGH
+	var extreme := quality == Quality.EXTREME and views <= EXTREME_MAX_VIEWS
 	env.ssao_enabled = quality != Quality.LOW
-	env.ssr_enabled = high and views <= SSR_MAX_VIEWS
-	env.ssil_enabled = high and views <= SSIL_MAX_VIEWS
+	env.ssr_enabled = (high or quality == Quality.EXTREME) and views <= SSR_MAX_VIEWS
+	env.ssil_enabled = extreme or (high and views <= SSIL_MAX_VIEWS)
 	# eclairage global et volumetrique : seulement si l'environnement en decrit
 	if env.has_meta(&"sdfgi") or env.sdfgi_enabled:
 		env.set_meta(&"sdfgi", true)
-		env.sdfgi_enabled = high and views <= SDFGI_MAX_VIEWS and sdfgi_supported()
+		env.sdfgi_enabled = (extreme or (high and views <= SDFGI_MAX_VIEWS)) and sdfgi_supported()
 	if env.has_meta(&"volumetric") or env.volumetric_fog_enabled:
 		env.set_meta(&"volumetric", true)
-		env.volumetric_fog_enabled = high and views <= VOLUMETRIC_MAX_VIEWS
+		env.volumetric_fog_enabled = extreme or (high and views <= VOLUMETRIC_MAX_VIEWS)
+	# reflets plus fins (pas de marche) : valeur d'origine gardee. Les cascades
+	# de l'eclairage global restent celles de l'environnement : a 6, leurs
+	# grosses cellules lointaines tachaient de sombre les reflets de la mer
+	if not env.has_meta(&"ssr_steps"):
+		env.set_meta(&"ssr_steps", env.ssr_max_steps)
+	env.ssr_max_steps = maxi(int(env.get_meta(&"ssr_steps")), 128) if extreme else int(env.get_meta(&"ssr_steps"))
+	# extreme : le reflet du ciel (eau, route mouillee, carrosseries) en 1024 px
+	# au lieu de 128 ; les ciels sont statiques, il n'est calcule qu'une fois
+	if env.sky != null:
+		if not env.has_meta(&"radiance"):
+			env.set_meta(&"radiance", env.sky.radiance_size)
+			env.set_meta(&"sky_mode", env.sky.process_mode)
+		var radiance := Sky.RADIANCE_SIZE_1024 if quality == Quality.EXTREME else int(env.get_meta(&"radiance"))
+		if env.sky.radiance_size != radiance:
+			env.sky.radiance_size = radiance
+		env.sky.process_mode = Sky.PROCESS_MODE_QUALITY if quality == Quality.EXTREME else int(env.get_meta(&"sky_mode"))
+	apply_render_quality(quality)
+
+
+## Le decor se construit-il en version extreme (plus dense, plus detaillee) ?
+## Lu une fois, a la construction du circuit.
+static func extreme_assets() -> bool:
+	# dans l'editeur (decors @tool), pas de GameState : decor ordinaire
+	if Engine.is_editor_hint() or GameState.graphics_quality != Quality.EXTREME:
+		return false
+	# ecran partage sur puce integree : la course passe en qualite basse
+	# (split_quality), le decor reste ordinaire aussi (2026-10-22 : 7 images/s
+	# a 6 joueurs sur Radeon 780M avec le decor extreme)
+	return split_quality(Quality.EXTREME, maxi(1, GameState.requested_players)) == Quality.EXTREME
+
+
+## Reglages globaux du rendu (communs a toutes les vues) : au maximum en
+## extreme, sinon ceux du projet.
+static func apply_render_quality(quality: int) -> void:
+	var x := quality == Quality.EXTREME
+	var ps := func(key: String, fallback: Variant) -> Variant: return ProjectSettings.get_setting(key, fallback)
+	RenderingServer.directional_shadow_atlas_set_size(8192 if x else int(ps.call(
+		"rendering/lights_and_shadows/directional_shadow/size", 4096)), true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA if x else int(ps.call(
+		"rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", 2)))
+	RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA if x else int(ps.call(
+		"rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality", 2)))
+	if x:
+		RenderingServer.environment_set_ssao_quality(RenderingServer.ENV_SSAO_QUALITY_ULTRA, false, 0.5, 3, 50.0, 300.0)
+		RenderingServer.environment_set_ssil_quality(RenderingServer.ENV_SSIL_QUALITY_ULTRA, false, 0.5, 4, 50.0, 300.0)
+	else:
+		RenderingServer.environment_set_ssao_quality(int(ps.call("rendering/environment/ssao/quality", 2)),
+			bool(ps.call("rendering/environment/ssao/half_size", true)), float(ps.call("rendering/environment/ssao/adaptive_target", 0.5)),
+			int(ps.call("rendering/environment/ssao/blur_passes", 2)), float(ps.call("rendering/environment/ssao/fadeout_from", 50.0)),
+			float(ps.call("rendering/environment/ssao/fadeout_to", 300.0)))
+		RenderingServer.environment_set_ssil_quality(int(ps.call("rendering/environment/ssil/quality", 2)),
+			bool(ps.call("rendering/environment/ssil/half_size", true)), float(ps.call("rendering/environment/ssil/adaptive_target", 0.5)),
+			int(ps.call("rendering/environment/ssil/blur_passes", 4)), float(ps.call("rendering/environment/ssil/fadeout_from", 50.0)),
+			float(ps.call("rendering/environment/ssil/fadeout_to", 300.0)))
+	RenderingServer.environment_set_ssr_roughness_quality(RenderingServer.ENV_SSR_ROUGHNESS_QUALITY_HIGH if x else int(ps.call(
+		"rendering/environment/screen_space_reflection/roughness_quality", 1)))
+	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_128 if x else int(ps.call(
+		"rendering/global_illumination/sdfgi/probe_ray_count", 1)))
+	RenderingServer.gi_set_use_half_resolution(false if x else bool(ps.call(
+		"rendering/global_illumination/gi/use_half_resolution", true)))
+	RenderingServer.environment_set_volumetric_fog_volume_size(160 if x else int(ps.call(
+		"rendering/environment/volumetric_fog/volume_size", 64)), 128 if x else int(ps.call(
+		"rendering/environment/volumetric_fog/volume_depth", 64)))
 
 
 ## Budget de l'ecran partage sur puce integree (spike V3, 2026-10-17, machine
@@ -122,8 +205,14 @@ static func apply_sun(light: DirectionalLight3D, views: int, quality: int = Qual
 		light.set_meta(&"shadow", light.shadow_enabled)
 	light.shadow_enabled = bool(light.get_meta(&"shadow")) \
 			and not (quality == Quality.LOW and views >= SPLIT_BUDGET_VIEWS)
+	var extreme := quality == Quality.EXTREME
 	light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS \
-		if views <= SHADOW_FULL_MAX_VIEWS else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		if views <= SHADOW_FULL_MAX_VIEWS or (extreme and views <= EXTREME_MAX_VIEWS) \
+		else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	# extreme : l'ombre porte plus loin (portee d'origine gardee en meta)
+	if not light.has_meta(&"shadow_reach"):
+		light.set_meta(&"shadow_reach", light.directional_shadow_max_distance)
+	light.directional_shadow_max_distance = float(light.get_meta(&"shadow_reach")) * (EXTREME_SHADOW_REACH if extreme else 1.0)
 
 
 ## Anticrenelage d'une vue (fenetre principale ou SubViewport de l'ecran
@@ -138,9 +227,13 @@ static func apply_viewport(vp: Viewport, quality: int) -> void:
 		vp.msaa_3d = Viewport.MSAA_DISABLED
 		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA
 	else:
-		vp.msaa_3d = Viewport.MSAA_2X
-		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_SMAA if quality == Quality.HIGH \
+		vp.msaa_3d = Viewport.MSAA_4X if quality == Quality.EXTREME else Viewport.MSAA_2X
+		vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_SMAA if quality == Quality.HIGH or quality == Quality.EXTREME \
 			else Viewport.SCREEN_SPACE_AA_DISABLED
+	# extreme : maillages a leur detail maximal, textures filtrees en 16x
+	vp.mesh_lod_threshold = 0.0 if quality == Quality.EXTREME else 1.0
+	if &"anisotropic_filtering_level" in vp:
+		vp.set(&"anisotropic_filtering_level", Viewport.ANISOTROPY_16X if quality == Quality.EXTREME else Viewport.ANISOTROPY_4X)
 
 
 ## Plein ecran sans bordure <-> fenetre (F11).

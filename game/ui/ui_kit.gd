@@ -359,22 +359,49 @@ static func style_primary(b: Button, font_size: int) -> void:
 		b.add_theme_color_override(c, PRIMARY_TEXT)
 
 
-## Petit bouton d'icone (son, parametres) : rond sombre, liseré au survol.
+## Petit bouton d'icone (son, parametres) : galet rond a l'habillage
+## (2026-10-22, « ca blend pas ») - neon : nuit a tube cyan lumineux ; plage :
+## lagon profond cercle de sable blanc, ombre posee ; Japon : laque noire
+## cerclee d'or, lettres d'or. Survol : liseré de la couleur de focus.
 static func style_icon(b: Button, font_size: int) -> void:
 	b.focus_mode = Control.FOCUS_ALL
 	b.add_theme_font_override("font", font(800, false))
 	b.add_theme_font_size_override("font_size", font_size)
-	b.add_theme_stylebox_override("normal", box(Color(PANEL, 0.85), Color(1, 1, 1, 0.12), 1, 0.0, 28))
-	b.add_theme_stylebox_override("hover", box(TILE_HOVER, Color(CYAN, 0.6), 1, 0.0, 28))
-	b.add_theme_stylebox_override("pressed", box(Color(PANEL, 0.85), Color(1, 1, 1, 0.12), 1, 0.0, 28))
-	b.add_theme_stylebox_override("hover_pressed", box(TILE_HOVER, Color(CYAN, 0.6), 1, 0.0, 28))
+	var fill := Color(PANEL, 0.85)
+	var edge := Color(CYAN, 0.55)
+	var width := 2
+	var text := TEXT
+	match skin:
+		Look.PLAYA:
+			fill = Color(PANEL, 0.95)
+			edge = Color(tile_edge, 0.95)
+			width = 3
+		Look.SAKURA:
+			fill = Color(PRIMARY_FILL, 0.96)
+			edge = PRIMARY_BORDER
+			text = PRIMARY_TEXT
+	var normal := box(fill, edge, width, 0.0, 28, Color(edge, 0.3), 8)
+	var hover := box(fill.lightened(0.08), CYAN, width, 0.0, 28, Color(CYAN, 0.55), 14)
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", normal)
+	b.add_theme_stylebox_override("hover_pressed", hover)
 	var f := box(Color(0, 0, 0, 0), CYAN, 3, 0.0, 28, Color(CYAN, 0.5), 8)
 	f.draw_center = false
 	if skin != Look.NEON:
 		f.shadow_size = 0
+	f.expand_margin_left = 3
+	f.expand_margin_right = 3
+	f.expand_margin_top = 3
+	f.expand_margin_bottom = 3
 	b.add_theme_stylebox_override("focus", f)
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
-		b.add_theme_color_override(c, TEXT)
+		b.add_theme_color_override(c, text)
+
+
+## Couleur des pictos dessines sur un bouton d'icone (roue des parametres).
+static func icon_color() -> Color:
+	return PRIMARY_TEXT if skin == Look.SAKURA else TEXT
 
 
 ## Intitule de section : repere puis le texte en capitales - trait cyan

@@ -49,6 +49,15 @@ var _center: Label
 var _ticker: Label
 var _ticker_card: PanelContainer
 var _help: Label
+var _help_bar: PanelContainer
+## Duree d'affichage de l'aide des commandes (s), puis elle s'efface.
+const HELP_S := 14.0
+const HELP_FADE_S := 1.5
+var _help_age: float = 0.0
+## Pictos de l'aide (seul a l'ecran) et ligne du clavier.
+const PAD_PROMPTS := [["r2", "Accélérer"], ["l2", "Freiner"], ["cross", "Drift"], ["square", "Nitro"],
+	["triangle", "Remorque"], ["dpad_lr", "Pouvoirs"], ["dpad_ud", "Cible"], ["l1", "Derrière"], ["options", "Reset"]]
+const KEYS_HELP := "Clavier : ZQSD / flèches  ·  Espace drift  ·  Maj boost  ·  E remorque  ·  F / G pouvoirs  ·  T cible  ·  C caméra  ·  R reset  ·  Échap menu"
 var _standings: Label
 var _standings_card: PanelContainer
 var _center_card: PanelContainer
@@ -109,18 +118,18 @@ func _ready() -> void:
 	_dial.offset_bottom = -16 * k
 	_cargo_label = _label(16, Vector2.ZERO)
 	_cargo_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_cargo_label.offset_left = -360 * k
+	_cargo_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_cargo_label.offset_left = -24 * k
 	_cargo_label.offset_right = -24 * k
-	_cargo_label.offset_top = (-HudDial.SIZE - 46.0) * k
+	_cargo_label.offset_top = (-HudDial.SIZE - 50.0) * k
+	# hauteur de son texte (sinon la plaquette descend jusqu'en bas de l'ecran)
+	_cargo_label.grow_vertical = Control.GROW_DIRECTION_END
+	_cargo_label.offset_bottom = _cargo_label.offset_top
 	_cargo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_cargo_label.add_theme_color_override("font_color", UiKit.GOLD)
+	_cargo_label.add_theme_color_override("font_color", UiKit.PRIMARY_TEXT if UiKit.skin == UiKit.Look.SAKURA else UiKit.GOLD)
+	_cargo_label.add_theme_stylebox_override("normal", _plaque(k))
 	_cargo_label.visible = _cargo != null
-	_help = _label(13, Vector2.ZERO)
-	_help.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_help.offset_left = 24 * k
-	_help.offset_top = (-28.0 - 16.0 * help_text.count("\n")) * k
-	_help.text = help_text
-	_help.modulate = Color(1, 1, 1, 0.75)
+	_build_help(k)
 	_standings = _label(26, Vector2.ZERO)
 	_standings.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_standings.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -145,6 +154,70 @@ func _ready() -> void:
 		_sound.name = "HitSound"
 		_sound.bus = SoundMix.EFFECTS
 		add_child(_sound)
+
+
+## Plaquette d'etiquette a l'habillage du circuit (etat du largage, aide) :
+## nuit a liseré or (neon), lagon cercle de sable (plage), laque noire
+## cerclee d'or (Japon).
+func _plaque(k: float) -> StyleBoxFlat:
+	var fill := Color(UiKit.NIGHT, 0.7)
+	var edge := Color(UiKit.GOLD, 0.45)
+	match UiKit.skin:
+		UiKit.Look.PLAYA:
+			fill = Color(UiKit.PANEL, 0.85)
+			edge = Color(UiKit.tile_edge, 0.8)
+		UiKit.Look.SAKURA:
+			fill = Color(UiKit.PRIMARY_FILL, 0.88)
+			edge = Color(UiKit.PRIMARY_BORDER, 0.8)
+	var sb := UiKit.box(fill, edge, maxi(1, roundi(1.5 * k)), UiKit.SKEW, UiKit.RADIUS)
+	sb.content_margin_left = 16 * k
+	sb.content_margin_right = 16 * k
+	sb.content_margin_top = 3 * k
+	sb.content_margin_bottom = 4 * k
+	return sb
+
+
+## Aide des commandes (2026-10-22, « ca fait tache » : deux longues lignes de
+## texte gris) : une barre a l'habillage en bas a gauche. Seul a l'ecran :
+## pictos de la manette, puis une ligne courte pour le clavier ; en ecran
+## partage : la ligne du joueur. Elle s'efface apres HELP_S secondes.
+func _build_help(k: float) -> void:
+	_help_bar = PanelContainer.new()
+	_help_bar.name = "Help"
+	_help_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := _plaque(k)
+	sb.bg_color.a = 0.6
+	sb.content_margin_left = 18 * k
+	sb.content_margin_right = 18 * k
+	sb.content_margin_top = 6 * k
+	sb.content_margin_bottom = 6 * k
+	_help_bar.add_theme_stylebox_override("panel", sb)
+	add_child(_help_bar)
+	_help_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	_help_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_help_bar.offset_left = 24 * k
+	_help_bar.offset_bottom = -12 * k
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", roundi(4 * k))
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_help_bar.add_child(col)
+	var glyph := maxi(10, roundi(15 * k))
+	var keys := help_text
+	if help_text.begins_with("Manette"):
+		# sans largage (arene, LocalRace.help_for) : ni picto ni touche de remorque
+		var drops := help_text.to_lower().contains("remorque")
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", roundi(18 * k))
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		for pr: Array in PAD_PROMPTS:
+			if drops or String(pr[0]) != "triangle":
+				row.add_child(UiKit.prompt(String(pr[0]), String(pr[1]), glyph))
+		col.add_child(row)
+		keys = KEYS_HELP if drops else KEYS_HELP.replace("  ·  E remorque", "")
+	_help = UiKit.label(keys, maxi(9, roundi(13 * k)), UiKit.DIM, 600, false)
+	_help.name = "Keys"
+	col.add_child(_help)
+	_help_bar.visible = help_text != ""
 
 
 ## Carte du haut a gauche, inclinee comme les menus : « 2e/4 » en grand a
@@ -309,6 +382,10 @@ func set_center_message(text: String, color: Color = Color.WHITE) -> void:
 
 
 func _process(_delta: float) -> void:
+	if _help_bar != null and _help_bar.visible:
+		_help_age += _delta
+		_help_bar.modulate.a = clampf((HELP_S - _help_age) / HELP_FADE_S, 0.0, 1.0)
+		_help_bar.visible = _help_age < HELP_S
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - _delta)
 		_flash.modulate.a = clampf(_flash_left / (FLASH_S * 0.4), 0.0, 1.0)
