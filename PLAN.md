@@ -1135,6 +1135,38 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
       - Corrigé au passage : la même piste rechargée (nouvelle partie) avec
         un autre niveau de bots plantait (`RacingLine.of` gardait la piste
         libérée).
+- [x] **Équilibrage des bots en course** (2026-10-22, « base-toi sur le hard,
+  qu'ils soient vraiment durs, et rends-les plus simples petit à petit ») :
+  - échelle repartie du dur : adhérence 75 / 85 / 100 %, vitesse max
+    91 / 95 / 100 %, freinage 66 / 78 / 100 %, ligne de course
+    60 / 85 / 100 % (facile / moyen / dur) ; remorques par niveau en course
+    (`LocalRace.bot_trailer` : les durs tirent les plus vives, les faciles
+    les plus lourdes ; avant, un dur pouvait tirer la citerne) ; le bot tient
+    compte de l'adhérence de sa remorque ;
+  - bonus : en course, le dur s'écarte jusqu'à 8 m de sa ligne pour un soin
+    ou une recharge dont il a besoin, le moyen 3 m, le facile jamais ;
+    pouvoirs espacés comme en arène (25 s / 5 s / dès que prêts) ;
+  - bancs (`dev/bot_bench`, un bot seul, moyenne des tours 2 et 3) : Cyber
+    City 101 / 107 / 120 s, Playa 99 / 107 / 120 s, Sakura 109 / 118 / 130 s
+    (dur / moyen / facile ; avant, moyen ≈ dur et facile +25 %) ; 9 courses
+    de 5 bots : aucun tour catastrophique ;
+  - corrigés : plaque de boost qui lançait le bot trop vite avant le S des
+    docks (il l'évite quand la suite ne permet pas de freiner) ; vitesse
+    plafonnée à 1,3 × le minimum avant un saut (178 km/h à la marina) ;
+    garde-fou de braquage qui faisait tomber la consigne à zéro (le bot
+    tournait en rond au pas) ;
+  - essayés et retirés (18 courses de 5 bots, des tours de 160 à 200 s) :
+    retour plus lent sur sa ligne à haute vitesse, freinage limité en butée
+    de direction, braquage plafonné à l'adhérence ;
+  - limite connue : en dur, 5 bots sur le raccourci de la marina se gênent
+    sur la rampe ; un bot ralenti tombe parfois dans le vide (~4 s perdues).
+- [x] **Réapparition sur un raccourci** (2026-10-22) : à côté de sa carcasse,
+  le camion se décalait de 7 à 21 m et passait le mur d'un raccourci étroit,
+  dans le vide ; la place doit maintenant être sur la chaussée
+  (`TruckHealth.spot_ok`, `LocalRace.on_road`), sinon un peu plus loin ou
+  plus tôt (`respawn_branch_test`).
+- [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
+  « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
   l'effet, puis la recharge.
 - [x] **Menu** : boutons 1 à N des joueurs à la couleur de leur pastille
