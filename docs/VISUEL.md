@@ -11,7 +11,8 @@ passent. Intégrée dans `main` après #95 (bots en ligne, latence,
 | `031942f` | Décor près des routes et au-dessus, décor lointain allégé | **toutes** (basse, moyenne, haute, extrême) |
 | `9f3f3ee` | Style des éléments « qui font tache » ; qualité extrême | style : **toutes** ; contenu extrême : **extrême seulement** |
 | `bd22536` | Reflets de la mer de Playa ; décor extrême coupé en écran partagé sur puce intégrée | reflets : **toutes** (plus nets en extrême) |
-| (suivant) | Décor **sur** la route ; jonctions des raccourcis ; tablier du pont de Sakura | **toutes** (plus dense en extrême) |
+| `4d6e226` | Décor **sur** la route ; jonctions des raccourcis ; tablier du pont de Sakura | **toutes** (plus dense en extrême) |
+| (suivant) | Tours de Cyber City noires en haute et extrême ; fenêtres sans grain | haute et extrême surtout |
 
 Tout est sur la même branche. Le décor proche, le décor lointain allégé et le
 nouveau style s'appliquent en basse, moyenne et haute comme en extrême ; le
@@ -256,6 +257,35 @@ avec la distance (`sakura_road.gdshader`).
 
 Test : `track_dressing_test` (vibreurs au bord, flèches et chevrons,
 objets volants hors de portée).
+
+---
+
+## 7 bis. Tours de Cyber City en haute et extrême
+
+Retour du test sur le PC fixe (4K) : « en basse et moyenne, c'est beau et
+dark ; en haute et extrême, les bâtiments deviennent blancs ». Axel : « bug
+de texture sur les fenêtres (les carrés de lumière) ».
+
+- **Les tours blanchissaient** : la haute et l'extrême sont les seules
+  qualités avec l'éclairage global (SDFGI) et les reflets d'écran. Les
+  milliers de fenêtres lumineuses alimentaient l'éclairage global, qui
+  rallumait toute la ville en gris clair, et les façades (35 % métal, à
+  demi lisses) le reflétaient avec le ciel. Corrigé : tours, antennes et
+  enseignes hors de l'éclairage global (`city_builder.gd`) ; façades mates,
+  sans métal ni reflet ; vitres éteintes à peine brillantes ; en extrême,
+  corniches et équipements de toit en noir mat (ils étaient gris clair).
+- **Grain dans les carrés lumineux** : les reflets d'écran sur les façades à
+  demi lisses ajoutaient du bruit dans chaque fenêtre ; les fenêtres
+  allumées sont maintenant en émission pure. Le tirage des fenêtres
+  allumées utilisait `sin()`, imprécis sur certaines cartes graphiques
+  (motifs au lieu du hasard) : remplacé par un hachage sans sinus, comme
+  ailleurs dans le projet. Bords des fenêtres lissés au pixel près (moins de
+  crénelage qui grouille au loin).
+- Au loin, la lueur moyenne d'une tour est un peu plus sombre (dalles moins
+  claires dans le brouillard).
+
+Fichiers : `city_building.gdshader`, `city_sign.gdshader`,
+`city_antenna.gdshader`, `city_builder.gd`.
 
 ---
 

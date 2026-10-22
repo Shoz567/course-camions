@@ -19,5 +19,6 @@ void fragment() {
 	float blink = step(0.45, fract(TIME * 0.8 + phase));
 	ALBEDO = vec3(0.04, 0.04, 0.05);
 	EMISSION = vec3(1.0, 0.08, 0.05) * tip * (0.3 + 4.0 * blink);
-	ROUGHNESS = 0.5;
+	ROUGHNESS = 0.85;
+	SPECULAR = 0.1;
 }
