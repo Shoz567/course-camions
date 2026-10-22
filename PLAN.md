@@ -1158,8 +1158,21 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   - essayés et retirés (18 courses de 5 bots, des tours de 160 à 200 s) :
     retour plus lent sur sa ligne à haute vitesse, freinage limité en butée
     de direction, braquage plafonné à l'adhérence ;
-  - limite connue : en dur, 5 bots sur le raccourci de la marina se gênent
-    sur la rampe ; un bot ralenti tombe parfois dans le vide (~4 s perdues).
+  - raccourci à saut (2026-10-22 : en dur, 5 bots se gênaient sur la rampe de
+    la marina, un ralenti tombait dans le vide) : un bot le laisse à ce
+    passage si un camion y est déjà avant le vide, ou le précède de moins de
+    120 m (`BotInputSource._jump_clear`) ; 6 courses de 5 bots sur 3 tours :
+    plus aucune chute (2 à 3 par course à Playa avant).
+- [x] **Arène, bots durs face au joueur** (2026-10-22 : un joueur immobile
+  finissait en tête 4 manches sur 9, jamais touché dans l'une ; les durs
+  s'éliminaient entre eux, un choc coûtant autant aux deux) : le dur vise un
+  joueur humain d'abord (distance comptée × 0,65), et une proie qui n'a plus
+  qu'une ou deux vies (× 0,5, × 0,75). Joueur immobile : en tête 1 manche sur
+  9 (3 à 5 bots, 3 arènes) ; `arena_idle_test` (4 durs, 3 min : il perd au
+  moins 2 vies et ne finit pas en tête). Essayé et retiré : une proie lente
+  comptée plus près (un camion coincé attirait tous les durs, empilés) ;
+  × 0,6 (les durs tapaient plus les murs), × 0,7 (en tête 5 fois sur 9).
+  `arena_test` B mesure désormais la distance à la proie visée (< 90 m).
 - [x] **Réapparition sur un raccourci** (2026-10-22) : à côté de sa carcasse,
   le camion se décalait de 7 à 21 m et passait le mur d'un raccourci étroit,
   dans le vide ; la place doit maintenant être sur la chaussée
