@@ -3,7 +3,8 @@ extends Node
 ## Essai de bout en bout en ligne : deux instances du jeu sur ce PC (host et
 ## client, ENet sur 127.0.0.1), chacune pilotee par un bot dur.
 ##   godot --headless --path game res://dev/net_e2e.tscn -- --role=host --mode=3 --port=7781 --secs=120
-## Le client passe --role=client et le meme port (modes : GameState.GameMode).
+## Le client passe --role=client et le meme port (modes : GameState.GameMode) ;
+## --bots=N : bots durs du host.
 ## Toutes les 10 s, une ligne SAMPLE (tour affiche, place, vies, PV de chaque
 ## camion) a comparer entre les deux ; a 50 s, le host detruit le camion du
 ## client (vitesse de reapparition : launch_kmh). A la fin : une ligne E2E par
@@ -28,6 +29,7 @@ var role := "host"
 var mode := 0
 var port := 7781
 var secs := 120
+var bots := 0
 var _launched := false
 var _loadout_sent := false
 var _race: Node
@@ -54,11 +56,16 @@ func _ready() -> void:
 			port = v.to_int()
 		elif a.begins_with("--secs="):
 			secs = v.to_int()
+		elif a.begins_with("--bots="):
+			bots = v.to_int()
 	NetSession.player_name = role
 	GameState.game_mode = mode
 	GameState.selected_track = 0
 	GameState.trailer_drops = 3
 	GameState.arena_minutes = 2
+	# bots du host (le client recoit les siens au lancement)
+	GameState.bot_count = bots if role == "host" else 0
+	GameState.bot_level = BotInputSource.Level.HARD
 	if role == "host":
 		NetSession.host(port)
 	else:
@@ -158,7 +165,7 @@ func _report(over: bool) -> void:
 		var h := TruckHealth.of(t)
 		rows.append([i, r.lap if r else -1, r.next_cp if r else -1, r.finished if r else false,
 			roundi(h.hp) if h else -1, lives[i] if i < lives.size() else -1, elim.has(i), _wrecks[i], _powers[i],
-			t.global_position.round()])
+			t.global_position.round(), String(_race.call("player_name", i)), int(_race.call("slot_of", i))])
 	var net: Variant = _race.get("net")
 	var extra := ""
 	if net != null and role == "client":

@@ -26,6 +26,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - Page de sélection en ligne : remorque et pouvoirs choisis par chaque joueur
   et envoyés au host (#45).
 - Pouvoirs rejoués chez les clients (missile, laser, aura, recharges) (#46).
+- Bots en ligne, simulés par le host, vus en marionnettes par les clients
+  (#93) ; tours du client à jour à chaque checkpoint (#92).
 - Correctifs : largage prédit refusé par le host rendu, trou dans une remorque
   aussi chez le client, délai de largage à la réapparition (#67).
 - À faire : **test réel sur 2 PC** (reporté depuis longtemps).

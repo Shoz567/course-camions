@@ -337,6 +337,12 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   remplace le circuit).
 - **Protocole 5** : le lancement porte aussi la durée de l'arène du host
   (`GameState.arena_minutes`) : même compte à rebours chez tous.
+- **Protocole 6 (2026-10-22)** : le lancement porte les bots du host (nombre,
+  niveau). Le host les simule (après les joueurs, indices >= nombre de
+  membres, sans peer) ; chez un client, ce sont des marionnettes comme les
+  joueurs distants. Leur remorque et leurs pouvoirs se déduisent du niveau
+  et de leur numéro, le même calcul partout. Case (couleur) et nom de chaque
+  camion figés au départ (`LocalRace._slots`, `_names`).
 - **Élimination et arène** : le host seul décide qui saute et qui perd une
   vie. L'état de course (`LocalRace.net_state`, renvoyé à chaque changement)
   porte trois champs de plus : éliminés, vies, tick de la prochaine

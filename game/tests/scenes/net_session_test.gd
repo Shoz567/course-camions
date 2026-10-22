@@ -7,7 +7,7 @@ extends PhysicsTest
 ##   - un client d'une autre version est refuse, avec la raison ;
 ##   - le host lance la course : circuit, categorie et mode du host chez le
 ##     client (2026-10-21 : arene ; le contre-la-montre devient une course),
-##     avec la duree de l'arene du host ;
+##     avec la duree de l'arene du host et ses bots (nombre, niveau ; 2026-10-22) ;
 ##   - un client qui part libere sa case (member_left) ;
 ##   - le host qui part termine la partie chez le client (connection_lost).
 
@@ -20,6 +20,7 @@ var stranger: NetSessionNode
 var _stage: int = 0
 var _stage_tick: int = 0
 var _launched: int = 0
+var _bots_saved: Array = []
 var _left: Array = []
 var _lost_reason: String = ""
 var _refused_reason: String = ""
@@ -79,11 +80,16 @@ func _test_tick(t: int) -> void:
 				GameState.speed_class = 2
 				GameState.game_mode = GameStateNode.GameMode.ARENA
 				GameState.arena_minutes = 8
+				_bots_saved = [GameState.bot_count, GameState.bot_level]
+				GameState.bot_count = 3
+				GameState.bot_level = BotInputSource.Level.HARD
 				host.launch_race()
 				# meme processus : on efface ce que le host vient de poser, le client
 				# doit le reecrire en recevant le lancement
 				GameState.game_mode = GameStateNode.GameMode.RACE
 				GameState.arena_minutes = 2
+				GameState.bot_count = 0
+				GameState.bot_level = BotInputSource.Level.EASY
 				_next(t)
 		2:
 			if _launched > 0:
@@ -91,6 +97,8 @@ func _test_tick(t: int) -> void:
 					GameState.selected_track == 1 and GameState.speed_class == 2 and guest.members.size() == 2
 					and GameState.game_mode == GameStateNode.GameMode.ARENA, str(GameState.game_mode))
 				check("duree de l'arene du host chez le client", GameState.arena_minutes == 8, str(GameState.arena_minutes))
+				check("bots du host chez le client (nombre, niveau)", GameState.bot_count == 3
+					and GameState.bot_level == BotInputSource.Level.HARD, "%d %d" % [GameState.bot_count, GameState.bot_level])
 				check("en ligne : le contre-la-montre devient une course, les autres modes restent",
 					NetSessionNode.online_mode(GameStateNode.GameMode.TIME_TRIAL) == GameStateNode.GameMode.RACE
 					and NetSessionNode.online_mode(GameStateNode.GameMode.ELIMINATION) == GameStateNode.GameMode.ELIMINATION)
@@ -120,5 +128,8 @@ func _test_finish() -> void:
 	GameState.speed_class = GameStateNode.SpeedClass.NORMAL
 	GameState.game_mode = GameStateNode.GameMode.RACE
 	GameState.arena_minutes = 4
+	if not _bots_saved.is_empty():
+		GameState.bot_count = _bots_saved[0]
+		GameState.bot_level = _bots_saved[1]
 	for s in [host, guest, stranger]:
 		(s as NetSessionNode).leave()

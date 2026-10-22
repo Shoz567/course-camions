@@ -153,6 +153,9 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @onready var auto_reset: AutoReset = $AutoReset
 
 var players: Array[Player] = []
+## En ligne : case et nom de chaque camion, figes au depart (_freeze_slots).
+var _slots: PackedInt32Array = []
+var _names: PackedStringArray = []
 ## Prechauffe des effets en cours (FxWarmup) ; depart retenu sous l'ecran de
 ## chargement, et ce qu'il deviendra (sas READY ou compte a rebours).
 var _warmup: FxWarmup
@@ -231,6 +234,10 @@ const UNSTABLE_TICKS := 90
 func _ready() -> void:
 	if NetSession.is_online():
 		player_count = clampi(NetSession.members.size(), 1, MAX_PLAYERS)
+		# bots du host (2026-10-22 : « tout disponible en ligne, les bots
+		# egalement ») : il les simule, les clients les voient en marionnettes
+		bot_count = GameState.bot_count
+		bot_level = GameState.bot_level
 		ready_gate = true
 		# le mode du host (envoye au lancement), sauf le contre-la-montre
 		game_mode = NetSessionNode.online_mode(GameState.game_mode)
@@ -253,7 +260,8 @@ func _ready() -> void:
 			arena_limit_ticks = GameState.arena_minutes * 3600
 		race.total_laps = 999
 		race.wrong_way_enabled = false
-	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
+	bot_count = clampi(bot_count, 0, MAX_PLAYERS - player_count)
+	_freeze_slots()
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
 	_apply_graphics()
@@ -360,11 +368,31 @@ func is_authority() -> bool:
 	return not NetSession.is_client()
 
 
-## Case du lobby du joueur `i` (sa couleur) : `i` hors ligne.
+## Case du lobby du joueur `i` (sa couleur) : `i` hors ligne. En ligne,
+## figee au depart (_freeze_slots).
 func slot_of(i: int) -> int:
-	if NetSession.is_online() and i < NetSession.members.size():
-		return int(NetSession.members[i]["slot"])
+	if i < _slots.size():
+		return _slots[i]
 	return i
+
+
+## En ligne : la case (couleur) et le nom de chaque camion, figes au depart.
+## Un joueur parti ne decale plus ceux des autres ; les bots prennent les
+## cases libres, dans l'ordre.
+func _freeze_slots() -> void:
+	_slots.clear()
+	_names.clear()
+	if not NetSession.is_online():
+		return
+	for i in mini(player_count, NetSession.members.size()):
+		_slots.append(int(NetSession.members[i]["slot"]))
+		_names.append(String(NetSession.members[i]["name"]))
+	var free := 0
+	for b in bot_count:
+		while _slots.has(free):
+			free += 1
+		_slots.append(free)
+		_names.append("BOT %d %s" % [b + 1, COLOR_NAMES[free % COLOR_NAMES.size()]])
 
 
 ## Le joueur `i` joue-t-il sur cette machine ?
@@ -374,15 +402,17 @@ func is_local(i: int) -> bool:
 	return not NetSession.is_online() or slot_of(i) == NetSession.local_slot()
 
 
-## Le joueur `i` est-il un bot (hors ligne, apres les joueurs) ?
+## Le joueur `i` est-il un bot (apres les joueurs ; en ligne, simule par le
+## host) ?
 func is_bot(i: int) -> bool:
-	return i >= player_count and not NetSession.is_online()
+	return i >= player_count
 
 
-## Nom affiche : J1 AZUR... hors ligne, nom du lobby en ligne.
+## Nom affiche : J1 AZUR... hors ligne, nom du lobby en ligne (BOT n pour un
+## bot), fige au depart.
 func player_name(i: int) -> String:
-	if NetSession.is_online():
-		return NetSession.name_of_slot(slot_of(i))
+	if i < _names.size():
+		return _names[i]
 	if is_bot(i):
 		return "BOT %d %s" % [i - player_count + 1, COLOR_NAMES[i]]
 	return NAMES[i]
@@ -470,7 +500,7 @@ func _add_player(i: int) -> Player:
 	# remorque et pouvoirs choisis sur la page de selection du menu ; en ligne,
 	# ceux que chaque joueur a envoyes au lobby (NetSession.set_loadout)
 	var choice := 0
-	if online:
+	if online and not is_bot(i):
 		var m := NetSession.member_of_slot(slot_of(i))
 		choice = int(m.get("trailer", GameState.trailer_choice[0] if mine else 0))
 		p.power_left = int(m.get("power_left", -1))
@@ -524,8 +554,9 @@ func _add_player(i: int) -> Player:
 		health.respawn_provider = respawn_for
 		health.launch_provider = launch_for
 		health.spot_ok = on_road
-	if is_bot(i):
-		# bot : il conduit seul, sans camera ni HUD
+	if is_bot(i) and is_authority():
+		# bot : il conduit seul, sans camera ni HUD (client en ligne : une
+		# marionnette, comme un joueur distant)
 		var bot := BotInputSource.new()
 		bot.name = "Bot%d" % (i - player_count + 1)
 		bot.setup(track, t, bot_level, i - player_count)
