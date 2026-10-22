@@ -5,7 +5,8 @@ extends Node
 ##   godot --headless --path game res://dev/net_e2e.tscn -- --role=host --mode=3 --port=7781 --secs=120
 ## Le client passe --role=client et le meme port (modes : GameState.GameMode) ;
 ## --bots=N : bots durs du host ; --players=N : le host lance quand N joueurs
-## sont la (2 par defaut).
+## sont la (2 par defaut) ; --track=N : circuit (GameState.TRACKS) ;
+## --quality=N : qualite graphique (GraphicsSettings.Quality, 3 = extreme).
 ## Toutes les 10 s, une ligne SAMPLE (tour affiche, place, vies, PV de chaque
 ## camion) a comparer entre les deux ; a 50 s, le host detruit le camion du
 ## client (vitesse de reapparition : launch_kmh). A la fin : une ligne E2E par
@@ -33,6 +34,7 @@ var secs := 120
 var bots := 0
 var expected := 2
 var snap := ""
+var track := 0
 var _wall0 := 0
 var _phys_sum := 0.0
 var _phys_n := 0
@@ -73,9 +75,13 @@ func _ready() -> void:
 			snap = v
 		elif a.begins_with("--trace="):
 			trace = v
+		elif a.begins_with("--track="):
+			track = v.to_int()
+		elif a.begins_with("--quality="):
+			GameState.graphics_quality = v.to_int()
 	NetSession.player_name = role
 	GameState.game_mode = mode
-	GameState.selected_track = 0
+	GameState.selected_track = track
 	GameState.trailer_drops = 3
 	GameState.arena_minutes = 2
 	# bots du host (le client recoit les siens au lancement)
@@ -121,10 +127,10 @@ func _physics_process(_delta: float) -> void:
 	# le host detruit le camion du client a 50 s : il doit reapparaitre lance
 	if role == "host" and _go >= 0 and Engine.get_physics_frames() - _go == 3000:
 		TruckHealth.of((players[1] as Object).get("truck") as Truck).crash(&"essai")
-	# captures du rendu (fenetre seulement) : --snap=prefixe, au depart et a 20 s
+	# captures du rendu (fenetre seulement) : --snap=prefixe, au depart, toutes les 10 s et a la fin
 	if snap != "" and DisplayServer.get_name() != "headless" and _go >= 0:
 		var k := Engine.get_physics_frames() - _go
-		if k == 1 or k == 1200 or k == secs * 60 - 2:
+		if k == 1 or k % 600 == 0 or k == secs * 60 - 2:
 			get_viewport().get_texture().get_image().save_png("%s_%d.png" % [snap, k / 60])
 	if _go >= 0 and (Engine.get_physics_frames() - _go) % 600 == 0:
 		var race := _race.get("race") as RaceLaps

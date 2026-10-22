@@ -75,10 +75,12 @@ static func set_smoke(p: GPUParticles3D, level: int) -> void:
 		Smoke.LIGHT:
 			FxKit.set_smoke_look(p, Color(0.8, 0.8, 0.82, 0.5), 0.35, 0.9, 1.4)
 		Smoke.HEAVY:
-			# anthracite plutot que noir : il se voit encore sur un ciel de nuit
-			FxKit.set_smoke_look(p, Color(0.16 * nk, 0.15 * nk, 0.15 * nk, 0.95), 0.9, 1.4, 2.3)
+			# anthracite plutot que noir : il se voit encore sur un ciel de nuit,
+			# et ne fait plus une tache noire en plein jour (il grisonne en
+			# montant, smoke.gdshader)
+			FxKit.set_smoke_look(p, Color(0.27 * nk, 0.26 * nk, 0.26 * nk, 0.9), 0.9, 1.4, 2.3)
 		_:
-			FxKit.set_smoke_look(p, Color(0.1 * nk, 0.095 * nk, 0.09 * nk, 0.95), 1.0, 1.9, 3.0)
+			FxKit.set_smoke_look(p, Color(0.2 * nk, 0.19 * nk, 0.18 * nk, 0.92), 1.0, 1.9, 3.0)
 
 
 ## Couleur des bouffees du panache `p`.

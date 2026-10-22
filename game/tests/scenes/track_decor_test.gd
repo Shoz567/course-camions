@@ -219,6 +219,15 @@ func _check_race_decor() -> void:
 	if person != null:
 		tris = (person.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
 	check("tribunes : un spectateur en 56 triangles au plus", tris > 0 and tris <= 56, "%d" % tris)
+	# au loin, la meme foule allegee prend le relais a la meme distance
+	var far := stands.get_node_or_null("CrowdFar") as MultiMeshInstance3D
+	var far_tris := 0
+	if far != null:
+		far_tris = (far.multimesh.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+	check("tribunes : foule lointaine en 9 triangles, relais sans trou", far != null and crowd != null
+		and far.multimesh.instance_count == crowd.multimesh.instance_count and far_tris <= 9
+		and is_equal_approx(far.visibility_range_begin, crowd.visibility_range_end) and crowd.visibility_range_end > 0.0,
+		"%d triangles" % far_tris)
 	check("tribunes illuminees : projecteurs sans ombres",
 		stands.find_children("*", "OmniLight3D", true, false).size() == 8
 		and stands.find_children("*", "OmniLight3D", true, false).all(func(l: Node) -> bool: return not (l as OmniLight3D).shadow_enabled))

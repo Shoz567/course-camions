@@ -4,7 +4,8 @@ extends Node3D
 
 ## Decor de Playa Del Sol autour de la piste parente : palmiers en bordure de
 ## piste et sur l'ile, parasols sur le sable, rochers et ilots au large, un
-## phare. Purement visuel (aucune collision : un camion qui passe le mur tombe
+## phare. Palmiers et parasols en 3D pres de la camera seulement ; au loin,
+## les palmiers sont des sprites tournes (FarLod, 2026-10-22). Purement visuel (aucune collision : un camion qui passe le mur tombe
 ## dans une zone de reset, il ne percute rien) ; en headless (tests), rien
 ## n'est genere, sauf si un test le force.
 ##
@@ -15,6 +16,8 @@ extends Node3D
 @export var decor_seed: int = 5
 ## Ecart entre deux palmiers de bordure, le long de la piste (m).
 @export var palm_spacing: float = 12.0
+## Qualite extreme : pas entre deux rangees de palmiers (part de palm_spacing).
+const EXTREME_SPACING := 0.72
 
 ## Un test peut forcer la generation en headless.
 static var generate_in_headless: bool = false
@@ -53,6 +56,8 @@ func _generate(track: TrackBlockout) -> void:
 	var half := track.width / 2.0
 	var beyond := half + track.wall_thickness + track.wall_lean
 
+	# qualite extreme : palmiers et parasols plus serres, palmiers detailles
+	var hd := GraphicsSettings.extreme_assets()
 	var palms: Array[Transform3D] = []
 	var crowns: Array[Transform3D] = []
 	var parasols: Array[Transform3D] = []
@@ -68,18 +73,19 @@ func _generate(track: TrackBlockout) -> void:
 		var p := track.sample_position(i)
 		var t := (track.sample_forward(i) * Vector3(1, 0, 1)).normalized()
 		var r := t.cross(Vector3.UP).normalized()
-		# la ou la route est haute (talus, pont), pas de palmier au pied du mur
 		var low := p.y < 2.0 and not track.is_bridge_deck(i)
 		# les tribunes occupent le bord de piste autour de la ligne de depart
 		var stands := s < 124.0 or s > length - 116.0
 		for side: float in [-1.0, 1.0]:
-			# bordure : un palmier pres du mur, un autre plus loin
+			# bordure : un palmier pres du mur (au pied du talus si la route
+			# est haute ; rien sous un pont), un autre plus loin
+			var foot := track.embankment_reach(i, side)
 			for row in 2:
-				if row == 0 and (not low or stands):
+				if row == 0 and (track.is_bridge_deck(i) or stands):
 					continue
 				if row == 1 and _rand() < 0.45:
 					continue
-				var lat := beyond + (_range(3.0, 9.0) if row == 0 else _range(22.0, 70.0))
+				var lat := beyond + (foot + _range(3.0, 9.0) if row == 0 else _range(22.0, 70.0))
 				if row == 1 and not low:
 					lat += 55.0
 				if row == 1 and stands:
@@ -99,7 +105,7 @@ func _generate(track: TrackBlockout) -> void:
 						c + Vector3(0.0, 2.3, 0.0)))
 					parasol_colors.append(tints[int(_rand() * tints.size()) % tints.size()])
 					poles.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.07, 2.5, 0.07)), c + Vector3(0.0, 1.25, 0.0)))
-		s += palm_spacing
+		s += palm_spacing * (EXTREME_SPACING if hd else 1.0)
 
 	# rochers et ilots au large, tout autour de l'ile
 	var rocks: Array[Transform3D] = []
@@ -122,10 +128,20 @@ func _generate(track: TrackBlockout) -> void:
 		rocks.append(Transform3D(Basis(Vector3.UP, _rand() * TAU).scaled(Vector3(w, h, w * _range(0.7, 1.3))),
 			c + Vector3(0.0, -h * 0.15, 0.0)))
 
-	root.add_child(_multimesh("PalmTrunks", _trunk_mesh(), palms, PackedColorArray(), true))
-	root.add_child(_multimesh("PalmCrowns", _crown_mesh(), crowns, PackedColorArray(), true))
-	root.add_child(_multimesh("Parasols", _parasol_mesh(), parasols, parasol_colors, true))
-	root.add_child(_multimesh("ParasolPoles", _pole_mesh(), poles, PackedColorArray(), false))
+	# palmiers : 3D pres de la camera, sprite tourne au loin (FarLod) ;
+	# parasols : 3D pres seulement (au loin, ils ne se voient plus)
+	var bases := PackedVector3Array()
+	var scales := PackedFloat32Array()
+	for xf in palms:
+		bases.append(xf.origin)
+		scales.append(xf.basis.y.length() / float(FarLod.KINDS["palm"]["ref"]))
+	FarLod.add(root, "Palm", [
+		{"name": "PalmTrunks", "mesh": TreeKit.palm_trunk() if hd else _trunk_mesh(), "xfs": palms},
+		{"name": "PalmCrowns", "mesh": TreeKit.palm_crown() if hd else _crown_mesh(), "xfs": crowns}],
+		"palm_hd" if hd else "palm", bases, scales)
+	FarLod.add(root, "Parasol", [
+		{"name": "Parasols", "mesh": _parasol_mesh(), "xfs": parasols, "colors": parasol_colors},
+		{"name": "ParasolPoles", "mesh": _pole_mesh(), "xfs": poles, "shadows": false}])
 	root.add_child(_multimesh("Rocks", _rock_mesh(), rocks, PackedColorArray(), true))
 	_add_lighthouse(root, track, beyond)
 	# positions gardees a part : le rendu factice du headless ne relit pas les
@@ -135,6 +151,14 @@ func _generate(track: TrackBlockout) -> void:
 	root.set_meta(&"parasols", parasols.duplicate())
 	# rien sur un raccourci (2026-10-20)
 	track.clear_branch_corridors(self)
+	# reflets de la mer (2026-10-22) : le sol (sable et mer) hors de la grille
+	# de l'eclairage global ; dedans, un rayon reflechi en vue rasante
+	# retombait aussitot sur la mer voxelisee et revenait sombre (taches a bord
+	# net). Il recoit toujours l'eclairage global.
+	var floor_body := track.get_node_or_null(^"Geometry/Ground")
+	if floor_body != null:
+		for mi in floor_body.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 
 
 ## Un palmier : tronc penche au hasard, couronne de palmes au sommet.

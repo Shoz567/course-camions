@@ -288,6 +288,8 @@ const UNSTABLE_TICKS := 90
 
 
 func _ready() -> void:
+	# compteur d'images par seconde en haut (le menu l'avait descendu)
+	GameState.set_fps_top(10.0)
 	if NetSession.is_online():
 		player_count = clampi(NetSession.members.size(), 1, MAX_TRUCKS)
 		# bots du host (2026-10-22 : « tout disponible en ligne, les bots

@@ -1150,7 +1150,53 @@ func _build_bridges(parent: Node3D) -> void:
 		under[kind].generate_normals()
 		mi.mesh = under[kind].commit()
 		mi.material_override = theme.bridge_concrete if kind == 0 else theme.bridge_wood
+		if theme.bridge_under != null:
+			mi.material_override = theme.bridge_under
 		parent.add_child(mi)
+
+
+## Largeur au sol du talus au-dela du haut exterieur du mur (m), au pire de
+## son ondulation ; 0 sans talus (route basse, pont). Pour planter le decor
+## a son pied plutot que dedans.
+func embankment_reach(i: int, side: float) -> float:
+	if theme.embankment == null or _deck[i] != 0:
+		return 0.0
+	var h := _wall_profile(i, side)[2].y - 0.2 - GROUND_Y
+	return (h * 1.25 + 3.0) * 1.3 if h > wall_height + 1.0 else 0.0
+
+
+## Longueur du talus parti de `top` vers `out` (au plus `d`) qui reste hors
+## du couloir des raccourcis (chaussee, murs et une marge) ; 0 si le pied du
+## mur y est deja.
+func _embankment_clear(top: Vector3, out: Vector3, d: float) -> float:
+	var margin := wall_thickness + wall_lean + 2.0
+	var foot := top + out * d
+	var near := false
+	for k in _br.size():
+		var box: Rect2 = _br[k]["box"]
+		if box.has_point(Vector2(top.x, top.z)) or box.has_point(Vector2(foot.x, foot.z)):
+			near = true
+			break
+	if not near:
+		return d
+	var steps := 12
+	for q in range(1, steps + 1):
+		var t := float(q) / steps
+		if _in_branch_corridor(top + out * d * t, margin):
+			# un pas de securite en deca ; trop court : pas de talus
+			var keep := d * (q - 1) / steps - 1.0
+			return keep if keep > 2.0 else 0.0
+	return d
+
+
+## Vrai si `p` est dans le couloir d'un raccourci (a plat), `margin` m
+## au-dela de ses bords.
+func _in_branch_corridor(p: Vector3, margin: float) -> bool:
+	for k in _br.size():
+		var c := _branch_coords(k, p)
+		if c.x >= 0.0 and c.x <= 1.0 and absf(c.y) < float(_br[k]["w"]) / 2.0 + margin:
+			return true
+	return false
 
 
 ## Talus : sous les portions hautes (hors ponts), une pente de roche descend
@@ -1164,6 +1210,7 @@ func _build_embankments(parent: Node3D) -> void:
 		var dummy := PackedVector3Array()
 		var rows: Array[PackedVector3Array] = []
 		var reach := PackedFloat32Array()
+		var opened := _wall_open[0 if side < 0.0 else 1]
 		for i in n:
 			var prof := _wall_profile(i, side)
 			var out := Vector3(_right[i].x, 0.0, _right[i].z).normalized() * side
@@ -1173,6 +1220,13 @@ func _build_embankments(parent: Node3D) -> void:
 			if _deck[i] == 0 and h > wall_height + 1.0:
 				# pente irreguliere (deterministe), plus longue quand c'est haut
 				d = (h * 1.25 + 3.0) * (1.0 + 0.18 * sin(_s[i] * 0.05 + side) + 0.12 * sin(_s[i] * 0.017))
+			# raccourcis (2026-10-22, « bugs de blend aux intersections ») : pas
+			# de talus la ou le mur s'ouvre, et ailleurs il s'arrete avant le
+			# couloir d'un raccourci (il traversait sa chaussee)
+			if d > 0.0 and not opened.is_empty() and opened[i] == 1:
+				d = 0.0
+			if d > 0.0:
+				d = _embankment_clear(top, out, d)
 			var foot := Vector3(top.x, GROUND_Y + 0.02, top.z) + out * d
 			var mid := top.lerp(foot, 0.42)
 			mid.y = top.y - h * 0.3
@@ -1896,6 +1950,11 @@ func _build_branches() -> void:
 			"dirs": dirs, "rights": rights, "curv": curv, "spec": spec,
 			"win": PackedInt32Array([i0 - 40, i0 + span / 2, i0 + span / 2, i0 + span + 40]),
 			"u_out": 0.0, "u_in": 1.0, "h_out": a.y, "h_in": b.y}
+		# emprise au sol (avec ses murs et une large marge) : tri rapide
+		var box := Rect2(Vector2(pts[0].x, pts[0].z), Vector2.ZERO)
+		for q in pts:
+			box = box.expand(Vector2(q.x, q.z))
+		bd["box"] = box.grow(w / 2.0 + 20.0)
 		_br.append(bd)
 		# profil en long : de la hauteur du bord de la piste ou il la quitte a
 		# celle du bord ou il la rejoint
@@ -2280,6 +2339,10 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 		var qb := roundi(jump[1] * count) if not jump.is_empty() else count + 1
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		# chaussee ordinaire (COLOR.r = 0) : sans couleur, les shaders de Playa
+		# et de Sakura y lisaient 1 et dessinaient un pont de bois (joints
+		# visibles avec la piste, 2026-10-22)
+		st.set_color(Color.BLACK)
 		var tris := PackedVector3Array()
 		for q in count:
 			if q >= qa and q < qb:
@@ -2302,6 +2365,8 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 			var col := 0 if side < 0.0 else cols
 			var wst := SurfaceTool.new()
 			wst.begin(Mesh.PRIMITIVE_TRIANGLES)
+			# mur ordinaire, comme celui de la piste (pas de garde-corps de pont)
+			wst.set_color(Color.BLACK)
 			var wtris := PackedVector3Array()
 			var nst := SurfaceTool.new()
 			nst.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -2347,6 +2412,7 @@ func _build_branch_roads(geometry: Node3D, walls: Node3D) -> void:
 func _build_branch_cliffs(walls: Node3D, kb: int, verts: PackedVector3Array, cols: int, qa: int, qb: int) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(Color.BLACK)
 	var tris := PackedVector3Array()
 	for row: int in [qa, qb]:
 		for c in cols:

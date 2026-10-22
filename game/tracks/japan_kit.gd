@@ -13,7 +13,8 @@ extends RefCounted
 ## tuiles a l'echelle. COLOR.r choisit le motif de mur (sakura_house.gdshader),
 ## COLOR.g varie la teinte.
 
-enum Mat { PLASTER, WOOD, LACQUER, ROOF, STONE, GOLD, PAPER }
+## CLOTH (tissu, couleur de sommet) : seulement en detail (noren).
+enum Mat { PLASTER, WOOD, LACQUER, ROOF, STONE, GOLD, PAPER, CLOTH }
 
 ## Motifs de mur (COLOR.r).
 const WALL_MACHIYA_GROUND := 0.0
@@ -23,6 +24,10 @@ const WALL_TEMPLE := 0.75
 const WALL_PLAIN := 1.0
 
 var _st: Dictionary = {}
+## Qualite extreme (2026-10-22, « les buildings trop simples, detaille-les ») :
+## les batiments composes ajoutent leurs details (lattis, chevrons, noren,
+## lanterne, fenetres a barreaux, faitage ; clochettes de la pagode).
+var detail: bool = false
 
 
 func _tool(m: int) -> SurfaceTool:
@@ -172,6 +177,59 @@ func machiya(xf: Transform3D, w: float, d: float, tint: float) -> void:
 	var up := xf * Transform3D(Basis.IDENTITY, Vector3(0, 3.4, 0.3))
 	box(Mat.PLASTER, up, Vector3(w - 0.3, 2.8, d - 0.8), Color(WALL_MACHIYA_UPPER, tint, 1.0))
 	hip_roof(Mat.ROOF, xf * Transform3D(Basis.IDENTITY, Vector3(0, 6.2, 0.3)), w, d - 0.8, 2.6, 1.1, 0.25, Color(1, tint, 1))
+	if detail:
+		_machiya_detail(xf, w, d, tint)
+
+
+## Details d'une machiya (qualite extreme) : lattis de bois (koshi) devant le
+## rez-de-chaussee, porte encadree sous un noren indigo a trois pans, lanterne
+## de papier sur potence, chevrons sous l'auvent, fenetres a barreaux a
+## l'etage, faitage et tuiles d'about (onigawara).
+func _machiya_detail(xf: Transform3D, w: float, d: float, tint: float) -> void:
+	var front := -d / 2.0 - 0.05
+	var door := -w * 0.22
+	var x := -w / 2.0 + 0.6
+	while x < w / 2.0 - 0.6:
+		if absf(x - door) > 0.75:
+			box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(x, 0.35, front)), Vector3(0.045, 2.25, 0.045), Color.WHITE)
+		x += 0.13
+	for y: float in [0.3, 2.6]:
+		box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(0, y, front)), Vector3(w - 1.1, 0.08, 0.09), Color.WHITE)
+	# porte : montants, linteau, noren a trois pans
+	for side: float in [-1.0, 1.0]:
+		box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(door + side * 0.72, 0.0, front)), Vector3(0.12, 2.75, 0.12), Color.WHITE)
+	box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(door, 2.75, front)), Vector3(1.6, 0.14, 0.14), Color.WHITE)
+	var indigo := Color(0.12, 0.17, 0.36).lerp(Color(0.32, 0.12, 0.1), 1.0 if tint > 0.7 else 0.0)
+	for k in 3:
+		box(Mat.CLOTH, xf * Transform3D(Basis.IDENTITY, Vector3(door + (k - 1) * 0.46, 1.95, front - 0.08)),
+			Vector3(0.43, 0.78, 0.02), indigo.lightened(0.06 * k))
+	# lanterne de papier sur sa potence
+	box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(door + 1.05, 2.55, front - 0.25)), Vector3(0.06, 0.06, 0.5), Color.WHITE)
+	cylinder(Mat.PAPER, xf * Transform3D(Basis.IDENTITY, Vector3(door + 1.05, 1.95, front - 0.45)), 0.2, 0.2, 0.55, 8, Color.WHITE)
+	# chevrons sous l'auvent
+	x = -(w - 0.6) / 2.0
+	while x <= (w - 0.6) / 2.0:
+		box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(x, 3.05, -d / 2.0 - 0.5)), Vector3(0.07, 0.07, 0.9), Color.WHITE)
+		x += 0.45
+	# fenetres a barreaux de l'etage, en relief sur celles que peint
+	# sakura_house.gdshader (une travee de 1,8 m sur deux)
+	var up_front := -d / 2.0 + 0.7 - 0.04
+	var hx := (w - 0.3) / 2.0
+	var bay := 1
+	while 1.8 * (bay + 1) <= w - 0.3:
+		var cx := hx - 1.8 * (bay + 0.5)
+		for y: float in [4.36, 5.28]:
+			box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(cx, y, up_front)), Vector3(1.15, 0.08, 0.09), Color.WHITE)
+		for b in 8:
+			box(Mat.WOOD, xf * Transform3D(Basis.IDENTITY, Vector3(cx - 0.49 + b * 0.14, 4.4, up_front)), Vector3(0.045, 0.9, 0.05),
+				Color.WHITE)
+		bay += 2
+	# faitage et tuiles d'about
+	var ridge := maxf(w - (d - 0.8), 0.0) / 2.0
+	box(Mat.ROOF, xf * Transform3D(Basis.IDENTITY, Vector3(0, 8.7, 0.3)), Vector3(ridge * 2.0 + 0.5, 0.3, 0.34), Color(1, tint, 1))
+	for side: float in [-1.0, 1.0]:
+		box(Mat.ROOF, xf * Transform3D(Basis.IDENTITY, Vector3(side * (ridge + 0.3), 8.65, 0.3)), Vector3(0.36, 0.6, 0.4),
+			Color(1, tint, 1))
 
 
 ## Pagode a `tiers` etages, cote de base `base` : corps vermillon a chaque
@@ -187,6 +245,14 @@ func pagoda(xf: Transform3D, tiers: int, base: float) -> float:
 		y += hk
 		hip_roof(Mat.ROOF, xf * Transform3D(Basis.IDENTITY, Vector3(0, y - 0.2, 0)), s, s, 2.0, s * 0.32 + 1.6, 0.9,
 			Color(1, 0.5, 1))
+		if detail:
+			# clochettes de bronze aux quatre coins du toit
+			var e := s / 2.0 + s * 0.32 + 1.6 - 0.3
+			for cx: float in [-e, e]:
+				for cz: float in [-e, e]:
+					var at := xf * Transform3D(Basis.IDENTITY, Vector3(cx, y - 0.2 + 0.9 - 1.25, cz))
+					cylinder(Mat.GOLD, at, 0.22, 0.12, 0.5, 8, Color.WHITE)
+					box(Mat.WOOD, at * Transform3D(Basis.IDENTITY, Vector3(0, 0.5, 0)), Vector3(0.04, 0.6, 0.04), Color.WHITE)
 		y += 1.4
 	var top := xf * Transform3D(Basis.IDENTITY, Vector3(0, y, 0))
 	cylinder(Mat.GOLD, top, 0.4, 0.25, 10.0, 8, Color.WHITE)

@@ -37,6 +37,11 @@ extends Node3D
 @export var decor_seed: int = 3
 
 ## Publicites qui alternent sur les mega-ecrans.
+## Foule : au-dela de cette distance du centre des tribunes (le spectateur
+## le plus proche est alors a plus de 130 m, 3 pixels de large), chacun passe
+## de 56 a 9 triangles (CrowdFar) ; ni la couleur ni le mouvement ne changent.
+const CROWD_NEAR_M := 250.0
+
 const ADS: PackedStringArray = ["NEON COLA", "HYPER FUEL", "TURBO TRUCKS", "CYBER TIRES", "NITRO+", "CRAZY WHEELS"]
 const AD_SECONDS := 3.5
 
@@ -341,26 +346,37 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 				light.shadow_enabled = false
 				light.position = Vector3(lx, top + 4.0, -2.0)
 				stand.add_child(light)
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.use_custom_data = true
-	var person := _person_mesh()
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://tracks/materials/crowd.gdshader")
 	mat.set_shader_parameter("glow", 0.08 if night else 0.0)
-	person.surface_set_material(0, mat)
-	mm.mesh = person
-	mm.instance_count = xfs.size()
-	for k in xfs.size():
-		mm.set_instance_transform(k, xfs[k])
-		mm.set_instance_color(k, colors[k])
-		mm.set_instance_custom_data(k, custom[k])
-	var crowd := MultiMeshInstance3D.new()
-	crowd.name = "Crowd"
-	crowd.multimesh = mm
-	crowd.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	stands.add_child(crowd)
+	# pose au centre de la foule : la portee de vue se mesure depuis la
+	var center := Vector3.ZERO
+	for xf in xfs:
+		center += xf.origin
+	center /= maxf(1.0, xfs.size())
+	for far: bool in [false, true]:
+		var person := _person_mesh(far)
+		person.surface_set_material(0, mat)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = person
+		mm.instance_count = xfs.size()
+		for k in xfs.size():
+			mm.set_instance_transform(k, Transform3D(xfs[k].basis, xfs[k].origin - center))
+			mm.set_instance_color(k, colors[k])
+			mm.set_instance_custom_data(k, custom[k])
+		var crowd := MultiMeshInstance3D.new()
+		crowd.name = "CrowdFar" if far else "Crowd"
+		crowd.multimesh = mm
+		crowd.position = center
+		crowd.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if far:
+			crowd.visibility_range_begin = CROWD_NEAR_M
+		else:
+			crowd.visibility_range_end = CROWD_NEAR_M
+		stands.add_child(crowd)
 	stands.set_meta(&"spectators", xfs.size())
 
 
@@ -369,16 +385,20 @@ func _build_grandstands(root: Node3D, track: TrackBlockout) -> void:
 ## se resserre entre 0,22 et 0,30) : 56 triangles au lieu de ~160 pour un
 ## CylinderMesh a 8 anneaux - 3 000 spectateurs, ~490 k triangles par vue
 ## avant (2026-10-09, performance). Le dessous, jamais vu (assis), n'est pas
-## ferme.
-static func _person_mesh() -> ArrayMesh:
-	const SEG := 8
-	var ys: Array[float] = [-0.5, 0.22, 0.3, 0.5]
+## ferme. `far` : prisme a 3 pans d'un seul anneau, 9 triangles (la tete ne
+## se resserre plus, mais jambes, buste et tete gardent leurs couleurs,
+## calculees au pixel).
+static func _person_mesh(far: bool = false) -> ArrayMesh:
+	var seg := 3 if far else 8
+	var ys: Array[float] = [-0.5, 0.5]
+	if not far:
+		ys = [-0.5, 0.22, 0.3, 0.5]
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for k in ys.size() - 1:
-		for i in SEG:
-			var a0 := TAU * i / SEG
-			var a1 := TAU * (i + 1) / SEG
+		for i in seg:
+			var a0 := TAU * i / seg
+			var a1 := TAU * (i + 1) / seg
 			var quad: Array[Vector3] = []
 			for c: Array in [[a0, ys[k]], [a1, ys[k]], [a1, ys[k + 1]], [a0, ys[k + 1]]]:
 				var r := lerpf(0.45, 0.5, float(c[1]) + 0.5)
@@ -387,9 +407,9 @@ static func _person_mesh() -> ArrayMesh:
 				st.set_normal(Vector3((v as Vector3).x, 0.0, (v as Vector3).z).normalized())
 				st.add_vertex(v)
 	# dessus (le crane)
-	for i in SEG:
-		var a0 := TAU * i / SEG
-		var a1 := TAU * (i + 1) / SEG
+	for i in seg:
+		var a0 := TAU * i / seg
+		var a1 := TAU * (i + 1) / seg
 		for v in [Vector3(0.0, 0.5, 0.0), Vector3(cos(a0) * 0.5, 0.5, sin(a0) * 0.5),
 				Vector3(cos(a1) * 0.5, 0.5, sin(a1) * 0.5)]:
 			st.set_normal(Vector3.UP)

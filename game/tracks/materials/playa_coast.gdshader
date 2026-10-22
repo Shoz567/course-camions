@@ -6,6 +6,10 @@ shader_type spatial;
 // Mer : turquoise sur les hauts-fonds, bleu profond au large, ecume qui
 // avance et recule sur le rivage, vaguelettes (normale animee : le soleil y
 // scintille). En coordonnees monde : le sol physique reste un plan.
+// Reflets (2026-10-22, « enhance les reflets de l'eau ») : la mer se calme
+// avec la distance (clapot pres de la camera, presque un miroir au loin),
+// les ilots, les palmiers et le pont s'y refletent (SSR) sans etre haches ;
+// eau un peu plus reflechissante (specular).
 uniform sampler2D coast_mask : filter_linear, repeat_disable;
 uniform vec2 coast_origin = vec2(0.0);
 uniform float coast_size = 1.0;
@@ -75,7 +79,7 @@ void fragment() {
 
 	ALBEDO = mix(ground, sea, water);
 	ROUGHNESS = mix(0.92, 0.04 + 0.6 * foam, water);
-	SPECULAR = mix(0.25, 0.5, water);
+	SPECULAR = mix(0.25, 0.62, water);
 	// houle et clapot : quatre trains d'ondes de longueurs differentes, plus
 	// du bruit ; les plus courtes s'effacent au loin (plus fines qu'un pixel),
 	// la houle longue reste jusqu'a l'horizon
@@ -91,11 +95,18 @@ void fragment() {
 		float fade = smoothstep(3.0 / kk * 60.0, 3.0 / kk * 8.0, dist);
 		float ph = dot(dk, q) * kk + TIME * dirs[k].w;
 		// pente : la houle longue est douce, le clapot plus raide
-		slope += dk * cos(ph) * (0.05 + 0.03 * float(k)) * fade;
+		slope += dk * cos(ph) * (0.04 + 0.025 * float(k)) * fade;
 	}
 	float nf = smoothstep(120.0, 20.0, dist);
-	slope += (vec2(vnoise(w * 1.3 + TIME * 0.6), vnoise(w * 1.3 - TIME * 0.6 + 7.0)) - 0.5) * 0.3 * nf;
+	slope += (vec2(vnoise(w * 1.3 + TIME * 0.6), vnoise(w * 1.3 - TIME * 0.6 + 7.0)) - 0.5) * 0.24 * nf;
+	// au loin, une mer d'huile : les reflets restent lisibles
+	slope *= mix(1.0, 0.35, smoothstep(50.0, 400.0, dist));
 	slope *= water * (1.0 - foam * 0.7);
 	vec3 n_world = normalize(vec3(-slope.x, 1.0, -slope.y));
-	NORMAL = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
+	vec3 n_view = normalize((VIEW_MATRIX * vec4(n_world, 0.0)).xyz);
+	// vue rasante : une vaguelette ne doit pas tourner le dos a la camera
+	// (sinon taches sombres a bord net la ou la normale passe derriere)
+	float nv = dot(n_view, VIEW);
+	n_view = normalize(n_view + VIEW * max(0.12 - nv, 0.0));
+	NORMAL = n_view;
 }

@@ -67,6 +67,8 @@ var resolution: DynamicResolution
 
 var _fps_label: Label
 var _fps_wait: float = 0.0
+## Habillage (UiKit.Look) avec lequel le compteur a ete dessine.
+var _fps_skin: int = -1
 
 ## Categorie choisie dans le menu (garde entre deux courses).
 var speed_class: int = SpeedClass.NORMAL
@@ -168,14 +170,35 @@ func _ready() -> void:
 	_fps_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_fps_label.position += Vector2(-16.0, 10.0)
 	_fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_fps_label.add_theme_font_size_override("font_size", 22)
-	_fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_fps_label.add_theme_constant_override("outline_size", 6)
+	_fps_label.add_theme_font_size_override("font_size", 18)
+	_fps_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	_fps_label.add_theme_constant_override("outline_size", 3)
 	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_fps_label.visible = show_fps
 	layer.add_child(_fps_label)
 	if persist:
 		read_settings(SETTINGS_PATH)
+
+
+## Haut du compteur (px sous le bord de l'ecran) : le menu le pose sous ses
+## boutons ronds (son, parametres), qu'il recouvrait (2026-10-22) ; la
+## course le remet en haut.
+func set_fps_top(y: float) -> void:
+	if _fps_label != null:
+		_fps_label.position.y = y
+
+
+## Compteur a l'habillage du circuit (2026-10-22, « ca blend pas ») : police
+## du menu, plaquette inclinee sombre a liseré de la couleur de focus.
+func _style_fps() -> void:
+	_fps_skin = UiKit.skin
+	_fps_label.add_theme_font_override("font", UiKit.font(700, false))
+	var sb := UiKit.box(Color(UiKit.NIGHT, 0.62), Color(UiKit.CYAN, 0.4), 1, UiKit.SKEW, UiKit.RADIUS)
+	sb.content_margin_left = 16
+	sb.content_margin_right = 14
+	sb.content_margin_top = 4
+	sb.content_margin_bottom = 4
+	_fps_label.add_theme_stylebox_override("normal", sb)
 
 
 ## Sauvegarde les options (sauf en headless) ; appele a chaque changement.
@@ -246,6 +269,8 @@ func _process(delta: float) -> void:
 	if _fps_wait > 0.0:
 		return
 	_fps_wait = 0.25
+	if _fps_skin != UiKit.skin:
+		_style_fps()
 	var fps := Engine.get_frames_per_second()
 	_fps_label.text = fps_text(fps, resolution.scale)
 	_fps_label.modulate = Color(0.45, 1.0, 0.5) if fps >= 55.0 else (Color(1.0, 0.85, 0.3) if fps >= 30.0 \
