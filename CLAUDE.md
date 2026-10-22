@@ -202,11 +202,14 @@ supporter :
 - Committer des binaires : `*.glb`, `*.blend1`, `.godot/`, `builds/` sont
   git-ignorés (le hook `pre-commit` les refuse). Exceptions : `baseline.json`,
   et les modèles `.glb` de l'équipe dans `Assets_Visuels/`, versionnés **par
-  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7).
+  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7), et les
+  musiques de `game/audio/music/`, en Git LFS aussi (2026-10-22).
 - Télécharger des assets tiers (modèles, textures, sons).
-  Les sons et la musique **synthétisés par le code** (`MenuSound`,
-  `CountdownSound`, `RaceMusic`) ne sont pas des assets tiers ; la musique de
-  course a été demandée par l'utilisateur le 2026-09-30.
+  Les sons **synthétisés par le code** (`MenuSound`, `CountdownSound`, moteurs,
+  ambiances) ne sont pas des assets tiers. Exception décidée par
+  l'utilisateur le 2026-10-22 : les **musiques** (menu, une par circuit et sa
+  version du dernier tour) sont des morceaux CC0 de MintoDog choisis par lui
+  (`game/audio/music/CREDITS.md`) ; en ajouter un autre se demande.
 - Refactorer une couche qui n'est pas dans la phase en cours de `PLAN.md`.
 - **Modifier `docs/VEHICLE_SPEC.md` ou `docs/METRICS.md`.** Ce sont des contrats
   entre plusieurs chaînes d'outils (physique, Blender, pistes). Un agent qui a

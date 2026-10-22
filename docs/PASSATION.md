@@ -163,6 +163,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - Musique du menu (`MenuMusic`) ; camions du plateau muets (le « bruit
   sourd ») ; bruitages 6 dB plus bas, musique de course 2 dB plus haut.
   Trois jauges dans les paramètres : général, musique, bruitages.
+- Vraies musiques (CC0, MintoDog, Git LFS) : une par circuit, version
+  rapide au dernier tour, une pour le menu (`game/audio/music/`).
 
 ### Performance, rendu, son, build
 - Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,

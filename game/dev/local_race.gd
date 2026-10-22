@@ -27,8 +27,9 @@ extends Node3D
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
 ## arrives : Options / Entree relance, Create / Echap revient au menu (Echap a tout
-## moment). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous ;
-## elle disparait avec la scene (menu, rejouer).
+## moment). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous, celle
+## du circuit, puis sa version rapide au dernier tour (_update_music) ; elle
+## disparait avec la scene (menu, rejouer).
 ##
 ## Le nombre de joueurs vient du menu principal (GameState.requested_players)
 ## quand `players_from_menu` est vrai (dev/race.tscn) ; les scenes a nombre
@@ -349,8 +350,8 @@ func _ready() -> void:
 	add_child(ambience)
 	music = RaceMusic.new()
 	music.name = "RaceMusic"
+	music.theme_id = track.theme_id
 	add_child(music)
-	RaceMusic.prepare()
 	split = null if NetSession.is_online() else _build_split_screen()
 	for i in player_count + bot_count:
 		players.append(_add_player(i))
@@ -1288,6 +1289,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_update_slowmo(delta)
+	_update_music()
 	var elapsed := Engine.get_physics_frames() - _state_tick
 	var standings := standings_text()
 	if _notice != "" and Engine.get_physics_frames() < _notice_until:
@@ -1597,6 +1599,20 @@ func arena_seconds_left() -> int:
 	if not _arena_running() or arena_limit_ticks <= 0:
 		return -1
 	return maxi(ceili((arena_limit_ticks - (Engine.get_physics_frames() - _state_tick)) / 60.0), 0)
+
+
+## Musique : version du dernier tour quand le plus avance des joueurs de ce
+## PC l'entame (en ligne : le sien ; ecran partage : celui qui mene), ou en
+## fin de manche d'arene ou d'elimination (RaceMusic.final_due).
+func _update_music() -> void:
+	if music == null or not music.playing or music.final or state != State.RACING:
+		return
+	var lap := 0
+	for i in players.size():
+		if is_local(i):
+			lap = maxi(lap, race.display_lap(players[i].truck))
+	music.set_final(RaceMusic.final_due(game_mode, lap, race.total_laps, _alive().size(), players.size(),
+		arena_seconds_left()))
 
 
 ## Joueurs encore en course (elimination) : ni elimines, ni partis.
