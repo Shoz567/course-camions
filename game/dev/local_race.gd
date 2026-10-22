@@ -400,7 +400,8 @@ func _ready() -> void:
 	# (tache 7.6 : la premiere explosion figeait l'image 370 ms a 4 joueurs)
 	_warmup = FxWarmup.start(self, quality)
 	# hors ligne, remorques et pouvoirs deja choisis au menu (page de selection) :
-	# pas de sas, compte a rebours tout de suite. En ligne, le sas READY reste
+	# pas de sas, compte a rebours tout de suite. En ligne, le sas reste, mais
+	# sans rien demander : il attend que chaque machine ait charge la course
 	var gate := ready_gate and (NetSession.is_online() or not GameState.loadout_locked)
 	# sous l'ecran de chargement (hors ligne) : rien ne part avant qu'il
 	# s'efface (release_start) ; la grille attend, camions immobiles
@@ -981,16 +982,24 @@ func _simulate(tick: int) -> void:
 		# sas READY : camions immobiles ; gauche / droite (SA source) = remorque
 		# precedente / suivante, Carre (le boost de SA source) = pret
 		_neutral.tick = tick
+		var online := NetSession.is_online()
 		for i in players.size():
 			var f := _menu_frame(i, players[i].input.poll(tick), tick)
 			players[i].truck.set_input(_neutral)
+			if online:
+				# en ligne, convoi choisi et PRET donne au salon (page de
+				# selection, 2026-10-22 : plus l'ancien sas jaune) : chacun est
+				# pret des que sa course est chargee ; le sas ne fait plus
+				# qu'attendre les machines lentes
+				if not ready_flags[i] and _loaded(i):
+					ready_flags[i] = true
+				continue
 			var dir := 0
 			if f.steer > TRAILER_STEER_THRESHOLD:
 				dir = 1
 			elif f.steer < -TRAILER_STEER_THRESHOLD:
 				dir = -1
-			# en ligne, la remorque est deja choisie au menu (page de selection)
-			if dir != 0 and dir != _steer_was[i] and not ready_flags[i] and not NetSession.is_online():
+			if dir != 0 and dir != _steer_was[i] and not ready_flags[i]:
 				set_trailer(players[i], players[i].trailer + dir)
 				if is_local(i):
 					MenuSound.play_select()
@@ -1086,6 +1095,14 @@ func _client_tick(tick: int) -> void:
 	net.client_tick(tick, f)
 	if state == State.COUNTDOWN:
 		_countdown_beeps(tick)
+
+
+## En ligne, host : la course du joueur `i` est chargee (son ecran de
+## chargement leve ; un client l'annonce, NetRace.is_loaded).
+func _loaded(i: int) -> bool:
+	if is_local(i):
+		return not LoadingScreen.covering()
+	return net != null and net.is_loaded(i)
 
 
 ## Sortie confirmee au menu pause : le host arrete la course pour tous
@@ -1384,7 +1401,11 @@ func _process(delta: float) -> void:
 			continue
 		if state == State.LOBBY and net != null and not net.is_host() and not net.host_ready:
 			# client : le host charge encore la course, l'invite READY attendra
-			p.hud.set_center_message("%s\nCONNEXION AU HOST..." % player_tag(i), Color(1.0, 0.85, 0.2))
+			p.hud.set_center_message("%s\nCONNEXION AU HOST..." % player_tag(i), Color.WHITE)
+		elif state == State.LOBBY and NetSession.is_online():
+			# convoi choisi au salon : plus d'invite, on attend les autres machines
+			p.hud.set_center_message("%s\nEN ATTENTE DES AUTRES JOUEURS  %d/%d" % [player_tag(i),
+				ready_flags.count(true), players.size()], Color.WHITE)
 		elif state == State.LOBBY:
 			if ready_flags[i]:
 				p.hud.set_center_message("%s\nREADY !  remorque %s\nen attente des autres (%d/%d)" % [
@@ -1393,11 +1414,8 @@ func _process(delta: float) -> void:
 			else:
 				# invite clignotante (2 fois par seconde) ; la remorque reste lisible
 				var on := int(Time.get_ticks_msec() / 400) % 2 == 0
-				# en ligne, convoi deja choisi au menu : il reste affiche, sans fleches
-				var convoy := ("REMORQUE : %s" % TrailerCatalog.at(p.trailer).display_name) \
-						if NetSession.is_online() else trailer_text(p.trailer)
 				p.hud.set_center_message("%s\n%s\nAPPUYER SUR [CARRÉ] POUR ÊTRE READY" % [player_tag(i),
-					convoy], Color(1.0, 0.85, 0.2, 1.0 if on else 0.6))
+					trailer_text(p.trailer)], Color(1.0, 0.85, 0.2, 1.0 if on else 0.6))
 		elif state == State.COUNTDOWN:
 			var c: Dictionary = GameStateNode.SPEED_CLASSES[GameState.speed_class]
 			p.hud.set_center_message("%d\n%s %s" % [maxi(3 - floori(elapsed / 60.0), 1),

@@ -24,9 +24,6 @@ class Driver extends InputSource:
 		var f := bot.poll(tick)
 		frame.copy_from(f)
 		frame.tick = tick
-		# sas READY : Carre (boost) = pret
-		if RaceManager.state == RaceManagerNode.State.LOBBY:
-			frame.boost = (tick / 10) % 2 == 0
 		return frame
 
 
