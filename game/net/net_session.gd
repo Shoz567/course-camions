@@ -36,14 +36,19 @@ signal race_launched
 enum Mode { OFFLINE, HOST, CLIENT }
 
 const DEFAULT_PORT := 7777
-const MAX_PLAYERS := 6
+## 12 joueurs (2026-10-22 ; 6 avant).
+const MAX_PLAYERS := 12
 ## Versions de protocole differentes : le host refuse le client.
 ## 4 (2026-10-21) : mode de jeu au lancement, eliminations et vies dans l'etat
 ## de course.
 ## 5 (2026-10-21) : duree de l'arene au lancement.
 ## 6 (2026-10-22) : nombre et niveau des bots du host au lancement.
-const PROTOCOL := 6
+## 7 (2026-10-22) : 12 joueurs (cases 6 a 11 : une version a 6 couleurs
+## plantait sur ces cases).
+const PROTOCOL := 7
 const MAX_NAME := 16
+## En-tetes par datagramme (UDP + IP + ENet, NETCODE.md §3).
+const PACKET_OVERHEAD := 48
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
 ## machine ne repond plus pendant quelques secondes), 15 a 60 s : une machine
@@ -172,6 +177,14 @@ static func _is_172_private(a: String) -> bool:
 		return false
 	var b := a.get_slice(".", 1).to_int()
 	return b >= 16 and b <= 31
+
+
+## Debit montant du host (kbps, en-tetes compris) : un snapshot de `trucks`
+## camions a chacun des `players - 1` autres joueurs, tous les `ticks` ticks.
+## 12 joueurs a 60 Hz : ~2,6 Mbit/s ; a 20 Hz : ~0,9.
+static func host_uplink_kbps(players: int, trucks: int, ticks: int) -> float:
+	var size := NetRace.SNAPSHOT_HEADER + trucks * TruckState.SIZE + 1 + PACKET_OVERHEAD
+	return size * 60.0 / maxf(ticks, 1.0) * maxi(players - 1, 0) * 8.0 / 1000.0
 
 
 # --- ouverture et fermeture ---------------------------------------------------

@@ -105,6 +105,13 @@ func _test_bandwidth() -> void:
 		check("baseline : octets par camion", TruckState.SIZE == int(ref_bytes), "%d / %s" % [TruckState.SIZE, ref_bytes])
 		check_near("baseline : montant du host a 4 joueurs (kbps)", kbps[0], float(ref_kbps), float(ref_kbps) * 0.1)
 	check_below("20 Hz : montant du host a 4 joueurs, en-tetes compris (kbps)", kbps[1], 128.0)
+	# 12 joueurs (2026-10-22) : le calcul du menu, celui de ce test
+	var k12 := NetSessionNode.host_uplink_kbps(12, 12, 1)
+	var k12_slow := NetSessionNode.host_uplink_kbps(12, 12, NetSessionNode.SNAPSHOT_TICKS_LOW_BANDWIDTH)
+	print("  INFO   montant du host a 12 joueurs : %.0f kbps a 60 Hz, %.0f kbps a 20 Hz" % [k12, k12_slow])
+	check("12 joueurs : meme calcul que le menu, sous 3 Mbit/s a 60 Hz et 1 Mbit/s a 20 Hz",
+		absf(NetSessionNode.host_uplink_kbps(4, 4, 1) - kbps[0]) < 0.01 and k12 < 3000.0 and k12_slow < 1000.0,
+		"%.0f / %.0f kbps" % [k12, k12_slow])
 	# un paquet d'inputs par tick, 3 frames (redondance)
 	var up := (InputFrame.SIZE * RemoteInputSource.BATCH + PACKET_OVERHEAD) * 60.0 * 8.0 / 1000.0
 	check_below("montant d'un client : 3 frames par tick (kbps)", up, 40.0)

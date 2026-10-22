@@ -30,6 +30,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   (#93) ; tours du client à jour à chaque checkpoint (#92).
 - Autres camions au présent du joueur local (façon Rocket League), sur leur
   courbe, lissés ; bonus prédits (#94).
+- 12 joueurs en ligne (écran partagé : 6) ; débit du host affiché au
+  salon ; bots deux fois moins coûteux à 12 (#95).
 - Correctifs : largage prédit refusé par le host rendu, trou dans une remorque
   aussi chez le client, délai de largage à la réapparition (#67).
 - À faire : **test réel sur 2 PC** (reporté depuis longtemps).

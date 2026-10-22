@@ -48,13 +48,22 @@ const MODELS: PackedStringArray = [
 	# reprennent un modele existant, repeint par leur livree (LIVERIES)
 	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
 	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
+	# J7 a J12 (en ligne, 2026-10-22 : 12 joueurs) : modeles repris, repeints
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Vert.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Vert.glb",
 ]
 const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT",
 	"J5 VIOLET NÉO-TOKYO", "J6 ORANGE CARBO"]
 ## Couleur des boites quand le modele est absent (clone neuf).
 const TINTS: Array[Color] = [Color(0.15, 0.35, 0.9), Color(0.85, 0.12, 0.1),
 	Color(0.95, 0.8, 0.1), Color(0.15, 0.7, 0.25),
-	Color(0.55, 0.16, 0.95), Color(1.0, 0.38, 0.04)]
+	Color(0.55, 0.16, 0.95), Color(1.0, 0.38, 0.04),
+	Color(1.0, 0.4, 0.7), Color(0.15, 0.85, 0.95), Color(0.92, 0.92, 0.95),
+	Color(0.7, 0.95, 0.15), Color(0.72, 0.45, 0.22), Color(0.55, 0.95, 0.75)]
 ## Livree par joueur (TruckVisual.livery) : par prefixe de nom de materiau du
 ## modele, les proprietes repeintes. Vide : le modele garde ses couleurs.
 const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
@@ -84,6 +93,49 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 		"Jante": {"albedo": Color(0.85, 0.42, 0.22), "metallic": 1.0, "roughness": 0.22},
 		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
 	},
+	# J7 ROSE, J8 CYAN, J9 BLANC, J10 CITRON, J11 BRONZE, J12 MENTHE
+	{
+		"Peinture_Cabine": {"albedo": Color(1.0, 0.35, 0.65), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.25, 0.05, 0.15), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(1.0, 0.6, 0.85), "emission": Color(1.0, 0.6, 0.85), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(1.0, 0.6, 0.85), "emission": Color(1.0, 0.6, 0.85), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.95, 0.75, 0.85), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.1, 0.8, 0.95), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.03, 0.15, 0.2), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.5, 1.0, 1.0), "emission": Color(0.5, 1.0, 1.0), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.5, 1.0, 1.0), "emission": Color(0.5, 1.0, 1.0), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.8, 0.95, 1.0), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.92, 0.92, 0.95), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.75, 0.76, 0.8), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.2, 0.6, 1.0), "emission": Color(0.2, 0.6, 1.0), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.2, 0.6, 1.0), "emission": Color(0.2, 0.6, 1.0), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.85, 0.9), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.7, 0.95, 0.12), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.08, 0.12, 0.03), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.85, 1.0, 0.3), "emission": Color(0.85, 1.0, 0.3), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.85, 1.0, 0.3), "emission": Color(0.85, 1.0, 0.3), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.25, 0.25, 0.25), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.7, 0.42, 0.2), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.2, 0.12, 0.06), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(1.0, 0.7, 0.35), "emission": Color(1.0, 0.7, 0.35), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(1.0, 0.7, 0.35), "emission": Color(1.0, 0.7, 0.35), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.6, 0.35), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.5, 0.95, 0.72), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.05, 0.2, 0.15), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.7, 1.0, 0.85), "emission": Color(0.7, 1.0, 0.85), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.7, 1.0, 0.85), "emission": Color(0.7, 1.0, 0.85), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.95, 0.9), "metallic": 1.0, "roughness": 0.2},
+	},
 ]
 ## Aide des commandes. En arene, pas de largage (une remorque par vie) : les
 ## morceaux entre crochets y disparaissent (help_for).
@@ -97,8 +149,12 @@ const HELP_SPLIT: PackedStringArray = [
 	"J6 : manette 6",
 ]
 const MAX_PLAYERS := 6
+## En ligne : 12 camions au plus, joueurs et bots (2026-10-22 : « monter le
+## nombre de joueurs max en ligne a 12 ») ; l'ecran partage reste a 6.
+const MAX_TRUCKS := 12
 ## Couleur de chaque joueur, pour le sas READY.
-const COLOR_NAMES: PackedStringArray = ["BLEU", "ROUGE", "JAUNE", "VERT", "VIOLET", "ORANGE"]
+const COLOR_NAMES: PackedStringArray = ["BLEU", "ROUGE", "JAUNE", "VERT", "VIOLET", "ORANGE",
+	"ROSE", "CYAN", "BLANC", "CITRON", "BRONZE", "MENTHE"]
 ## Echelle du HUD selon le nombre de joueurs (vues plus petites).
 const HUD_SCALE: Array[float] = [1.0, 0.85, 0.6, 0.6, 0.5, 0.5]
 
@@ -233,7 +289,7 @@ const UNSTABLE_TICKS := 90
 
 func _ready() -> void:
 	if NetSession.is_online():
-		player_count = clampi(NetSession.members.size(), 1, MAX_PLAYERS)
+		player_count = clampi(NetSession.members.size(), 1, MAX_TRUCKS)
 		# bots du host (2026-10-22 : « tout disponible en ligne, les bots
 		# egalement ») : il les simule, les clients les voient en marionnettes
 		bot_count = GameState.bot_count
@@ -260,7 +316,7 @@ func _ready() -> void:
 			arena_limit_ticks = GameState.arena_minutes * 3600
 		race.total_laps = 999
 		race.wrong_way_enabled = false
-	bot_count = clampi(bot_count, 0, MAX_PLAYERS - player_count)
+	bot_count = clampi(bot_count, 0, (MAX_TRUCKS if NetSession.is_online() else MAX_PLAYERS) - player_count)
 	_freeze_slots()
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
