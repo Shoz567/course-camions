@@ -6,7 +6,7 @@ extends RefCounted
 ## trois bus sous le Master, qui garde le volume et la sourdine des reglages :
 ##   Effets    bruitages (moteurs, chocs, pneus, explosions, pouvoirs, klaxon,
 ##             menus, bips du compte a rebours et du viseur) ;
-##   Ambiance  pluie, vagues, brise, foule des tribunes ;
+##   Ambiance  pluie, vagues, brise ;
 ##   Musique   musique de course et du menu.
 ## Un limiteur sur le Master : la somme des sons (quatre moteurs, une
 ## explosion, la foule, la musique) ne depasse plus le plafond, elle n'ecrete

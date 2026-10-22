@@ -791,7 +791,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 |---|---|---|
 | 7.1 | Menu principal, options, remapping (`[x]` 2026-10-17 : options sauvegardées d'un lancement à l'autre - son, volume, qualité, compteur, résolution dynamique, circuit, vitesse, remorques - et réaffectation des boutons de la manette, `settings_remap_test` ; clavier non réaffectable ; écran de chargement avant chaque course, le départ attend qu'il s'efface - `loading_screen_test`) | gameplay-engineer |
 | 7.2 | Personnalisation des camions (couleurs, pièces générées) (en attente : décision de l'équipe, 2026-10-17) | blender-modeler |
-| 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, `crowd_sound_test`) - `[x]`) | — |
+| 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, retirée le 2026-10-22 : « un peu brouillon et ça sert à rien ») - `[x]`) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires (en attente : tracé et ambiance à décider par l'équipe, 2026-10-17) | track-designer |
 | 7.6 | Profilage et optimisation (`[x]` passes du 2026-10-09, du 2026-10-17 et du 2026-10-18 ci-dessous : plus de gel au-delà de 50 ms en course à 4 joueurs) | godot-qa |
@@ -1466,6 +1466,10 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     le Climax du Remake en OGG, téléchargé avec l'accord de l'utilisateur ;
   - tests : `race_music_test` (réécrit : fichiers en boucle, règle du
     dernier tour, course en un tour), `menu_music_test`.
+- [x] **Plus de son de la foule** (2026-10-22, « retirer le son que font les
+  spectateurs […] un peu brouillon et ça sert à rien ») : `CrowdSound` et
+  son test supprimés ; `track_decor_test` vérifie que les tribunes sont
+  muettes. Les spectateurs restent visibles.
 
 ## Questions de design ouvertes
 
