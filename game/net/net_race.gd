@@ -498,7 +498,7 @@ func _hook_host_events() -> void:
 		truck.body_impact.connect(func(v: float, rear: bool, at: Vector3, n: Vector3) -> void:
 			body_impacts += 1
 			if impact_log.size() < 20:
-				impact_log.append([Engine.get_physics_frames(), i, snappedf(v, 0.1)])
+				impact_log.append([GameClock.now(), i, snappedf(v, 0.1)])
 			_send_event(Ev.IMPACT, [i, false, v, rear, at, n], owner))
 	for k in _barrels.size():
 		_barrels[k].exploded.connect(func(_t: Truck) -> void: _send_event(Ev.BARREL, [k]))
@@ -616,7 +616,7 @@ func _reconcile() -> void:
 		_has_pending = false
 		snaps += 1
 		if snap_log.size() < 20:
-			snap_log.append([Engine.get_physics_frames(), snappedf(dpos.length(), 0.01), snappedf(rad_to_deg(drot.length()), 0.1)])
+			snap_log.append([GameClock.now(), snappedf(dpos.length(), 0.01), snappedf(rad_to_deg(drot.length()), 0.1)])
 		return
 	if dpos.length() < DEAD_ZONE and dvel.length() < DEAD_ZONE * 10.0:
 		_has_pending = false
@@ -848,7 +848,7 @@ func _on_local_cargo() -> void:
 			or truck.is_net_puppet():
 		return
 	_predicted_drop = cargo.drop()
-	_predicted_drop_tick = Engine.get_physics_frames()
+	_predicted_drop_tick = GameClock.now()
 	drops_predicted += 1
 
 
@@ -859,7 +859,7 @@ func _check_predicted_drop(truck: Truck) -> void:
 	if not is_instance_valid(_predicted_drop):
 		_predicted_drop = null
 		return
-	if Engine.get_physics_frames() - _predicted_drop_tick < DROP_CONFIRM_TICKS:
+	if GameClock.now() - _predicted_drop_tick < DROP_CONFIRM_TICKS:
 		return
 	_predicted_drop.queue_free()
 	_predicted_drop = null
@@ -960,7 +960,7 @@ func sample(i: int, at: float, out: TruckState) -> bool:
 
 @rpc("authority", "call_remote", "unreliable_ordered", 2)
 func _snapshot(bytes: PackedByteArray) -> void:
-	receive_snapshot(bytes, Engine.get_physics_frames())
+	receive_snapshot(bytes, GameClock.now())
 
 
 ## Snapshot recu au tick local `local_tick`. Paquet mal forme : ignore.
@@ -1040,7 +1040,7 @@ func host_offset() -> float:
 
 ## Client : ticks depuis le dernier snapshot recu (liaison instable).
 func ticks_since_snapshot() -> int:
-	return Engine.get_physics_frames() - _last_snapshot_local
+	return GameClock.now() - _last_snapshot_local
 
 
 ## Retard de rendu des autres camions (ticks).

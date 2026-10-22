@@ -78,7 +78,7 @@ func _physics_process(_delta: float) -> void:
 	if start != _lap_start_seen:
 		_lap_start_seen = start
 		_rec.clear()
-	if (Engine.get_physics_frames() - start) % SAMPLE_EVERY != 0:
+	if (GameClock.now() - start) % SAMPLE_EVERY != 0:
 		return
 	var xf := truck.global_transform
 	var q := xf.basis.get_rotation_quaternion()
@@ -136,7 +136,7 @@ func _process(_delta: float) -> void:
 		_build_ghost()
 		if _ghost == null:
 			return
-	var t := float(Engine.get_physics_frames() - _lap_start(r)) + Engine.get_physics_interpolation_fraction()
+	var t := float(GameClock.now() - _lap_start(r)) + Engine.get_physics_interpolation_fraction()
 	_ghost.global_transform = ghost_pose(t)
 	_ghost.visible = true
 	if _ghost_trailer != null:

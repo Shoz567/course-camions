@@ -291,7 +291,7 @@ func _burst_fx(wheel: int) -> void:
 		_rubber.roughness = 0.9
 	var b := _truck.global_basis
 	var r := TIRE_PIECE_RADIUS_M if wheel < 4 else TIRE_PIECE_RADIUS_M * 0.7
-	var salt := float(Engine.get_physics_frames()) * 0.731
+	var salt := float(GameClock.now()) * 0.731
 	for k in BURST_PIECES:
 		var h := fposmod(sin(float(k * 7 + wheel) * 12.9898 + salt) * 43758.55, 1.0)
 		var h2 := fposmod(sin(float(k * 3 + wheel) * 78.233 + salt) * 24634.63, 1.0)

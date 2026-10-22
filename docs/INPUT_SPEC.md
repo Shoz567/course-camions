@@ -107,7 +107,8 @@ position. Chaque action est une **liste** de boutons exportée par
 | regarder derrière (tant que c'est tenu) | **L1** (local, hors `InputFrame`) | Fin | B |
 | `power_left` / `power_right` (pouvoirs) | **croix gauche / droite** | K / L | F / G |
 | `target_next` (cible suivante des pouvoirs, en cycle parmi les camions devant) | **croix haut** | J | T |
-| `reset` | **Options**, **Create** ou **pavé tactile** | Retour arrière | R |
+| `reset` | **Create** ou **pavé tactile** | Retour arrière | R |
+| menu pause (pendant la course, `PauseMenu`) | **Options** (réservé, non réaffectable) | Échap | Échap |
 | rejouer après l'arrivée | Options | Entrée | Entrée |
 | revenir au menu après l'arrivée | Create | Échap | Échap |
 
@@ -124,9 +125,11 @@ J3 et J4 n'ont que leur manette (`KeyboardInputSource.Layout.NONE`).
 Godot (croix directionnelle, stick, flèches, souris). Godot 4.7 ne met aucun
 bouton de manette dans `ui_accept` ni `ui_cancel` : le menu y ajoute Croix
 (valider) et Rond (revenir) au démarrage. L1 / R1 changent le nombre de joueurs,
-Options commence, Rond ou Create ferment les paramètres. En course : Échap
-revient au menu à tout moment ; après l'arrivée, Options / Entrée rejoue et
-Create revient au menu.
+Options commence, Rond ou Create ferment les paramètres. En course (depuis le
+2026-10-22) : Options / Échap ouvrent le menu pause (REPRENDRE, PARAMÈTRES,
+sortie confirmée), qui fige la course hors ligne ; Options, Échap ou Rond le
+referment. Après l'arrivée, Options / Entrée rejoue et Create / Échap
+reviennent au menu.
 
 - **Direction** : zone morte **axiale de 0,10** sur X uniquement (un seul axe
   utile), puis courbe de réponse légèrement exponentielle pour la précision en

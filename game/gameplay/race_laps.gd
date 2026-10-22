@@ -73,7 +73,7 @@ func watch(truck: Truck) -> void:
 
 ## Signal de depart : le chrono de tous les camions part de ce tick.
 func start() -> void:
-	start_tick = Engine.get_physics_frames()
+	start_tick = GameClock.now()
 
 
 func is_started() -> bool:
@@ -96,7 +96,7 @@ func current_lap_ticks(truck: Truck) -> int:
 	if start_tick < 0 or r.finished:
 		return -1
 	var from := r.lap_start_tick if r.lap > 0 else start_tick
-	return Engine.get_physics_frames() - from
+	return GameClock.now() - from
 
 
 func _on_checkpoint(body: Node3D, index: int) -> void:
@@ -105,7 +105,7 @@ func _on_checkpoint(body: Node3D, index: int) -> void:
 	var r: Racer = _racers.get(body)
 	if r == null or start_tick < 0 or r.finished or index != r.next_cp:
 		return
-	var now := Engine.get_physics_frames()
+	var now := GameClock.now()
 	if index == 0:
 		if r.lap == 0:
 			r.lap = 1
@@ -180,7 +180,7 @@ func finish_now(truck: Truck) -> void:
 	if r == null or r.finished:
 		return
 	r.finished = true
-	r.finish_ticks = Engine.get_physics_frames() - start_tick
+	r.finish_ticks = GameClock.now() - start_tick
 	race_finished.emit(truck, r.finish_ticks)
 	racer_updated.emit(truck)
 

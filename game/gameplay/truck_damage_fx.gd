@@ -336,7 +336,7 @@ func crush(point: Vector3, normal: Vector3, speed: float, on_trailer: bool) -> v
 	BodyDamage.detach_parts(root, world, point, lerpf(1.2, 2.2, sev), 1 + roundi(sev * 2.0),
 		_truck.linear_velocity * 0.85, 3.0 + 5.0 * sev)
 	BodyDamage.shards(world, point, -normal, 2 + roundi(sev * 4.0), _truck.linear_velocity * 0.85,
-		4.0 + 6.0 * sev, BodyDamage.nearest_material(root, point), Engine.get_physics_frames())
+		4.0 + 6.0 * sev, BodyDamage.nearest_material(root, point), GameClock.now())
 
 
 ## Point de contact ramene sur la carrosserie : une boite de collision touche
@@ -431,7 +431,7 @@ func _on_destroyed() -> void:
 		BodyDamage.detach_parts(_visual.mark_parent(false), world, c, 8.0, EXPLOSION_PARTS,
 			_truck.linear_velocity, 11.0, EXPLOSION_TRAILS)
 		BodyDamage.shards(world, c, Vector3.UP, 10, _truck.linear_velocity, 13.0,
-			BodyDamage.nearest_material(_visual.mark_parent(false), c), Engine.get_physics_frames())
+			BodyDamage.nearest_material(_visual.mark_parent(false), c), GameClock.now())
 	refresh()
 
 
@@ -445,7 +445,7 @@ func _on_trailer_destroyed(at: Vector3) -> void:
 	var mat := BodyDamage.nearest_material(root, at)
 	BodyDamage.detach_parts(root, world, at, 12.0, EXPLOSION_PARTS, _truck.linear_velocity, 12.0,
 		EXPLOSION_TRAILS)
-	BodyDamage.shards(world, at, Vector3.UP, 18, _truck.linear_velocity, 15.0, mat, Engine.get_physics_frames())
+	BodyDamage.shards(world, at, Vector3.UP, 18, _truck.linear_velocity, 15.0, mat, GameClock.now())
 
 
 ## Nouvelle remorque : neuve (ni traces, ni bosses).

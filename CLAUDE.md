@@ -191,6 +191,11 @@ supporter :
   **Toute durée de logique se spécifie en ticks**, y compris dans les specs :
   `12 ticks (~200 ms)`. Exception : le **chronomètre affiché** au joueur est
   dérivé du compteur de ticks (`tick / 60`), jamais de l'horloge.
+- Ce compteur, c'est `GameClock.now()`, pas `Engine.get_physics_frames()` :
+  le moteur compte aussi les ticks du menu pause (hors ligne, l'arbre est
+  figé), et une pause avançait d'autant compte à rebours, chrono et
+  recharges (2026-10-22). Les tests peuvent garder le compteur du moteur :
+  ils ne mettent pas en pause.
 - Aucun état de jeu dans les nœuds d'UI (le HUD lit, il ne décide pas).
 - Rien d'aléatoire sans un `RandomNumberGenerator` seedé et possédé par
   `RaceManager`.

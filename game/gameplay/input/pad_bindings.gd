@@ -27,8 +27,9 @@ const LABELS: Dictionary = {
 	"target": "Changer de cible",
 }
 
-## Boutons qu'on ne peut pas donner : le bouton PS ouvre le systeme.
-const RESERVED: Array[JoyButton] = [JOY_BUTTON_GUIDE]
+## Boutons qu'on ne peut pas donner : le bouton PS ouvre le systeme, Options
+## le menu pause de la course (2026-10-22 ; il faisait aussi reset avant).
+const RESERVED: Array[JoyButton] = [JOY_BUTTON_GUIDE, JOY_BUTTON_START]
 
 
 ## Profil par defaut (disposition Forza Horizon, DeviceInputSource).
@@ -40,7 +41,7 @@ static func defaults() -> Dictionary:
 		"honk": PackedInt32Array([JOY_BUTTON_LEFT_STICK]),
 		"camera": PackedInt32Array([JOY_BUTTON_RIGHT_STICK]),
 		"look_back": PackedInt32Array([JOY_BUTTON_LEFT_SHOULDER]),
-		"reset": PackedInt32Array([JOY_BUTTON_START, JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]),
+		"reset": PackedInt32Array([JOY_BUTTON_BACK, JOY_BUTTON_TOUCHPAD]),
 		"power_left": PackedInt32Array([JOY_BUTTON_DPAD_LEFT]),
 		"power_right": PackedInt32Array([JOY_BUTTON_DPAD_RIGHT]),
 		"target": PackedInt32Array([JOY_BUTTON_DPAD_UP]),

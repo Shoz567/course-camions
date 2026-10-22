@@ -13,6 +13,8 @@ extends Node
 ##                     joueur est alors PRET (ready)
 ##   launch_race()     host : circuit et categorie du host, puis la scene de
 ##                     course chez tout le monde (LocalRace lit la session)
+##   stop_race()       host : arrete la course, chacun revient au salon
+##                     (menu pause, 2026-10-22)
 ##   leave()           quitte, ferme la partie si on est le host
 ##
 ## Messages (NETCODE.md §7) : lobby, refus et depart de course en `reliable` ;
@@ -32,6 +34,8 @@ signal connection_lost(reason: String)
 ## Host : un joueur est parti (case liberee).
 signal member_left(slot: int, peer_id: int)
 signal race_launched
+## Le host a arrete la course (menu pause) : retour au salon.
+signal race_stopped
 
 enum Mode { OFFLINE, HOST, CLIENT }
 
@@ -47,7 +51,9 @@ const MAX_PLAYERS := 12
 ## plantait sur ces cases).
 ## 8 (2026-10-22) : regles du host dans le lobby (menu en ligne : chacun voit
 ## mode, circuit, vitesse et bots avant le lancement).
-const PROTOCOL := 8
+const PROTOCOL := 9
+## Menu principal : retour au salon quand le host arrete la course.
+const MENU_SCENE := "res://ui/main_menu.tscn"
 const MAX_NAME := 16
 ## En-tetes par datagramme (UDP + IP + ENet, NETCODE.md §3).
 const PACKET_OVERHEAD := 48
@@ -523,6 +529,30 @@ func launch_race() -> void:
 			GameState.arena_minutes, GameState.bot_count, GameState.bot_level)
 	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
 		GameState.arena_minutes, GameState.bot_count, GameState.bot_level)
+
+
+## Host : arrete la course en cours pour tous (menu pause, « ARRETER LA
+## COURSE ») ; la partie reste ouverte, chacun revient au salon du menu.
+func stop_race() -> void:
+	if not is_host():
+		return
+	for id in _guest_peers():
+		_stop.rpc_id(id)
+	_stop()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _stop() -> void:
+	# le menu se charge : chacun peut se figer un moment (comme au depart)
+	for m in members:
+		var id := int(m["peer"])
+		if is_host() and id != 1:
+			set_fast_timeout(id, false)
+		elif is_client() and id == 1:
+			set_fast_timeout(1, false)
+	race_stopped.emit()
+	if auto_change_scene:
+		get_tree().change_scene_to_file(MENU_SCENE)
 
 
 @rpc("authority", "call_remote", "reliable")

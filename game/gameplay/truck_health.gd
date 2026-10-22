@@ -401,7 +401,7 @@ func _respawn() -> void:
 		visual.visible = true
 	hp = max_hp
 	trailer_hp = trailer_max_hp
-	_truck.set_meta(RESPAWNED_META, Engine.get_physics_frames())
+	_truck.set_meta(RESPAWNED_META, GameClock.now())
 	respawned.emit()
 
 
