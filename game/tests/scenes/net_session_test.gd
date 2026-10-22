@@ -5,6 +5,8 @@ extends PhysicsTest
 ##   - un client rejoint : case 1, le lobby (noms, cases) est le meme des deux
 ##     cotes ;
 ##   - un client d'une autre version est refuse, avec la raison ;
+##   - les regles du host (menu en ligne, 2026-10-22) arrivent au client avec
+##     le lobby, avant le lancement : circuit, categorie, mode, duree, bots ;
 ##   - le host lance la course : circuit, categorie et mode du host chez le
 ##     client (2026-10-21 : arene ; le contre-la-montre devient une course),
 ##     avec la duree de l'arene du host et ses bots (nombre, niveau ; 2026-10-22) ;
@@ -83,6 +85,8 @@ func _test_tick(t: int) -> void:
 				_bots_saved = [GameState.bot_count, GameState.bot_level]
 				GameState.bot_count = 3
 				GameState.bot_level = BotInputSource.Level.HARD
+				# regles au salon, puis lancement (messages fiables, dans l'ordre)
+				host.push_rules()
 				host.launch_race()
 				# meme processus : on efface ce que le host vient de poser, le client
 				# doit le reecrire en recevant le lancement
@@ -97,6 +101,11 @@ func _test_tick(t: int) -> void:
 					GameState.selected_track == 1 and GameState.speed_class == 2 and guest.members.size() == 2
 					and GameState.game_mode == GameStateNode.GameMode.ARENA, str(GameState.game_mode))
 				check("duree de l'arene du host chez le client", GameState.arena_minutes == 8, str(GameState.arena_minutes))
+				var r := guest.host_rules
+				check("regles du host recues au salon, avant le lancement", not r.is_empty() and int(r["track"]) == 1
+					and int(r["speed_class"]) == 2 and int(r["mode"]) == GameStateNode.GameMode.ARENA
+					and int(r["arena_minutes"]) == 8 and int(r["bots"]) == 3 and int(r["bot_level"]) == BotInputSource.Level.HARD
+					and int(r["send_ticks"]) == 1 and str(guest.rules()) == str(r), str(r))
 				check("bots du host chez le client (nombre, niveau)", GameState.bot_count == 3
 					and GameState.bot_level == BotInputSource.Level.HARD, "%d %d" % [GameState.bot_count, GameState.bot_level])
 				check("en ligne : le contre-la-montre devient une course, les autres modes restent",

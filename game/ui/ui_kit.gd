@@ -355,8 +355,11 @@ static func style_primary(b: Button, font_size: int) -> void:
 	b.add_theme_stylebox_override("pressed", box(PRIMARY_FILL.darkened(0.12), PRIMARY_BORDER, bw, -1.0, -1,
 		Color(PRIMARY_BORDER, 0.5), 8))
 	b.add_theme_stylebox_override("focus", focus_box())
+	# grise (LANCER en attendant les convois) : fond eteint, texte attenue
+	b.add_theme_stylebox_override("disabled", box(Color(PRIMARY_FILL.darkened(0.55), 0.55), Color(PRIMARY_BORDER, 0.2), bw))
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(c, PRIMARY_TEXT)
+	b.add_theme_color_override("font_disabled_color", Color(PRIMARY_TEXT.lerp(TEXT, 0.5), 0.55))
 
 
 ## Petit bouton d'icone (son, parametres) : galet rond a l'habillage

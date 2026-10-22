@@ -358,6 +358,11 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   camions en ligne avec les bots (`LocalRace.MAX_TRUCKS`). Le débit montant
   du host croît avec le carré du nombre de joueurs : 12 joueurs, ~2,6 Mbit/s
   à 60 Hz, ~0,9 à 20 Hz (`NetSession.host_uplink_kbps`, affiché au salon).
+- **Protocole 8 (2026-10-22) : règles au salon.** Le lobby porte aussi les
+  règles du host (`NetSession.rules` : circuit, catégorie, mode, durée de
+  l'arène, largages, bots, niveau, cadence des snapshots), renvoyées à
+  chaque changement (`push_rules`) : le menu en ligne d'un client les
+  affiche avant le lancement. Le lancement porte toujours les siennes.
 - **Élimination et arène** : le host seul décide qui saute et qui perd une
   vie. L'état de course (`LocalRace.net_state`, renvoyé à chaque changement)
   porte trois champs de plus : éliminés, vies, tick de la prochaine

@@ -155,6 +155,10 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   (`HudDial`, `RaceHud`). Menu : boutons ronds Son / Paramètres à
   l'habillage (`UiKit.style_icon`), compteur FPS en plaquette sous ces
   boutons (il les recouvrait).
+- **Menus rangés en pages** (2026-10-22) : accueil à quatre tuiles, partie
+  locale par étapes, menu en ligne à part (`OnlineMenu` : héberger ou
+  rejoindre, puis salon avec les règles du host vues par tous) ; réglages
+  du local et de l'en ligne séparés (`GameState.use_profile`).
 
 ### Performance, rendu, son, build
 - Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,

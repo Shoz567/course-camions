@@ -30,6 +30,8 @@ func _test_setup() -> void:
 	_menu = (load("res://ui/main_menu.tscn") as PackedScene).instantiate() as MainMenu
 	_menu.auto_change_scene = false
 	add_child(_menu)
+	# partie locale (touche T, PRET et sa note)
+	_menu.open_local()
 
 
 func _key(code: Key) -> void:
@@ -118,7 +120,7 @@ func _test_tick(t: int) -> void:
 			_menu.toggle_settings()
 		22: _menu.select_track(0)
 		28:
-			_seen["panel"] = [UiKit.skin, _menu.settings.visible, _menu.home.visible, _ui_count()]
+			_seen["panel"] = [UiKit.skin, _menu.settings.visible, _menu.local_page.visible, _ui_count()]
 
 
 func _test_finish() -> void:

@@ -45,7 +45,9 @@ const MAX_PLAYERS := 12
 ## 6 (2026-10-22) : nombre et niveau des bots du host au lancement.
 ## 7 (2026-10-22) : 12 joueurs (cases 6 a 11 : une version a 6 couleurs
 ## plantait sur ces cases).
-const PROTOCOL := 7
+## 8 (2026-10-22) : regles du host dans le lobby (menu en ligne : chacun voit
+## mode, circuit, vitesse et bots avant le lancement).
+const PROTOCOL := 8
 const MAX_NAME := 16
 ## En-tetes par datagramme (UDP + IP + ENet, NETCODE.md §3).
 const PACKET_OVERHEAD := 48
@@ -67,6 +69,9 @@ var mode: Mode = Mode.OFFLINE
 ## "trailer": int, "power_left": int, "power_right": int, "ready": bool}]
 ## (choix de la page de selection, PowerCatalog : -1 = aucun).
 var members: Array[Dictionary] = []
+## Regles de la partie (rules()), recues du host avec le lobby ; vide hors
+## ligne. Le host lit les siennes dans GameState.
+var host_rules: Dictionary = {}
 var player_name: String = ""
 ## Faux pour les tests : launch_race ne change pas de scene.
 var auto_change_scene: bool = true
@@ -236,6 +241,7 @@ func leave() -> void:
 	_api = null
 	mode = Mode.OFFLINE
 	members = []
+	host_rules = {}
 	lobby_changed.emit()
 
 
@@ -397,15 +403,64 @@ func _refused(reason: String) -> void:
 	last_error = reason
 
 
-## Lobby a tous les joueurs acceptes (pas a un peer refuse, encore en train
-## de se deconnecter).
+## Lobby et regles a tous les joueurs acceptes (pas a un peer refuse, encore
+## en train de se deconnecter).
 func _broadcast_lobby() -> void:
 	lobby_changed.emit()
 	if _api == null or _api.multiplayer_peer == null:
 		return
 	var data := _pack(members)
+	var r := _pack_rules(rules())
 	for id in _guest_peers():
-		_lobby.rpc_id(id, data)
+		_lobby.rpc_id(id, data, r)
+
+
+## Host : regles changees au menu, envoyees a tous.
+func push_rules() -> void:
+	if is_host():
+		_broadcast_lobby()
+
+
+## Regles de la partie : celles du menu du host (GameState) chez le host,
+## celles recues chez un client. Le contre-la-montre devient une course, les
+## bots sont bornes aux places libres, "send_ticks" : cadence des snapshots.
+func rules() -> Dictionary:
+	if is_client():
+		return host_rules
+	var r := GameState.rules()
+	r["mode"] = online_mode(int(r["mode"]))
+	r["bots"] = clampi(int(r["bots"]), 0, MAX_PLAYERS - maxi(members.size(), 1))
+	r["send_ticks"] = snapshot_ticks
+	return r
+
+
+const RULES_ORDER: PackedStringArray = ["track", "speed_class", "mode", "arena_minutes", "trailer_drops", "bots",
+	"bot_level", "send_ticks"]
+
+
+static func _pack_rules(r: Dictionary) -> Array:
+	var out := []
+	for k: String in RULES_ORDER:
+		out.append(int(r.get(k, 0)))
+	return out
+
+
+static func _unpack_rules(a: Array) -> Dictionary:
+	if a.size() != RULES_ORDER.size():
+		return {}
+	var r := {}
+	for i in RULES_ORDER.size():
+		r[RULES_ORDER[i]] = int(a[i])
+	r["track"] = clampi(int(r["track"]), 0, GameStateNode.TRACKS.size() - 1)
+	r["speed_class"] = clampi(int(r["speed_class"]), 0, GameStateNode.SPEED_CLASSES.size() - 1)
+	r["mode"] = online_mode(int(r["mode"]))
+	r["trailer_drops"] = clampi(int(r["trailer_drops"]), 0, GameStateNode.MAX_TRAILER_DROPS)
+	r["bots"] = clampi(int(r["bots"]), 0, MAX_PLAYERS - 1)
+	r["bot_level"] = clampi(int(r["bot_level"]), 0, 2)
+	r["send_ticks"] = clampi(int(r["send_ticks"]), 1, SNAPSHOT_TICKS_LOW_BANDWIDTH)
+	if not GameStateNode.ARENA_MINUTES.has(int(r["arena_minutes"])):
+		r["arena_minutes"] = 4
+	return r
 
 
 func _guest_peers() -> Array[int]:
@@ -417,9 +472,10 @@ func _guest_peers() -> Array[int]:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _lobby(data: Array) -> void:
+func _lobby(data: Array, rules_data: Array) -> void:
 	var was_in := local_slot() >= 0
 	members = _unpack(data)
+	host_rules = _unpack_rules(rules_data)
 	lobby_changed.emit()
 	if not was_in and local_slot() >= 0:
 		joined.emit()
