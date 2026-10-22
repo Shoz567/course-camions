@@ -106,12 +106,22 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 	if env.has_meta(&"volumetric") or env.volumetric_fog_enabled:
 		env.set_meta(&"volumetric", true)
 		env.volumetric_fog_enabled = extreme or (high and views <= VOLUMETRIC_MAX_VIEWS)
-	# reflets plus fins (pas de marche, distance) : valeurs d'origine gardees
+	# reflets plus fins (pas de marche) : valeur d'origine gardee. Les cascades
+	# de l'eclairage global restent celles de l'environnement : a 6, leurs
+	# grosses cellules lointaines tachaient de sombre les reflets de la mer
 	if not env.has_meta(&"ssr_steps"):
 		env.set_meta(&"ssr_steps", env.ssr_max_steps)
-		env.set_meta(&"sdfgi_cascades", env.sdfgi_cascades)
 	env.ssr_max_steps = maxi(int(env.get_meta(&"ssr_steps")), 128) if extreme else int(env.get_meta(&"ssr_steps"))
-	env.sdfgi_cascades = maxi(int(env.get_meta(&"sdfgi_cascades")), 6) if extreme else int(env.get_meta(&"sdfgi_cascades"))
+	# extreme : le reflet du ciel (eau, route mouillee, carrosseries) en 1024 px
+	# au lieu de 128 ; les ciels sont statiques, il n'est calcule qu'une fois
+	if env.sky != null:
+		if not env.has_meta(&"radiance"):
+			env.set_meta(&"radiance", env.sky.radiance_size)
+			env.set_meta(&"sky_mode", env.sky.process_mode)
+		var radiance := Sky.RADIANCE_SIZE_1024 if quality == Quality.EXTREME else int(env.get_meta(&"radiance"))
+		if env.sky.radiance_size != radiance:
+			env.sky.radiance_size = radiance
+		env.sky.process_mode = Sky.PROCESS_MODE_QUALITY if quality == Quality.EXTREME else int(env.get_meta(&"sky_mode"))
 	apply_render_quality(quality)
 
 
@@ -119,9 +129,12 @@ static func apply_environment(env: Environment, quality: int, views: int) -> voi
 ## Lu une fois, a la construction du circuit.
 static func extreme_assets() -> bool:
 	# dans l'editeur (decors @tool), pas de GameState : decor ordinaire
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() or GameState.graphics_quality != Quality.EXTREME:
 		return false
-	return GameState.graphics_quality == Quality.EXTREME
+	# ecran partage sur puce integree : la course passe en qualite basse
+	# (split_quality), le decor reste ordinaire aussi (2026-10-22 : 7 images/s
+	# a 6 joueurs sur Radeon 780M avec le decor extreme)
+	return split_quality(Quality.EXTREME, maxi(1, GameState.requested_players)) == Quality.EXTREME
 
 
 ## Reglages globaux du rendu (communs a toutes les vues) : au maximum en

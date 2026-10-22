@@ -175,7 +175,15 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   Cyber City détaillées (corniches, acrotère, toits équipés, enseignes
   verticales) et plus nombreuses, décor de bord de piste plus serré et vu
   jusqu'à 690 m (`extreme_quality_test`). Sur ce PC portable, la qualité
-  extrême fait chuter les images par seconde : c'est attendu.
+  extrême fait chuter les images par seconde : c'est attendu (testé : 13 à
+  17 images/s à 1 joueur sur Radeon 780M). En écran partagé sur puce
+  intégrée (3 vues et plus), le décor reste ordinaire, comme les effets
+  (`split_quality`).
+- **Reflets de la mer** (Playa, 2026-10-22) : ciel reflété en 1024 px en
+  extrême (128 sinon ; ciels statiques, calculés une fois), mer qui se calme
+  au loin (îlots, palmiers et pont s'y reflètent), sol hors de la grille de
+  l'éclairage global et cascades de celui-ci laissées à 4 : leurs voxels
+  tachaient l'eau de plaques sombres à bord net.
 - Fumée des dégâts redessinée : bouffées rondes à bord net, éclairage en
   deux tons, gris qui s'éclaircit en montant (plus de tache noire en plein
   jour).

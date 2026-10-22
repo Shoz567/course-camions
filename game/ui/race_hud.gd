@@ -204,13 +204,16 @@ func _build_help(k: float) -> void:
 	var glyph := maxi(10, roundi(15 * k))
 	var keys := help_text
 	if help_text.begins_with("Manette"):
+		# sans largage (arene, LocalRace.help_for) : ni picto ni touche de remorque
+		var drops := help_text.to_lower().contains("remorque")
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", roundi(18 * k))
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		for pr: Array in PAD_PROMPTS:
-			row.add_child(UiKit.prompt(String(pr[0]), String(pr[1]), glyph))
+			if drops or String(pr[0]) != "triangle":
+				row.add_child(UiKit.prompt(String(pr[0]), String(pr[1]), glyph))
 		col.add_child(row)
-		keys = KEYS_HELP
+		keys = KEYS_HELP if drops else KEYS_HELP.replace("  ·  E remorque", "")
 	_help = UiKit.label(keys, maxi(9, roundi(13 * k)), UiKit.DIM, 600, false)
 	_help.name = "Keys"
 	col.add_child(_help)

@@ -151,6 +151,14 @@ func _generate(track: TrackBlockout) -> void:
 	root.set_meta(&"parasols", parasols.duplicate())
 	# rien sur un raccourci (2026-10-20)
 	track.clear_branch_corridors(self)
+	# reflets de la mer (2026-10-22) : le sol (sable et mer) hors de la grille
+	# de l'eclairage global ; dedans, un rayon reflechi en vue rasante
+	# retombait aussitot sur la mer voxelisee et revenait sombre (taches a bord
+	# net). Il recoit toujours l'eclairage global.
+	var floor_body := track.get_node_or_null(^"Geometry/Ground")
+	if floor_body != null:
+		for mi in floor_body.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 
 
 ## Un palmier : tronc penche au hasard, couronne de palmes au sommet.
