@@ -1152,6 +1152,40 @@ func embankment_reach(i: int, side: float) -> float:
 	return (h * 1.25 + 3.0) * 1.3 if h > wall_height + 1.0 else 0.0
 
 
+## Longueur du talus parti de `top` vers `out` (au plus `d`) qui reste hors
+## du couloir des raccourcis (chaussee, murs et une marge) ; 0 si le pied du
+## mur y est deja.
+func _embankment_clear(top: Vector3, out: Vector3, d: float) -> float:
+	var margin := wall_thickness + wall_lean + 2.0
+	var foot := top + out * d
+	var near := false
+	for k in _br.size():
+		var box: Rect2 = _br[k]["box"]
+		if box.has_point(Vector2(top.x, top.z)) or box.has_point(Vector2(foot.x, foot.z)):
+			near = true
+			break
+	if not near:
+		return d
+	var steps := 12
+	for q in range(1, steps + 1):
+		var t := float(q) / steps
+		if _in_branch_corridor(top + out * d * t, margin):
+			# un pas de securite en deca ; trop court : pas de talus
+			var keep := d * (q - 1) / steps - 1.0
+			return keep if keep > 2.0 else 0.0
+	return d
+
+
+## Vrai si `p` est dans le couloir d'un raccourci (a plat), `margin` m
+## au-dela de ses bords.
+func _in_branch_corridor(p: Vector3, margin: float) -> bool:
+	for k in _br.size():
+		var c := _branch_coords(k, p)
+		if c.x >= 0.0 and c.x <= 1.0 and absf(c.y) < float(_br[k]["w"]) / 2.0 + margin:
+			return true
+	return false
+
+
 ## Talus : sous les portions hautes (hors ponts), une pente de roche descend
 ## du haut exterieur du mur jusqu'au sol, plus large quand la route est plus
 ## haute : la route court sur une crete, pas sur un mur. Purement visuel.
@@ -1163,6 +1197,7 @@ func _build_embankments(parent: Node3D) -> void:
 		var dummy := PackedVector3Array()
 		var rows: Array[PackedVector3Array] = []
 		var reach := PackedFloat32Array()
+		var opened := _wall_open[0 if side < 0.0 else 1]
 		for i in n:
 			var prof := _wall_profile(i, side)
 			var out := Vector3(_right[i].x, 0.0, _right[i].z).normalized() * side
@@ -1172,6 +1207,13 @@ func _build_embankments(parent: Node3D) -> void:
 			if _deck[i] == 0 and h > wall_height + 1.0:
 				# pente irreguliere (deterministe), plus longue quand c'est haut
 				d = (h * 1.25 + 3.0) * (1.0 + 0.18 * sin(_s[i] * 0.05 + side) + 0.12 * sin(_s[i] * 0.017))
+			# raccourcis (2026-10-22, « bugs de blend aux intersections ») : pas
+			# de talus la ou le mur s'ouvre, et ailleurs il s'arrete avant le
+			# couloir d'un raccourci (il traversait sa chaussee)
+			if d > 0.0 and not opened.is_empty() and opened[i] == 1:
+				d = 0.0
+			if d > 0.0:
+				d = _embankment_clear(top, out, d)
 			var foot := Vector3(top.x, GROUND_Y + 0.02, top.z) + out * d
 			var mid := top.lerp(foot, 0.42)
 			mid.y = top.y - h * 0.3
@@ -1895,6 +1937,11 @@ func _build_branches() -> void:
 			"dirs": dirs, "rights": rights, "curv": curv, "spec": spec,
 			"win": PackedInt32Array([i0 - 40, i0 + span / 2, i0 + span / 2, i0 + span + 40]),
 			"u_out": 0.0, "u_in": 1.0, "h_out": a.y, "h_in": b.y}
+		# emprise au sol (avec ses murs et une large marge) : tri rapide
+		var box := Rect2(Vector2(pts[0].x, pts[0].z), Vector2.ZERO)
+		for q in pts:
+			box = box.expand(Vector2(q.x, q.z))
+		bd["box"] = box.grow(w / 2.0 + 20.0)
 		_br.append(bd)
 		# profil en long : de la hauteur du bord de la piste ou il la quitte a
 		# celle du bord ou il la rejoint

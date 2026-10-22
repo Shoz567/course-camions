@@ -9,6 +9,7 @@ passent.
 | `031942f` | Décor près des routes et au-dessus, décor lointain allégé | **toutes** (basse, moyenne, haute, extrême) |
 | `9f3f3ee` | Style des éléments « qui font tache » ; qualité extrême | style : **toutes** ; contenu extrême : **extrême seulement** |
 | `bd22536` | Reflets de la mer de Playa ; décor extrême coupé en écran partagé sur puce intégrée | reflets : **toutes** (plus nets en extrême) |
+| (suivant) | Décor **sur** la route ; jonctions des raccourcis ; tablier du pont de Sakura | **toutes** (plus dense en extrême) |
 
 Tout est sur la même branche. Le décor proche, le décor lointain allégé et le
 nouveau style s'appliquent en basse, moyenne et haute comme en extrême ; le
@@ -31,6 +32,10 @@ extrême**.
    branches et feuillages individuels, effets (lumière, reflets, ombres) mis
    en valeur ; un avertissement avant de le sélectionner. »
 5. « Améliorer les reflets de l'eau » (Playa, après le test en extrême).
+6. « À certaines intersections il y a encore des bugs de blend des routes » ;
+   « sans tanker les perfs, en tous les modes, ajoute des décors sur la
+   route (fences, objets qui montent et descendent, panneaux) : les routes
+   faisaient trop vides. »
 
 ---
 
@@ -207,7 +212,52 @@ Test : `extreme_quality_test` (+ `main_menu_test` pour l'avertissement).
 
 ---
 
-## 7. Essayé puis retiré
+## 7. Décor sur la route et jonctions (toutes qualités)
+
+Script : `game/tracks/road_decor.gd` (`RoadDecor`), appelé par
+`RoadsideDressing`. **Rien ne change la conduite** : aucune collision, rien
+à hauteur de camion (les bots et le pilotage ne voient aucune différence).
+
+| Élément | Cyber City | Playa | Sakura |
+|---|---|---|---|
+| **Vibreurs** à la corde des virages (rayon < 230 m), 1,9 m de large, 10 cm de haut | magenta et blanc | rouge et blanc | vermillon et blanc |
+| **Panneaux à chevrons** sur le mur extérieur des virages serrés (rayon < 150 m), à la place des sponsors | flèches jaunes lumineuses sur noir | blanches sur rouge | crème sur vermillon |
+| **Flèches peintes** dans les 4 voies (droites sur les lignes droites, coudées 30 m avant chaque virage serré) | néon cyan lumineux | blanches | blanches |
+| **Passages piétons** en travers de la route (2 par tour) | néon cyan | blancs | blancs |
+| **Nom du circuit** peint en grand en travers de la route (2 fois par tour) | CYBER CITY néon | PLAYA DEL SOL | 桜 SAKURA |
+| **Plots lumineux** sur les lignes de voie | cyan et ambre | – | – |
+| **Objets qui montent et descendent** au-dessus de la route | drones à enseigne néon qui tournent | mouettes qui planent en cercle en battant des ailes | lanternes de papier flottantes, rouges ou blanches |
+
+Les objets volants restent toujours **à 9 m au moins** de la chaussée,
+point le plus bas compris (enseigne du drone, au creux de sa descente). Ils
+ne sont jamais près d'un tremplin, d'une arche, d'un câble ou du croisement
+du 8. Tout leur mouvement est dans le shader (`float_decor.gdshader`), donc
+aucun calcul par image côté CPU. Un seul MultiMesh par circuit.
+
+Les marquages au sol sont fusionnés par case de 240 m et sans ombre ; rien
+n'est peint sur les plaques, flaques, bonus ou tremplins.
+
+**Coût mesuré** (tour de piste, Radeon 780M, contre le commit précédent) :
++2 à 5 % de triangles, +10 à 40 appels de dessin ; temps GPU : +0,1 ms à
+4 joueurs sur Cyber City (3 mesures alternées), dans le bruit ailleurs.
+
+**Jonctions des raccourcis** : là où la piste est haute, son talus de roche
+(Playa) ou de pierre (Sakura) partait en biais sur 30 à 40 m et traversait la
+route du raccourci. C'étaient le coin beige, la bande de pierre étirée et les
+traits sombres en diagonale sur la route. Le talus s'arrête maintenant avant
+le couloir de chaque raccourci, et disparaît là où le mur s'ouvre
+(`TrackBlockout._embankment_clear`).
+
+**Tablier du pont de Sakura** : au loin, les planches faisaient un moiré en
+écailles. Joints et veines s'effacent maintenant dans leur teinte moyenne
+avec la distance (`sakura_road.gdshader`).
+
+Test : `track_dressing_test` (vibreurs au bord, flèches et chevrons,
+objets volants hors de portée).
+
+---
+
+## 8. Essayé puis retiré
 
 - **Couper murs, sol et talus en cases d'affichage** : peu de triangles en
   moins, +190 appels de dessin à 4 joueurs. Retiré.
@@ -218,12 +268,14 @@ Test : `extreme_quality_test` (+ `main_menu_test` pour l'avertissement).
 
 ---
 
-## 8. Fichiers
+## 9. Fichiers
 
 **Nouveaux** :
 
 - `game/tracks/roadside_dressing.gd` : décor près des routes, garde-corps
   des ponts, piliers des raccourcis.
+- `game/tracks/road_decor.gd` : décor sur la route (vibreurs, chevrons,
+  marquages, objets volants) ; shaders `chevron_board`, `float_decor`.
 - `game/tracks/far_lod.gd`, `game/tracks/materials/impostor.gdshader`,
   `game/tracks/impostors/*.png` : décor lointain en sprites.
 - `game/dev/bake_impostors.gd` : photos des arbres.
@@ -235,7 +287,8 @@ Test : `extreme_quality_test` (+ `main_menu_test` pour l'avertissement).
 **Modifiés, partagés avec Axel** :
 
 - `game/tracks/track_blockout.gd` : couleur de sommet des raccourcis,
-  `embankment_reach`, dessous des ponts (`theme.bridge_under`).
+  `embankment_reach`, dessous des ponts (`theme.bridge_under`), talus
+  arrêté avant les raccourcis (`_embankment_clear`).
 - `game/tracks/race_decor.gd` : foule lointaine.
 - `game/dev/local_race.gd` : une ligne (compteur FPS en haut en course).
 - `game/ui/main_menu.gd` : liste des qualités, avertissement, compteur FPS.

@@ -55,6 +55,12 @@ var _x: bool = false
 const EXTREME_DENSITY := 0.75
 const EXTREME_VIEW := 1.5
 var _batches: Dictionary = {}
+## Lots plats poses sur la chaussee (vibreurs, marquages) : sans ombre.
+var _flat_batches: Dictionary = {}
+## Noeuds poses tels quels sous le decor (objets volants de RoadDecor).
+var _extra_nodes: Array[Node3D] = []
+## Decor sur la route (RoadDecor), null avant la generation.
+var road: RoadDecor
 var _labels: Array[Label3D] = []
 var _blocked: Array[Vector2] = []
 ## Pour les tests : cables poses ({s, low, road_top, a, b}), pieds des objets
@@ -111,14 +117,21 @@ func _generate(track: TrackBlockout) -> void:
 	while s < L - STANDS_BEFORE:
 		_try_span(s)
 		s += span_spacing * _dense() + _range(-15.0, 15.0)
+	# decor sur la route : ses virages a chevrons d'abord (les panneaux de
+	# sponsors les evitent)
+	road = RoadDecor.new(self)
+	road.plan(L)
 	_wall_props(L)
 	_bridge_rails(L)
 	_wall_ends()
 	_wall_boards(L)
 	_ground_props(L)
+	road.build(L)
 	_commit()
 	set_meta(&"spans", spans)
 	set_meta(&"props", props)
+	set_meta(&"road", {"kerbs": road.kerbs, "arrows": road.arrows, "flyers": road.flyers, "chevrons": road.chevrons,
+		"flyer_drop": road.flyer_drop})
 
 
 ## Part du pas entre deux objets : moins en qualite extreme (plus d'objets).
@@ -432,7 +445,8 @@ func _wall_boards(L: float) -> void:
 		var skip := _style == TrackTheme.Id.SAKURA and int(s / 320.0) % 2 == 1
 		var i0 := _track.index_at_s(s)
 		var i1 := _track.index_at_s(s + length)
-		if not skip and not _wall_open(i0, side) and not _wall_open(i1, side):
+		if not skip and not _wall_open(i0, side) and not _wall_open(i1, side) \
+				and not road.in_chevron_zone(s, s + length, side):
 			_board(s, length, side, k)
 		s += spacing * _dense() + _range(-6.0, 6.0)
 
@@ -485,6 +499,31 @@ func _board(s: float, length: float, side: float, k: int) -> void:
 			var word := SPONSORS[int(_rand() * SPONSORS.size()) % SPONSORS.size()]
 			_label(word, mid, Basis(Vector3.UP.cross(z), Vector3.UP, z), Color(0.98, 0.98, 0.95), 120, 0.012)
 	props.append(pts_lo[n / 2])
+
+
+## Panneau de `length` m sur la face interieure du mur (cote `side`), en
+## matiere `key` et couleur de fond `col` ; UV : metres le long du mur (sens
+## de course), 0 .. 1 en hauteur (chevrons de RoadDecor).
+func _board_strip(s: float, length: float, side: float, key: String, col: Color) -> void:
+	var n := maxi(2, roundi(length / 2.0))
+	var pts_lo: Array[Vector3] = []
+	var pts_hi: Array[Vector3] = []
+	var inward := Vector3.ZERO
+	for j in n + 1:
+		var f := _frame(s + length * j / n)
+		var prof: PackedVector3Array = _track._wall_profile(f["i"], side)
+		var span := prof[1] - prof[0]
+		var h := span.y
+		inward = -(f["r"] as Vector3) * side
+		pts_lo.append(prof[0] + span * (0.65 / h) + inward * 0.06)
+		pts_hi.append(prof[0] + span * (2.45 / h) + inward * 0.06)
+	var batch := _batch(pts_lo[n / 2])
+	var dist := 0.0
+	for j in n:
+		var seg := pts_lo[j].distance_to(pts_lo[j + 1])
+		batch.quad(key, pts_lo[j], pts_lo[j + 1], pts_hi[j + 1], pts_hi[j], col,
+			[Vector2(dist, 0), Vector2(dist + seg, 0), Vector2(dist + seg, 1), Vector2(dist, 1)], inward)
+		dist += seg
 
 
 ## Pied des murs, la ou la route est au sol.
@@ -839,6 +878,14 @@ func _batch(at: Vector3) -> Batch:
 	return _batches[key]
 
 
+## Lot plat (sur la chaussee, sans ombre) de la case de `at`.
+func _flat_batch(at: Vector3) -> Batch:
+	var key := Vector2i(floori(at.x / CELL), floori(at.z / CELL))
+	if not _flat_batches.has(key):
+		_flat_batches[key] = Batch.new(Vector3((key.x + 0.5) * CELL, 0.0, (key.y + 0.5) * CELL))
+	return _flat_batches[key]
+
+
 func _label(text: String, at: Vector3, basis: Basis, color: Color, size: int, pixel: float) -> void:
 	var l := Label3D.new()
 	l.text = text
@@ -876,7 +923,19 @@ func _materials() -> Dictionary:
 	bush.shader = preload("res://tracks/materials/sakura_blossom.gdshader")
 	var maku := ShaderMaterial.new()
 	maku.shader = preload("res://tracks/materials/festival_maku.gdshader")
-	return {"solid": solid, "cloth": cloth, "glow": glow, "holo": holo, "fence": fence, "bush": bush, "maku": maku}
+	# panneaux a chevrons des virages (RoadDecor) : fond en couleur de sommet
+	var chevron := ShaderMaterial.new()
+	chevron.shader = preload("res://tracks/materials/chevron_board.gdshader")
+	match _style:
+		TrackTheme.Id.CYBER_CITY:
+			chevron.set_shader_parameter("arrow_color", Color(1.0, 0.85, 0.15))
+			chevron.set_shader_parameter("glow", 2.2)
+		TrackTheme.Id.SAKURA:
+			chevron.set_shader_parameter("arrow_color", Color(0.98, 0.95, 0.88))
+		_:
+			chevron.set_shader_parameter("arrow_color", Color(0.98, 0.98, 0.96))
+	return {"solid": solid, "cloth": cloth, "glow": glow, "holo": holo, "fence": fence, "bush": bush, "maku": maku,
+		"chevron": chevron}
 
 
 func _commit() -> void:
@@ -896,6 +955,21 @@ func _commit() -> void:
 		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 		root.add_child(mi)
 		n += 1
+	# sur la chaussee : sans ombre (des lames de 10 cm, rien a ombrer)
+	for key: Vector2i in _flat_batches:
+		var batch: Batch = _flat_batches[key]
+		var mi := MeshInstance3D.new()
+		mi.name = "Road%d" % n
+		mi.mesh = batch.commit(mats)
+		mi.position = batch.origin
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visibility_range_end = VIEW_END * (EXTREME_VIEW if _x else 1.0)
+		mi.visibility_range_end_margin = 60.0
+		mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		root.add_child(mi)
+		n += 1
+	for node in _extra_nodes:
+		root.add_child(node)
 	for l in _labels:
 		root.add_child(l)
 

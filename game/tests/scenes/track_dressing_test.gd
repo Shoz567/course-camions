@@ -63,6 +63,32 @@ func _test_finish() -> void:
 		check_above("%s : objets de bord de piste" % label, d.props.size(), 100.0)
 		check("%s : aucun objet sur la chaussee" % label, on_road == 0, "%d sur %d" % [on_road, d.props.size()])
 		check("%s : decor sans collision" % label, d.find_children("*", "CollisionObject3D", true, false).is_empty())
+		# sur la route (RoadDecor, 2026-10-22) : vibreurs au bord, fleches,
+		# chevrons, objets volants hors de portee des camions
+		var road: Dictionary = d.get_meta(&"road", {})
+		var kerbs: PackedVector3Array = road.get("kerbs", PackedVector3Array())
+		var flyers: PackedVector3Array = road.get("flyers", PackedVector3Array())
+		var off_edge := 0
+		for p in kerbs:
+			var i := t.closest_sample(p)
+			var lat := absf((p - t.sample_position(i)).dot((t.sample_right(i) * Vector3(1, 0, 1)).normalized()))
+			if lat < t.width / 2.0 - RoadDecor.KERB_WIDTH - 0.5:
+				off_edge += 1
+		check("%s : vibreurs au bord de la chaussee, a la corde des virages" % label, kerbs.size() > 20 and off_edge == 0,
+			"%d, %d hors du bord" % [kerbs.size(), off_edge])
+		check("%s : fleches peintes et chevrons de virage" % label, (road.get("arrows", []) as PackedVector3Array).size() > 8
+			and int(road.get("chevrons", 0)) > 20, "%d fleches, %d chevrons" % [(road.get("arrows", []) as PackedVector3Array).size(),
+			int(road.get("chevrons", 0))])
+		var lowest := INF
+		for p in flyers:
+			var i := t.closest_sample(p)
+			var q := t.sample_position(i)
+			var r := t.sample_right(i) * (t.width / 2.0)
+			var top := maxf(q.y + r.y, q.y - r.y)
+			# point le plus bas de l'objet, au creux de sa montee et descente
+			lowest = minf(lowest, p.y - float(road.get("flyer_drop", 0.0)) - top)
+		check("%s : objets volants au-dessus des camions" % label, flyers.size() > 20 and lowest >= RoadDecor.SKY_MIN - 0.01,
+			"%d, plus bas %.1f m" % [flyers.size(), lowest])
 	# sprites lointains
 	for spec: Array in [[1, "PlayaBackdrop/Playa", "PalmFar", &"palms"], [2, "SakuraBackdrop/Sakura", "TreesFar", &"trees"]]:
 		var t := _tracks[spec[0]]
