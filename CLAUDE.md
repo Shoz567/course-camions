@@ -154,7 +154,9 @@ d'emploi dans `.claude/agents/godot-qa.md`.
   `reset_physics_interpolation()` (le camion le fait seul après `reset_to`).
 - **Pas de téléportation d'un corps en mouvement** par `global_position`. Le
   reset d'un camion (retour sur la piste) passe par `state.transform` dans
-  `_integrate_forces()`, avec les vitesses remises à zéro dans le même tick.
+  `_integrate_forces()`, avec les vitesses fixées dans le même tick : à zéro,
+  ou à une vitesse choisie vers l'avant (réapparition lancée, depuis le
+  2026-10-22) ; jamais l'élan d'avant la téléportation.
 - **Les roues ne sont pas des corps physiques** : la suspension est portée par
   des rayons (raycasts) depuis le châssis. Les maillages de roues sont purement
   visuels. On ne fait jamais de collision sur un maillage de véhicule.

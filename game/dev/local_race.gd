@@ -218,6 +218,10 @@ const ARENA_SPAWN_LATERAL_M := 20.0
 ## Arene : place laissee autour d'un depart ou d'une reapparition (m), et pas
 ## de la recherche d'une place libre.
 const ARENA_CLEAR_M := 9.0
+## Reapparition lancee (launch_for).
+const RESPAWN_LAUNCH_KMH := 80.0
+const LAUNCH_LOOK_M := 60.0
+var _launch_profile: PackedFloat32Array = []
 const ARENA_FREE_STEP_M := 6.0
 const NOTICE_TICKS := 240
 ## Sans snapshot depuis ce nombre de ticks : « connexion instable ».
@@ -269,6 +273,7 @@ func _ready() -> void:
 	else:
 		TruckMaterials.set_weather(TruckMaterials.BEACH_GRIME, 0.0)
 	auto_reset.respawn_provider = respawn_for
+	auto_reset.launch_provider = launch_for
 	race.race_finished.connect(_on_race_finished)
 	race.lap_completed.connect(_on_lap_completed)
 	# pluie et ville, ou vagues et vent, sous la musique
@@ -517,6 +522,7 @@ func _add_player(i: int) -> Player:
 	var health := TruckHealth.of(t)
 	if health != null and is_authority():
 		health.respawn_provider = respawn_for
+		health.launch_provider = launch_for
 		health.spot_ok = on_road
 	if is_bot(i):
 		# bot : il conduit seul, sans camera ni HUD
@@ -920,7 +926,7 @@ func _simulate(tick: int) -> void:
 		var f := p.input.poll(tick)
 		p.truck.set_input(f)
 		if f.reset and not p.truck.is_wrecked():
-			p.truck.reset_to(respawn_for(p.truck))
+			_relaunch(p.truck)
 			if p.camera != null:
 				p.camera.snap()
 
@@ -959,7 +965,7 @@ func _client_tick(tick: int) -> void:
 		# sas READY et compte a rebours : camion immobile, comme chez le host
 		local.truck.set_input(f if state == State.RACING or state == State.FINISHED else _neutral)
 		if state == State.RACING and f.reset and not local.truck.is_wrecked() and not local.truck.is_net_puppet():
-			local.truck.reset_to(respawn_for(local.truck))
+			_relaunch(local.truck)
 			local.camera.snap()
 	net.client_tick(tick, f)
 	if state == State.COUNTDOWN:
@@ -1421,6 +1427,36 @@ func respawn_for(truck: Truck) -> Transform3D:
 	if game_mode == GameStateNode.GameMode.ARENA:
 		return arena_respawn(truck)
 	return race.respawn_transform(truck)
+
+
+## Remet le camion en piste (respawn_for), lance (launch_for).
+func _relaunch(truck: Truck) -> void:
+	var xf := respawn_for(truck)
+	truck.reset_to(xf, -xf.basis.z.normalized() * launch_for(xf))
+
+
+## Vitesse de lancement a la reapparition, vers l'avant (m/s ; 2026-10-22 :
+## « pour que cela soit plus dynamique, que lorsque l'on reapparait on soit
+## lance, de meme pour les bots ») : RESPAWN_LAUNCH_KMH, moins si un virage
+## arrive trop vite pour un bot facile (profil de la ligne de course). Tourne
+## a contresens (arene) : le plus lent du profil a LAUNCH_LOOK_M de part et
+## d'autre ; sur un raccourci : la moitie.
+func launch_for(xf: Transform3D) -> float:
+	var v := RESPAWN_LAUNCH_KMH / 3.6
+	if track.on_branch(xf.origin) >= 0:
+		return v * 0.5
+	if _launch_profile.is_empty():
+		_launch_profile = RacingLine.of(track).speed_profile(
+			BotInputSource.BOT_LATERAL_G * float(BotInputSource.GRIP[0]) * TruckSpec.GRAVITY,
+			BotInputSource.BOT_BRAKE * float(BotInputSource.BRAKE[0]), BotInputSource.PROFILE_CEILING_MS)
+	var i := track.closest_sample(xf.origin)
+	if (-xf.basis.z).dot(track.sample_forward(i)) >= 0.0:
+		return minf(v, _launch_profile[i])
+	var n := track.sample_count()
+	var look := roundi(LAUNCH_LOOK_M / (track.length() / n))
+	for d in range(-look, look + 1):
+		v = minf(v, _launch_profile[posmod(i + d, n)])
+	return v
 
 
 ## `p` est sur la chaussee (piste ou raccourci), a 2,5 m au moins de ses

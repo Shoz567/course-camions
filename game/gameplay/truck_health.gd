@@ -75,6 +75,9 @@ var trailer_max_hp: float = DEFAULT_TRAILER_HP
 ## Transformation de reapparition (Truck -> Transform3D). Par defaut : sur
 ## place, a plat, 1 m au-dessus.
 var respawn_provider: Callable
+## Vitesse de lancement a la reapparition (Transform3D -> float, m/s, vers
+## l'avant). Invalide : a l'arret.
+var launch_provider: Callable
 ## Place sur la route ? (Vector3 -> bool ; invalide : toute place libre.)
 ## 2026-10-22 : sur un raccourci etroit, a cote de sa carcasse, le decalage de
 ## 14 m passait le mur et le camion reapparaissait dans le vide.
@@ -389,7 +392,8 @@ func _respawn() -> void:
 		xf = Transform3D(Basis(Vector3.UP, atan2(-f.x, -f.z)), _truck.global_position + Vector3.UP)
 	xf = free_spot(xf)
 	_truck.set_wrecked(false)
-	_truck.reset_to(xf)
+	var launch := float(launch_provider.call(xf)) if launch_provider.is_valid() else 0.0
+	_truck.reset_to(xf, -xf.basis.z.normalized() * launch)
 	# camion neuf : remorque neuve attelee
 	_truck.reattach_trailer(true)
 	var visual := _truck.get_node_or_null(^"Visual") as Node3D

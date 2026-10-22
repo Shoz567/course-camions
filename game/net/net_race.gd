@@ -631,7 +631,7 @@ func _follow_host_flags(truck: Truck, host: TruckState) -> void:
 	elif not wrecked and truck.is_net_puppet():
 		truck.set_net_puppet(false)
 		var xf := Transform3D(Basis(host.rotation), host.position)
-		truck.reset_to(xf)
+		truck.reset_to(xf, host.linear_velocity)
 	_check_predicted_drop(truck)
 	if is_instance_valid(_predicted_drop):
 		return   # largage predit : le host ne l'a pas encore vu

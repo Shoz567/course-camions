@@ -84,6 +84,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   éclatent ; sous bouclier, plus aucun dégât visuel (#58).
 - Remorques larguées : PV ×2, se cassent en morceaux, se percent quand un
   camion fonce dedans (il la traverse), puis explosent (#65).
+- Réapparition lancée à 80 km/h (moins avant un virage), joueurs et bots
+  (#91).
 
 ### Pouvoirs (6 : bouclier, missile, laser, mitrailleuse, scie, boomerang)
 - Séries 1 et 2 (#43, #52) ; scie à hauteur des pneus, qui les crève (#59) ;
