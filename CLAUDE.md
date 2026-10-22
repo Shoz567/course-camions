@@ -95,7 +95,18 @@ make run           # lance le jeu
 ```
 
 - `make test` doit rester **sous 60 s** : le hook `pre-commit` la lance à chaque
-  commit. Si elle déborde, découpe la suite, ne retire pas le hook.
+  commit. Si elle déborde, découpe la suite, ne retire pas le hook. Depuis le
+  2026-10-22, les scènes tournent **en parallèle** (`cli_runner.gd`,
+  `--jobs`) : ~75 s sur la machine de référence (9 min 20 l'une après
+  l'autre), encore au-dessus de la cible. Une scène qui mesure un temps réel
+  (`Time.get_ticks_*`, `Performance.get_monitor`) passe seule à la fin ; une
+  scène réseau (`NetSession`, `ENetMultiplayerPeer`) dans une file unique.
+- Tout lancement **fenêtré** pour un essai ou une capture passe par
+  `tools/hidden_run.ps1` (fenêtre née dans une fenêtre jamais montrée : rien
+  ne s'affiche, pas même l'écran de démarrage) et prend `-- --offscreen`
+  (`GameState.go_offscreen` : son coupé, réglages du joueur jamais réécrits ;
+  lancé seul, fenêtre hors de l'écran et sans focus). Le projet démarre sinon
+  en plein écran, devant le joueur.
 - `make test-full` applique la règle des 5 runs (§10) et valide les critères de
   sortie de phase.
 

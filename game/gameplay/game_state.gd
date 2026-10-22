@@ -202,6 +202,9 @@ static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> Vehicle
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var offscreen := OS.get_cmdline_user_args().has("--offscreen")
+	if offscreen:
+		go_offscreen()
 	# bus Effets / Ambiance / Musique et limiteur, avant le premier son
 	SoundMix.setup()
 	resolution = DynamicResolution.new()
@@ -225,6 +228,10 @@ func _ready() -> void:
 	layer.add_child(_fps_label)
 	if persist:
 		read_settings(SETTINGS_PATH)
+	if offscreen:
+		# essai en arriere-plan : muet, et rien n'ecrit dans les reglages du joueur
+		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
+		persist = false
 
 
 ## Haut du compteur (px sous le bord de l'ecran) : le menu le pose sous ses
@@ -246,6 +253,23 @@ func _style_fps() -> void:
 	sb.content_margin_top = 4
 	sb.content_margin_bottom = 4
 	_fps_label.add_theme_stylebox_override("normal", sb)
+
+
+## Essais et captures fenetres (2026-10-22 : « que tu le lances en
+## arriere-plan pour pas qu'il s'affiche devant moi [...] couper le son
+## aussi ») : -- --offscreen. La fenetre, avant d'etre montree, quitte le
+## plein ecran du projet, ne prend pas le focus et se pose hors de l'ecran,
+## en 1920 x 1080 (l'ecran de reference) ; le rendu et les captures
+## continuent. Le son est coupe et les reglages ne sont pas reecrits (_ready).
+## Lance par tools/hidden_run.ps1 (fenetre nee dans une fenetre cachee, sans
+## meme l'ecran de demarrage : CW_HIDDEN_HOST), elle reste ou elle est.
+static func go_offscreen() -> void:
+	if DisplayServer.get_name() == "headless" or OS.get_environment("CW_HIDDEN_HOST") == "1":
+		return
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(Vector2i(1920, 1080))
+	DisplayServer.window_set_position(Vector2i(-20000, -20000))
 
 
 ## Sauvegarde les options (sauf en headless) ; appele a chaque changement.

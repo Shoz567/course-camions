@@ -14,7 +14,9 @@ extends SceneTree
 ## Options (apres `--`) :
 ##   --runs=N            chaque scene N fois (regle des 5 runs, CLAUDE.md §10)
 ##   --dir=res://...     dossier des scenes (defaut : res://tests/scenes)
-##   --max-iterations=N  garde anti-blocage par scene (defaut : 7200 iterations)
+##   --max-iterations=N  garde anti-blocage par scene (defaut : 12000 iterations)
+##   --jobs=N            scenes lancees en meme temps (defaut : un tiers des
+##                       coeurs, 8 au plus ; 1 : l'une apres l'autre)
 ##   --selftest          mode auto-test du socle : le verdict attendu est lu dans
 ##                       le nom de la scene (expect_pass_*, expect_fail_*,
 ##                       expect_skip_*), et c'est l'ECART qui fait echouer
@@ -38,17 +40,42 @@ extends SceneTree
 ## Performance.TIME_PHYSICS_PROCESS n'est rafraichi qu'environ une fois par
 ## seconde reelle (docs/SPIKE.md, acquis A2).
 ##
+## En parallele (2026-10-22 : « il n'y a pas moyen d'aller plus vite en
+## faisant plusieurs a la fois ? ») : chaque scene reste un process a part,
+## --jobs a la fois. Classement lu dans le script de la scene :
+##   - MESURE (Time.get_ticks_*, Performance.get_monitor : un temps reel) :
+##     a la fin, seule, comme avant - la charge des autres fausserait la
+##     mesure ;
+##   - RESEAU (NetSession, ENet) : une seule file, l'une apres l'autre (un
+##     port ne sert jamais a deux scenes en meme temps) ;
+##   - le reste : toutes les files.
+## Sous --fixed-fps, une scene ordinaire compte en ticks : la charge du PC ne
+## change que sa duree, pas son resultat. Les plus longues partent d'abord
+## (durees du dernier passage, DURATIONS_PATH ; inconnue : en tete), sinon
+## la derniere arrivee seule rallongeait la suite.
+##
 ## Code de sortie : 0 si aucun FAIL, 1 sinon.
 
 const DEFAULT_DIR := "res://tests/scenes"
 ## 12 000 images (200 s) : un tour complet des circuits rallonges (2026-10-20,
 ## 4,4 a 4,6 km) tient, pilote automatique prudent compris.
 const DEFAULT_MAX_ITERATIONS := 12000
+## Duree de chaque scene au dernier passage (ms), pour l'ordre de depart.
+const DURATIONS_PATH := "user://test_durations.json"
 
 var _dir: String = DEFAULT_DIR
 var _runs: int = 1
 var _max_iterations: int = DEFAULT_MAX_ITERATIONS
 var _selftest: bool = false
+var _jobs: int = 0
+
+## File des scenes ordinaires et des scenes reseau, resultats a afficher
+## (partages entre les fils, sous _lock).
+var _lock := Mutex.new()
+var _queue: PackedStringArray = []
+var _net_queue: PackedStringArray = []
+var _done: Array[Dictionary] = []
+var _durations: Dictionary = {}
 
 var _total_runs: int = 0
 var _pass_count: int = 0
@@ -72,8 +99,33 @@ func _initialize() -> void:
 		_report()
 		return
 
+	var jobs := _jobs if _jobs > 0 else clampi(OS.get_processor_count() / 3, 1, 8)
+	var timed: PackedStringArray = []
 	for scene in scenes:
-		_run_scene(scene)
+		match _kind(scene):
+			"timed":
+				timed.append(scene)
+			"net":
+				_net_queue.append(scene)
+			_:
+				_queue.append(scene)
+	if jobs <= 1:
+		_queue.append_array(_net_queue)
+		_net_queue.clear()
+	var last: Variant = JSON.parse_string(FileAccess.get_file_as_string(DURATIONS_PATH))
+	var known: Dictionary = last if last is Dictionary else {}
+	_queue = _longest_first(_queue, known)
+	_net_queue = _longest_first(_net_queue, known)
+	print("en parallele : %d a la fois ; reseau a la file (%d) ; mesures seules a la fin (%d)" % [jobs,
+		_net_queue.size(), timed.size()])
+	print("")
+	_run_parallel(jobs)
+	# mesures de temps : seules, rien d'autre ne tourne
+	for scene in timed:
+		_print_runs(_execute(scene))
+	var f := FileAccess.open(DURATIONS_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(_durations))
 
 	_report()
 
@@ -86,10 +138,79 @@ func _parse_args() -> void:
 			_max_iterations = maxi(1, _int_arg(arg, "--max-iterations=", _max_iterations))
 		elif arg.begins_with("--dir="):
 			_dir = arg.trim_prefix("--dir=").trim_suffix("/")
+		elif arg.begins_with("--jobs="):
+			_jobs = maxi(1, _int_arg(arg, "--jobs=", 1))
 		elif arg == "--selftest":
 			_selftest = true
 		else:
 			push_warning("option inconnue, ignoree : %s" % arg)
+
+
+## Classe d'une scene, d'apres son script (meme nom, .gd) : "timed" (mesure
+## un temps reel), "net" (ouvre un port), "" (le reste).
+func _kind(scene_path: String) -> String:
+	var src := FileAccess.get_file_as_string(scene_path.get_basename() + ".gd")
+	if src.contains("Time.get_ticks_") or src.contains("Performance.get_monitor"):
+		return "timed"
+	if src.contains("NetSession") or src.contains("ENetMultiplayerPeer"):
+		return "net"
+	return ""
+
+
+## `list` triee de la plus longue a la plus courte (durees `known`, en ms ;
+## inconnue : en tete).
+static func _longest_first(list: PackedStringArray, known: Dictionary) -> PackedStringArray:
+	var order := Array(list)
+	order.sort_custom(func(a: String, b: String) -> bool:
+		return float(known.get(a.get_file(), 1e9)) > float(known.get(b.get_file(), 1e9)))
+	return PackedStringArray(order)
+
+
+## Lance les files sur `jobs` fils : le premier prend les scenes reseau,
+## puis aide les autres ; on affiche chaque resultat des qu'il arrive.
+func _run_parallel(jobs: int) -> void:
+	var threads: Array[Thread] = []
+	for k in jobs:
+		var th := Thread.new()
+		th.start(_worker.bind(k == 0))
+		threads.append(th)
+	var alive := true
+	while alive:
+		OS.delay_msec(100)
+		_flush_done()
+		alive = false
+		for th in threads:
+			alive = alive or th.is_alive()
+	for th in threads:
+		th.wait_to_finish()
+	_flush_done()
+
+
+func _worker(takes_net: bool) -> void:
+	while true:
+		var scene := ""
+		_lock.lock()
+		if takes_net and not _net_queue.is_empty():
+			scene = _net_queue[0]
+			_net_queue.remove_at(0)
+		elif not _queue.is_empty():
+			scene = _queue[0]
+			_queue.remove_at(0)
+		_lock.unlock()
+		if scene == "":
+			return
+		var runs := _execute(scene)
+		_lock.lock()
+		_done.append_array(runs)
+		_lock.unlock()
+
+
+func _flush_done() -> void:
+	_lock.lock()
+	var ready: Array[Dictionary] = _done.duplicate()
+	_done.clear()
+	_lock.unlock()
+	_print_runs(ready)
 
 
 func _int_arg(arg: String, prefix: String, fallback: int) -> int:
@@ -116,10 +237,14 @@ func _discover_scenes() -> PackedStringArray:
 	return found
 
 
-func _run_scene(scene_path: String) -> void:
+## Lance la scene (`_runs` fois, un SKIP arrete) et rend chaque run :
+## {label, verdict, reason, elapsed_ms, raw, expected}. Sans affichage : sur
+## un fil, l'affichage revient au fil principal (_print_runs).
+func _execute(scene_path: String) -> Array[Dictionary]:
 	var exe := OS.get_executable_path()
 	var project_dir := ProjectSettings.globalize_path("res://")
 	var expected := _expected_verdict(scene_path)
+	var out: Array[Dictionary] = []
 
 	for run_index in _runs:
 		var args: PackedStringArray = [
@@ -133,7 +258,6 @@ func _run_scene(scene_path: String) -> void:
 		var started_ms := Time.get_ticks_msec()
 		var code := OS.execute(exe, args, output, true)
 		var elapsed_ms := Time.get_ticks_msec() - started_ms
-		_total_runs += 1
 
 		var raw := ""
 		for chunk in output:
@@ -144,22 +268,28 @@ func _run_scene(scene_path: String) -> void:
 			label += " [run %d/%d]" % [run_index + 1, _runs]
 
 		var result := _verdict(code, raw)
-		var verdict: String = result[0]
-		var reason: String = result[1]
+		out.append({"label": label, "verdict": result[0], "reason": result[1], "elapsed_ms": elapsed_ms,
+			"raw": raw, "expected": expected})
+		# Un SKIP ne depend pas du hasard physique : inutile de le rejouer.
+		if result[0] == "SKIP":
+			break
+	return out
 
+
+## Verdict et sortie de chaque run (fil principal).
+func _print_runs(runs: Array[Dictionary]) -> void:
+	for r in runs:
+		_total_runs += 1
+		var key := String(r["label"]).get_slice(" ", 0)
+		_durations[key] = maxf(float(_durations.get(key, 0.0)), float(r["elapsed_ms"]))
 		if _selftest:
-			_record_selftest(label, verdict, expected, elapsed_ms, reason)
+			_record_selftest(r["label"], r["verdict"], r["expected"], r["elapsed_ms"], r["reason"])
 		else:
-			_record(label, verdict, elapsed_ms, reason)
-
+			_record(r["label"], r["verdict"], r["elapsed_ms"], r["reason"])
 		# La sortie de la scene contient les mesures : on la montre toujours.
-		for line in raw.strip_edges().split("\n"):
+		for line in String(r["raw"]).strip_edges().split("\n"):
 			if line.strip_edges() != "":
 				print("        | %s" % line.strip_edges())
-
-		# Un SKIP ne depend pas du hasard physique : inutile de le rejouer.
-		if verdict == "SKIP":
-			break
 
 
 ## Retourne [verdict, raison].
