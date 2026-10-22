@@ -83,14 +83,25 @@ d'input, et le host calcule le delta contre le dernier snapshot acquitté.
 - Les **obstacles déterministes** d'une piste (pilotés par le compteur de ticks,
   cf. `track-designer`) : seul leur tick de départ est envoyé, une fois.
 
-## 4. Camions distants : interpolation
+## 4. Camions distants : au présent du joueur local
 
-- Buffer de **2 ticks à 60 Hz** (~33 ms ; 100 ms à l'origine, réduit le 2026-10-17,
-  §11). Positions en `lerp`, rotations en
-  `slerp`.
-- Snapshot manquant → **extrapolation** à partir des vitesses, limitée à
-  **250 ms** (15 ticks), puis gel. Un camion est un corps rigide qui roule :
-  l'extrapolation linéaire y est bien plus fiable que sur un ragdoll.
+- **Depuis le 2026-10-22 (façon Rocket League)** : les autres camions sont
+  montrés dans le même présent que son propre camion prédit. L'avance de la
+  prédiction sur le host (un aller-retour : envoi de la frame, file du host,
+  snapshot de retour) se mesure sur l'ack de chaque snapshot ; les autres
+  camions sont extrapolés d'autant depuis le dernier snapshot, au plus
+  **300 ms** (18 ticks ; au-delà, le reste est du retard). Ainsi un contact
+  se joue à l'endroit où le host le jouera. Mesure (position relative
+  autre camion − le sien, client contre host à la même frame) : réseau local
+  2,65 → 0,58 m, 80 ms d'aller-retour 6,9 → 0,9 m, 160 ms et 2 % de perte
+  9,2 → 2,0 m.
+- Extrapolation **sur la courbe** : la vitesse tourne avec le lacet, la
+  caisse avec sa vitesse angulaire (`TruckState.extrapolate`).
+- **Lissage** : un nouveau snapshot déplace l'extrapolation ; l'écart avec la
+  pose affichée se résorbe (80 % gardé par tick), saut assumé au-delà de 4 m.
+- `present_part = 0` rend l'ancien affichage : buffer de **2 ticks à
+  60 Hz**, positions en `lerp`, rotations en `slerp`, dans le passé.
+- Snapshot manquant → extrapolation bornée à **400 ms** (24 ticks), puis gel.
 - Les camions distants sont **cinématiques** côté client
   (`freeze_mode = FREEZE_MODE_KINEMATIC`) : le camion local peut les percuter,
   mais ils ne sont pas simulés localement.
@@ -349,6 +360,12 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   élimination (ramené à l'horloge du client). L'épave d'un éliminé arrive par
   `Ev.WRECK` ; sans `Ev.RESPAWN`, il ne revient pas.
 
+- **Bonus prédits (2026-10-22)** : un bonus que SON camion traverse
+  disparaît tout de suite chez le client ; le host confirme (Ev.PICKUP),
+  sinon il revient après 1 s (`TrackPickup.PREDICT_TICKS`).
+- **Mesurer** : `dev/net_e2e.tscn -- --trace=fichier` écrit, à chaque tick,
+  l'heure système et la position de chaque camion (host et client, à
+  comparer) ; `--net-jitter=ms` ajoute de la gigue à la latence simulée.
 - **Tours chez le client (2026-10-22)** : l'état d'un concurrent part à
   chaque checkpoint (`RaceLaps.racer_updated`), une fois le tour compté ;
   envoyé avant, à `lap_completed`, le client affichait un tour de retard.

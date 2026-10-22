@@ -6,8 +6,10 @@ extends Area3D
 ## frappe de son symbole (croix verte : reparation ; eclair jaune :
 ## recharge). Un camion qui le traverse le prend (`taken`) ; il disparait,
 ## puis revient a sa place apres respawn_ticks. L'effet est l'affaire du
-## gameplay (PadEffects). En ligne, chez un client (net_mirror) : il ne se
-## prend pas ici, le host annonce qui l'a pris (net_take).
+## gameplay (PadEffects). En ligne, chez un client (net_mirror) : le host
+## annonce qui l'a pris (net_take) ; SON camion le prend tout de suite ici
+## (predit, 2026-10-22 : il disparaissait un aller-retour plus tard), le
+## host confirme ; sans confirmation apres PREDICT_TICKS, il revient.
 ## Deterministe : aucun tirage ; durees en ticks.
 
 signal taken(truck: Truck, pickup: TrackPickup)
@@ -21,6 +23,9 @@ const FLOAT_M := 1.8
 @export var kind: Kind = Kind.REPAIR
 @export var respawn_ticks: int = 900
 var net_mirror: bool = false
+const PREDICT_TICKS := 60
+var _predicted: Truck
+var _predict_left: int = 0
 var index: int = -1
 var _away: int = 0
 var _visual: Node3D
@@ -88,6 +93,14 @@ func available() -> bool:
 
 
 func _physics_process(_delta: float) -> void:
+	if _predict_left > 0:
+		_predict_left -= 1
+		if _predict_left == 0:
+			# le host ne l'a pas vu le prendre : il revient
+			_predicted = null
+			_away = 0
+			_show(true)
+			return
 	if _away > 0:
 		_away -= 1
 		if _away == 0:
@@ -103,15 +116,28 @@ func _process(delta: float) -> void:
 
 func _on_body_entered(body: Node3D) -> void:
 	var truck := body as Truck
-	if truck == null or net_mirror or _away > 0 or truck.is_wrecked():
+	if truck == null or _away > 0 or truck.is_wrecked():
 		return
+	if net_mirror:
+		# client : son propre camion (predit, pas une marionnette) seulement
+		if truck.is_net_puppet():
+			return
+		_predicted = truck
+		_predict_left = PREDICT_TICKS
 	_take(truck)
 
 
 ## Client en ligne : le host a vu `truck` le prendre.
 func net_take(truck: Truck) -> void:
-	if truck != null:
-		_take(truck)
+	if truck == null:
+		return
+	if _predict_left > 0:
+		var same := truck == _predicted
+		_predicted = null
+		_predict_left = 0
+		if same:
+			return   # deja pris ici
+	_take(truck)
 
 
 func _take(truck: Truck) -> void:
