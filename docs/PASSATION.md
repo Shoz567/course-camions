@@ -126,6 +126,9 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 
 ## Outils hors du jeu
 
+- **Essai en ligne sur un seul PC** : `dev/net_e2e.tscn`, host et client
+  pilotés par des bots, journal comparable des deux côtés (#92).
+
 - **Barre d'état Claude Code** : `~/.claude/statusline.js` (modèle, branche,
   coût, jauges du contexte et des quotas). Paquet à partager :
   `barre-etat-claude-code.zip` (sur le Bureau, notice incluse).

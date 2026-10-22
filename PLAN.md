@@ -1216,6 +1216,27 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   temps où ils la visent 0,55 / 0,52 (moyens 0,39), pouvoirs 66 / 66 ; la
   manche d'`arena_levels_test` basculait de justesse (C, E2 : marge de
   0,8 et 0,85).
+- [x] **Vérification du multijoueur** (2026-10-22, « lance des tests et
+  vérifie que tout est bien disponible en multijoueur ») :
+  - essai de bout en bout en ligne (`dev/net_e2e.tscn`) : deux instances du
+    jeu sur ce PC, host et client, chacune pilotée par un bot dur ; course,
+    élimination et arène. Trouvé : chez le client, le tour affiché avait un
+    tour de retard et le classement s'inversait par moments (le host
+    envoyait l'état d'un camion à `lap_completed`, avant que son tour
+    change, et jamais à un checkpoint). Corrigé : `RaceLaps.racer_updated`,
+    émis à chaque checkpoint une fois tout compté ; un vainqueur désigné par
+    le mode (`finish_now`) ne compte plus de tour fantôme chez le client.
+    Après correction : tours, places, vies et PV identiques des deux côtés
+    toutes les 10 s, sur 230 s de course et une manche d'arène ; camion du
+    client détruit, il réapparaît lancé (73 à 95 km/h) ; `net_racer_sync_test`
+    (contrôle : il échoue avec l'ancien envoi) ;
+  - écran partagé : élimination et arène à 3 joueurs et 2 bots
+    (`split_modes_test`, `split_modes_arena_test`) : un écran, une caméra et
+    un HUD par joueur. Trouvé : à la fin d'une élimination, un joueur éliminé
+    lisait « NON CLASSÉ, temps limite écoulé » ; il lit maintenant
+    « ÉLIMINÉ » et sa place (aussi en solo et en ligne) ;
+  - menu en ligne : le host qui a réglé des bots lit qu'il n'y en a pas en
+    ligne.
 - [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
   « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
