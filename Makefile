@@ -12,7 +12,7 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run solo sandbox clean-spike vehicules export export-windows export-linux
+.PHONY: help assets import test test-full test-selftest baseline run solo sandbox trailer clean-spike vehicules export export-windows export-linux
 
 help:
 	@echo "Cibles disponibles :"
@@ -27,6 +27,7 @@ help:
 	@echo "  make export     - exporte le jeu Windows et Linux dans builds/ (modeles d'export requis)"
 	@echo "  make solo       - course a 1 joueur, plein ecran, sans passer par le menu"
 	@echo "  make sandbox    - lance le bac a sable (arene, tremplin, camions gares)"
+	@echo "  make trailer    - enregistre le trailer de 30 s (builds/trailer.avi, 1080p 60 i/s, son)"
 	@echo "  make clean-spike- supprime spike/ (fin de phase 0.5)"
 
 assets:
@@ -86,6 +87,11 @@ solo:
 
 sandbox:
 	$(GODOT) --path $(PROJECT) res://dev/drive_sandbox.tscn
+
+# Trailer de 30 s (dev/trailer.gd) : Movie Maker de Godot, image par image
+# (le rendu peut etre plus lent que le temps reel), MJPEG + son.
+trailer:
+	$(GODOT) --path $(PROJECT) --write-movie ../builds/trailer.avi --fixed-fps 60 res://dev/trailer.tscn -- --offscreen
 
 clean-spike:
 	rm -rf spike

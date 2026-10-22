@@ -1531,6 +1531,19 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   (course chargée de chacun dans l'état de course). Hors ligne : pas de
   sas. Test : `net_bots_test` (D : la course attend sans appui, Croix la
   lance) ; `net_modes_test` (9 champs).
+- [x] **Trailer de 30 s** (2026-10-23, « le plus impressionnant possible […]
+  dynamique, de l'action, de la musique, et qu'il présente le jeu […] finir
+  sur l'affichage du nom du jeu avec une image stylée ») : `dev/trailer.tscn`,
+  enregistré par le Movie Maker de Godot (`make trailer`, 1080p 60 i/s,
+  son compris). Les vraies courses tournent dessous, 6 camions aux mains des
+  bots ; le réalisateur place les camions à chaque plan, déclenche missile,
+  laser, scies, mitrailleuse, largage de remorque, nitro et explosions, et
+  pilote caméra, ralentis et habillage (bandes noires, textes, flashs sur
+  les temps). Musique : Neon sign Circuit (Climax, MintoDog, CC0), 160 BPM,
+  partie au GO après 3 s de compte à rebours sous la pluie. Plans : grille
+  de nuit, départ, missile, laser, duel, largage, Playa et son tremplin
+  géant, nitro à Sakura, montage d'explosions, puis logo CRAZY WHEELS sur le
+  plateau du menu.
 - [x] **Ancien sas jaune supprimé partout** (2026-10-22, « il y a toujours le
   texte jaune que je ne veux pas. Maintenant, c'est le menu ») : il ne
   restait que dans les scènes de course lancées sans le menu (captures,
