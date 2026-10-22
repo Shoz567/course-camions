@@ -117,7 +117,7 @@ func _test_finish() -> void:
 		int(_seen.get("refused", 9)) == 1 and int(_seen.get("while_away", 9)) == 1
 		and (_seen.get("rearm", [false, ""]) as Array)[0] == true
 		and String((_seen.get("rearm", [false, ""]) as Array)[1]).begins_with("largage dans"), str(_seen))
-	check("B apres le delai : second largage (plus aucun)", String(_seen.get("ready_text", "")).begins_with("REMORQUE PRETE")
+	check("B apres le delai : second largage (plus aucun)", String(_seen.get("ready_text", "")).begins_with("REMORQUE PRÊTE")
 		and _seen.get("second") == [2, 0], "%s %s" % [_seen.get("ready_text"), _seen.get("second")])
 	check("B ensuite : plus rien, « PLUS DE LARGAGE »", int(_seen.get("after", 9)) == 2
 		and String(_seen.get("none_text", "")) == "PLUS DE LARGAGE", "%s %s" % [_seen.get("after"), _seen.get("none_text")])

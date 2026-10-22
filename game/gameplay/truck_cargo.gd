@@ -134,8 +134,8 @@ func status_text() -> String:
 	if _rearm > 0:
 		return "largage dans %d s" % rearm_seconds_left()
 	if drops_left > 0:
-		return "REMORQUE PRETE · %d largage%s" % [drops_left, "s" if drops_left > 1 else ""]
-	return "REMORQUE PRETE"
+		return "REMORQUE PRÊTE · %d largage%s" % [drops_left, "s" if drops_left > 1 else ""]
+	return "REMORQUE PRÊTE"
 
 
 ## Client en ligne : recharge et verrou du depart tels que le host les voit.
