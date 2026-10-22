@@ -4,7 +4,8 @@ extends PhysicsTest
 ## le contre-la-montre ») : l'etat de course que le host diffuse
 ## (LocalRace.net_state) porte ce que le client ne decide pas : elimines, vies
 ## en arene, tick de la prochaine elimination. Arene a 2 joueurs :
-##   A. l'etat a 8 champs ; un client qui l'applique retrouve elimines, vies et
+##   A. l'etat a 9 champs (le 9e : course chargee chez chacun, sas en
+##      ligne) ; un client qui l'applique retrouve elimines, vies et
 ##      prochaine elimination du host (meme sans changement d'etat de course) ;
 ##   B. un etat de l'ancien protocole (5 champs) est ignore : rien ne change.
 
@@ -42,7 +43,7 @@ func _test_tick(t: int) -> void:
 
 
 func _test_finish() -> void:
-	check("A etat de course : 8 champs", int(_seen.get("size", 0)) == 8, str(_seen.get("size")))
+	check("A etat de course : 9 champs", int(_seen.get("size", 0)) == 9, str(_seen.get("size")))
 	check("A le client retrouve elimines, vies et prochaine elimination",
 		str(_seen.get("applied")) == str([[1], [1, 0], 9000]), str(_seen.get("applied")))
 	check("B ancien protocole ignore", str(_seen.get("old")) == str([[1], [1, 0], 9000]), str(_seen.get("old")))

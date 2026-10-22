@@ -9,10 +9,12 @@ extends PhysicsTest
 ##      « BOT n COULEUR » et une case libre, differente de celle du joueur ;
 ##   B. le snapshot porte les 4 camions ;
 ##   C. 10 s apres le depart, chaque bot a roule plus de 100 m ;
-##   D. sas en ligne (2026-10-22, « l'ancien menu de selection des remorques
-##      en jaune ») : personne n'appuie sur rien, la course part (convoi
-##      choisi au salon), et l'invite « [CARRE] POUR ETRE READY » ne
-##      s'affiche jamais.
+##   D. sas en ligne (2026-10-22, « une touche a appuyer pour se mettre
+##      pret [...] dans le nouveau style graphique, pas du texte jaune ») :
+##      sans rien presser, la course attend (2 s plus tard, toujours le
+##      sas) ; la carte ReadyGate montre le joueur EN ATTENTE (pas les bots)
+##      et l'invite a pictos ; aucun texte au centre de l'ecran ; Croix : le
+##      joueur est PRET, le compte a rebours part, la carte disparait.
 
 const PORT := 7795
 
@@ -21,8 +23,7 @@ var _saved: Array = []
 var _go := -1
 var _starts: Array[Vector3] = []
 var _snapshot_trucks := -1
-## Textes du centre de l'ecran du joueur pendant le sas.
-var _lobby_texts := {}
+var _seen := {}
 
 
 func _test_setup() -> void:
@@ -40,14 +41,20 @@ func _test_setup() -> void:
 
 
 func _test_tick(t: int) -> void:
-	# le joueur du host n'appuie sur rien : en ligne, il est pret des que sa
-	# course est chargee (convoi choisi au salon), les bots d'office
 	var players: Array = _race.get("players")
-	if int(_race.get("state")) == 3 and not players.is_empty():    # LocalRace.State.LOBBY
+	var gate := _race.get("ready_gate_ui") as ReadyGate
+	if t == 120:
+		# 2 s sans rien presser : toujours le sas (les bots sont prets d'office)
+		_race.call("_process", 0.0)    # carte a jour, sans attendre l'image
 		var hud := (players[0] as Object).get("hud") as Object
-		if hud != null:
-			_race.call("_process", 0.0)    # message du sas, sans attendre l'image
-			_lobby_texts[String(hud.get("_center_text"))] = true
+		_seen["wait"] = [int(_race.get("state")) == 3, gate.visible, gate.row_text(0), gate.row_text(1),
+			gate._title.text, gate._prompt.visible, String(hud.get("_center_text"))]    # 3 : LocalRace.State.LOBBY
+		_pad(JOY_BUTTON_A, true)
+	elif t == 124:
+		_pad(JOY_BUTTON_A, false)
+	elif t == 130:
+		_race.call("_process", 0.0)
+		_seen["pressed"] = [(_race.get("ready_flags") as Array)[0], int(_race.get("state")) == 0, gate.visible]
 	if RaceManager.state == RaceManagerNode.State.RACING and _go < 0:
 		_go = t
 		var net := _race.get("net") as NetRace
@@ -55,6 +62,14 @@ func _test_tick(t: int) -> void:
 		_snapshot_trucks = snap.decode_u8(4) if snap.size() > 4 else -1
 	if _go >= 0 and t - _go >= 600:
 		duration_ticks = mini(duration_ticks, t + 1)
+
+
+func _pad(button: JoyButton, pressed: bool) -> void:
+	var e := InputEventJoypadButton.new()
+	e.device = 0
+	e.button_index = button
+	e.pressed = pressed
+	Input.parse_input_event(e)
 
 
 func _test_finish() -> void:
@@ -73,11 +88,15 @@ func _test_finish() -> void:
 	var moved := []
 	for i in range(1, players.size()):
 		moved.append(roundi(((players[i] as Object).get("truck") as Truck).global_position.distance_to(_starts[i])))
-	var prompt := false
-	for s: String in _lobby_texts:
-		prompt = prompt or s.contains("CARRÉ")
-	check("D sas en ligne : depart sans rien presser, jamais d'invite [CARRE]", _go >= 0 and not prompt,
-		"textes du sas %s" % [_lobby_texts.keys()])
+	var wait: Array = _seen.get("wait", [])
+	check("D sans rien presser : la course attend au sas, carte affichee", wait.size() == 7 and wait[0] and wait[1],
+		str(wait))
+	check("D carte : le joueur EN ATTENTE, pas de ligne de bot, PRET ? et l'invite",
+		wait.size() == 7 and String(wait[2]).ends_with("EN ATTENTE") and String(wait[2]).contains("(toi)")
+		and wait[3] == "" and wait[4] == "PRÊT ?" and wait[5], str(wait))
+	check("D aucun texte au centre de l'ecran (plus de texte jaune)", wait.size() == 7 and wait[6] == "", str(wait))
+	check("D Croix : PRET, compte a rebours, carte cachee", _seen.get("pressed", []) == [true, true, false],
+		str(_seen.get("pressed")))
 	check("C les bots roulent", _go >= 0 and moved.all(func(m: int) -> bool: return m > 100), "%s m" % [moved])
 	GameState.bot_count = _saved[0]
 	GameState.bot_level = _saved[1]

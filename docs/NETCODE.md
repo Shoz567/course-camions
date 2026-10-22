@@ -388,13 +388,15 @@ inputs du client, et sa trajectoire s'écarte de la prédiction ; à refaire sur
   `_stop` (RPC fiable) à tous, chacun revient au salon du menu, la partie
   reste ouverte (délais de coupure longs, comme au lancement). Signal
   `race_stopped`. Test : `pause_menu_test`.
-- **Sas en ligne sans invite (2026-10-22)** : le convoi et le PRÊT se donnent
-  au salon (page de sélection) ; la course n'affiche plus l'ancienne invite
-  jaune « [CARRÉ] POUR ÊTRE READY ». Le sas reste pour attendre les machines
-  lentes : le host compte un joueur prêt dès que sa course est chargée (son
-  écran de chargement levé ; un client l'annonce par `_scene_ready`,
-  `NetRace.is_loaded`). Message : « EN ATTENTE DES AUTRES JOUEURS n/N ».
-  Test : `net_bots_test` (D).
+- **Sas en ligne, protocole 10 (2026-10-22)** : le convoi se choisit au
+  salon ; en course, une carte (`ReadyGate`, style des menus, plus de texte
+  jaune) liste les joueurs (CHARGEMENT / EN ATTENTE / PRÊT, sans les bots).
+  Le host note la course chargée de chacun (son écran de chargement levé ;
+  un client l'annonce par `_scene_ready`, `NetRace.is_loaded`), puis le
+  joueur confirme par Croix / Espace (le frein à main de SA frame, lu aussi
+  pour un client). L'état de course porte 9 champs : le 9e, course chargée
+  de chacun, pour que les clients affichent CHARGEMENT. Départ quand tous
+  sont prêts. Test : `net_bots_test` (D).
 
 ### Pas encore fait
 
