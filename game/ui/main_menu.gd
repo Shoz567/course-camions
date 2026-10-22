@@ -43,6 +43,9 @@ const LocalRace := preload("res://dev/local_race.gd")
 const ENVIRONMENTS: Array[Environment] = [preload("res://tracks/cyber_night.tres"),
 	preload("res://tracks/playa_sun.tres"), preload("res://tracks/sakura_day.tres")]
 
+## Noeuds sonores retires des camions du plateau (vehicles/truck.tscn).
+const SHOWROOM_MUTED: PackedStringArray = ["Audio", "Horn", "BoostSound"]
+
 ## Faux pour les tests : le depart emet `launch_requested` sans changer de scene.
 @export var auto_change_scene: bool = true
 @export var orbit_speed: float = 0.06        # rad/s
@@ -163,6 +166,11 @@ func _ready() -> void:
 	set_sound(not AudioServer.is_bus_mute(_master_bus()))
 	# musique de course rendue en fond pendant le menu (sans effet en headless)
 	RaceMusic.prepare()
+	# musique du menu (2026-10-22), en fondu des que son rendu est pret
+	var music := MenuMusic.new()
+	music.name = "MenuMusic"
+	add_child(music)
+	music.play()
 	# on retrouve le dernier choix en revenant d'une course
 	select_players(GameState.requested_players if GameState.requested_players > 0 else 1, false)
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
@@ -194,6 +202,13 @@ func _spawn_trucks() -> void:
 		LocalRace.dress(t.get_node("Visual") as TruckVisual, i)
 		t.transform = Showroom.slot(i, LocalRace.MAX_PLAYERS)
 		t.freeze = true
+		# decor muet (2026-10-22, « un bruit sourd au lancement » : six moteurs
+		# au ralenti, boucle a 55 Hz) : ni moteur, ni klaxon, ni boost
+		for sound: String in SHOWROOM_MUTED:
+			var n := t.get_node_or_null(sound)
+			if n != null:
+				t.remove_child(n)
+				n.free()
 		showroom.turntable.add_child(t)
 		# remorque choisie par ce joueur (sas READY), jamais celle d'origine
 		(t.get_node("Visual") as TruckVisual).set_trailer_type(TrailerCatalog.at(GameState.trailer_choice[i]))

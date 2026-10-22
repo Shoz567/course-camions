@@ -7,7 +7,7 @@ extends RefCounted
 ##   Effets    bruitages (moteurs, chocs, pneus, explosions, pouvoirs, klaxon,
 ##             menus, bips du compte a rebours et du viseur) ;
 ##   Ambiance  pluie, vagues, brise, foule des tribunes ;
-##   Musique   musique de course.
+##   Musique   musique de course et du menu.
 ## Un limiteur sur le Master : la somme des sons (quatre moteurs, une
 ## explosion, la foule, la musique) ne depasse plus le plafond, elle n'ecrete
 ## plus (l'ecretage s'entend comme un grésillement). Pose une fois par
@@ -16,8 +16,10 @@ extends RefCounted
 const EFFECTS := &"Effets"
 const AMBIENCE := &"Ambiance"
 const MUSIC := &"Musique"
-## Volume de chaque bus (dB), sous le Master.
-const LEVELS := {EFFECTS: -6.0, AMBIENCE: -6.0, MUSIC: 0.0}
+## Volume de chaque bus (dB), sous le Master. Bruitages -6 -> -12 dB
+## (2026-10-22 : « les bruitages sont trop forts par rapport a la musique » :
+## en course, les chocs montaient a -7 dB, plus haut que la musique, -9).
+const LEVELS := {EFFECTS: -12.0, AMBIENCE: -6.0, MUSIC: 0.0}
 ## Plafond du limiteur du Master (dB).
 const CEILING_DB := -1.0
 

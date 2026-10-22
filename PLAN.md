@@ -1415,6 +1415,23 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     (`GameState.go_offscreen`) : muet, réglages non réécrits (lancé seul :
     fenêtre hors de l'écran, sans focus). Le rendu et les captures
     continuent (menu et course capturés ainsi).
+- [x] **Son du menu et mixage** (2026-10-22, « dans le menu, quand on lance,
+  il y a un bruit sourd […] qu'à la place, on ait une musique dans le menu
+  […] en course, les bruitages sont trop forts par rapport à la musique ») :
+  - bruit sourd : les 6 camions du plateau faisaient tourner leur moteur au
+    ralenti (boucle à 55 Hz) ; ils sont muets (moteur, klaxon, boost). Bus
+    Effets au menu : -46 dB en continu → silence ;
+  - musique du menu (`MenuMusic`, procédurale) : 104 BPM en fa majeur,
+    16 mesures (~37 s), piano électrique FM, basse syncopée, batterie
+    légère, thème en cloche FM ; rendue en fond (~1,8 s), entrée en fondu ;
+  - bus Effets -6 → -12 dB, musique de course -8 → -6 dB. Mesuré en course
+    (`net_e2e --audio-stats`, 50 s, 5 bots, Cyber City et Sakura) :
+    bruitages -25 → -32 dB en moyenne, crêtes -7 → -12 à -14 dB ; musique
+    -14 → -12 dB, crêtes -9 → -7 dB (les chocs dépassaient la musique) ;
+  - `tools/hidden_run.ps1` : l'essai apparaît réduit dans la barre des
+    tâches (« je veux quand même pouvoir y accéder ») ; `--mute` séparé de
+    `--offscreen` ;
+  - tests : `menu_music_test` (nouveau), `sound_mix_test` (12 dB).
 
 ## Questions de design ouvertes
 

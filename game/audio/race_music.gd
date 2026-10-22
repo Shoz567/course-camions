@@ -22,7 +22,8 @@ const RATE := 22050
 const BPM := 150.0
 const BARS := 16
 const STEPS_PER_BAR := 16
-const VOLUME_DB := -8.0
+## -8 -> -6 dB (2026-10-22, bruitages trop forts par rapport a elle).
+const VOLUME_DB := -6.0
 const FADE_S := 1.5
 const SEED := 1996
 

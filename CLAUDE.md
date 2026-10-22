@@ -102,11 +102,13 @@ make run           # lance le jeu
   (`Time.get_ticks_*`, `Performance.get_monitor`) passe seule à la fin ; une
   scène réseau (`NetSession`, `ENetMultiplayerPeer`) dans une file unique.
 - Tout lancement **fenêtré** pour un essai ou une capture passe par
-  `tools/hidden_run.ps1` (fenêtre née dans une fenêtre jamais montrée : rien
-  ne s'affiche, pas même l'écran de démarrage) et prend `-- --offscreen`
-  (`GameState.go_offscreen` : son coupé, réglages du joueur jamais réécrits ;
-  lancé seul, fenêtre hors de l'écran et sans focus). Le projet démarre sinon
-  en plein écran, devant le joueur.
+  `tools/hidden_run.ps1` : la fenêtre naît dans une fenêtre hôte réduite et
+  non activée, rien ne s'affiche (pas même l'écran de démarrage), mais
+  l'essai est dans la barre des tâches (« Crazy Wheels - essai de Claude ») et
+  le joueur peut l'ouvrir. Il prend `-- --offscreen` (`GameState.go_offscreen` :
+  réglages du joueur jamais réécrits ; lancé seul, fenêtre hors de l'écran
+  et sans focus) et `--mute` pour couper le son, sauf quand on travaille le
+  son. Le projet démarre sinon en plein écran, devant le joueur.
 - `make test-full` applique la règle des 5 runs (§10) et valide les critères de
   sortie de phase.
 
