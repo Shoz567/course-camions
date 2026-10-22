@@ -16,10 +16,11 @@ extends RefCounted
 const EFFECTS := &"Effets"
 const AMBIENCE := &"Ambiance"
 const MUSIC := &"Musique"
-## Volume de chaque bus (dB), sous le Master. Bruitages -6 -> -12 dB
-## (2026-10-22 : « les bruitages sont trop forts par rapport a la musique » :
-## en course, les chocs montaient a -7 dB, plus haut que la musique, -9).
-const LEVELS := {EFFECTS: -12.0, AMBIENCE: -6.0, MUSIC: 0.0}
+## Volume de chaque bus (dB), sous le Master, jauges a 100 %. Bruitages -6 ->
+## -12 dB (2026-10-22 : « les bruitages sont trop forts par rapport a la
+## musique » : en course, les chocs montaient a -7 dB, plus haut que la
+## musique, -9) ; musique 0 -> +3 dB (« c'est un peu faible »).
+const LEVELS := {EFFECTS: -12.0, AMBIENCE: -6.0, MUSIC: 3.0}
 ## Plafond du limiteur du Master (dB).
 const CEILING_DB := -1.0
 
@@ -38,6 +39,25 @@ static func setup() -> void:
 		var fx := AudioEffectHardLimiter.new()
 		fx.ceiling_db = CEILING_DB
 		AudioServer.add_bus_effect(AudioServer.get_bus_index(&"Master"), fx)
+
+
+## Jauges des parametres (2026-10-22 : « une jauge pour la musique et une
+## jauge pour les bruitages. Et une jauge generale ») : musique et bruitages
+## de 0 a 100 %, par-dessus le niveau de leur bus (LEVELS) ; la jauge des
+## bruitages regle aussi l'ambiance (pluie, vagues, foule). La jauge generale
+## est le volume du Master. 0 % : bus muet.
+static func apply_user_volumes(music_percent: float, effects_percent: float) -> void:
+	_set_gain(MUSIC, music_percent)
+	_set_gain(EFFECTS, effects_percent)
+	_set_gain(AMBIENCE, effects_percent)
+
+
+static func _set_gain(bus_name: StringName, percent: float) -> void:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx < 0:
+		return
+	AudioServer.set_bus_volume_db(idx, float(LEVELS[bus_name]) + linear_to_db(maxf(percent, 0.1) / 100.0))
+	AudioServer.set_bus_mute(idx, percent <= 0.0)
 
 
 ## Le limiteur du Master, ou null.

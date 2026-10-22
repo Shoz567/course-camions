@@ -162,6 +162,7 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   premier, au menu déroulant (local et salon).
 - Musique du menu (`MenuMusic`) ; camions du plateau muets (le « bruit
   sourd ») ; bruitages 6 dB plus bas, musique de course 2 dB plus haut.
+  Trois jauges dans les paramètres : général, musique, bruitages.
 
 ### Performance, rendu, son, build
 - Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,

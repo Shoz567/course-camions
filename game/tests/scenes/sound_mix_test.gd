@@ -10,6 +10,8 @@ extends PhysicsTest
 ##   C. setup() rejoue sans doubler bus ni limiteur ;
 ##   D. chaque son part sur son bus : foule et ambiance sur Ambiance, klaxon
 ##      et boost sur Effets ;
+##   F. jauges Musique et Bruitages (2026-10-22) : par-dessus le niveau du
+##      bus ; la jauge des bruitages regle aussi l'ambiance ; 0 % : muet ;
 ##   E. la pluie de Cyber City sous les autres ambiances, et plus douce :
 ##      part de l'energie dans les aigus (derivee / signal) sous la moitie de
 ##      l'ancienne pluie (mesuree avant le changement : 0,65 ; apres : 0,10).
@@ -59,3 +61,17 @@ func _test_finish() -> void:
 		hf += (rain[i] - rain[i - 1]) * (rain[i] - rain[i - 1])
 		total += rain[i] * rain[i]
 	check_below("E pluie plus douce (energie aigue / totale)", hf / total, 0.65 / 2.0)
+	var buses := [AudioServer.get_bus_index(SoundMix.MUSIC), AudioServer.get_bus_index(SoundMix.EFFECTS),
+		AudioServer.get_bus_index(SoundMix.AMBIENCE)]
+	SoundMix.apply_user_volumes(50.0, 25.0)
+	var half := []
+	for idx: int in buses:
+		half.append(snappedf(AudioServer.get_bus_volume_db(idx), 0.01))
+	SoundMix.apply_user_volumes(100.0, 0.0)
+	var silent := [AudioServer.is_bus_mute(buses[0]), AudioServer.is_bus_mute(buses[1]), AudioServer.is_bus_mute(buses[2])]
+	SoundMix.apply_user_volumes(GameState.music_volume, GameState.effects_volume)
+	var want := [snappedf(3.0 + linear_to_db(0.5), 0.01), snappedf(-12.0 + linear_to_db(0.25), 0.01),
+		snappedf(-6.0 + linear_to_db(0.25), 0.01)]
+	check("F jauges : musique 50 %, bruitages 25 % (ambiance comprise), par-dessus le bus", half == want,
+		"%s / %s" % [half, want])
+	check("F bruitages a 0 % : Effets et Ambiance muets, musique non", silent == [false, true, true], str(silent))

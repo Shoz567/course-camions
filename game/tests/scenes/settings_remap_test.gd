@@ -161,6 +161,9 @@ func _round_trip() -> void:
 	GameState.pad_bindings = custom
 	AudioServer.set_bus_mute(bus, true)
 	AudioServer.set_bus_volume_db(bus, linear_to_db(0.4))
+	var jauges := [GameState.music_volume, GameState.effects_volume]
+	GameState.music_volume = 65.0
+	GameState.effects_volume = 30.0
 	var w := GameState.write_settings(TEST_PATH)
 	# tout remis aux defauts, puis relu
 	GameState.graphics_quality = GraphicsSettings.Quality.HIGH
@@ -172,13 +175,16 @@ func _round_trip() -> void:
 	GameState.pad_bindings = PadBindings.defaults()
 	AudioServer.set_bus_mute(bus, false)
 	AudioServer.set_bus_volume_db(bus, 0.0)
+	GameState.music_volume = 100.0
+	GameState.effects_volume = 100.0
 	var r := GameState.read_settings(TEST_PATH)
 	var ok := w == OK and r == OK and GameState.graphics_quality == GraphicsSettings.Quality.LOW \
 		and GameState.show_fps and not GameState.dynamic_resolution and GameState.selected_track == 1 \
 		and GameState.speed_class == 3 and GameState.trailer_choice == PackedInt32Array([2, 1, 0, 3, 0, 1]) \
 		and str(GameState.pad_bindings) == str(custom) and AudioServer.is_bus_mute(bus) \
-		and absf(db_to_linear(AudioServer.get_bus_volume_db(bus)) - 0.4) < 0.01
-	check("fichier d'options : ecrit puis relu a l'identique (son, video, course, boutons)", ok,
+		and absf(db_to_linear(AudioServer.get_bus_volume_db(bus)) - 0.4) < 0.01 \
+		and GameState.music_volume == 65.0 and GameState.effects_volume == 30.0
+	check("fichier d'options : ecrit puis relu a l'identique (son et jauges, video, course, boutons)", ok,
 		"ecriture %d, lecture %d" % [w, r])
 	check("fichier absent : erreur, rien ne change", GameState.read_settings("user://absent_xyz.cfg") != OK
 		and GameState.selected_track == 1)
@@ -192,6 +198,9 @@ func _round_trip() -> void:
 	GameState.pad_bindings = saved[6]
 	AudioServer.set_bus_mute(bus, audio[0])
 	AudioServer.set_bus_volume_db(bus, audio[1])
+	GameState.music_volume = jauges[0]
+	GameState.effects_volume = jauges[1]
+	SoundMix.apply_user_volumes(GameState.music_volume, GameState.effects_volume)
 
 
 static func _list(b: Dictionary, action: String) -> String:
