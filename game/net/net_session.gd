@@ -36,13 +36,21 @@ signal race_launched
 enum Mode { OFFLINE, HOST, CLIENT }
 
 const DEFAULT_PORT := 7777
-const MAX_PLAYERS := 6
+## 12 joueurs (2026-10-22 ; 6 avant).
+const MAX_PLAYERS := 12
 ## Versions de protocole differentes : le host refuse le client.
 ## 4 (2026-10-21) : mode de jeu au lancement, eliminations et vies dans l'etat
 ## de course.
 ## 5 (2026-10-21) : duree de l'arene au lancement.
-const PROTOCOL := 5
+## 6 (2026-10-22) : nombre et niveau des bots du host au lancement.
+## 7 (2026-10-22) : 12 joueurs (cases 6 a 11 : une version a 6 couleurs
+## plantait sur ces cases).
+## 8 (2026-10-22) : regles du host dans le lobby (menu en ligne : chacun voit
+## mode, circuit, vitesse et bots avant le lancement).
+const PROTOCOL := 8
 const MAX_NAME := 16
+## En-tetes par datagramme (UDP + IP + ENet, NETCODE.md §3).
+const PACKET_OVERHEAD := 48
 ## Coupure detectee (ENet, ENetPacketPeer.set_timeout) : en course, 3 s au
 ## moins, 8 s au plus ; pendant les chargements (scene, carrosseries : la
 ## machine ne repond plus pendant quelques secondes), 15 a 60 s : une machine
@@ -61,6 +69,9 @@ var mode: Mode = Mode.OFFLINE
 ## "trailer": int, "power_left": int, "power_right": int, "ready": bool}]
 ## (choix de la page de selection, PowerCatalog : -1 = aucun).
 var members: Array[Dictionary] = []
+## Regles de la partie (rules()), recues du host avec le lobby ; vide hors
+## ligne. Le host lit les siennes dans GameState.
+var host_rules: Dictionary = {}
 var player_name: String = ""
 ## Faux pour les tests : launch_race ne change pas de scene.
 var auto_change_scene: bool = true
@@ -80,6 +91,9 @@ var debug_latency_ms: int = 0
 ## machine jette au lieu de les envoyer (les messages reliable ne sont jamais
 ## perdus : ENet les renvoie). Ligne de commande : -- --net-loss=2.
 var debug_loss_percent: float = 0.0
+## Tests seulement : gigue (ms), de 0 a cette valeur en plus de la latence,
+## tiree pour chaque paquet (l'ordre d'envoi est garde). -- --net-jitter=15.
+var debug_jitter_ms: int = 0
 
 var _peer: ENetMultiplayerPeer
 var _api: MultiplayerAPI
@@ -94,6 +108,8 @@ func _ready() -> void:
 			debug_latency_ms = maxi(a.get_slice("=", 1).to_int(), 0)
 		elif a.begins_with("--net-loss="):
 			debug_loss_percent = clampf(a.get_slice("=", 1).to_float(), 0.0, 100.0)
+		elif a.begins_with("--net-jitter="):
+			debug_jitter_ms = maxi(a.get_slice("=", 1).to_int(), 0)
 
 
 static func default_name() -> String:
@@ -168,6 +184,14 @@ static func _is_172_private(a: String) -> bool:
 	return b >= 16 and b <= 31
 
 
+## Debit montant du host (kbps, en-tetes compris) : un snapshot de `trucks`
+## camions a chacun des `players - 1` autres joueurs, tous les `ticks` ticks.
+## 12 joueurs a 60 Hz : ~2,6 Mbit/s ; a 20 Hz : ~0,9.
+static func host_uplink_kbps(players: int, trucks: int, ticks: int) -> float:
+	var size := NetRace.SNAPSHOT_HEADER + trucks * TruckState.SIZE + 1 + PACKET_OVERHEAD
+	return size * 60.0 / maxf(ticks, 1.0) * maxi(players - 1, 0) * 8.0 / 1000.0
+
+
 # --- ouverture et fermeture ---------------------------------------------------
 
 func host(port: int = DEFAULT_PORT) -> Error:
@@ -217,6 +241,7 @@ func leave() -> void:
 	_api = null
 	mode = Mode.OFFLINE
 	members = []
+	host_rules = {}
 	lobby_changed.emit()
 
 
@@ -378,15 +403,64 @@ func _refused(reason: String) -> void:
 	last_error = reason
 
 
-## Lobby a tous les joueurs acceptes (pas a un peer refuse, encore en train
-## de se deconnecter).
+## Lobby et regles a tous les joueurs acceptes (pas a un peer refuse, encore
+## en train de se deconnecter).
 func _broadcast_lobby() -> void:
 	lobby_changed.emit()
 	if _api == null or _api.multiplayer_peer == null:
 		return
 	var data := _pack(members)
+	var r := _pack_rules(rules())
 	for id in _guest_peers():
-		_lobby.rpc_id(id, data)
+		_lobby.rpc_id(id, data, r)
+
+
+## Host : regles changees au menu, envoyees a tous.
+func push_rules() -> void:
+	if is_host():
+		_broadcast_lobby()
+
+
+## Regles de la partie : celles du menu du host (GameState) chez le host,
+## celles recues chez un client. Le contre-la-montre devient une course, les
+## bots sont bornes aux places libres, "send_ticks" : cadence des snapshots.
+func rules() -> Dictionary:
+	if is_client():
+		return host_rules
+	var r := GameState.rules()
+	r["mode"] = online_mode(int(r["mode"]))
+	r["bots"] = clampi(int(r["bots"]), 0, MAX_PLAYERS - maxi(members.size(), 1))
+	r["send_ticks"] = snapshot_ticks
+	return r
+
+
+const RULES_ORDER: PackedStringArray = ["track", "speed_class", "mode", "arena_minutes", "trailer_drops", "bots",
+	"bot_level", "send_ticks"]
+
+
+static func _pack_rules(r: Dictionary) -> Array:
+	var out := []
+	for k: String in RULES_ORDER:
+		out.append(int(r.get(k, 0)))
+	return out
+
+
+static func _unpack_rules(a: Array) -> Dictionary:
+	if a.size() != RULES_ORDER.size():
+		return {}
+	var r := {}
+	for i in RULES_ORDER.size():
+		r[RULES_ORDER[i]] = int(a[i])
+	r["track"] = clampi(int(r["track"]), 0, GameStateNode.TRACKS.size() - 1)
+	r["speed_class"] = clampi(int(r["speed_class"]), 0, GameStateNode.SPEED_CLASSES.size() - 1)
+	r["mode"] = online_mode(int(r["mode"]))
+	r["trailer_drops"] = clampi(int(r["trailer_drops"]), 0, GameStateNode.MAX_TRAILER_DROPS)
+	r["bots"] = clampi(int(r["bots"]), 0, MAX_PLAYERS - 1)
+	r["bot_level"] = clampi(int(r["bot_level"]), 0, 2)
+	r["send_ticks"] = clampi(int(r["send_ticks"]), 1, SNAPSHOT_TICKS_LOW_BANDWIDTH)
+	if not GameStateNode.ARENA_MINUTES.has(int(r["arena_minutes"])):
+		r["arena_minutes"] = 4
+	return r
 
 
 func _guest_peers() -> Array[int]:
@@ -398,9 +472,10 @@ func _guest_peers() -> Array[int]:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _lobby(data: Array) -> void:
+func _lobby(data: Array, rules_data: Array) -> void:
 	var was_in := local_slot() >= 0
 	members = _unpack(data)
+	host_rules = _unpack_rules(rules_data)
 	lobby_changed.emit()
 	if not was_in and local_slot() >= 0:
 		joined.emit()
@@ -436,8 +511,8 @@ static func online_mode(mode: int) -> int:
 	return clampi(mode, 0, GameStateNode.MODE_NAMES.size() - 1)
 
 
-## Host : lance la course pour tous, sur le circuit, la categorie, le mode et
-## la duree de l'arene choisis au menu du host.
+## Host : lance la course pour tous, sur le circuit, la categorie, le mode,
+## la duree de l'arene et les bots (nombre, niveau) choisis au menu du host.
 func launch_race() -> void:
 	if not is_host():
 		return
@@ -445,14 +520,14 @@ func launch_race() -> void:
 	var mode := online_mode(GameState.game_mode)
 	for id in _guest_peers():
 		_launch.rpc_id(id, GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
-			GameState.arena_minutes)
+			GameState.arena_minutes, GameState.bot_count, GameState.bot_level)
 	_launch(GameState.selected_track, GameState.speed_class, snapshot_ticks, data, GameState.trailer_drops, mode,
-		GameState.arena_minutes)
+		GameState.arena_minutes, GameState.bot_count, GameState.bot_level)
 
 
 @rpc("authority", "call_remote", "reliable")
 func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: int = 3, mode: int = 0,
-		arena_minutes: int = 4) -> void:
+		arena_minutes: int = 4, bots: int = 0, bot_level: int = 1) -> void:
 	# chargement de la course : chacun peut se figer quelques secondes
 	for m in members:
 		var id := int(m["peer"])
@@ -468,6 +543,9 @@ func _launch(track: int, speed_class: int, send_ticks: int, data: Array, drops: 
 	GameState.game_mode = online_mode(mode)
 	# le compte a rebours de l'arene est le meme chez tous
 	GameState.arena_minutes = arena_minutes if GameStateNode.ARENA_MINUTES.has(arena_minutes) else 4
+	# les bots du host : il les simule, chacun les voit (LocalRace)
+	GameState.bot_count = clampi(bots, 0, MAX_PLAYERS - 1)
+	GameState.bot_level = clampi(bot_level, 0, 2)
 	members = _unpack(data)
 	race_launched.emit()
 	if auto_change_scene:

@@ -208,6 +208,10 @@ func _check_race_decor() -> void:
 		var c := _track.sample_position(_track.closest_sample(pos))
 		outside = outside and Vector2(pos.x - c.x, pos.z - c.z).length() > half + _track.wall_thickness + _track.wall_lean
 	check("4 tribunes au depart, au-dela des murs", blocks.size() == 4 and outside, "%d" % blocks.size())
+	# rumeur de la foule retiree (2026-10-22, « un peu brouillon et ca sert a
+	# rien ») : aucune tribune n'emet de son
+	var voices := stands.find_children("*", "AudioStreamPlayer3D", true, false)
+	check("tribunes muettes (plus de rumeur de la foule)", voices.is_empty(), "%d son(s)" % voices.size())
 	var crowd := stands.get_node_or_null("Crowd") as MultiMeshInstance3D
 	check_above("tribunes : spectateurs", int(stands.get_meta(&"spectators", 0)), 1999)
 	check("tribunes : la foule est un seul MultiMesh, sans ombre portee", crowd != null

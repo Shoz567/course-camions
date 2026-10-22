@@ -62,6 +62,11 @@ var show_fps: bool = false:
 ## active par defaut, sans effet tant que la carte tient 60 images/s.
 var dynamic_resolution: bool = true
 
+## Jauges Musique et Bruitages des parametres (0 a 100 %, SoundMix) ; la
+## jauge generale est le volume du Master.
+var music_volume: float = SoundMix.DEFAULT_MUSIC
+var effects_volume: float = SoundMix.DEFAULT_EFFECTS
+
 ## Regle l'echelle 3D de toutes les vues (enfant de l'autoload).
 var resolution: DynamicResolution
 
@@ -129,6 +134,53 @@ var arena_minutes: int = 4
 const MODE_NAMES: PackedStringArray = ["COURSE", "ÉLIMINATION", "CONTRE-LA-MONTRE", "ARÈNE"]
 var game_mode: int = GameMode.RACE
 
+## Reglages de partie du local et de l'en ligne, separes (2026-10-22 : « le
+## mode en ligne et local [...] pas tres bien separe ») : circuit, vitesse,
+## mode, duree de l'arene, largages, bots. Les champs ci-dessus sont ceux du
+## profil actif (la course les lit) ; use_profile range ceux-ci et sort les
+## autres. Le menu passe en ONLINE a l'ouverture de l'en ligne, en LOCAL a
+## celle de la partie locale.
+enum Profile { LOCAL, ONLINE }
+const RULE_KEYS: PackedStringArray = ["track", "speed_class", "mode", "arena_minutes", "trailer_drops", "bots",
+	"bot_level"]
+var profile: int = Profile.LOCAL
+var _profiles: Array[Dictionary] = [{}, {}]
+
+
+## Reglages de partie du profil actif.
+func rules() -> Dictionary:
+	return {"track": selected_track, "speed_class": speed_class, "mode": game_mode, "arena_minutes": arena_minutes,
+		"trailer_drops": trailer_drops, "bots": bot_count, "bot_level": bot_level}
+
+
+## Ecrit `r` (cles absentes : inchangees) dans les champs, ramenes dans leurs
+## bornes. Jusqu'a 11 bots en ligne (12 camions), 5 en local (`online` : -1
+## selon le profil actif, 0 local, 1 en ligne).
+func apply_rules(r: Dictionary, online: int = -1) -> void:
+	var max_bots := 11 if (online == 1 or (online < 0 and profile == Profile.ONLINE)) else 5
+	selected_track = clampi(int(r.get("track", selected_track)), 0, TRACKS.size() - 1)
+	speed_class = clampi(int(r.get("speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
+	game_mode = clampi(int(r.get("mode", game_mode)), 0, MODE_NAMES.size() - 1)
+	var minutes := int(r.get("arena_minutes", arena_minutes))
+	arena_minutes = minutes if ARENA_MINUTES.has(minutes) else 4
+	trailer_drops = clampi(int(r.get("trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
+	bot_count = clampi(int(r.get("bots", bot_count)), 0, max_bots)
+	bot_level = clampi(int(r.get("bot_level", bot_level)), 0, 2)
+
+
+## Passe au profil `p` : les reglages actuels restent a l'autre, ceux de `p`
+## reviennent (la premiere fois : ceux du moment). Vrai si le circuit change.
+func use_profile(p: int) -> bool:
+	p = clampi(p, 0, 1)
+	if p == profile:
+		return false
+	var track := selected_track
+	_profiles[profile] = rules()
+	profile = p
+	if not _profiles[p].is_empty():
+		apply_rules(_profiles[p])
+	return selected_track != track
+
 
 ## Scene de course du circuit `index` (borne aux circuits connus).
 static func track_scene(index: int) -> String:
@@ -155,8 +207,12 @@ static func speed_tuning(base: VehicleTuning, speed_class_index: int) -> Vehicle
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var offscreen := OS.get_cmdline_user_args().has("--offscreen")
+	if offscreen:
+		go_offscreen()
 	# bus Effets / Ambiance / Musique et limiteur, avant le premier son
 	SoundMix.setup()
+	SoundMix.apply_user_volumes(music_volume, effects_volume)
 	resolution = DynamicResolution.new()
 	resolution.name = "DynamicResolution"
 	add_child(resolution)
@@ -178,6 +234,11 @@ func _ready() -> void:
 	layer.add_child(_fps_label)
 	if persist:
 		read_settings(SETTINGS_PATH)
+	if offscreen:
+		# essai en arriere-plan : rien n'ecrit dans les reglages du joueur
+		persist = false
+	if OS.get_cmdline_user_args().has("--mute"):
+		AudioServer.set_bus_mute(AudioServer.get_bus_index("Master"), true)
 
 
 ## Haut du compteur (px sous le bord de l'ecran) : le menu le pose sous ses
@@ -201,6 +262,24 @@ func _style_fps() -> void:
 	_fps_label.add_theme_stylebox_override("normal", sb)
 
 
+## Essais et captures fenetres (2026-10-22 : « que tu le lances en
+## arriere-plan pour pas qu'il s'affiche devant moi [...] couper le son
+## aussi ») : -- --offscreen. La fenetre, avant d'etre montree, quitte le
+## plein ecran du projet, ne prend pas le focus et se pose hors de l'ecran,
+## en 1920 x 1080 (l'ecran de reference) ; le rendu et les captures
+## continuent. Les reglages ne sont pas reecrits (_ready) ; -- --mute coupe le
+## son (separe : les essais du son le gardent, 2026-10-22).
+## Lance par tools/hidden_run.ps1 (fenetre nee dans une fenetre cachee, sans
+## meme l'ecran de demarrage : CW_HIDDEN_HOST), elle reste ou elle est.
+static func go_offscreen() -> void:
+	if DisplayServer.get_name() == "headless" or OS.get_environment("CW_HIDDEN_HOST") == "1":
+		return
+	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_NO_FOCUS, true)
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(Vector2i(1920, 1080))
+	DisplayServer.window_set_position(Vector2i(-20000, -20000))
+
+
 ## Sauvegarde les options (sauf en headless) ; appele a chaque changement.
 func save_settings() -> void:
 	if persist:
@@ -212,17 +291,19 @@ func write_settings(path: String) -> Error:
 	var bus := AudioServer.get_bus_index("Master")
 	cfg.set_value("audio", "on", not AudioServer.is_bus_mute(bus))
 	cfg.set_value("audio", "volume", db_to_linear(AudioServer.get_bus_volume_db(bus)))
+	cfg.set_value("audio", "music", music_volume)
+	cfg.set_value("audio", "effects", effects_volume)
 	cfg.set_value("video", "quality", graphics_quality)
 	cfg.set_value("video", "show_fps", show_fps)
 	cfg.set_value("video", "dynamic_resolution", dynamic_resolution)
-	cfg.set_value("race", "track", selected_track)
-	cfg.set_value("race", "speed_class", speed_class)
+	# reglages de partie : [race] pour le local, [online] pour l'en ligne
+	_profiles[profile] = rules()
+	for p in 2:
+		var section := "online" if p == Profile.ONLINE else "race"
+		var r: Dictionary = _profiles[p] if not _profiles[p].is_empty() else rules()
+		for k: String in RULE_KEYS:
+			cfg.set_value(section, k, int(r[k]))
 	cfg.set_value("race", "trailers", trailer_choice)
-	cfg.set_value("race", "bots", bot_count)
-	cfg.set_value("race", "trailer_drops", trailer_drops)
-	cfg.set_value("race", "mode", game_mode)
-	cfg.set_value("race", "arena_minutes", arena_minutes)
-	cfg.set_value("race", "bot_level", bot_level)
 	for a: String in PadBindings.ACTIONS:
 		cfg.set_value("pad", a, pad_bindings[a])
 	return cfg.save(path)
@@ -239,17 +320,24 @@ func read_settings(path: String) -> Error:
 	AudioServer.set_bus_mute(bus, not bool(cfg.get_value("audio", "on", true)))
 	var vol := clampf(float(cfg.get_value("audio", "volume", 1.0)), 0.0, 1.0)
 	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(vol, 0.00001)))
+	music_volume = clampf(float(cfg.get_value("audio", "music", SoundMix.DEFAULT_MUSIC)), 0.0, 100.0)
+	effects_volume = clampf(float(cfg.get_value("audio", "effects", SoundMix.DEFAULT_EFFECTS)), 0.0, 100.0)
+	SoundMix.apply_user_volumes(music_volume, effects_volume)
 	graphics_quality = clampi(int(cfg.get_value("video", "quality", graphics_quality)), 0, GraphicsSettings.NAMES.size() - 1)
 	show_fps = bool(cfg.get_value("video", "show_fps", show_fps))
 	dynamic_resolution = bool(cfg.get_value("video", "dynamic_resolution", dynamic_resolution))
-	selected_track = clampi(int(cfg.get_value("race", "track", selected_track)), 0, TRACKS.size() - 1)
-	speed_class = clampi(int(cfg.get_value("race", "speed_class", speed_class)), 0, SPEED_CLASSES.size() - 1)
-	bot_count = clampi(int(cfg.get_value("race", "bots", bot_count)), 0, 5)
-	trailer_drops = clampi(int(cfg.get_value("race", "trailer_drops", trailer_drops)), 0, MAX_TRAILER_DROPS)
-	game_mode = clampi(int(cfg.get_value("race", "mode", game_mode)), 0, MODE_NAMES.size() - 1)
-	var minutes := int(cfg.get_value("race", "arena_minutes", arena_minutes))
-	arena_minutes = minutes if ARENA_MINUTES.has(minutes) else 4
-	bot_level = clampi(int(cfg.get_value("race", "bot_level", bot_level)), 0, 2)
+	# reglages de partie des deux profils ; l'en ligne, jamais enregistre (fichier
+	# d'avant le 2026-10-22), part de ceux du local
+	var defaults := rules()
+	for p in 2:
+		var section := "online" if p == Profile.ONLINE else "race"
+		var r := {}
+		for k: String in RULE_KEYS:
+			r[k] = cfg.get_value(section if cfg.has_section_key(section, k) else "race",
+				k, defaults[k])
+		apply_rules(r, p)
+		_profiles[p] = rules()
+	apply_rules(_profiles[profile])
 	var trailers: Variant = cfg.get_value("race", "trailers", trailer_choice)
 	if trailers is PackedInt32Array and (trailers as PackedInt32Array).size() == trailer_choice.size():
 		trailer_choice = trailers

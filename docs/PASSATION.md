@@ -26,6 +26,15 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - Page de sélection en ligne : remorque et pouvoirs choisis par chaque joueur
   et envoyés au host (#45).
 - Pouvoirs rejoués chez les clients (missile, laser, aura, recharges) (#46).
+- Bots en ligne, simulés par le host, vus en marionnettes par les clients
+  (#93) ; tours du client à jour à chaque checkpoint (#92).
+- Autres camions au présent du joueur local (façon Rocket League), sur leur
+  courbe, lissés ; bonus prédits (#94).
+- 12 joueurs en ligne (écran partagé : 6) ; débit du host affiché au
+  salon ; bots deux fois moins coûteux à 12 (#95).
+- Décor proche et lointain, style par circuit, qualité extrême
+  (`visuel/decor-style-extreme`, intégrée après #95, `docs/VISUEL.md`) :
+  vérifiée en ligne et à 12 camions (PLAN.md).
 - Correctifs : largage prédit refusé par le host rendu, trou dans une remorque
   aussi chez le client, délai de largage à la réapparition (#67).
 - À faire : **test réel sur 2 PC** (reporté depuis longtemps).
@@ -146,6 +155,16 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
   (`HudDial`, `RaceHud`). Menu : boutons ronds Son / Paramètres à
   l'habillage (`UiKit.style_icon`), compteur FPS en plaquette sous ces
   boutons (il les recouvrait).
+- **Menus rangés en pages** (2026-10-22) : accueil à quatre tuiles, partie
+  locale par étapes, menu en ligne à part (`OnlineMenu` : héberger ou
+  rejoindre, puis salon avec les règles du host vues par tous) ; réglages
+  du local et de l'en ligne séparés (`GameState.use_profile`). Circuit en
+  premier, au menu déroulant (local et salon).
+- Musique du menu (`MenuMusic`) ; camions du plateau muets (le « bruit
+  sourd ») ; bruitages 6 dB plus bas, musique de course 2 dB plus haut.
+  Trois jauges dans les paramètres : général, musique, bruitages.
+- Vraies musiques (CC0, MintoDog, Git LFS) : une par circuit, version
+  rapide au dernier tour, une pour le menu (`game/audio/music/`).
 
 ### Performance, rendu, son, build
 - Détail du travail visuel du 2026-10-22 (décor proche, décor lointain,
@@ -189,7 +208,8 @@ Le détail tâche par tâche est dans `PLAN.md` ; ce document résume.
 - Fumée des dégâts redessinée : bouffées rondes à bord net, éclairage en
   deux tons, gris qui s'éclaircit en montant (plus de tache noire en plein
   jour).
-- Sons de tour, d'arrivée, de largage, foule des tribunes (#36, #40).
+- Sons de tour, d'arrivée, de largage (#36, #40) ; la foule des tribunes,
+  jugée brouillonne, est muette depuis le 2026-10-22.
 - Export Windows et Linux préparé (#38).
 
 ## Outils hors du jeu

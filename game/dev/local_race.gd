@@ -27,8 +27,9 @@ extends Node3D
 ## RaceLaps compte les tours, AutoReset replace hors piste ou retourne. Le
 ## classement s'affiche pour tous des la premiere arrivee. Quand tous sont
 ## arrives : Options / Entree relance, Create / Echap revient au menu (Echap a tout
-## moment). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous ;
-## elle disparait avec la scene (menu, rejouer).
+## moment). Musique de course (RaceMusic) du GO jusqu'a l'arrivee de tous, celle
+## du circuit, puis sa version rapide au dernier tour (_update_music) ; elle
+## disparait avec la scene (menu, rejouer).
 ##
 ## Le nombre de joueurs vient du menu principal (GameState.requested_players)
 ## quand `players_from_menu` est vrai (dev/race.tscn) ; les scenes a nombre
@@ -48,13 +49,22 @@ const MODELS: PackedStringArray = [
 	# reprennent un modele existant, repeint par leur livree (LIVERIES)
 	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
 	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
+	# J7 a J12 (en ligne, 2026-10-22 : 12 joueurs) : modeles repris, repeints
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Rouge.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Bleu.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Vert.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Jaune.glb",
+	"../Assets_Visuels/Camion/Camions_Course_Export/Realiste/Camion_Vert.glb",
 ]
 const NAMES: PackedStringArray = ["J1 AZUR", "J2 DURAND", "J3 SOLEIL", "J4 VERT",
 	"J5 VIOLET NÉO-TOKYO", "J6 ORANGE CARBO"]
 ## Couleur des boites quand le modele est absent (clone neuf).
 const TINTS: Array[Color] = [Color(0.15, 0.35, 0.9), Color(0.85, 0.12, 0.1),
 	Color(0.95, 0.8, 0.1), Color(0.15, 0.7, 0.25),
-	Color(0.55, 0.16, 0.95), Color(1.0, 0.38, 0.04)]
+	Color(0.55, 0.16, 0.95), Color(1.0, 0.38, 0.04),
+	Color(1.0, 0.4, 0.7), Color(0.15, 0.85, 0.95), Color(0.92, 0.92, 0.95),
+	Color(0.7, 0.95, 0.15), Color(0.72, 0.45, 0.22), Color(0.55, 0.95, 0.75)]
 ## Livree par joueur (TruckVisual.livery) : par prefixe de nom de materiau du
 ## modele, les proprietes repeintes. Vide : le modele garde ses couleurs.
 const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
@@ -84,6 +94,49 @@ const LIVERIES: Array[Dictionary] = [{}, {}, {}, {},
 		"Jante": {"albedo": Color(0.85, 0.42, 0.22), "metallic": 1.0, "roughness": 0.22},
 		"Chrome": {"albedo": Color(0.8, 0.45, 0.28), "metallic": 1.0, "roughness": 0.15},
 	},
+	# J7 ROSE, J8 CYAN, J9 BLANC, J10 CITRON, J11 BRONZE, J12 MENTHE
+	{
+		"Peinture_Cabine": {"albedo": Color(1.0, 0.35, 0.65), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.25, 0.05, 0.15), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(1.0, 0.6, 0.85), "emission": Color(1.0, 0.6, 0.85), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(1.0, 0.6, 0.85), "emission": Color(1.0, 0.6, 0.85), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.95, 0.75, 0.85), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.1, 0.8, 0.95), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.03, 0.15, 0.2), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.5, 1.0, 1.0), "emission": Color(0.5, 1.0, 1.0), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.5, 1.0, 1.0), "emission": Color(0.5, 1.0, 1.0), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.8, 0.95, 1.0), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.92, 0.92, 0.95), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.75, 0.76, 0.8), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.2, 0.6, 1.0), "emission": Color(0.2, 0.6, 1.0), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.2, 0.6, 1.0), "emission": Color(0.2, 0.6, 1.0), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.85, 0.9), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.7, 0.95, 0.12), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.08, 0.12, 0.03), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.85, 1.0, 0.3), "emission": Color(0.85, 1.0, 0.3), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.85, 1.0, 0.3), "emission": Color(0.85, 1.0, 0.3), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.25, 0.25, 0.25), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.7, 0.42, 0.2), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.2, 0.12, 0.06), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(1.0, 0.7, 0.35), "emission": Color(1.0, 0.7, 0.35), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(1.0, 0.7, 0.35), "emission": Color(1.0, 0.7, 0.35), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.6, 0.35), "metallic": 1.0, "roughness": 0.2},
+	},
+	{
+		"Peinture_Cabine": {"albedo": Color(0.5, 0.95, 0.72), "metallic": 0.7, "roughness": 0.18, "clearcoat": 1.0},
+		"Peinture_Caisse": {"albedo": Color(0.05, 0.2, 0.15), "metallic": 0.4, "roughness": 0.35},
+		"Bande_Deco": {"albedo": Color(0.7, 1.0, 0.85), "emission": Color(0.7, 1.0, 0.85), "emission_energy": 2.5},
+		"Texte_Logo": {"albedo": Color(0.7, 1.0, 0.85), "emission": Color(0.7, 1.0, 0.85), "emission_energy": 2.0},
+		"Jante": {"albedo": Color(0.85, 0.95, 0.9), "metallic": 1.0, "roughness": 0.2},
+	},
 ]
 ## Aide des commandes. En arene, pas de largage (une remorque par vie) : les
 ## morceaux entre crochets y disparaissent (help_for).
@@ -97,8 +150,12 @@ const HELP_SPLIT: PackedStringArray = [
 	"J6 : manette 6",
 ]
 const MAX_PLAYERS := 6
+## En ligne : 12 camions au plus, joueurs et bots (2026-10-22 : « monter le
+## nombre de joueurs max en ligne a 12 ») ; l'ecran partage reste a 6.
+const MAX_TRUCKS := 12
 ## Couleur de chaque joueur, pour le sas READY.
-const COLOR_NAMES: PackedStringArray = ["BLEU", "ROUGE", "JAUNE", "VERT", "VIOLET", "ORANGE"]
+const COLOR_NAMES: PackedStringArray = ["BLEU", "ROUGE", "JAUNE", "VERT", "VIOLET", "ORANGE",
+	"ROSE", "CYAN", "BLANC", "CITRON", "BRONZE", "MENTHE"]
 ## Echelle du HUD selon le nombre de joueurs (vues plus petites).
 const HUD_SCALE: Array[float] = [1.0, 0.85, 0.6, 0.6, 0.5, 0.5]
 
@@ -153,6 +210,9 @@ const TRAILER_STEER_THRESHOLD := 0.6
 @onready var auto_reset: AutoReset = $AutoReset
 
 var players: Array[Player] = []
+## En ligne : case et nom de chaque camion, figes au depart (_freeze_slots).
+var _slots: PackedInt32Array = []
+var _names: PackedStringArray = []
 ## Prechauffe des effets en cours (FxWarmup) ; depart retenu sous l'ecran de
 ## chargement, et ce qu'il deviendra (sas READY ou compte a rebours).
 var _warmup: FxWarmup
@@ -232,7 +292,11 @@ func _ready() -> void:
 	# compteur d'images par seconde en haut (le menu l'avait descendu)
 	GameState.set_fps_top(10.0)
 	if NetSession.is_online():
-		player_count = clampi(NetSession.members.size(), 1, MAX_PLAYERS)
+		player_count = clampi(NetSession.members.size(), 1, MAX_TRUCKS)
+		# bots du host (2026-10-22 : « tout disponible en ligne, les bots
+		# egalement ») : il les simule, les clients les voient en marionnettes
+		bot_count = GameState.bot_count
+		bot_level = GameState.bot_level
 		ready_gate = true
 		# le mode du host (envoye au lancement), sauf le contre-la-montre
 		game_mode = NetSessionNode.online_mode(GameState.game_mode)
@@ -255,7 +319,8 @@ func _ready() -> void:
 			arena_limit_ticks = GameState.arena_minutes * 3600
 		race.total_laps = 999
 		race.wrong_way_enabled = false
-	bot_count = 0 if NetSession.is_online() else clampi(bot_count, 0, MAX_PLAYERS - player_count)
+	bot_count = clampi(bot_count, 0, (MAX_TRUCKS if NetSession.is_online() else MAX_PLAYERS) - player_count)
+	_freeze_slots()
 	# vue propre par defaut : F1 affiche les traces de debug
 	DebugDraw.enabled = false
 	_apply_graphics()
@@ -285,8 +350,8 @@ func _ready() -> void:
 	add_child(ambience)
 	music = RaceMusic.new()
 	music.name = "RaceMusic"
+	music.theme_id = track.theme_id
 	add_child(music)
-	RaceMusic.prepare()
 	split = null if NetSession.is_online() else _build_split_screen()
 	for i in player_count + bot_count:
 		players.append(_add_player(i))
@@ -362,11 +427,31 @@ func is_authority() -> bool:
 	return not NetSession.is_client()
 
 
-## Case du lobby du joueur `i` (sa couleur) : `i` hors ligne.
+## Case du lobby du joueur `i` (sa couleur) : `i` hors ligne. En ligne,
+## figee au depart (_freeze_slots).
 func slot_of(i: int) -> int:
-	if NetSession.is_online() and i < NetSession.members.size():
-		return int(NetSession.members[i]["slot"])
+	if i < _slots.size():
+		return _slots[i]
 	return i
+
+
+## En ligne : la case (couleur) et le nom de chaque camion, figes au depart.
+## Un joueur parti ne decale plus ceux des autres ; les bots prennent les
+## cases libres, dans l'ordre.
+func _freeze_slots() -> void:
+	_slots.clear()
+	_names.clear()
+	if not NetSession.is_online():
+		return
+	for i in mini(player_count, NetSession.members.size()):
+		_slots.append(int(NetSession.members[i]["slot"]))
+		_names.append(String(NetSession.members[i]["name"]))
+	var free := 0
+	for b in bot_count:
+		while _slots.has(free):
+			free += 1
+		_slots.append(free)
+		_names.append("BOT %d %s" % [b + 1, COLOR_NAMES[free % COLOR_NAMES.size()]])
 
 
 ## Le joueur `i` joue-t-il sur cette machine ?
@@ -376,15 +461,17 @@ func is_local(i: int) -> bool:
 	return not NetSession.is_online() or slot_of(i) == NetSession.local_slot()
 
 
-## Le joueur `i` est-il un bot (hors ligne, apres les joueurs) ?
+## Le joueur `i` est-il un bot (apres les joueurs ; en ligne, simule par le
+## host) ?
 func is_bot(i: int) -> bool:
-	return i >= player_count and not NetSession.is_online()
+	return i >= player_count
 
 
-## Nom affiche : J1 AZUR... hors ligne, nom du lobby en ligne.
+## Nom affiche : J1 AZUR... hors ligne, nom du lobby en ligne (BOT n pour un
+## bot), fige au depart.
 func player_name(i: int) -> String:
-	if NetSession.is_online():
-		return NetSession.name_of_slot(slot_of(i))
+	if i < _names.size():
+		return _names[i]
 	if is_bot(i):
 		return "BOT %d %s" % [i - player_count + 1, COLOR_NAMES[i]]
 	return NAMES[i]
@@ -472,7 +559,7 @@ func _add_player(i: int) -> Player:
 	# remorque et pouvoirs choisis sur la page de selection du menu ; en ligne,
 	# ceux que chaque joueur a envoyes au lobby (NetSession.set_loadout)
 	var choice := 0
-	if online:
+	if online and not is_bot(i):
 		var m := NetSession.member_of_slot(slot_of(i))
 		choice = int(m.get("trailer", GameState.trailer_choice[0] if mine else 0))
 		p.power_left = int(m.get("power_left", -1))
@@ -526,8 +613,9 @@ func _add_player(i: int) -> Player:
 		health.respawn_provider = respawn_for
 		health.launch_provider = launch_for
 		health.spot_ok = on_road
-	if is_bot(i):
-		# bot : il conduit seul, sans camera ni HUD
+	if is_bot(i) and is_authority():
+		# bot : il conduit seul, sans camera ni HUD (client en ligne : une
+		# marionnette, comme un joueur distant)
 		var bot := BotInputSource.new()
 		bot.name = "Bot%d" % (i - player_count + 1)
 		bot.setup(track, t, bot_level, i - player_count)
@@ -1201,6 +1289,7 @@ func _exit_tree() -> void:
 
 func _process(delta: float) -> void:
 	_update_slowmo(delta)
+	_update_music()
 	var elapsed := Engine.get_physics_frames() - _state_tick
 	var standings := standings_text()
 	if _notice != "" and Engine.get_physics_frames() < _notice_until:
@@ -1510,6 +1599,20 @@ func arena_seconds_left() -> int:
 	if not _arena_running() or arena_limit_ticks <= 0:
 		return -1
 	return maxi(ceili((arena_limit_ticks - (Engine.get_physics_frames() - _state_tick)) / 60.0), 0)
+
+
+## Musique : version du dernier tour quand le plus avance des joueurs de ce
+## PC l'entame (en ligne : le sien ; ecran partage : celui qui mene), ou en
+## fin de manche d'arene ou d'elimination (RaceMusic.final_due).
+func _update_music() -> void:
+	if music == null or not music.playing or music.final or state != State.RACING:
+		return
+	var lap := 0
+	for i in players.size():
+		if is_local(i):
+			lap = maxi(lap, race.display_lap(players[i].truck))
+	music.set_final(RaceMusic.final_due(game_mode, lap, race.total_laps, _alive().size(), players.size(),
+		arena_seconds_left()))
 
 
 ## Joueurs encore en course (elimination) : ni elimines, ni partis.

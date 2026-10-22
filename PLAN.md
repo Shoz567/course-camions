@@ -791,7 +791,7 @@ Lire `docs/NETCODE.md` avant de commencer.
 |---|---|---|
 | 7.1 | Menu principal, options, remapping (`[x]` 2026-10-17 : options sauvegardées d'un lancement à l'autre - son, volume, qualité, compteur, résolution dynamique, circuit, vitesse, remorques - et réaffectation des boutons de la manette, `settings_remap_test` ; clavier non réaffectable ; écran de chargement avant chaque course, le départ attend qu'il s'efface - `loading_screen_test`) | gameplay-engineer |
 | 7.2 | Personnalisation des camions (couleurs, pièces générées) (en attente : décision de l'équipe, 2026-10-17) | blender-modeler |
-| 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, `crowd_sound_test`) - `[x]`) | — |
+| 7.3 | Sons et musique complets (`[~]` musique de course procédurale `RaceMusic`, 2026-09-30 : boucle arcade de 16 mesures à 150 BPM, du GO à l'arrivée ; bips du menu et du départ ; bruitages du camion - moteur, crissement, chocs, klaxon, nitro, pneu crevé - et explosions ; 2026-10-17 : carillon de tour, annonce du dernier tour, fanfare d'arrivée (`RaceSound`), sellette au largage, `race_sound_test` ; ambiance des circuits - pluie et ville, vagues et vent (`AmbienceSound`, `ambience_test`) ; rumeur 3D de chaque tribune, clameurs et sifflets (`CrowdSound`, retirée le 2026-10-22 : « un peu brouillon et ça sert à rien ») - `[x]`) | — |
 | 7.4 | Juice complet (particules, ralentis d'arrivée) (`[x]` particules : poussière, gerbes d'eau, étincelles, fumée et débris des dégâts, explosions - phases 3 et 4.5 ; ralenti d'arrivée le 2026-10-17 : 0,3 pendant 0,7 s puis retour en douceur, hors ligne, `finish_slowmo_test`) | gameplay-engineer |
 | 7.5 | Pistes supplémentaires (en attente : tracé et ambiance à décider par l'équipe, 2026-10-17) | track-designer |
 | 7.6 | Profilage et optimisation (`[x]` passes du 2026-10-09, du 2026-10-17 et du 2026-10-18 ci-dessous : plus de gel au-delà de 50 ms en course à 4 joueurs) | godot-qa |
@@ -1236,7 +1236,62 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     lisait « NON CLASSÉ, temps limite écoulé » ; il lit maintenant
     « ÉLIMINÉ » et sa place (aussi en solo et en ligne) ;
   - menu en ligne : le host qui a réglé des bots lit qu'il n'y en a pas en
-    ligne.
+    ligne (remplacé le jour même par les bots en ligne, ci-dessous).
+- [x] **Bots en ligne** (2026-10-22, « tout est bien disponible en
+  multijoueur en ligne, les bots également ») : le host simule les bots
+  choisis à son menu (nombre, niveau), en plus des joueurs (6 camions au
+  plus) ; le lancement les transmet (protocole 6) ; les clients les voient
+  en marionnettes, comme un joueur distant. Remorques et pouvoirs des bots
+  déterministes (même calcul partout) ; nom « BOT n COULEUR » et case libre.
+  Cases et noms de tous les camions figés au départ (`LocalRace._slots`) :
+  un joueur parti ne décale plus les couleurs des autres. Essai à deux
+  instances, 3 bots durs : course, élimination et arène, mêmes tours,
+  places, vies et PV des deux côtés ; `net_bots_test` ; `net_session_test`
+  vérifie les bots reçus au lancement.
+- [x] **Moins de latence en ligne** (2026-10-22, « le moins de latence
+  possible, le plus fluide ; inspire-toi du netcode d'autres jeux ») :
+  - autres camions au présent du joueur local (façon Rocket League) : son
+    camion est prédit en avance d'un aller-retour sur le host ; les autres
+    étaient montrés dans le passé (latence + 2 ticks), ils sont extrapolés
+    d'autant (aller-retour mesuré sur l'ack des snapshots, borné à 300 ms),
+    sur leur courbe (la vitesse tourne avec le lacet), lissés à l'affichage
+    (`NetRace.render_tick`, `TruckState.extrapolate`) ;
+  - bonus pris par son camion : disparaît tout de suite chez le client, le
+    host confirme (sinon il revient après 1 s) ;
+  - mesure (`dev/net_e2e.tscn`, option `--trace`, et gigue simulée
+    `--net-jitter`) : position relative d'un autre camion par rapport au
+    sien, chez le client contre chez le host à la même frame (camions à
+    moins de 40 m) : réseau local 2,65 → 0,58 m, 80 ms d'aller-retour 6,9 →
+    0,9 m, 160 ms avec 2 % de perte 9,2 → 2,0 m. En contrepartie, petites
+    corrections visibles un peu plus fréquentes (1 à 6 cm par image en
+    moyenne, contre 1 à 4) ;
+  - `net_present_test` ; `net_protocol_test` suit la borne d'extrapolation
+    (15 → 24 ticks).
+- [x] **12 joueurs en ligne** (2026-10-22, « monter le nombre de joueurs max
+  en ligne à 12 ») : `NetSession.MAX_PLAYERS` 6 → 12, `LocalRace.MAX_TRUCKS`
+  = 12 camions en ligne, joueurs et bots (l'écran partagé reste à 6) ;
+  protocole 7 (une version à 6 couleurs plantait sur les cases 6 à 11) :
+  - 6 couleurs de plus (ROSE, CYAN, BLANC, CITRON, BRONZE, MENTHE), avec
+    modèle repris et livrée ;
+  - grille de départ : un rang de 4, un rang de 2 en quinconce, en
+    alternance (12 camions en 4 rangs) ; avant, les places 6 et 7 tombaient
+    sur les 4 et 5 ;
+  - coût d'un tick chez le host (`--fixed-fps`, course) : 12 camions dont
+    11 bots, 17,7 → 13,2 ms, 6 camions 10,6 → 9,1 ms ; arène à 12 : 9,7 ms.
+    Les bots en prenaient 9,6 : chacun refaisait la liste des obstacles et
+    la recherche de leur échantillon ; elle est faite une fois par tick pour
+    tous (`BotInputSource._others`). Hors raccourci, la vitesse cible se lit
+    directement sur le profil (déjà freinage compris). 12 joueurs humains,
+    sans bot : ~7 ms ;
+  - débit d'envoi du host affiché au salon (`NetSession.host_uplink_kbps`) :
+    12 joueurs, 2,6 Mbit/s à 60 Hz, 0,9 à 20 Hz (« Connexion lente »
+    conseillée au-delà de 1 Mbit/s) ;
+  - essais réels à 12 instances du jeu sur ce PC (host et 11 clients, bots
+    aux commandes) : course 90 s, arène 2 min, mêmes vies, PV et places chez
+    le host et les clients ; classement, bandeau, mini-carte et salon à 12
+    vérifiés en capture ; `net_twelve_test` (grilles des 3 circuits,
+    couleurs, course hébergée à 12) ; `split_modes_arena_test` : au moins un
+    joueur sorti (« 2 camions » basculait avec le nouveau calcul des bots).
 - [x] **Aide des commandes** (2026-10-22) : accents rétablis ; plus de
   « remorque » en arène (pas de largage).
 - [x] **HUD** (2026-10-20) : pouvoir actif, pastille verte qui se vide avec
@@ -1294,6 +1349,141 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
     l'activer, arbres détaillés (`TreeKit`), plus d'arbres, maisons et tours
     ouvragées, décor plus dense et vu plus loin (`extreme_quality_test`,
     `main_menu_test`).
+- [x] **Intégration de `visuel/decor-style-extreme` dans `main`**
+  (2026-10-22, après #95, « implémente le tout en veillant à ne créer aucun
+  problème ») : fusion sans conflit avec les bots en ligne, la latence et
+  les 12 joueurs. Vérifié contre `main` :
+  - 132 tests sur 132 ;
+  - chargement d'un circuit : +0 à +0,3 s (extrême : 0,5 à 1,3 s), loin du
+    délai de chargement en ligne (15 s) ;
+  - coût d'un tick du host à 12 camions (headless) : ~+0,7 ms (12,4 contre
+    11,7, budget 16,7) ; cadran du HUD : +0,1 à +0,3 ms de processeur par
+    image et par joueur (habillage Sakura le plus cher) ;
+  - fenêtré, qualité haute, 1 joueur et 5 bots : 60 images/s sur les
+    3 circuits, comme `main` ; captures des 3 circuits correctes ;
+  - en ligne, host et client (course et arène sur Sakura) : mêmes tours,
+    places, vies et PV. Aucun décor n'a de collision.
+  - `net_e2e` : `--track=N`, `--quality=N`, captures toutes les 10 s.
+- [x] **Menus rangés, en ligne à part** (2026-10-22, « améliorer tout ce qui
+  est menu […] quand on sélectionne en ligne, que ça ouvre un autre menu
+  dans lequel on peut choisir toutes les caractéristiques séparées. Le mode
+  en ligne et local […] pas très bien séparé ») :
+  - **accueil** : logo et quatre tuiles, JOUER EN LOCAL, JOUER EN LIGNE,
+    PARAMÈTRES, QUITTER ; Rond / Échap reviennent d'une page à l'accueil,
+    Échap y quitte ; après une course locale, retour sur la partie locale ;
+  - **partie locale** par étapes : 1 mode (et son explication), 2 circuit,
+    3 joueurs et bots (manettes, salle d'attente), 4 règles (vitesse, durée
+    de l'arène ou largages), RETOUR et PRÊT ; ses raccourcis (1-6, T, L1/R1,
+    Triangle, Options) ne marchent que sur sa page ;
+  - **en ligne** (`OnlineMenu`, `ui/online_menu.gd`, sorti de
+    `main_menu.gd`) : pseudo, puis deux cartes HÉBERGER / REJOINDRE (erreur
+    dessous) ; dans une partie, le salon : règles à gauche (le host choisit
+    mode, circuit, vitesse, durée ou largages, bots jusqu'à 11, niveau,
+    connexion lente ; le contre-la-montre n'est plus proposé), joueurs à
+    droite (pastille de couleur, convoi, adresse à donner, débit du host),
+    ce qu'on attend écrit au-dessus de CHOISIR MON CONVOI / LANCER /
+    QUITTER LA PARTIE. Partie ouverte : JOUER EN LOCAL grisée, JOUER EN
+    LIGNE ramène au salon ;
+  - **réglages séparés** : local et en ligne ont chacun circuit, vitesse,
+    mode, durée, largages et bots (`GameState.use_profile`, sections
+    `[race]` et `[online]` de settings.cfg ; l'en ligne part de ceux du
+    local la première fois) ;
+  - **protocole 8** : les règles du host partent avec le lobby
+    (`NetSession.host_rules`, `push_rules`) : chacun les voit en direct,
+    l'ambiance du menu suit le circuit du host ;
+  - tests : `menu_pages_test` (nouveau : pages, Échap, réglages séparés
+    dans les deux sens et dans settings.cfg, salon, partie ouverte),
+    `net_session_test` (règles reçues avant le lancement), `main_menu_test`
+    (accueil d'abord, clic sur JOUER EN LOCAL).
+- [x] **Circuit d'abord, en menu déroulant** (2026-10-22, « inverse mode de
+  jeu et map […] la sélection des maps ne soit plus des cases, mais un menu
+  déroulant ») : partie locale 1 circuit, 2 mode ; salon en ligne : CIRCUIT
+  au-dessus de MODE. Une ligne par circuit, pastille à sa teinte, ambiance
+  en infobulle (`MainMenu.track_dropdown`) ; la liste s'ouvre sur le
+  circuit choisi (la première flèche ne faisait que surligner la première
+  ligne). T et Triangle font toujours défiler les circuits.
+  `main_menu_test` : clic, flèche bas et Entrée choisissent Playa.
+- [x] **Tests en parallèle, essais en arrière-plan** (2026-10-22, « pas moyen
+  d'aller plus vite en faisant plusieurs à la fois ? […] le lancer en
+  arrière-plan pour pas qu'il s'affiche devant moi […] couper le son ») :
+  - `cli_runner.gd` : `--jobs` scènes à la fois (défaut : un tiers des
+    cœurs, 8 au plus), les plus longues d'abord (`user://test_durations.json`) ;
+    mesures de temps seules à la fin, scènes réseau dans une file. Suite
+    complète : 9 min 20 → 1 min 15, 133/133 ;
+  - `tools/hidden_run.ps1` : Godot lancé dans une fenêtre jamais montrée
+    (`--wid`), écran de démarrage compris ; `-- --offscreen`
+    (`GameState.go_offscreen`) : muet, réglages non réécrits (lancé seul :
+    fenêtre hors de l'écran, sans focus). Le rendu et les captures
+    continuent (menu et course capturés ainsi).
+- [x] **Son du menu et mixage** (2026-10-22, « dans le menu, quand on lance,
+  il y a un bruit sourd […] qu'à la place, on ait une musique dans le menu
+  […] en course, les bruitages sont trop forts par rapport à la musique ») :
+  - bruit sourd : les 6 camions du plateau faisaient tourner leur moteur au
+    ralenti (boucle à 55 Hz) ; ils sont muets (moteur, klaxon, boost). Bus
+    Effets au menu : -46 dB en continu → silence ;
+  - musique du menu (`MenuMusic`, procédurale) : 104 BPM en fa majeur,
+    16 mesures (~37 s), piano électrique FM, basse syncopée, batterie
+    légère, thème en cloche FM ; rendue en fond (~1,8 s), entrée en fondu ;
+  - bus Effets -6 → -12 dB, musique de course -8 → -6 dB. Mesuré en course
+    (`net_e2e --audio-stats`, 50 s, 5 bots, Cyber City et Sakura) :
+    bruitages -25 → -32 dB en moyenne, crêtes -7 → -12 à -14 dB ; musique
+    -14 → -12 dB, crêtes -9 → -7 dB (les chocs dépassaient la musique) ;
+  - `tools/hidden_run.ps1` : l'essai apparaît réduit dans la barre des
+    tâches (« je veux quand même pouvoir y accéder ») ; `--mute` séparé de
+    `--offscreen` ;
+  - tests : `menu_music_test` (nouveau), `sound_mix_test` (12 dB).
+- [x] **Trois jauges de volume** (2026-10-22, « c'est un peu faible […] une
+  jauge pour la musique et une jauge pour les bruitages. Et une jauge
+  générale ») : paramètres, Son et réglages : Volume général (Master),
+  Musique, Bruitages (Effets et Ambiance), de 0 à 100 % avec leur
+  pourcentage, gardées dans settings.cfg (`GameState.music_volume`,
+  `effects_volume`, `SoundMix.apply_user_volumes`, par-dessus le niveau de
+  chaque bus) ; musique +3 dB par défaut (bus Musique 0 → +3). La ligne
+  « Vibrations manette (bientôt) », qui ne faisait rien, est retirée : la
+  page débordait sur la barre d'aide. Tests : `sound_mix_test`,
+  `settings_remap_test`, `main_menu_test` (jauges, page qui tient).
+- [x] **Bruitages plus forts à 100 %** (2026-10-22, « je trouve les bruitages
+  faibles, même à 100 % ») : 100 % ne rendait que le -12 dB du réglage
+  précédent. Bus Effets et Ambiance à 0 dB pour la jauge à 100 %, musique
+  à +5 dB ; jauges par défaut : musique 80 % (+3 dB), bruitages 50 % (-6 dB,
+  le niveau d'origine). Une jauge déjà enregistrée garde son pourcentage.
+- [x] **Vraies musiques, une par circuit, version rapide au dernier tour**
+  (2026-10-22, « une par map […] la musique change uniquement au dernier
+  tour […] sur la version avec un plus gros BPM […] pour du local, la
+  musique de la personne la plus avancée ») : morceaux CC0 de MintoDog
+  (OpenGameArt) choisis par l'utilisateur, en Git LFS
+  (`game/audio/music/CREDITS.md`) :
+  - menu : Racing Game Title ; Cyber City : Neon sign Circuit ; Playa :
+    Sunny City ; Sakura : Blossom Mountain [Remake] ; chacun avec sa
+    version Climax au dernier tour (fondu croisé de 1,2 s) ; l'arène prend
+    celle de son habillage ;
+  - `RaceMusic.final_due` : course et contre-la-montre, dernier tour du
+    plus avancé des joueurs de ce PC (en ligne : le sien) ; arène et
+    élimination, dernière minute ou 2 camions restants (pas une manche à
+    deux) ;
+  - musiques procédurales (`RaceMusic`, `MenuMusic`) remplacées ;
+    `sakura_last_lap` fourni en FLAC (illisible par Godot) : remplacé par
+    le Climax du Remake en OGG, téléchargé avec l'accord de l'utilisateur ;
+  - tests : `race_music_test` (réécrit : fichiers en boucle, règle du
+    dernier tour, course en un tour), `menu_music_test`.
+- [x] **Plus de son de la foule** (2026-10-22, « retirer le son que font les
+  spectateurs […] un peu brouillon et ça sert à rien ») : `CrowdSound` et
+  son test supprimés ; `track_decor_test` vérifie que les tribunes sont
+  muettes. Les spectateurs restent visibles.
+- [x] **Bots : la course d'abord** (2026-10-22, « leur objectif principal,
+  c'est de finir la course et pas d'attaquer le joueur. Car au début, on le
+  voit, ils foncent sur le joueur […] numéro 2, dès qu'ils peuvent tirer ») :
+  en course, la conduite des bots ne vise jamais personne ; mais au départ,
+  chacun visait une voie tirée de son numéro (-4 / 4 / 0 / -8 / 8 m), sans
+  rapport avec sa place sur la grille à 12 (#95) : au GO, il traversait la
+  grille, parfois vers le joueur. Sa voie de départ est maintenant sa place
+  réelle (`BotInputSource.lane`, au premier poll) : il part droit et
+  rejoint sa ligne sur 250 m. Joueur immobile sur la grille, 5 bots durs,
+  10 s : chocs subis 1 / 3 / 3 → 0 / 0 / 0 (Cyber City, Playa, Sakura) ;
+  moyens 0, faciles 0 / 1 / 0 (un facile, coincé derrière le camion arrêté,
+  le touche à 46 km/h). Les tirs restent secondaires : un pouvoir part sur
+  le camion qui se trouve devant, sans détour pour l'atteindre, au rythme
+  du niveau. Test : `bot_start_test`.
 
 ## Questions de design ouvertes
 
@@ -1301,7 +1491,7 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
 ajout discret au milieu d'une autre.
 
 - **IA / adversaires pilotés par l'ordinateur.** Bots hors ligne livrés le
-  2026-10-19 (phase 7.8) ; en ligne : pas encore.
+  2026-10-19 (phase 7.8) ; en ligne le 2026-10-22 (simulés par le host).
 - **Remorques** — tranché le 2026-09-28 (semi-remorque sur le même corps que le
   tracteur, inertie imposée), puis le 2026-09-29 : **articulée** à la sellette,
   ±35°, la caisse de collision pivote et balaie les adversaires (VEHICLE_SPEC

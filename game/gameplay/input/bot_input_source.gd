@@ -196,8 +196,15 @@ const GOLDEN := 0.618034
 var track: TrackBlockout
 var truck: Truck
 var level: int = Level.MEDIUM
-## Voie de depart (m, > 0 a droite de la ligne de course).
+## Voie de depart (m, > 0 a droite de la ligne de course) : sa place sur la
+## grille, prise au premier poll (2026-10-22 : « au debut, ils foncent sur le
+## joueur a la place de partir pour faire la course » ; la voie venait du
+## numero du bot, -4 / 4 / 0 / -8 / 8 m, sans rapport avec sa place depuis la
+## grille a 12 en rangs de 4 : au GO, il traversait la grille vers elle, parfois
+## celle du joueur). Il part droit devant et rejoint sa ligne sur
+## START_BLEND_M.
 var lane: float = 0.0
+var _lane_set: bool = false
 var index: int = -1
 var target_speed: float = 0.0
 ## Ce qui le gene devant (trafic), ou null.
@@ -373,7 +380,12 @@ var _lat_now: float = 0.0
 var _pass_side: float = 0.0
 var _pass_target: Node3D = null
 var _driven_m: float = 0.0
-var _hints: Dictionary = {}
+## Liste des obstacles du tick, partagee par tous les bots (_others).
+static var _shared_frame: int = -1
+static var _shared_track: TrackBlockout
+static var _shared_list: Array[Dictionary] = []
+static var _shared_index: Dictionary = {}
+static var _shared_hints: Dictionary = {}
 var _slow_ticks: int = 0
 var _boost_was: bool = false
 ## Ticks avant que le bot puisse reagir a nouveau avec un pouvoir.
@@ -392,8 +404,6 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 	track = t
 	truck = tr
 	level = clampi(bot_level, Level.EASY, Level.HARD)
-	var lanes := [-4.0, 4.0, 0.0, -8.0, 8.0]
-	lane = lanes[number % lanes.size()]
 	_phase = number * 37
 	_power_wait = int(START_POWER_TICKS[level]) + number * START_POWER_STEP_TICKS
 	line = RacingLine.of(t)
@@ -447,6 +457,9 @@ func poll(tick: int) -> InputFrame:
 		frame.steer = 0.0
 		return frame
 	index = _sample_of(truck.global_position, index)
+	if not _lane_set:
+		_lane_set = true
+		lane = _lateral_of(truck.global_position, index) - _line_at(index)
 	var v := truck.linear_velocity.length()
 	if RaceManager.state == RaceManagerNode.State.RACING:
 		_driven_m += v / Engine.physics_ticks_per_second
@@ -537,10 +550,10 @@ func _traffic(v: float) -> Dictionary:
 	var push := 0.0
 	for o: Dictionary in _others():
 		var node := o["node"] as Node3D
+		if node == truck:
+			continue
 		var at: Vector3 = o["at"]
-		# echantillon de chacun, suivi d'un tick a l'autre (recherche locale)
-		var oi := _sample_of(at, int(_hints.get(node, -1)))
-		_hints[node] = oi
+		var oi := int(o["i"])
 		var gap := _s_gap(index, oi)
 		var lat := _lateral_of(at, oi)
 		var ov := float(o["v"])
@@ -716,17 +729,51 @@ func _choose_side(other_lat: float, reach: float, want: float, half: float) -> f
 ## Camions (pas soi), epaves, remorques larguees, barils : noeud, centre,
 ## vitesse, gabarit le long de la piste (avant et arriere du centre) et demi-
 ## largeur en travers (m).
+## Ce qui roule ou traine sur la piste, avec l'echantillon de chacun ("i") :
+## construit une fois par tick pour tous les bots (2026-10-22 : chaque bot
+## refaisait la liste et la recherche de l'echantillon de chacun ; 11 bots,
+## 6,6 ms par tick sur 15,7, la moitie du budget d'un tick). Chacun y saute
+## son propre camion.
 func _others() -> Array[Dictionary]:
+	var f := Engine.get_physics_frames()
+	if f != _shared_frame or _shared_track != track:
+		if _shared_track != track:
+			_shared_hints.clear()
+		_shared_frame = f
+		_shared_track = track
+		_shared_list = _build_others()
+		_shared_index.clear()
+		for o: Dictionary in _shared_list:
+			_shared_index[o["node"]] = o["i"]
+	return _shared_list
+
+
+## Echantillon d'un camion de la course (liste du tick), -1 s'il n'y est pas.
+func _index_of_truck(t: Truck) -> int:
+	_others()
+	return int(_shared_index.get(t, -1))
+
+
+## Echantillon de `p`, suivi d'un tick a l'autre par noeud (recherche locale).
+func _shared_sample(node: Node3D, p: Vector3) -> int:
+	var i := _sample_of(p, int(_shared_hints.get(node.get_instance_id(), -1)))
+	_shared_hints[node.get_instance_id()] = i
+	return i
+
+
+func _build_others() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var tree := truck.get_tree()
 	for n in tree.get_nodes_in_group(TruckPowers.TARGETS):
 		var t := n as Truck
 		# epave : cache, sans collision (sa carcasse est un obstacle a part)
-		if t == null or t == truck or not t.is_inside_tree() or t.is_wrecked():
+		if t == null or not t.is_inside_tree() or t.is_wrecked():
 			continue
 		var vel := t.linear_velocity.length()
 		var tail := NOSE_M if t.is_trailer_detached() else TAIL_M
-		out.append({"node": t, "at": t.global_position, "v": vel, "front": NOSE_M, "back": tail, "half": HALF_WIDTH_M})
+		var at := t.global_position
+		out.append({"node": t, "at": at, "v": vel, "front": NOSE_M, "back": tail, "half": HALF_WIDTH_M,
+			"i": _shared_sample(t, at)})
 	for n in tree.get_nodes_in_group(DetachedTrailer.OBSTACLES):
 		var d := n as DetachedTrailer
 		if d == null or not d.is_inside_tree():
@@ -734,7 +781,7 @@ func _others() -> Array[Dictionary]:
 		# boite orientee projetee sur la piste
 		var xf := d.global_transform
 		var c := xf * d.box_center
-		var i := _sample_of(c, int(_hints.get(d, -1)))
+		var i := _shared_sample(d, c)
 		var f := track.sample_forward(i)
 		var r := track.sample_right(i)
 		var hx := d.box_size.x / 2.0
@@ -742,13 +789,13 @@ func _others() -> Array[Dictionary]:
 		var along := absf(f.dot(xf.basis.x)) * hx + absf(f.dot(xf.basis.z)) * hz
 		var across := absf(r.dot(xf.basis.x)) * hx + absf(r.dot(xf.basis.z)) * hz
 		out.append({"node": d, "at": c, "v": maxf(0.0, d.linear_velocity.dot(f)), "front": along, "back": along,
-			"half": across})
+			"half": across, "i": i})
 	var barrel_r := ExplosiveBarrel.BARREL_RADIUS + 1.0
 	for k in track.barrel_count():
 		var barrel := track.barrel_node(k)
 		if barrel != null and is_instance_valid(barrel) and barrel.is_inside_tree() and barrel.visible 				and not barrel.exploded_state:
 			out.append({"node": barrel, "at": barrel.global_position, "v": 0.0, "front": barrel_r, "back": barrel_r,
-				"half": barrel_r})
+				"half": barrel_r, "i": _shared_sample(barrel, barrel.global_position)})
 	return out
 
 
@@ -782,7 +829,12 @@ func _speed(v: float, cap: float) -> void:
 	var lead := v * SPEED_LEAD_S
 	var reach := minf(v * v / (2.0 * brake) + PLAN_STEP_M, PLAN_MAX_M)
 	target_speed = INF
-	var d := 0.0
+	if _branch < 0 and _exit < 0:
+		# sur la piste, le profil tient deja compte du freinage (meme
+		# deceleration : passe arriere de RacingLine.speed_profile) ; le minimum
+		# est en d = 0 (2026-10-22 : la boucle coutait 1,8 ms par tick a 11 bots)
+		target_speed = _profile_at(lead)
+	var d := 0.0 if is_inf(target_speed) else reach + 1.0
 	while d <= reach:
 		var p := _profile_at(lead + d)
 		target_speed = minf(target_speed, sqrt(p * p + 2.0 * brake * d))
@@ -1535,8 +1587,9 @@ func _pursuer() -> Truck:
 		var t := n as Truck
 		if t == null or t == truck or t.is_wrecked() or not t.is_inside_tree():
 			continue
-		var i := _sample_of(t.global_position, int(_hints.get(t, index)))
-		_hints[t] = i
+		var i := _index_of_truck(t)
+		if i < 0:
+			continue
 		# son nez par rapport a l'arriere de notre remorque (negatif : derriere)
 		var gap := _s_gap(index, i) + NOSE_M + TAIL_M
 		if gap > 0.0 or gap < -DROP_BEHIND_M:

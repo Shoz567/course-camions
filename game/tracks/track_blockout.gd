@@ -398,15 +398,27 @@ func frame_at(i: int, lateral: float, lift: float) -> Transform3D:
 ## Case de depart `slot` (0 = pole) : rangs derriere la ligne, le 1er dans les
 ## couloirs `grid_lateral`, les suivants dans `grid_back_lateral`.
 @warning_ignore("integer_division")
+## Place `slot` de la grille : un rang de grid_lateral, puis, avec
+## grid_back_lateral, un rang en quinconce et un rang plein en alternance
+## (4, 2, 4, 2 : 12 camions en 4 rangs, 2026-10-22 ; avant, les places 6 et 7
+## tombaient sur les 4 et 5).
 func get_start_transform(slot: int) -> Transform3D:
 	_ensure_built()
-	var row := slot / grid_lateral.size()
-	var col := slot % grid_lateral.size()
+	var row := 0
+	var col := slot
+	while true:
+		var width_row := grid_lateral.size()
+		if row % 2 == 1 and not grid_back_lateral.is_empty():
+			width_row = grid_back_lateral.size()
+		if col < width_row:
+			break
+		col -= width_row
+		row += 1
 	var s := _length - grid_distance - row * grid_row_spacing
 	var i := roundi(s / (_length / _pos.size()))
 	var lateral := grid_lateral[col]
-	if row > 0 and not grid_back_lateral.is_empty():
-		lateral = grid_back_lateral[col % grid_back_lateral.size()]
+	if row % 2 == 1 and not grid_back_lateral.is_empty():
+		lateral = grid_back_lateral[col]
 	return frame_at(i, lateral, 0.0)
 
 
@@ -778,7 +790,8 @@ func _scatter_pickups() -> void:
 		var tmp := kinds[k]
 		kinds[k] = kinds[j]
 		kinds[j] = tmp
-	# grille de 6 camions au plus (LocalRace.MAX_PLAYERS)
+	# grille de 6 camions (hors ligne ; en ligne jusqu'a 12, LocalRace.MAX_TRUCKS :
+	# leurs 2 derniers rangs peuvent alors froler le dernier bonus du tour)
 	var rows := ceili(6.0 / maxf(grid_lateral.size(), 1.0))
 	var hi := _length - grid_distance - rows * grid_row_spacing - 20.0
 	var span := (hi - PICKUP_START_M) / n

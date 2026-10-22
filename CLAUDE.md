@@ -95,7 +95,20 @@ make run           # lance le jeu
 ```
 
 - `make test` doit rester **sous 60 s** : le hook `pre-commit` la lance à chaque
-  commit. Si elle déborde, découpe la suite, ne retire pas le hook.
+  commit. Si elle déborde, découpe la suite, ne retire pas le hook. Depuis le
+  2026-10-22, les scènes tournent **en parallèle** (`cli_runner.gd`,
+  `--jobs`) : ~75 s sur la machine de référence (9 min 20 l'une après
+  l'autre), encore au-dessus de la cible. Une scène qui mesure un temps réel
+  (`Time.get_ticks_*`, `Performance.get_monitor`) passe seule à la fin ; une
+  scène réseau (`NetSession`, `ENetMultiplayerPeer`) dans une file unique.
+- Tout lancement **fenêtré** pour un essai ou une capture passe par
+  `tools/hidden_run.ps1` : la fenêtre naît dans une fenêtre hôte réduite et
+  non activée, rien ne s'affiche (pas même l'écran de démarrage), mais
+  l'essai est dans la barre des tâches (« Crazy Wheels - essai de Claude ») et
+  le joueur peut l'ouvrir. Il prend `-- --offscreen` (`GameState.go_offscreen` :
+  réglages du joueur jamais réécrits ; lancé seul, fenêtre hors de l'écran
+  et sans focus) et `--mute` pour couper le son, sauf quand on travaille le
+  son. Le projet démarre sinon en plein écran, devant le joueur.
 - `make test-full` applique la règle des 5 runs (§10) et valide les critères de
   sortie de phase.
 
@@ -189,11 +202,14 @@ supporter :
 - Committer des binaires : `*.glb`, `*.blend1`, `.godot/`, `builds/` sont
   git-ignorés (le hook `pre-commit` les refuse). Exceptions : `baseline.json`,
   et les modèles `.glb` de l'équipe dans `Assets_Visuels/`, versionnés **par
-  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7).
+  Git LFS** (décision du 2026-10-02, `docs/ENVIRONMENT.md` §6.7), et les
+  musiques de `game/audio/music/`, en Git LFS aussi (2026-10-22).
 - Télécharger des assets tiers (modèles, textures, sons).
-  Les sons et la musique **synthétisés par le code** (`MenuSound`,
-  `CountdownSound`, `RaceMusic`) ne sont pas des assets tiers ; la musique de
-  course a été demandée par l'utilisateur le 2026-09-30.
+  Les sons **synthétisés par le code** (`MenuSound`, `CountdownSound`, moteurs,
+  ambiances) ne sont pas des assets tiers. Exception décidée par
+  l'utilisateur le 2026-10-22 : les **musiques** (menu, une par circuit et sa
+  version du dernier tour) sont des morceaux CC0 de MintoDog choisis par lui
+  (`game/audio/music/CREDITS.md`) ; en ajouter un autre se demande.
 - Refactorer une couche qui n'est pas dans la phase en cours de `PLAN.md`.
 - **Modifier `docs/VEHICLE_SPEC.md` ou `docs/METRICS.md`.** Ce sont des contrats
   entre plusieurs chaînes d'outils (physique, Blender, pistes). Un agent qui a

@@ -9,7 +9,8 @@ extends PhysicsTest
 ##   B. elimination (elimination toutes les 10 s) : 4 elimines, un vainqueur,
 ##      la course se termine ; un joueur elimine lit « ELIMINE » sur SON ecran,
 ##      fin comprise (il lisait « temps limite ecoule ») ;
-##      arene (1 vie, manche de 2 min) : au moins 2 camions sortis, la manche se
+##      arene (1 vie, manche de 2 min) : au moins un joueur sorti (2026-10-22 :
+##      « 2 camions » basculait d'une manche a l'autre), la manche se
 ##      termine, un joueur sorti lit « ELIMINE » sur son ecran.
 
 @export var arena := false
@@ -93,7 +94,7 @@ func _test_finish() -> void:
 			shown.append(str((players[i] as Object).get("hud").get("_center_text")))
 	if arena:
 		check("B arene : des camions sortis, fin de manche, un joueur sorti le lit sur son ecran",
-			eliminated.size() >= 2 and RaceManager.state == RaceManagerNode.State.FINISHED
+			not shown.is_empty() and RaceManager.state == RaceManagerNode.State.FINISHED
 			and shown.all(func(s: String) -> bool: return s.contains("ÉLIMINÉ")),
 			"vies %s, etat %d, ecrans des joueurs sortis %s" % [lives, RaceManager.state, shown])
 	else:

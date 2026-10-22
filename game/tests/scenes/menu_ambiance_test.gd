@@ -30,6 +30,8 @@ func _test_setup() -> void:
 	_menu = (load("res://ui/main_menu.tscn") as PackedScene).instantiate() as MainMenu
 	_menu.auto_change_scene = false
 	add_child(_menu)
+	# partie locale (touche T, PRET et sa note)
+	_menu.open_local()
 
 
 func _key(code: Key) -> void:
@@ -100,25 +102,27 @@ func _test_tick(t: int) -> void:
 				_menu.player_buttons[0].get_theme_stylebox("normal") is StyleBoxFlat]
 			_menu.select_players(3)
 			_menu.select_speed(2)
-		6: _click(_menu.track_buttons[1])
+		6:
+			_menu.track_option.select(1)
+			_menu.track_option.item_selected.emit(1)
 		12:
 			_seen["fit1"] = _fits()
 			var moon := _menu.get_node("Moon") as DirectionalLight3D
 			_seen["playa"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("playa_sun.tres"), moon.light_energy > 0.8,
 				_menu.player_buttons[0].get_theme_stylebox("normal") is SkewTileBox,
 				(_menu.start_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color.is_equal_approx(UiKit.PRIMARY_FILL)]
-			_seen["kept"] = [_ui_count(), _menu.track_buttons[1].button_pressed, _menu.player_buttons[2].button_pressed,
+			_seen["kept"] = [_ui_count(), _menu.track_option.selected == 1, _menu.player_buttons[2].button_pressed,
 				_menu.speed_buttons[2].button_pressed, _menu.selected_players, GameState.speed_class]
 		14: _key(KEY_T)
 		20:
 			_seen["fit2"] = _fits()
 			_seen["sakura"] = [UiKit.skin, _sets(), _env().resource_path.ends_with("sakura_day.tres"),
-				UiKit.FONT_NAMES.has("Yu Mincho"), _menu.track_buttons[2].button_pressed,
+				UiKit.FONT_NAMES.has("Yu Mincho"), _menu.track_option.selected == 2,
 				_menu.player_buttons[0].get_theme_stylebox("normal") is SkewTileBox]
 			_menu.toggle_settings()
 		22: _menu.select_track(0)
 		28:
-			_seen["panel"] = [UiKit.skin, _menu.settings.visible, _menu.home.visible, _ui_count()]
+			_seen["panel"] = [UiKit.skin, _menu.settings.visible, _menu.local_page.visible, _ui_count()]
 
 
 func _test_finish() -> void:

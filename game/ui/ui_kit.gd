@@ -23,9 +23,12 @@ extends RefCounted
 
 enum Look { NEON, PLAYA, SAKURA }
 
-## Couleur de chaque joueur (BLEU, ROUGE, JAUNE, VERT, VIOLET, ORANGE).
+## Couleur de chaque joueur (BLEU, ROUGE, JAUNE, VERT, VIOLET, ORANGE ; en
+## ligne, jusqu'a 12 : ROSE, CYAN, BLANC, CITRON, BRONZE, MENTHE).
 const PLAYER_COLORS: Array[Color] = [Color(0.2, 0.55, 1.0), Color(1.0, 0.24, 0.24),
-	Color(1.0, 0.84, 0.15), Color(0.25, 0.9, 0.4), Color(0.7, 0.32, 1.0), Color(1.0, 0.52, 0.12)]
+	Color(1.0, 0.84, 0.15), Color(0.25, 0.9, 0.4), Color(0.7, 0.32, 1.0), Color(1.0, 0.52, 0.12),
+	Color(1.0, 0.45, 0.75), Color(0.2, 0.9, 1.0), Color(0.95, 0.95, 0.97), Color(0.75, 1.0, 0.2),
+	Color(0.8, 0.55, 0.3), Color(0.55, 1.0, 0.78)]
 
 static var skin: int = Look.NEON
 ## Fond (voiles, barres), panneau, tuile sombre (cartes, cases a plat).
@@ -352,8 +355,11 @@ static func style_primary(b: Button, font_size: int) -> void:
 	b.add_theme_stylebox_override("pressed", box(PRIMARY_FILL.darkened(0.12), PRIMARY_BORDER, bw, -1.0, -1,
 		Color(PRIMARY_BORDER, 0.5), 8))
 	b.add_theme_stylebox_override("focus", focus_box())
+	# grise (LANCER en attendant les convois) : fond eteint, texte attenue
+	b.add_theme_stylebox_override("disabled", box(Color(PRIMARY_FILL.darkened(0.55), 0.55), Color(PRIMARY_BORDER, 0.2), bw))
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(c, PRIMARY_TEXT)
+	b.add_theme_color_override("font_disabled_color", Color(PRIMARY_TEXT.lerp(TEXT, 0.5), 0.55))
 
 
 ## Petit bouton d'icone (son, parametres) : galet rond a l'habillage

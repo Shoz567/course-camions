@@ -2,6 +2,9 @@ extends PhysicsTest
 
 ## Menu principal (ui/main_menu.tscn), par les vrais chemins d'entree
 ## (Input.parse_input_event : clavier, manette, clics souris) :
+##   - accueil d'abord (2026-10-22, menu range en pages) : focus sur JOUER EN
+##     LOCAL, la touche 3 n'y fait rien ; un clic sur la tuile ouvre la
+##     partie locale, ou se passe tout ce qui suit ;
 ##   - titre dans la colonne de gauche (les camions sont exposes a droite),
 ##     entierement a l'ecran ; 6 boutons de joueurs, 1 joueur par defaut ;
 ##   - showroom : les camions sont sur le plateau tournant, qui tourne, et les
@@ -9,10 +12,11 @@ extends PhysicsTest
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
 ##     camions montres en decor aussi ; touche 6 : les 6 camions tiennent sur
 ##     le plateau ;
-##   - circuit : Cyber City par defaut ; un clic sur PLAYA DEL SOL le choisit
-##     (GameState.selected_track, scene de course, ambiance du sous-titre), Triangle
-##     passe au suivant (Sakura, le 3e circuit) ; les trois noms tiennent dans
-##     leur carte ;
+##   - circuit (menu deroulant, 2026-10-22) : Cyber City par defaut ; un clic
+##     ouvre la liste, fleche bas et Entree choisissent PLAYA DEL SOL
+##     (GameState.selected_track, scene de course, ambiance du sous-titre),
+##     Triangle passe au suivant (Sakura, le 3e circuit) ; les trois noms
+##     tiennent dans le menu ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
 ##     il montre la DualSense (les commandes Forza de la demande, legendes
@@ -96,13 +100,23 @@ func _test_tick(t: int) -> void:
 			_cam_start = cam
 			_defaults_ok = _menu.selected_players == 1 and _visible_trucks() == 1 \
 					and _menu.player_buttons[0].button_pressed and not _menu.player_buttons[1].button_pressed
-			_defaults_track = GameState.selected_track == 0 and _menu.track_buttons[0].button_pressed \
+			_defaults_track = GameState.selected_track == 0 and _menu.track_option.selected == 0 \
 					and _menu.race_scene() == "res://dev/race.tscn"
 			var title_center := _menu.title.get_global_rect().get_center().x
 			var vp := _menu.get_viewport().get_visible_rect()
 			var tr := _menu.title.get_global_rect()
 			_seen["title_left"] = title_center < vp.size.x / 2.0 and vp.encloses(tr)
 			_seen["plate_yaw"] = _menu.showroom.turntable.rotation.y
+			# accueil d'abord (2026-10-22) : tuiles, focus sur JOUER EN LOCAL ; la
+			# touche 3 n'y change rien
+			_seen["title_page"] = [_menu.title_page.visible, _menu.local_page.visible, _menu.local_tile.has_focus()]
+			_key(KEY_3, true)
+		4:
+			_key(KEY_3, false)
+			_seen["title_keys"] = _menu.selected_players
+		5: _click(_menu.local_tile, true)
+		6: _click(_menu.local_tile, false)
+		8: _seen["local_open"] = [_menu.title_page.visible, _menu.local_page.visible, _menu.start_button.has_focus()]
 		10: _key(KEY_3, true)
 		11: _key(KEY_3, false)
 		14:
@@ -145,6 +159,8 @@ func _test_tick(t: int) -> void:
 		64:
 			var back := _menu.settings.find_child("Back", true, false) as Button
 			_seen["settings_open"] = _menu.settings.visible and back.has_focus()
+			# trois jauges (2026-10-22) : RETOUR reste au-dessus de la barre d'aide
+			_seen["settings_fit"] = back.get_global_rect().end.y <= 1080.0 - UiKit.PAGE_BOTTOM
 			_pad(JOY_BUTTON_B, true)
 		65: _pad(JOY_BUTTON_B, false)
 		68: _seen["settings_closed"] = not _menu.settings.visible and _menu.settings_button.has_focus()
@@ -158,6 +174,14 @@ func _test_tick(t: int) -> void:
 			_menu.volume_slider.value = 50.0
 			_seen["volume_db"] = AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Master"))
 			_menu.volume_slider.value = 100.0
+			# jauges Musique et Bruitages (2026-10-22)
+			_menu.music_slider.value = 40.0
+			_menu.effects_slider.value = 20.0
+			_seen["jauges"] = [GameState.music_volume, GameState.effects_volume,
+				snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(SoundMix.MUSIC)), 0.01),
+				snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(SoundMix.EFFECTS)), 0.01)]
+			_menu.music_slider.value = SoundMix.DEFAULT_MUSIC
+			_menu.effects_slider.value = SoundMix.DEFAULT_EFFECTS
 			_seen["sound_check"] = _menu.sound_check.button_pressed
 			var env := (_menu.get_node("WorldEnvironment") as WorldEnvironment).environment
 			var was := [GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
@@ -185,41 +209,50 @@ func _test_tick(t: int) -> void:
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
 		82: _seen["back"] = not _menu.settings.visible
-		83: _click(_menu.track_buttons[1], true)
-		84: _click(_menu.track_buttons[1], false)
+		# circuit : clic sur le menu deroulant, fleche bas, Entree
+		83: _click(_menu.track_option, true)
+		84: _click(_menu.track_option, false)
 		85:
-			_seen["track_click"] = [GameState.selected_track, _menu.track_buttons[1].button_pressed,
-				_menu.track_buttons[0].button_pressed, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[1]["tagline"])]
+			_seen["track_popup"] = [_menu.track_option.get_popup().visible, _menu.track_option.item_count]
+			_key(KEY_DOWN, true)
+		86: _key(KEY_DOWN, false)
+		87: _key(KEY_ENTER, true)
+		88: _key(KEY_ENTER, false)
+		89:
+			_seen["track_click"] = [GameState.selected_track, _menu.track_option.selected,
+				_menu.track_option.get_popup().visible, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[1]["tagline"])]
 			_pad(JOY_BUTTON_Y, true)
-		86:
+		90:
 			_pad(JOY_BUTTON_Y, false)
 			_key(KEY_6, true)
-		87: _key(KEY_6, false)
-		90:
+		91: _key(KEY_6, false)
+		94:
 			# coin le plus eloigne de chaque ensemble (3,6 m de large, ~20 m de long)
 			var reach := 0.0
 			for truck in _menu.trucks:
 				reach = maxf(reach, Vector2(absf(truck.position.x) + 1.8, 9.9).length())
 			_seen["key6"] = [_menu.selected_players, _visible_trucks(), reach < Showroom.PLATE_RADIUS]
 			_seen["track_pad"] = [GameState.selected_track, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[2]["tagline"])]
-			# les cartes des 3 circuits tiennent dans la colonne, sans deborder
-			var fit := true
-			for b in _menu.track_buttons:
-				var font := b.get_theme_font("font")
-				var w := font.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, b.get_theme_font_size("font_size")).x
-				fit = fit and w + 24.0 <= b.size.x
+			# les noms des 3 circuits tiennent dans le menu deroulant (pastille et
+			# fleche comprises)
+			var o := _menu.track_option
+			var font := o.get_theme_font("font")
+			var fit := o.item_count == 3
+			for i in o.item_count:
+				var w := font.get_string_size(o.get_item_text(i), HORIZONTAL_ALIGNMENT_LEFT, -1, o.get_theme_font_size("font_size")).x
+				fit = fit and w + o.get_item_icon(i).get_width() + 120.0 <= o.size.x
 			_seen["track_fit"] = fit
 			_key(KEY_3, true)
-		91: _key(KEY_3, false)
+		95: _key(KEY_3, false)
 		110: _pad(JOY_BUTTON_START, true)
 		111: _pad(JOY_BUTTON_START, false)
 		114:
-			_seen["start"] = [_menu.loadout.visible, _menu.loadout.panels.size(), _menu.home.visible,
+			_seen["start"] = [_menu.loadout.visible, _menu.loadout.panels.size(), _menu.local_page.visible,
 				_launches.duplicate()]
 			_pad(JOY_BUTTON_B, true)
 		115: _pad(JOY_BUTTON_B, false)
 		118:
-			_seen["back_home"] = [_menu.loadout.visible, _menu.home.visible, _menu.start_button.has_focus()]
+			_seen["back_home"] = [_menu.loadout.visible, _menu.local_page.visible, _menu.start_button.has_focus()]
 			_pad(JOY_BUTTON_A, true)
 		120: _pad(JOY_BUTTON_A, false)
 		122: _seen["cross_opens"] = [_menu.loadout.visible, _launches.duplicate()]
@@ -280,10 +313,11 @@ func _test_finish() -> void:
 	check("manette R : 4 joueurs", _seen["r"] == 4, str(_seen["r"]))
 	check("manette L : 3 joueurs", _seen["l"] == 3, str(_seen["l"]))
 	check("clic sur 2 JOUEURS : choisi et seul enfonce", _seen["click2"] == [2, true, false], str(_seen["click2"]))
-	check("circuit : 3 boutons, Cyber City par defaut", _menu.track_buttons.size() == 3 and _defaults_track)
-	check("circuit : les noms tiennent dans leur carte", _seen.get("track_fit", false))
-	check("circuit : clic sur PLAYA DEL SOL (GameState, scene, sous-titre)",
-		_seen.get("track_click", []) == [1, true, false, "res://dev/race_playa.tscn", true], str(_seen.get("track_click", [])))
+	check("circuit : menu deroulant de 3 circuits, Cyber City par defaut", _menu.track_option.item_count == 3 and _defaults_track)
+	check("circuit : le clic ouvre la liste des 3 circuits", _seen.get("track_popup", []) == [true, 3], str(_seen.get("track_popup")))
+	check("circuit : les noms tiennent dans le menu deroulant", _seen.get("track_fit", false))
+	check("circuit : menu deroulant, fleche bas et Entree choisissent PLAYA DEL SOL (GameState, scene, sous-titre), liste refermee",
+		_seen.get("track_click", []) == [1, 1, false, "res://dev/race_playa.tscn", true], str(_seen.get("track_click", [])))
 	check("circuit : Triangle passe au suivant, Sakura",
 		_seen.get("track_pad", []) == [2, "res://dev/race_sakura.tscn", true], str(_seen.get("track_pad", [])))
 	check("son : un clic coupe le bus Master", _seen["mute"] == [true, "SON : OFF"], str(_seen["mute"]))
@@ -346,10 +380,19 @@ func _test_finish() -> void:
 	circle.button_index = JOY_BUTTON_B
 	check("Croix valide, Rond revient (ui_accept / ui_cancel)", InputMap.action_has_event("ui_accept", cross)
 		and InputMap.action_has_event("ui_cancel", circle))
+	check("accueil d'abord : tuiles, focus sur JOUER EN LOCAL, touche 3 sans effet",
+		_seen.get("title_page", []) == [true, false, true] and _seen.get("title_keys", 0) == 1,
+		str([_seen.get("title_page"), _seen.get("title_keys")]))
+	check("clic sur JOUER EN LOCAL : la partie locale, focus sur PRET", _seen.get("local_open", []) == [false, true, true],
+		str(_seen.get("local_open")))
+	check("parametres : la page tient au-dessus de la barre d'aide (RETOUR)", _seen.get("settings_fit", false))
+	check("parametres : jauges Musique 40 % et Bruitages 20 %, dans GameState et sur leurs bus",
+		_seen.get("jauges", []) == [40.0, 20.0, snappedf(5.0 + linear_to_db(0.4), 0.01), snappedf(linear_to_db(0.2), 0.01)],
+		str(_seen.get("jauges")))
 	check("PRET : bouton d'or, libelle PRET", _menu.start_button.text == "PRÊT")
 	check("Options : ouvre la selection (3 cartes, accueil cache), pas encore de depart",
 		_seen["start"] == [true, 3, false, []], str(_seen["start"]))
-	check("Rond : retour a l'accueil, focus sur PRET", _seen.get("back_home", []) == [false, true, true],
+	check("Rond : retour a la partie locale, focus sur PRET", _seen.get("back_home", []) == [false, true, true],
 		str(_seen.get("back_home")))
 	check("Croix sur PRET : rouvre la selection", _seen.get("cross_opens", []) == [true, []], str(_seen.get("cross_opens")))
 	check("3 joueurs : Croix x 3 chacun, tous prets", _seen.get("all_ready", false))

@@ -2,7 +2,9 @@
 
 Travail du 2026-10-22 sur la branche **`visuel/decor-style-extreme`**, partie
 du `main` à jour (après #92). Rien côté réseau ni gameplay. Les 121 tests
-passent.
+passent. Intégrée dans `main` après #95 (bots en ligne, latence,
+12 joueurs) : 132 tests, mesures dans PLAN.md (« Intégration de
+`visuel/decor-style-extreme` »).
 
 | Commit | Contenu | Qualités concernées |
 |---|---|---|
