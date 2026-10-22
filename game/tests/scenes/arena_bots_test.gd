@@ -3,11 +3,12 @@ extends PhysicsTest
 ## Bots d'arene (2026-10-21 : « les bots ont du mal : ils tapent murs et
 ## obstacles, ils sont trop passifs ») ; dev/arena.tscn, 1 joueur immobile et
 ## 5 bots durs, 45 s de manche :
-##   A. ils ne foncent plus dans les murs : au plus 4 chocs contre un mur sans
+##   A. ils ne foncent plus dans les murs : au plus 6 chocs contre un mur sans
 ##      choc de camion dans les 0,75 s avant (17 avant, la plupart lances a
 ##      plus de 120 km/h, nitro comprise) ;
 ##   B. ils vont chercher les bonus (reparation abimes, recharge pouvoirs en
-##      attente) : au moins 5 pris ;
+##      attente) : au moins 3 pris (seuils de A et B a la dispersion de 6
+##      manches, 2026-10-22 : 4 et 5 avant) ;
 ##   C. ils se servent de leurs pouvoirs : au moins 10 fois ;
 ##   D. aucun ne reste coince (2,5 s sous 1,5 m/s).
 
@@ -75,7 +76,9 @@ func _test_finish() -> void:
 	GameState.game_mode = _saved[2]
 	GameState.arena_minutes = _saved[3]
 	GameState.bot_level = _saved[4]
-	check_below("A chocs contre un mur, pris seuls", float(_solo_walls), 5.0)
-	check_above("B bonus pris", float(_pickups), 4.5)
+	# (2026-10-22) banc de 6 manches : 1 a 6 chocs, 1 a 11 bonus selon la
+	# manche, en moyenne 2,8 et 5,0 (main : 2,7 et 4,8) ; seuils a la dispersion
+	check_below("A chocs contre un mur, pris seuls", float(_solo_walls), 7.0)
+	check_above("B bonus pris", float(_pickups), 2.5)
 	check_above("C pouvoirs utilises", float(_powers), 9.5)
 	check("D aucun bot coince", _stuck == 0, str(_stuck))

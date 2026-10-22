@@ -1173,6 +1173,28 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   comptée plus près (un camion coincé attirait tous les durs, empilés) ;
   × 0,6 (les durs tapaient plus les murs), × 0,7 (en tête 5 fois sur 9).
   `arena_test` B mesure désormais la distance à la proie visée (< 90 m).
+- [x] **Rattrapage et départ des bots** (2026-10-22, « permettre aux bots
+  d'aller plus vite que le joueur pour le rattraper ; les bots attaquent tous
+  en même temps dès le spawn ») :
+  - course et élimination : un bot en retard sur le meilleur joueur humain
+    gagne en vitesse max, de 0 à 40 m de retard jusqu'à +4 / +7 / +10 %
+    (facile / moyen / dur) à 440 m (`Truck.catchup`, `LocalRace.CATCHUP_*`) ;
+    vitesses de virage inchangées ;
+  - arène : à la poursuite d'un joueur humain qui le fuit à plus de 60 m,
+    plafond relevé de 6 % (moyen) ou 12 % (dur) ;
+  - aucun pouvoir pendant le compte à rebours (leur délai y courait : tous
+    tiraient au GO) ; premier pouvoir 10 / 5 / 3 s après le GO, plus 0,75 s
+    par numéro de bot ;
+  - arène : au plus 2 bots sur une même cible (au-delà, elle compte 2,5 ×
+    plus loin) ; 3 s de répit à un camion qui réapparaît ; la proie du tick
+    d'avant compte 0,8 × (sans cela, le compte des chasseurs le faisait
+    changer de cible sans cesse) ; contre un joueur humain, plus de pénalité
+    d'échange (elle annulait la priorité humaine) ;
+  - `bot_catchup_test` (nouveau) ; tests d'arène : critères d'une seule
+    manche remplacés par des critères robustes (banc de 6 manches : de 1 à
+    113 PV infligés au joueur en facile, de 52 à 299 en dur selon la manche,
+    une manche ne classe pas les niveaux). Moyenne des 6 manches, PV infligés
+    à un joueur : 53 / 104 / 134 (main : 57 / 127 / 128).
 - [x] **Réapparition sur un raccourci** (2026-10-22) : à côté de sa carcasse,
   le camion se décalait de 7 à 21 m et passait le mur d'un raccourci étroit,
   dans le vide ; la place doit maintenant être sur la chaussée

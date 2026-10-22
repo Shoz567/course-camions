@@ -32,6 +32,9 @@ extends Node
 signal damaged(amount: float, source: StringName)
 signal destroyed
 signal respawned
+## Tick physique de sa derniere reapparition (meta du camion : les bots lui
+## laissent un repit).
+const RESPAWNED_META := &"respawned_at"
 ## La remorque attelee a perdu `amount` PV (il lui en reste trailer_hp).
 signal trailer_damaged(amount: float, source: StringName)
 ## Elle vient d'exploser, centree en `at` (monde).
@@ -394,6 +397,7 @@ func _respawn() -> void:
 		visual.visible = true
 	hp = max_hp
 	trailer_hp = trailer_max_hp
+	_truck.set_meta(RESPAWNED_META, Engine.get_physics_frames())
 	respawned.emit()
 
 

@@ -153,6 +153,8 @@ var _free_length: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
 var _k: float = 0.0
 var _c: float = 0.0
 var _top_speed_ms: float = 0.0
+## Rattrapage d'un bot en retard (LocalRace) : vitesse max multipliee.
+var catchup: float = 1.0
 var _taper_ms: float = 0.0
 var _reverse_top_ms: float = 0.0
 var _tan_slip: float = 0.0
@@ -970,7 +972,7 @@ func _physics_process(_delta: float) -> void:
 	var v_fwd := linear_velocity.dot(fwd)
 	var t := tuning
 	# tracteur seul (remorque larguee) : plus leger, plus rapide, plus vif
-	var top_ms := _top_speed_ms * (t.solo_top_speed_factor if _trailer_detached else 1.0)
+	var top_ms := _top_speed_ms * (t.solo_top_speed_factor if _trailer_detached else 1.0) * catchup
 	var accel_k := t.solo_accel_factor if _trailer_detached else 1.0
 
 	# 1.6 frein a main : engagement rapide, relacher plus lent (relance propre).

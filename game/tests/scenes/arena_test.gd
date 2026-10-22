@@ -9,9 +9,10 @@ extends PhysicsTest
 ##      de celle qu'ils visent, elan apres chaque charge compris : 75 a 80 m
 ##      mesures le 2026-10-22, quand le dur vise d'abord le joueur ; avant, moins
 ##      de 60 m du camion le plus proche)
-##      en moyenne sur 15 s, dans une arene de 340 m) et la percutent (5 chocs
-##      au moins ; 10 avant le 2026-10-21 : ce compte varie de 6 a 10 au gre
-##      du deroule, tremplins, departs degages, recul quand ca pousse) ;
+##      en moyenne sur 15 s, dans une arene de 340 m) et la percutent (3 chocs
+##      au moins ; 5 avant le 2026-10-22, 10 avant le 2026-10-21 : ce compte
+##      varie au gre du deroule (tremplins, departs degages, recul quand ca
+##      pousse), moins quand 2 bots au plus visent le joueur) ;
 ##   C. vies : detruit une fois, un camion reapparait avec une vie de moins ;
 ##      la seconde, il sort (son epave reste) ;
 ##   D. le dernier debout gagne : course finie, 1er au classement, vainqueur ;
@@ -112,7 +113,7 @@ func _test_finish() -> void:
 	check("A le menu lance l'arene de l'habillage choisi", String(_seen.get("menu_scene", "")) == "res://dev/arena_playa.tscn",
 		str(_seen.get("menu_scene")))
 	var h: Array = _seen.get("hunt", [INF, 0])
-	check("B les bots chassent : au contact, des chocs", float(h[0]) < 90.0 and int(h[1]) >= 5,
+	check("B les bots chassent : au contact, des chocs", float(h[0]) < 90.0 and int(h[1]) >= 3,
 		"%.0f m en moyenne, %d chocs" % [float(h[0]), int(h[1])])
 	check("C detruit une fois : reapparu, une vie de moins", _seen.get("one") == [1, false], str(_seen.get("one")))
 	check("C la seconde : sorti, l'epave reste", _seen.get("out") == [0, true, true], str(_seen.get("out")))

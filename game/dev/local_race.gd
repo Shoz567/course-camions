@@ -707,6 +707,34 @@ func set_trailer(p: Player, index: int) -> void:
 
 
 ## Ligne du sas READY : « ◄ CITERNE ►  2/9 » puis ses stats.
+## Rattrapage (2026-10-22 : « permettre aux bots d'aller plus vite que le
+## joueur pour qu'ils puissent le rattraper ») : en course et en elimination,
+## un bot en retard sur le meilleur joueur humain voit sa vitesse max relevee,
+## de 0 a CATCHUP_FROM_M de retard jusqu'a CATCHUP_MAX (par niveau) a
+## CATCHUP_FROM_M + CATCHUP_SPAN_M. Ses vitesses de virage ne changent pas.
+const CATCHUP_MAX := [0.04, 0.07, 0.1]
+const CATCHUP_FROM_M := 40.0
+const CATCHUP_SPAN_M := 400.0
+
+
+func _update_catchup() -> void:
+	var race_mode := game_mode == GameStateNode.GameMode.RACE or game_mode == GameStateNode.GameMode.ELIMINATION
+	var best := -INF
+	if race_mode and state == State.RACING:
+		for i in players.size():
+			var r := race.racer(players[i].truck)
+			if not is_bot(i) and not eliminated.has(i) and r != null and not r.finished:
+				best = maxf(best, race.progress(players[i].truck))
+	for i in players.size():
+		if not is_bot(i):
+			continue
+		var f := 1.0
+		if is_finite(best):
+			var behind := best - race.progress(players[i].truck)
+			f += float(CATCHUP_MAX[clampi(bot_level, 0, 2)]) * clampf((behind - CATCHUP_FROM_M) / CATCHUP_SPAN_M, 0.0, 1.0)
+		players[i].truck.catchup = f
+
+
 ## Remorques des bots par niveau (2026-10-21 : « base-toi sur le hard, qu'ils
 ## soient vraiment durs, et rends-les plus simples petit a petit ») : les durs
 ## tirent les plus vives (chariot elevateur, chasse-neige, conteneur, grue,
@@ -887,6 +915,7 @@ func _simulate(tick: int) -> void:
 		_arena_tick(tick)
 	# temps limite apres la premiere arrivee (une course se termine toujours)
 	_check_all_finished()
+	_update_catchup()
 	for p in players:
 		var f := p.input.poll(tick)
 		p.truck.set_input(f)

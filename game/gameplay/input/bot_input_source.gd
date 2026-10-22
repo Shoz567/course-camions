@@ -60,6 +60,12 @@ const BRAKE := [0.66, 0.78, 1.0]
 const LINE := [0.6, 0.85, 1.0]
 const BOOST := [false, true, true]
 const REACTION_TICKS := [150, 70, 25]
+## Premier pouvoir : START_POWER_TICKS apres le GO, plus START_POWER_STEP_TICKS
+## par numero de bot (2026-10-22 : « les bots attaquent tous en meme temps des
+## le spawn » ; leur delai courait pendant le compte a rebours, tous tiraient
+## au GO).
+const START_POWER_TICKS := [600, 300, 180]
+const START_POWER_STEP_TICKS := 45
 ## Bouclier : distance (m) d'un projectile qui le vise a laquelle il le sort
 ## (0 : jamais).
 const SHIELD_WARN_M := [0.0, 25.0, 40.0]
@@ -297,6 +303,25 @@ const ARENA_LIVES_NEAR := [0.5, 0.75, 1.0]
 ## fois sa distance : les durs s'eliminaient entre eux (un choc coute autant
 ## aux deux), et le joueur, plus loin, n'etait jamais touche.
 const HUMAN_META := &"human"
+## Pas plus de ARENA_MAX_ON_ONE bots sur une meme cible (au-dela, elle compte
+## ARENA_CROWD_FAR fois plus loin) ; une cible reapparue depuis moins de
+## RESPAWN_GRACE_TICKS compte ARENA_GRACE_FAR fois plus loin (2026-10-22 : tous
+## les bots fondaient sur le joueur des le depart, et a chaque reapparition).
+const ARENA_MAX_ON_ONE := 2
+## Sa proie du tick d'avant compte ARENA_KEEP_NEAR fois sa distance : sans
+## cela, le compte des chasseurs (qui depend des choix des autres) le faisait
+## changer de cible sans cesse, il zigzaguait et tapait les murs.
+const ARENA_KEEP_NEAR := 0.8
+const ARENA_CROWD_FAR := 2.5
+const RESPAWN_GRACE_TICKS := 180
+const ARENA_GRACE_FAR := 4.0
+## Rattrapage en arene : a la poursuite d'un joueur humain a plus de
+## ARENA_CATCH_M qui le fuit (_fleeing), plafond de vitesse releve de
+## ARENA_CATCH (par niveau). Sans fuite, il depassait sa cible et tapait les murs.
+const ARENA_FLEE_PART := 0.6
+const ARENA_CATCH_M := 60.0
+const ARENA_CATCH := [0.0, 0.06, 0.12]
+const BOTS_GROUP := &"bots"
 const ARENA_HUMAN_NEAR := 0.65
 ## Il charge (dur), ce tick ; charges a la nitro lancees (tests) ; reparation decidee
 ## (-1 : pas encore, sous le seuil) et passages sous le seuil ; nitro
@@ -370,7 +395,7 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 	var lanes := [-4.0, 4.0, 0.0, -8.0, 8.0]
 	lane = lanes[number % lanes.size()]
 	_phase = number * 37
-	_power_wait = int(REACTION_TICKS[level]) + _phase
+	_power_wait = int(START_POWER_TICKS[level]) + number * START_POWER_STEP_TICKS
 	line = RacingLine.of(t)
 	_top = tr.tuning.top_speed_kmh / 3.6 * float(SPEED[level])
 	# profil sans plafond de vitesse : il ne freine que pour un virage (au-dessus
@@ -389,6 +414,7 @@ func setup(t: TrackBlockout, tr: Truck, bot_level: int, number: int) -> void:
 		_blend_m.append(_best_blend(k))
 		_exit_m.append(_best_exit(k))
 	_cargo = tr.get_node_or_null(^"Cargo") as TruckCargo
+	add_to_group(BOTS_GROUP)
 	_pad_i.clear()
 	_pad_lat.clear()
 	for k in t.boost_pad_count():
@@ -432,7 +458,9 @@ func poll(tick: int) -> InputFrame:
 		_steer(v, float(traffic["lateral"]))
 		_speed(v, float(traffic["cap"]))
 		_boost(bool(traffic["clear"]))
-	_powers()
+	# pas de pouvoir avant le depart : son delai court a partir du GO
+	if RaceManager.state == RaceManagerNode.State.RACING:
+		_powers()
 	_drop_tactic(v)
 	# bloque contre un mur, coince dans une epave : reset (comme un joueur)
 	_slow_ticks = _slow_ticks + 1 if v < 1.4 and RaceManager.state == RaceManagerNode.State.RACING else 0
@@ -774,7 +802,7 @@ func _speed(v: float, cap: float) -> void:
 	frame.throttle = clampf(err / 1.5, 0.0, 1.0)
 	frame.brake = clampf(-err / 2.0, 0.0, 1.0)
 	# au-dessus de sa vitesse max (niveau) sans virage devant : roue libre
-	if float(SPEED[level]) < 1.0 and v > _top and frame.brake == 0.0:
+	if float(SPEED[level]) < 1.0 and v > _top * truck.catchup and frame.brake == 0.0:
 		frame.throttle = 0.0 if not truck.is_boosting() else frame.throttle
 
 
@@ -1178,15 +1206,25 @@ func _arena_drive(v: float) -> void:
 			var h := TruckHealth.of(t)
 			if h != null:
 				score *= 1.0 - ARENA_WEAK_PART * (1.0 - clampf(h.hp / h.max_hp, 0.0, 1.0))
-			if not _wins_trade(t):
+			# un joueur humain d'abord, quoi que coute l'echange (la penalite
+			# annulait la priorite : 1,6 x 0,65)
+			if bool(t.get_meta(HUMAN_META, false)):
+				score *= ARENA_HUMAN_NEAR
+			elif not _wins_trade(t):
 				score *= ARENA_LOSING_FAR
 			# moins il lui reste de vies, plus l'achever compte
 			var lives_left := int(t.get_meta(LIVES_META, 0))
 			if lives_left > 0:
 				score *= ARENA_LIVES_NEAR[mini(lives_left, ARENA_LIVES_NEAR.size()) - 1]
-			# un joueur humain d'abord
-			if bool(t.get_meta(HUMAN_META, false)):
-				score *= ARENA_HUMAN_NEAR
+		# deja ARENA_MAX_ON_ONE bots dessus : un autre d'abord (tous niveaux)
+		if _hunters_of(t) >= ARENA_MAX_ON_ONE:
+			score *= ARENA_CROWD_FAR
+		# il vient de reapparaitre : repit
+		if Engine.get_physics_frames() - int(t.get_meta(TruckHealth.RESPAWNED_META, -100000)) < RESPAWN_GRACE_TICKS:
+			score *= ARENA_GRACE_FAR
+		# sa proie actuelle : il la garde, sauf beaucoup mieux ailleurs
+		if t == arena_prey:
+			score *= ARENA_KEEP_NEAR
 		if score < best_score:
 			best_score = score
 			best = d
@@ -1237,7 +1275,11 @@ func _arena_drive(v: float) -> void:
 		and absf(angle) < ARENA_RAM_ANGLE and not near_wall and drift_out <= room * 0.5
 	var go := ramming or ((prey != null or pickup != null) and absf(angle) < 0.15 and best > 40.0
 		and bool(BOOST[level]) and not near_wall)
-	if v > float(ARENA_TOP_MS[level]):
+	var top := float(ARENA_TOP_MS[level])
+	if pickup == null and prey != null and best > ARENA_CATCH_M and bool(prey.get_meta(HUMAN_META, false)) \
+			and _fleeing(prey, top):
+		top *= 1.0 + float(ARENA_CATCH[level])
+	if v > top:
 		frame.throttle = 0.0
 		go = false
 	# le mur approche trop vite pour le longer : freine aussi
@@ -1266,6 +1308,22 @@ func _arena_drive(v: float) -> void:
 ## le seuil (suite fixe, comme takes_shortcut) ?
 static func seeks_repair(bot_level: int, phase: int, times: int) -> bool:
 	return fposmod(phase * 0.37 + times * GOLDEN, 1.0) < float(ARENA_REPAIR_TAKE[bot_level])
+
+
+## Arene : `t` s'eloigne de lui a plus de ARENA_FLEE_PART de `top` (il fuit).
+func _fleeing(t: Truck, top: float) -> bool:
+	var away := t.global_position - truck.global_position
+	away.y = 0.0
+	return away.length() > 0.1 and t.linear_velocity.dot(away.normalized()) > top * ARENA_FLEE_PART
+
+
+## Arene : bots (autres que lui) qui visent `t` en ce moment.
+func _hunters_of(t: Truck) -> int:
+	var n := 0
+	for b in truck.get_tree().get_nodes_in_group(BOTS_GROUP):
+		if b != self and (b as BotInputSource).arena_prey == t:
+			n += 1
+	return n
 
 
 ## Arene : il gagne un choc contre `other` (toujours vrai sous le niveau dur,
