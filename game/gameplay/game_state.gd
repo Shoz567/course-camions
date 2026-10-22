@@ -64,8 +64,8 @@ var dynamic_resolution: bool = true
 
 ## Jauges Musique et Bruitages des parametres (0 a 100 %, SoundMix) ; la
 ## jauge generale est le volume du Master.
-var music_volume: float = 100.0
-var effects_volume: float = 100.0
+var music_volume: float = SoundMix.DEFAULT_MUSIC
+var effects_volume: float = SoundMix.DEFAULT_EFFECTS
 
 ## Regle l'echelle 3D de toutes les vues (enfant de l'autoload).
 var resolution: DynamicResolution
@@ -320,8 +320,8 @@ func read_settings(path: String) -> Error:
 	AudioServer.set_bus_mute(bus, not bool(cfg.get_value("audio", "on", true)))
 	var vol := clampf(float(cfg.get_value("audio", "volume", 1.0)), 0.0, 1.0)
 	AudioServer.set_bus_volume_db(bus, linear_to_db(maxf(vol, 0.00001)))
-	music_volume = clampf(float(cfg.get_value("audio", "music", 100.0)), 0.0, 100.0)
-	effects_volume = clampf(float(cfg.get_value("audio", "effects", 100.0)), 0.0, 100.0)
+	music_volume = clampf(float(cfg.get_value("audio", "music", SoundMix.DEFAULT_MUSIC)), 0.0, 100.0)
+	effects_volume = clampf(float(cfg.get_value("audio", "effects", SoundMix.DEFAULT_EFFECTS)), 0.0, 100.0)
 	SoundMix.apply_user_volumes(music_volume, effects_volume)
 	graphics_quality = clampi(int(cfg.get_value("video", "quality", graphics_quality)), 0, GraphicsSettings.NAMES.size() - 1)
 	show_fps = bool(cfg.get_value("video", "show_fps", show_fps))

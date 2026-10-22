@@ -2,10 +2,10 @@ extends PhysicsTest
 
 ## Mixage (2026-10-21 : « un grésillement, tous les bruitages plutôt forts,
 ## la pluie vachement forte au début ») :
-##   A. trois bus sous le Master (Effets, Ambiance, Musique) ; bruitages et
-##      ambiance plus bas que la musique ; bruitages 12 dB sous elle
-##      (2026-10-22 : « les bruitages sont trop forts par rapport a la
-##      musique » ; 6 avant) ;
+##   A. trois bus sous le Master (Effets, Ambiance, Musique) ; aux jauges par
+##      defaut, bruitages 9 dB sous la musique (2026-10-22 : « les bruitages
+##      sont trop forts par rapport a la musique » ; 6 avant), et a 100 %
+##      ils montent a 0 dB (« faibles, meme a 100 % ») ;
 ##   B. un limiteur sur le Master, plafond sous 0 dB (plus d'ecretage) ;
 ##   C. setup() rejoue sans doubler bus ni limiteur ;
 ##   D. chaque son part sur son bus : foule et ambiance sur Ambiance, klaxon
@@ -38,8 +38,11 @@ func _test_finish() -> void:
 		levels.append(AudioServer.get_bus_volume_db(idx) if idx >= 0 else 99.0)
 		sends.append(AudioServer.get_bus_send(idx) if idx >= 0 else &"")
 	check("A trois bus vers le Master", sends == [&"Master", &"Master", &"Master"], str(sends))
-	check("A bruitages et ambiance sous la musique, bruitages 12 dB sous elle (dB)", float(levels[0]) < float(levels[2])
-		and float(levels[1]) < float(levels[2]) and float(levels[2]) - float(levels[0]) >= 12.0, str(levels))
+	var music_db := float(SoundMix.LEVELS[SoundMix.MUSIC]) + linear_to_db(SoundMix.DEFAULT_MUSIC / 100.0)
+	var effects_db := float(SoundMix.LEVELS[SoundMix.EFFECTS]) + linear_to_db(SoundMix.DEFAULT_EFFECTS / 100.0)
+	check("A jauges par defaut : bruitages 9 dB sous la musique ; a 100 %, bruitages a 0 dB",
+		music_db - effects_db >= 9.0 and is_equal_approx(float(SoundMix.LEVELS[SoundMix.EFFECTS]), 0.0)
+		and float(levels[1]) < float(levels[2]), "%.1f / %.1f %s" % [music_db, effects_db, levels])
 	var lim := SoundMix.limiter()
 	check("B limiteur sur le Master, plafond < 0 dB", lim != null and lim.ceiling_db < 0.0,
 		str(lim.ceiling_db if lim != null else null))
@@ -70,8 +73,8 @@ func _test_finish() -> void:
 	SoundMix.apply_user_volumes(100.0, 0.0)
 	var silent := [AudioServer.is_bus_mute(buses[0]), AudioServer.is_bus_mute(buses[1]), AudioServer.is_bus_mute(buses[2])]
 	SoundMix.apply_user_volumes(GameState.music_volume, GameState.effects_volume)
-	var want := [snappedf(3.0 + linear_to_db(0.5), 0.01), snappedf(-12.0 + linear_to_db(0.25), 0.01),
-		snappedf(-6.0 + linear_to_db(0.25), 0.01)]
+	var want := [snappedf(5.0 + linear_to_db(0.5), 0.01), snappedf(linear_to_db(0.25), 0.01),
+		snappedf(linear_to_db(0.25), 0.01)]
 	check("F jauges : musique 50 %, bruitages 25 % (ambiance comprise), par-dessus le bus", half == want,
 		"%s / %s" % [half, want])
 	check("F bruitages a 0 % : Effets et Ambiance muets, musique non", silent == [false, true, true], str(silent))

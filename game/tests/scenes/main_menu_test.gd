@@ -180,8 +180,8 @@ func _test_tick(t: int) -> void:
 			_seen["jauges"] = [GameState.music_volume, GameState.effects_volume,
 				snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(SoundMix.MUSIC)), 0.01),
 				snappedf(AudioServer.get_bus_volume_db(AudioServer.get_bus_index(SoundMix.EFFECTS)), 0.01)]
-			_menu.music_slider.value = 100.0
-			_menu.effects_slider.value = 100.0
+			_menu.music_slider.value = SoundMix.DEFAULT_MUSIC
+			_menu.effects_slider.value = SoundMix.DEFAULT_EFFECTS
 			_seen["sound_check"] = _menu.sound_check.button_pressed
 			var env := (_menu.get_node("WorldEnvironment") as WorldEnvironment).environment
 			var was := [GameState.graphics_quality, env.ssr_enabled, env.ssil_enabled, env.ssao_enabled]
@@ -387,7 +387,7 @@ func _test_finish() -> void:
 		str(_seen.get("local_open")))
 	check("parametres : la page tient au-dessus de la barre d'aide (RETOUR)", _seen.get("settings_fit", false))
 	check("parametres : jauges Musique 40 % et Bruitages 20 %, dans GameState et sur leurs bus",
-		_seen.get("jauges", []) == [40.0, 20.0, snappedf(3.0 + linear_to_db(0.4), 0.01), snappedf(-12.0 + linear_to_db(0.2), 0.01)],
+		_seen.get("jauges", []) == [40.0, 20.0, snappedf(5.0 + linear_to_db(0.4), 0.01), snappedf(linear_to_db(0.2), 0.01)],
 		str(_seen.get("jauges")))
 	check("PRET : bouton d'or, libelle PRET", _menu.start_button.text == "PRÊT")
 	check("Options : ouvre la selection (3 cartes, accueil cache), pas encore de depart",
