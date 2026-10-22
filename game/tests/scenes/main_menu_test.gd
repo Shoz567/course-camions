@@ -12,10 +12,11 @@ extends PhysicsTest
 ##   - touche 3, puis L / R de la manette, puis clic : le choix suit, et les
 ##     camions montres en decor aussi ; touche 6 : les 6 camions tiennent sur
 ##     le plateau ;
-##   - circuit : Cyber City par defaut ; un clic sur PLAYA DEL SOL le choisit
-##     (GameState.selected_track, scene de course, ambiance du sous-titre), Triangle
-##     passe au suivant (Sakura, le 3e circuit) ; les trois noms tiennent dans
-##     leur carte ;
+##   - circuit (menu deroulant, 2026-10-22) : Cyber City par defaut ; un clic
+##     ouvre la liste, fleche bas et Entree choisissent PLAYA DEL SOL
+##     (GameState.selected_track, scene de course, ambiance du sous-titre),
+##     Triangle passe au suivant (Sakura, le 3e circuit) ; les trois noms
+##     tiennent dans le menu ;
 ##   - son : un clic coupe le bus Master, un second le remet ;
 ##   - roue crantee : ouvre l'ecran des parametres, Rond le referme ; rouvert,
 ##     il montre la DualSense (les commandes Forza de la demande, legendes
@@ -99,7 +100,7 @@ func _test_tick(t: int) -> void:
 			_cam_start = cam
 			_defaults_ok = _menu.selected_players == 1 and _visible_trucks() == 1 \
 					and _menu.player_buttons[0].button_pressed and not _menu.player_buttons[1].button_pressed
-			_defaults_track = GameState.selected_track == 0 and _menu.track_buttons[0].button_pressed \
+			_defaults_track = GameState.selected_track == 0 and _menu.track_option.selected == 0 \
 					and _menu.race_scene() == "res://dev/race.tscn"
 			var title_center := _menu.title.get_global_rect().get_center().x
 			var vp := _menu.get_viewport().get_visible_rect()
@@ -198,32 +199,41 @@ func _test_tick(t: int) -> void:
 		78: _click(_menu.settings.find_child("Back", true, false) as Control, true)
 		79: _click(_menu.settings.find_child("Back", true, false) as Control, false)
 		82: _seen["back"] = not _menu.settings.visible
-		83: _click(_menu.track_buttons[1], true)
-		84: _click(_menu.track_buttons[1], false)
+		# circuit : clic sur le menu deroulant, fleche bas, Entree
+		83: _click(_menu.track_option, true)
+		84: _click(_menu.track_option, false)
 		85:
-			_seen["track_click"] = [GameState.selected_track, _menu.track_buttons[1].button_pressed,
-				_menu.track_buttons[0].button_pressed, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[1]["tagline"])]
+			_seen["track_popup"] = [_menu.track_option.get_popup().visible, _menu.track_option.item_count]
+			_key(KEY_DOWN, true)
+		86: _key(KEY_DOWN, false)
+		87: _key(KEY_ENTER, true)
+		88: _key(KEY_ENTER, false)
+		89:
+			_seen["track_click"] = [GameState.selected_track, _menu.track_option.selected,
+				_menu.track_option.get_popup().visible, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[1]["tagline"])]
 			_pad(JOY_BUTTON_Y, true)
-		86:
+		90:
 			_pad(JOY_BUTTON_Y, false)
 			_key(KEY_6, true)
-		87: _key(KEY_6, false)
-		90:
+		91: _key(KEY_6, false)
+		94:
 			# coin le plus eloigne de chaque ensemble (3,6 m de large, ~20 m de long)
 			var reach := 0.0
 			for truck in _menu.trucks:
 				reach = maxf(reach, Vector2(absf(truck.position.x) + 1.8, 9.9).length())
 			_seen["key6"] = [_menu.selected_players, _visible_trucks(), reach < Showroom.PLATE_RADIUS]
 			_seen["track_pad"] = [GameState.selected_track, _menu.race_scene(), _menu.subtitle.text.containsn(GameStateNode.TRACKS[2]["tagline"])]
-			# les cartes des 3 circuits tiennent dans la colonne, sans deborder
-			var fit := true
-			for b in _menu.track_buttons:
-				var font := b.get_theme_font("font")
-				var w := font.get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, b.get_theme_font_size("font_size")).x
-				fit = fit and w + 24.0 <= b.size.x
+			# les noms des 3 circuits tiennent dans le menu deroulant (pastille et
+			# fleche comprises)
+			var o := _menu.track_option
+			var font := o.get_theme_font("font")
+			var fit := o.item_count == 3
+			for i in o.item_count:
+				var w := font.get_string_size(o.get_item_text(i), HORIZONTAL_ALIGNMENT_LEFT, -1, o.get_theme_font_size("font_size")).x
+				fit = fit and w + o.get_item_icon(i).get_width() + 120.0 <= o.size.x
 			_seen["track_fit"] = fit
 			_key(KEY_3, true)
-		91: _key(KEY_3, false)
+		95: _key(KEY_3, false)
 		110: _pad(JOY_BUTTON_START, true)
 		111: _pad(JOY_BUTTON_START, false)
 		114:
@@ -293,10 +303,11 @@ func _test_finish() -> void:
 	check("manette R : 4 joueurs", _seen["r"] == 4, str(_seen["r"]))
 	check("manette L : 3 joueurs", _seen["l"] == 3, str(_seen["l"]))
 	check("clic sur 2 JOUEURS : choisi et seul enfonce", _seen["click2"] == [2, true, false], str(_seen["click2"]))
-	check("circuit : 3 boutons, Cyber City par defaut", _menu.track_buttons.size() == 3 and _defaults_track)
-	check("circuit : les noms tiennent dans leur carte", _seen.get("track_fit", false))
-	check("circuit : clic sur PLAYA DEL SOL (GameState, scene, sous-titre)",
-		_seen.get("track_click", []) == [1, true, false, "res://dev/race_playa.tscn", true], str(_seen.get("track_click", [])))
+	check("circuit : menu deroulant de 3 circuits, Cyber City par defaut", _menu.track_option.item_count == 3 and _defaults_track)
+	check("circuit : le clic ouvre la liste des 3 circuits", _seen.get("track_popup", []) == [true, 3], str(_seen.get("track_popup")))
+	check("circuit : les noms tiennent dans le menu deroulant", _seen.get("track_fit", false))
+	check("circuit : menu deroulant, fleche bas et Entree choisissent PLAYA DEL SOL (GameState, scene, sous-titre), liste refermee",
+		_seen.get("track_click", []) == [1, 1, false, "res://dev/race_playa.tscn", true], str(_seen.get("track_click", [])))
 	check("circuit : Triangle passe au suivant, Sakura",
 		_seen.get("track_pad", []) == [2, "res://dev/race_sakura.tscn", true], str(_seen.get("track_pad", [])))
 	check("son : un clic coupe le bus Master", _seen["mute"] == [true, "SON : OFF"], str(_seen["mute"]))

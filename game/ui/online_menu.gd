@@ -9,7 +9,8 @@ extends Control
 ##      la partie) et REJOINDRE (adresse IP du host) ; l'erreur de connexion
 ##      s'affiche dessous ;
 ##   2. dans une partie (salon) : a gauche les REGLES - le host les choisit
-##      (mode, circuit, vitesse, duree ou largages, bots, connexion lente),
+##      (circuit au menu deroulant, mode, vitesse, duree ou largages, bots,
+##      connexion lente),
 ##      les autres les voient en direct (NetSession.host_rules) ; a droite
 ##      les JOUEURS (convoi choisi ou pas), l'adresse a donner, le debit du
 ##      host ; en bas CHOISIR MON CONVOI, LANCER (host), QUITTER LA PARTIE.
@@ -44,7 +45,7 @@ var connect_box: Control
 var lobby_box: Control
 ## Regles : boutons du host (par regle), resume du client.
 var mode_buttons: Array[Button] = []
-var track_buttons: Array[Button] = []
+var track_option: OptionButton
 var speed_buttons: Array[Button] = []
 var time_buttons: Array[Button] = []
 var drop_buttons: Array[Button] = []
@@ -343,6 +344,12 @@ func _build_rules_host() -> Control:
 	var box := VBoxContainer.new()
 	box.name = "RulesHost"
 	box.add_theme_constant_override("separation", 10)
+	var track_row := _rule_row("CIRCUIT")
+	track_option = MainMenu.track_dropdown(19, 46)
+	track_option.item_selected.connect(set_track)
+	track_row.add_child(track_option)
+	box.add_child(track_row)
+
 	var mode_row := _rule_row("MODE")
 	var group := ButtonGroup.new()
 	for k in MODES.size():
@@ -356,15 +363,6 @@ func _build_rules_host() -> Control:
 	var tip_row := _rule_row("")
 	tip_row.add_child(mode_tip)
 	box.add_child(tip_row)
-
-	var track_row := _rule_row("CIRCUIT")
-	group = ButtonGroup.new()
-	for k in GameStateNode.TRACKS.size():
-		var b := _rule_button("Track%d" % k, String(GameStateNode.TRACKS[k]["name"]).to_upper(), group, 17)
-		b.pressed.connect(set_track.bind(k))
-		track_row.add_child(b)
-		track_buttons.append(b)
-	box.add_child(track_row)
 
 	var speed_row := _rule_row("VITESSE")
 	group = ButtonGroup.new()
@@ -559,8 +557,7 @@ func _refresh_rules() -> void:
 		for k in mode_buttons.size():
 			mode_buttons[k].set_pressed_no_signal(MODES[k] == mode)
 		mode_tip.text = MainMenu.MODE_TIPS[mode]
-		for k in track_buttons.size():
-			track_buttons[k].set_pressed_no_signal(k == int(r["track"]))
+		track_option.select(int(r["track"]))
 		for k in speed_buttons.size():
 			speed_buttons[k].set_pressed_no_signal(k == int(r["speed_class"]))
 		time_row.visible = arena
@@ -585,8 +582,8 @@ func _refresh_rules() -> void:
 		_guest_line("", "En attente des règles…")
 		return
 	var c: Dictionary = GameStateNode.SPEED_CLASSES[int(r["speed_class"])]
-	_guest_line("MODE", "%s  ·  %s" % [GameStateNode.MODE_NAMES[mode], MainMenu.MODE_TIPS[mode]])
 	_guest_line("CIRCUIT", String(GameStateNode.TRACKS[int(r["track"])]["name"]).to_upper())
+	_guest_line("MODE", "%s  ·  %s" % [GameStateNode.MODE_NAMES[mode], MainMenu.MODE_TIPS[mode]])
 	_guest_line("VITESSE", "%s  %s" % [c["cc"], String(c["name"]).to_upper()])
 	if arena:
 		var minutes := int(r["arena_minutes"])

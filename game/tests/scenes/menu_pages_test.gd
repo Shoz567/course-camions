@@ -71,7 +71,7 @@ func _test_tick(t: int) -> void:
 			_menu.open_local()
 		28:
 			_seen["back_local"] = [GameState.profile, GameState.selected_track, GameState.bot_count,
-				_menu.track_buttons[1].button_pressed, _menu.bot_buttons[2].button_pressed, UiKit.skin]
+				_menu.track_option.selected == 1, _menu.bot_buttons[2].button_pressed, UiKit.skin]
 			_menu.back_to_title()
 			_menu.open_online()
 		34:
