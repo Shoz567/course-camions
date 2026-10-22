@@ -1403,6 +1403,18 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   circuit choisi (la première flèche ne faisait que surligner la première
   ligne). T et Triangle font toujours défiler les circuits.
   `main_menu_test` : clic, flèche bas et Entrée choisissent Playa.
+- [x] **Tests en parallèle, essais en arrière-plan** (2026-10-22, « pas moyen
+  d'aller plus vite en faisant plusieurs à la fois ? […] le lancer en
+  arrière-plan pour pas qu'il s'affiche devant moi […] couper le son ») :
+  - `cli_runner.gd` : `--jobs` scènes à la fois (défaut : un tiers des
+    cœurs, 8 au plus), les plus longues d'abord (`user://test_durations.json`) ;
+    mesures de temps seules à la fin, scènes réseau dans une file. Suite
+    complète : 9 min 20 → 1 min 15, 133/133 ;
+  - `tools/hidden_run.ps1` : Godot lancé dans une fenêtre jamais montrée
+    (`--wid`), écran de démarrage compris ; `-- --offscreen`
+    (`GameState.go_offscreen`) : muet, réglages non réécrits (lancé seul :
+    fenêtre hors de l'écran, sans focus). Le rendu et les captures
+    continuent (menu et course capturés ainsi).
 
 ## Questions de design ouvertes
 

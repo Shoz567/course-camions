@@ -6,7 +6,8 @@ extends Node
 ## Le client passe --role=client et le meme port (modes : GameState.GameMode) ;
 ## --bots=N : bots durs du host ; --players=N : le host lance quand N joueurs
 ## sont la (2 par defaut) ; --track=N : circuit (GameState.TRACKS) ;
-## --quality=N : qualite graphique (GraphicsSettings.Quality, 3 = extreme).
+## --quality=N : qualite graphique (GraphicsSettings.Quality, 3 = extreme) ;
+## --offscreen : fenetre hors de l'ecran, muette (GameState.go_offscreen).
 ## Toutes les 10 s, une ligne SAMPLE (tour affiche, place, vies, PV de chaque
 ## camion) a comparer entre les deux ; a 50 s, le host detruit le camion du
 ## client (vitesse de reapparition : launch_kmh). A la fin : une ligne E2E par
