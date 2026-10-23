@@ -89,8 +89,8 @@ var _cam_snap := true
 ## Images de debut de plan ou la camera se recale sans amorti (les camions
 ## replaces ne le sont qu'au pas physique suivant).
 var _snap_frames := 0
-## Derniere position de la cible (elle disparait a son explosion).
-var _foe_pos := Vector3.ZERO
+## Derniere place vue de chaque camion (_seen).
+var _last_seen: Dictionary = {}
 var _shake := 0.0
 ## Point fixe du plan courant (camera posee au bord de la route).
 var _anchor := Transform3D.IDENTITY
@@ -115,6 +115,11 @@ func _ready() -> void:
 			_snap_dir = a.substr(11)
 		elif a.begins_with("--until="):
 			_until = float(a.substr(8))
+	# rien n'est reecrit dans les reglages du joueur ; qualite extreme imposee
+	# (2026-10-23 : « tu enregistres bien le trailer en qualite extreme »)
+	GameState.persist = false
+	GameState.graphics_quality = GraphicsSettings.Quality.EXTREME
+	GraphicsSettings.apply_render_quality(GraphicsSettings.Quality.EXTREME)
 	GameState.show_fps = false
 	GameState.requested_players = 1
 	GameState.bot_count = 5
@@ -192,6 +197,7 @@ func _process(_delta: float) -> void:
 		_events.clear()
 		_cam_snap = true
 		_snap_frames = 3
+		_last_seen.clear()
 		if int(s["scene"]) != _scene_id:
 			_load_scene(int(s["scene"]))
 		(s["setup"] as Callable).call()
@@ -507,6 +513,12 @@ func _put(pos: Vector3, look: Vector3, fov: float, smooth: float = 0.0) -> void:
 		_cam_pos = _cam_pos.lerp(pos, k)
 		_cam_look = _cam_look.lerp(look, k)
 	var p := _cam_pos
+	# decor entre la camera et ce qu'elle filme (tribunes, murs) : elle passe
+	# devant, comme la camera de jeu (couche 1, jamais les camions)
+	var ray := PhysicsRayQueryParameters3D.create(_cam_look, p, 1)
+	var hit := cam.get_world_3d().direct_space_state.intersect_ray(ray)
+	if not hit.is_empty():
+		p = (hit["position"] as Vector3) + (_cam_look - p).normalized() * 0.6
 	if _shake > 0.0:
 		p += Vector3(sin(_frame * 1.7), cos(_frame * 2.3), sin(_frame * 1.1)) * _shake * 0.35
 		_shake = maxf(0.0, _shake - 1.6 / FPS)
@@ -548,131 +560,128 @@ func _c_chase_low(lt: float) -> void:
 	_put(pos, look, 66.0, 14.0)
 
 
-## Travelling lateral a hauteur de roue.
+## Position du camion `i`, figee a sa derniere place s'il vient d'exploser
+## (le camion detruit disparait : la camera ne le suit pas dans le vide).
+func _seen(i: int) -> Vector3:
+	if not _truck(i).is_wrecked():
+		_last_seen[i] = _xf(i).origin
+	return _last_seen.get(i, _xf(i).origin)
+
+
+## Repere a plat du camion `i` : [position, avant, droite] (avant sans
+## tangage, pour des cadrages stables).
+func _flat(i: int) -> Array:
+	var xf := _xf(i)
+	var fwd := -xf.basis.z
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+	return [_seen(i), fwd, fwd.cross(Vector3.UP)]
+
+
+## Travelling lateral large : le camion entier (cabine et remorque) de profil.
 func _c_side(lt: float) -> void:
-	var lead := _leader()
-	var xf := _xf(lead)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var pos := xf.origin + side * 10.0 + fwd * (3.0 - lt * 4.0) + Vector3.UP * 1.4
-	var look := xf.origin - fwd * (3.0 + lt * 2.0) + Vector3.UP * 1.8
-	_put(pos, look, 58.0, 14.0)
+	var f := _flat(_leader())
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var pos := p + side * 14.0 - fwd * (6.0 + lt * 2.0) + Vector3.UP * 4.5
+	_put(pos, p - fwd * 7.0 + Vector3.UP * 1.8, 54.0, 10.0)
 
 
-## Missile : de cote et en hauteur, le tireur et sa cible dans l'image.
+## Missile : plan large en hauteur, derriere le tireur ; sa cible devant.
 func _c_missile(lt: float) -> void:
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	if not _truck(_foe).is_wrecked():
-		_foe_pos = _xf(_foe).origin
-	var mid := xf.origin.lerp(_foe_pos, 0.55)
-	var pos := mid - side * (19.0 - lt * 2.0) - fwd * 6.0 + Vector3.UP * (5.0 - lt * 0.8)
-	_put(pos, mid + Vector3.UP * 1.5, 62.0, 8.0)
+	var f := _flat(_hero)
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var target := _seen(_foe)
+	var pos := p - fwd * (22.0 - lt * 3.0) - side * 7.0 + Vector3.UP * 8.0
+	_put(pos, p.lerp(target, 0.6) + Vector3.UP * 1.0, 58.0, 8.0)
 
 
-## Laser : camera basse devant, de trois quarts, le rayon vient vers nous.
+## Laser : de trois quarts face, en hauteur, les deux camions et le rayon.
 func _c_laser(lt: float) -> void:
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var pos := xf.origin + fwd * (14.0 - lt * 2.0) - side * 5.5 + Vector3.UP * 1.0
-	var look := xf.origin.lerp(_xf(_foe).origin, 0.45) + Vector3.UP * 1.5
-	_put(pos, look, 58.0, 10.0)
+	var f := _flat(_hero)
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var mid := p.lerp(_seen(_foe), 0.5)
+	var pos := mid + fwd * (24.0 - lt * 3.0) - side * 13.0 + Vector3.UP * 5.0
+	_put(pos, mid + Vector3.UP * 1.2, 56.0, 8.0)
 
 
-## Largage : derriere celui qui va percuter la remorque.
+## Largage : plan large en hauteur derriere celui qui va percuter ; la
+## remorque lachee devant lui, l'impact au ralenti.
 func _c_drop(lt: float) -> void:
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var pos := xf.origin - fwd * 7.0 + side * 6.0 + Vector3.UP * 3.2
-	var look := xf.origin + fwd * 18.0 + Vector3.UP * 1.0
-	if lt > 0.9:
-		# apres l'impact : on tourne autour de l'epave
-		var a := (lt - 0.9) * 0.9
-		pos = xf.origin + (side * cos(a) - fwd * sin(a) * -1.0) * 9.0 + Vector3.UP * 2.6
-		look = xf.origin + Vector3.UP * 1.2
-	_put(pos, look, 64.0, 8.0)
+	var f := _flat(_hero)
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var pos := p - fwd * 24.0 + side * 6.0 + Vector3.UP * 9.0
+	_put(pos, p + fwd * 22.0 + Vector3.UP * 0.5, 56.0, 6.0)
 
 
-## Duel : camera basse devant les deux cabines, qui recule avec elles.
+## Duel : devant les deux cabines, un peu plus haut et plus large.
 func _c_duel(lt: float) -> void:
-	var a := _xf(_hero).origin
-	var b := _xf(_foe).origin
-	var mid := a.lerp(b, 0.5)
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var pos := mid + fwd * (11.0 - lt * 1.5) + side * (2.5 - lt * 3.0) + Vector3.UP * 1.0
-	_put(pos, mid + Vector3.UP * 1.6 - fwd * 2.0, 70.0, 12.0)
+	var mid := _seen(_hero).lerp(_seen(_foe), 0.5)
+	var f := _flat(_hero)
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var pos := mid + fwd * (15.0 - lt * 2.0) + side * (3.0 - lt * 3.5) + Vector3.UP * 2.4
+	_put(pos, mid + Vector3.UP * 1.4 - fwd * 3.0, 64.0, 10.0)
 
 
-## Playa : drone qui plonge sur le peloton, la mer derriere.
+## Playa : survol haut et de cote (au-dessus des arches), le peloton et la mer.
 func _c_drone(lt: float) -> void:
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var pos := xf.origin - fwd * (26.0 - lt * 6.0) + side * (14.0 - lt * 4.0) + Vector3.UP * (30.0 - lt * 14.0)
-	var look := xf.origin + fwd * 12.0
-	_put(pos, look, 60.0, 6.0)
+	var f := _flat(_hero)
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var pos := p + side * (30.0 - lt * 4.0) + fwd * (6.0 + lt * 4.0) + Vector3.UP * (34.0 - lt * 6.0)
+	_put(pos, p + fwd * 10.0, 58.0, 6.0)
 
 
-## Playa : au pied du tremplin geant, on regarde le peloton s'envoler.
+## Playa : de cote, pres du tremplin geant ; le peloton le traverse en l'air.
 func _c_jump_playa(lt: float) -> void:
 	var a := _anchor
 	var fwd := -a.basis.z
-	var pos := a.origin + fwd * 28.0 - a.basis.x * 11.0 + Vector3.UP * 1.2
-	var look := _xf(_hero).origin + Vector3.UP * 2.0
-	_put(pos, look, 64.0, 14.0)
+	var pos := a.origin + fwd * 16.0 - a.basis.x * 20.0 + Vector3.UP * 3.0
+	var look := _seen(_hero) + Vector3.UP * 2.0
+	_put(pos, look.lerp(a.origin + fwd * 20.0 + Vector3.UP * 6.0, 0.35), 62.0, 10.0)
 
 
-## Sakura : nitro de pres, camera basse derriere qui recule.
+## Sakura : de trois quarts face, le camion en nitro se rapproche ; la camera
+## garde ses distances (jamais dans la cabine).
 func _c_boost(lt: float) -> void:
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var lead := 16.0 - clampf(lt - 0.4, 0.0, 1.8) * 7.0
-	var pos := xf.origin + fwd * lead + side * 3.4 + Vector3.UP * 1.0
-	var look := xf.origin - fwd * 4.0 + Vector3.UP * 1.6
-	_put(pos, look, 64.0 + clampf(lt - 0.4, 0.0, 1.0) * 12.0, 10.0)
+	var f := _flat(_hero)
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var lead := 20.0 - clampf(lt - 0.3, 0.0, 1.8) * 5.0
+	var pos := p + fwd * lead + side * 6.0 + Vector3.UP * 2.0
+	_put(pos, p + Vector3.UP * 1.5, 60.0 + clampf(lt - 0.4, 0.0, 1.0) * 8.0, 10.0)
 
 
-## Virage de Sakura : la camera, au ras de la route, se laisse depasser par le
-## camion de tete.
+## Virage de Sakura : grue qui tourne lentement autour du camion de tete, en
+## hauteur, le peloton derriere lui.
 func _c_corner(lt: float) -> void:
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var pos := xf.origin + fwd * (9.0 - lt * 11.0) + side * 5.5 + Vector3.UP * 1.1
-	_put(pos, xf.origin + Vector3.UP * 1.8 + fwd * 2.0, 66.0, 14.0)
+	var f := _flat(_hero)
+	var p: Vector3 = f[0]
+	var fwd: Vector3 = f[1]
+	var side: Vector3 = f[2]
+	var a := 0.5 + lt * 0.5
+	var pos := p + (fwd * cos(a) + side * sin(a)) * 22.0 + Vector3.UP * 7.0
+	_put(pos, p - fwd * 6.0 + Vector3.UP * 1.0, 58.0, 8.0)
 
 
 ## Montage : un angle different a chaque temps.
 func _c_montage(lt: float) -> void:
 	var k := clampi(int(lt / (BAR / 4.0)), 0, 3)
-	var xf := _xf(_hero)
-	var fwd := -xf.basis.z
-	fwd.y = 0.0
-	fwd = fwd.normalized()
-	var side := fwd.cross(Vector3.UP)
-	var offsets := [Vector3(-11.0, 1.6, 10.0), Vector3(-3.0, 8.0, -30.0), Vector3(13.0, 1.4, -4.0), Vector3(0.0, 20.0, -12.0)]
+	var fl := _flat(_hero)
+	var fwd: Vector3 = fl[1]
+	var side: Vector3 = fl[2]
+	var xf := Transform3D(Basis.IDENTITY, fl[0])
+	var offsets := [Vector3(-16.0, 3.0, 16.0), Vector3(-3.0, 8.0, -30.0), Vector3(13.0, 1.4, -4.0), Vector3(0.0, 20.0, -12.0)]
 	var o: Vector3 = offsets[k]
 	var pos := xf.origin + side * o.x + Vector3.UP * o.y + fwd * o.z
 	if k != int((lt - 1.0 / FPS) / (BAR / 4.0)):

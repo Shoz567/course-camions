@@ -91,6 +91,15 @@ var _predicted: PackedInt32Array = PackedInt32Array([0, 0])
 var _truck: Truck
 var _health: TruckHealth
 var _beam: MeshInstance3D
+## Laser (2026-10-23 : « juste un trait rouge lambda ») : halo additif pulse
+## autour du cœur (laser_beam.gdshader), boule d'energie a la bouche, eclat,
+## lumiere et etincelles a l'impact. Purement visuel.
+var _beam_glow: MeshInstance3D
+var _beam_mat: ShaderMaterial
+var _muzzle: MeshInstance3D
+var _impact: Node3D
+var _impact_glow: MeshInstance3D
+var _impact_sparks: GPUParticles3D
 var _tracer: MeshInstance3D
 var _tracer_ticks: int = 0
 ## Lames de la scie sorties (gauche, droite) : modele de l'equipe, lame a plat.
@@ -138,16 +147,68 @@ func _ready() -> void:
 			m.position = ROOF + Vector3(-0.7 if k == 0 else 0.7, 0.0, 0.3)
 			add_child(m)
 			_roof[k] = m
+	# laser : cœur blanc-rose tres lumineux, halo pulse, bouche, impact
 	_beam = MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.12
-	cyl.bottom_radius = 0.12
+	cyl.top_radius = 0.06
+	cyl.bottom_radius = 0.06
 	cyl.height = 1.0
+	cyl.radial_segments = 12
 	_beam.mesh = cyl
-	_beam.material_override = _glow(Color(1.0, 0.15, 0.3), 6.0, 0.9)
+	_beam.material_override = _glow(Color(1.0, 0.82, 0.92), 9.0, 1.0)
 	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_beam.visible = false
 	add_child(_beam)
+	_beam_glow = MeshInstance3D.new()
+	var halo := CylinderMesh.new()
+	halo.top_radius = 0.42
+	halo.bottom_radius = 0.42
+	halo.height = 1.0
+	halo.radial_segments = 24
+	halo.rings = 1
+	_beam_glow.mesh = halo
+	_beam_mat = ShaderMaterial.new()
+	_beam_mat.shader = preload("res://gameplay/laser_beam.gdshader")
+	_beam_glow.material_override = _beam_mat
+	_beam_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beam_glow.visible = false
+	add_child(_beam_glow)
+	_muzzle = MeshInstance3D.new()
+	var orb := SphereMesh.new()
+	orb.radius = 0.35
+	orb.height = 0.7
+	_muzzle.mesh = orb
+	_muzzle.material_override = _glow(Color(1.0, 0.3, 0.55), 7.0, 0.85)
+	_muzzle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_muzzle.position = LASER_ORIGIN
+	_muzzle.visible = false
+	add_child(_muzzle)
+	var muzzle_light := OmniLight3D.new()
+	muzzle_light.light_color = Color(1.0, 0.25, 0.45)
+	muzzle_light.light_energy = 2.5
+	muzzle_light.omni_range = 5.0
+	_muzzle.add_child(muzzle_light)
+	_impact = Node3D.new()
+	_impact.top_level = true
+	_impact.visible = false
+	add_child(_impact)
+	_impact_glow = MeshInstance3D.new()
+	var flare := SphereMesh.new()
+	flare.radius = 0.7
+	flare.height = 1.4
+	_impact_glow.mesh = flare
+	_impact_glow.material_override = _glow(Color(1.0, 0.45, 0.65), 8.0, 0.7)
+	_impact_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_impact.add_child(_impact_glow)
+	var impact_light := OmniLight3D.new()
+	impact_light.light_color = Color(1.0, 0.3, 0.5)
+	impact_light.light_energy = 4.0
+	impact_light.omni_range = 8.0
+	_impact.add_child(impact_light)
+	_impact_sparks = FxKit.make_sparks(48, 0.45)
+	_impact_sparks.one_shot = false
+	_impact_sparks.emitting = false
+	_impact.add_child(_impact_sparks)
 	# balles de la mitrailleuse : trainee jaune d'un instant
 	_tracer = MeshInstance3D.new()
 	var tc := CylinderMesh.new()
@@ -191,8 +252,8 @@ func _physics_process(_delta: float) -> void:
 	if laser_ticks > 0:
 		laser_ticks -= 1
 		_laser_tick()
-	elif _beam != null:
-		_beam.visible = false
+	elif _beam != null and _beam.visible:
+		_show_laser(false)
 	if gun_ticks > 0:
 		gun_ticks -= 1
 		if gun_ticks % PowerCatalog.GUN_INTERVAL == 0:
@@ -416,9 +477,30 @@ func _laser_tick() -> void:
 					PowerCatalog.LASER_HIT_MS if mark else 0.0)
 			land(hit["position"], PowerCatalog.LASER_DAMAGE_PER_TICK, false, mark)
 	if _beam != null:
-		_beam.visible = true
+		_show_laser(true)
+		var xf := _ray_transform(fwd, length)
 		(_beam.mesh as CylinderMesh).height = length
-		_beam.transform = _ray_transform(fwd, length)
+		_beam.transform = xf
+		(_beam_glow.mesh as CylinderMesh).height = length
+		# le halo respire (visuel : au compteur d'images du rendu)
+		var breath := 1.0 + 0.12 * sin(Engine.get_process_frames() * 0.5)
+		_beam_glow.transform = Transform3D(xf.basis.scaled(Vector3(breath, 1.0, breath)), xf.origin)
+		_beam_mat.set_shader_parameter("length_m", length)
+		_muzzle.scale = Vector3.ONE * (0.85 + 0.3 * absf(sin(Engine.get_process_frames() * 0.75)))
+		_impact.visible = not hit.is_empty()
+		_impact_sparks.emitting = _impact.visible
+		if _impact.visible:
+			_impact.global_position = hit["position"]
+			_impact_glow.scale = Vector3.ONE * (0.7 + 0.5 * absf(sin(Engine.get_process_frames() * 1.0)))
+
+
+func _show_laser(on: bool) -> void:
+	_beam.visible = on
+	_beam_glow.visible = on
+	_muzzle.visible = on
+	if not on:
+		_impact.visible = false
+		_impact_sparks.emitting = false
 
 
 ## Une balle : rayon vise depuis la face avant ; GUN_DAMAGE au camion

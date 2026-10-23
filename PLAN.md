@@ -1544,6 +1544,21 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   de nuit, départ, missile, laser, duel, largage, Playa et son tremplin
   géant, nitro à Sakura, montage d'explosions, puis logo CRAZY WHEELS sur le
   plateau du menu.
+  Reprise (2026-10-23, « des petits bugs […] difficilement lisible […]
+  peut-être avec des plans plus larges ») : relevé complet (une capture
+  toutes les 0,5 s et après chaque coupe). Bugs corrigés : écran noir après
+  le crash (caméra autour d'un camion détruit, disparu : sa dernière place
+  est gardée), caméra dans la cabine à Sakura, arche devant le survol de
+  Playa, caméra dans les tribunes (elle passe désormais devant le décor qui
+  la masque, comme la caméra de jeu). Plans élargis et posés : profil
+  entier, missile et largage en hauteur derrière le tireur, laser de trois
+  quarts, grue autour du peloton au virage. Qualité extrême imposée, sans
+  toucher aux réglages du joueur.
+- [x] **Laser : vrai rayon d'énergie** (2026-10-23, « c'est juste un trait
+  rouge lambda ») : cœur blanc-rose, halo additif aux bords doux avec
+  pulsations le long du rayon (`gameplay/laser_beam.gdshader`), boule
+  d'énergie à la bouche, éclat, lumière et étincelles à l'impact. Purement
+  visuel (dégâts et portée inchangés), en jeu comme dans le trailer.
 - [x] **Ancien sas jaune supprimé partout** (2026-10-22, « il y a toujours le
   texte jaune que je ne veux pas. Maintenant, c'est le menu ») : il ne
   restait que dans les scènes de course lancées sans le menu (captures,
@@ -1553,7 +1568,7 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   réécrit (plus de sas, rien ne bouge pendant le compte à rebours).
   À noter : `docs/VEHICLE_SPEC.md` §5 bis dit encore « dans le sas READY,
   chaque joueur choisit sa semi-remorque » (contrat : à corriger avec
-  l'accord de l’équipe ; le choix se fait à la page de sélection du menu).
+  l'accord de l'équipe ; le choix se fait à la page de sélection du menu).
 
 ## Questions de design ouvertes
 
