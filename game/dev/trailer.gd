@@ -91,6 +91,18 @@ var _cam_snap := true
 var _snap_frames := 0
 ## Derniere place vue de chaque camion (_seen).
 var _last_seen: Dictionary = {}
+## Camion de tete du plan, choisi a sa premiere image puis garde : au depart,
+## deux camions cote a cote se disputaient la tete d'une image a l'autre et
+## la camera sautait de l'un a l'autre (2026-10-23 : « une sorte de rollback »).
+var _lead := -1
+## Images depuis la derniere coupe : le lissage de la camera y repart en
+## douceur (sans recalage brutal puis freinage).
+var _since_cut := 0
+## Des camions ont ete replaces (ou une course chargee) a cette coupe.
+var _teleported := false
+## Images masquees a la coupe : 1, ou 2 quand une course vient d'etre
+## chargee (sa camera n'est en place qu'a la deuxieme image).
+var _hidden_frames := 1
 var _shake := 0.0
 ## Point fixe du plan courant (camera posee au bord de la route).
 var _anchor := Transform3D.IDENTITY
@@ -186,23 +198,38 @@ func _program() -> void:
 	]
 
 
-func _process(_delta: float) -> void:
-	var t := _frame / FPS
-	if t >= minf(END, _until):
-		get_tree().quit()
-		return
-	# plan suivant
+## Coupe au plan suivant (2026-10-23 : « une sorte de rollback » vers 4-5 s).
+## Les camions replaces (Truck.reset_to) ne bougent qu'au debut du pas
+## physique suivant (avant meme _physics_process) : l'image de la coupe les
+## montre encore a l'ancienne place, la camera du nouveau plan a jusqu'a
+## 300 m de son sujet. Cette image-la est masquee (noir, 1/60 s) et la camera
+## se recale encore a l'image suivante, camions en place.
+func _advance_shots(t: float) -> void:
 	while _shot + 1 < _shots.size() and t >= float(_shots[_shot + 1]["at"]):
 		_shot += 1
 		var s: Dictionary = _shots[_shot]
 		_shot_t0 = float(s["at"])
 		_events.clear()
 		_cam_snap = true
-		_snap_frames = 3
+		_since_cut = 0
+		_teleported = false
+		_hidden_frames = 1
 		_last_seen.clear()
+		_lead = -1
 		if int(s["scene"]) != _scene_id:
 			_load_scene(int(s["scene"]))
 		(s["setup"] as Callable).call()
+		_snap_frames = _hidden_frames + 1
+
+
+func _process(_delta: float) -> void:
+	var t := _frame / FPS
+	if t >= minf(END, _until):
+		get_tree().quit()
+		return
+	_advance_shots(t)
+	overlay.hide_frame = _teleported and _since_cut < _hidden_frames
+	_since_cut += 1
 	var lt := t - _shot_t0
 	for e: Array in _events:
 		if not bool(e[2]) and lt >= float(e[0]):
@@ -279,6 +306,8 @@ func _load_scene(id: int) -> void:
 		return
 	GameState.requested_players = 1
 	GameState.selected_track = id
+	_teleported = true
+	_hidden_frames = 2
 	race = (load(GameStateNode.track_scene(id)) as PackedScene).instantiate() as Node3D
 	add_child(race)
 	track = race.get("track") as TrackBlockout
@@ -325,6 +354,7 @@ func _place(i: int, s: float, lateral: float, speed: float) -> void:
 	var k := track.index_at_s(fposmod(s, track.length()))
 	var xf := track.frame_at(k, lateral, 0.35)
 	var t := _truck(i)
+	_teleported = true
 	var h := TruckHealth.of(t)
 	if h != null:
 		if h.is_wrecked():
@@ -511,7 +541,7 @@ func _put(pos: Vector3, look: Vector3, fov: float, smooth: float = 0.0) -> void:
 		_cam_look = look
 		_cam_snap = false
 	else:
-		var k := 1.0 - exp(-smooth / FPS)
+		var k := lerpf(1.0, 1.0 - exp(-smooth / FPS), clampf(_since_cut / 24.0, 0.0, 1.0))
 		_cam_pos = _cam_pos.lerp(pos, k)
 		_cam_look = _cam_look.lerp(look, k)
 	var p := _cam_pos
@@ -551,7 +581,7 @@ func _c_launch(lt: float) -> void:
 ## Camera de face devant le camion de tete, qui la rattrape ; le peloton
 ## derriere lui.
 func _c_chase_low(lt: float) -> void:
-	var lead := _leader()
+	var lead := _plan_leader()
 	var xf := _xf(lead)
 	var fwd := -xf.basis.z
 	fwd.y = 0.0
@@ -582,7 +612,7 @@ func _flat(i: int) -> Array:
 
 ## Travelling lateral large : le camion entier (cabine et remorque) de profil.
 func _c_side(lt: float) -> void:
-	var f := _flat(_leader())
+	var f := _flat(_plan_leader())
 	var p: Vector3 = f[0]
 	var fwd: Vector3 = f[1]
 	var side: Vector3 = f[2]
@@ -698,6 +728,12 @@ func _c_title(lt: float) -> void:
 	var r := 34.0 - lt * 1.2
 	var pos := center + Vector3(sin(a), 0.0, cos(a)) * r + Vector3.UP * (3.6 + lt * 0.4)
 	_put(pos, center + Vector3.UP * 2.5, 58.0)
+
+
+func _plan_leader() -> int:
+	if _lead < 0:
+		_lead = _leader()
+	return _lead
 
 
 func _leader() -> int:
