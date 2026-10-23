@@ -37,6 +37,9 @@ var logo_at: float = INF
 var black_from: float = INF
 var black_to: float = INF
 var count_marks: Array[float] = []
+## Image masquee (noir) : l'image d'une coupe ou les camions ne sont pas
+## encore a leur nouvelle place (dev/trailer.gd).
+var hide_frame: bool = false
 
 
 func _ready() -> void:
@@ -203,9 +206,11 @@ func update(t: float) -> void:
 		_tag.modulate.a = clampf((lx - 1.5) / 0.25, 0.0, 1.0)
 		_tag.position.x = 80.0 * (1.0 - _ease_out((lx - 1.5) / 0.3))
 		_info.modulate.a = clampf((lx - 3.0) / 0.3, 0.0, 1.0)
-	# fondu au noir
+	# fondu au noir, ou image masquee
 	if t >= black_from:
 		_black.color.a = clampf((t - black_from) / maxf(black_to - black_from, 0.01), 0.0, 1.0)
+	else:
+		_black.color.a = 1.0 if hide_frame else 0.0
 
 
 func set_info(text_line: String) -> void:
