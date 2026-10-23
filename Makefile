@@ -12,7 +12,7 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run solo sandbox trailer clean-spike vehicules export export-windows export-linux export-macos share
+.PHONY: help assets import test test-full test-selftest baseline run solo sandbox trailer clean-spike vehicules export export-windows export-linux export-macos export-windows-share share
 
 help:
 	@echo "Cibles disponibles :"
@@ -52,8 +52,14 @@ export: export-windows export-linux
 
 # Jeu a partager (2026-10-23) : Windows et Mac, chacun en .zip pret a envoyer
 # (builds/CrazyWheels-Windows.zip, builds/CrazyWheels-Mac.zip ; tools/package.js).
-share: export-windows export-macos
+share: export-windows-share export-macos
 	node tools/package.js
+
+# Windows : executable signe de Godot (le modele d'export ne l'est pas, et le
+# controle intelligent des applications de Windows 11 le bloque) et ses donnees.
+export-windows-share: import
+	$(GODOT) --headless -s tools/export_assets.gd -- builds/share-windows --exe=CrazyWheels.exe
+	$(GODOT) --headless --path $(PROJECT) --export-pack "Windows Desktop" ../builds/share-windows/CrazyWheels.pck
 
 export-macos: import
 	$(GODOT) --headless -s tools/export_assets.gd -- builds/macos/assets

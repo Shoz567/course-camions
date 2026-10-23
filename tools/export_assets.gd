@@ -8,6 +8,12 @@ extends SceneTree
 ##
 ## Lance depuis la racine du depot. Sort en code 1 si un dossier manque ou si
 ## un fichier n'est qu'un pointeur Git LFS (clone sans `git lfs pull`).
+##
+## `--exe=CrazyWheels.exe` (jeu partage pour Windows, make share, 2026-10-23) :
+## copie aussi l'executable de ce Godot sous ce nom. L'executable officiel est
+## signe par son editeur, le modele d'export non : le controle intelligent des
+## applications de Windows 11 bloque un executable non signe, sans recours.
+## Lance a cote de CrazyWheels.pck (export --export-pack), il charge le jeu.
 
 const DIRS: PackedStringArray = [
 	"Assets_Visuels/Camion/Camions_Course_Export/Realiste",
@@ -53,4 +59,14 @@ func _initialize() -> void:
 			copied += 1
 			bytes += size
 	print("OK %d modele(s), %.1f Mo -> %s" % [copied, bytes / 1048576.0, dest])
+	for a in args:
+		if a.begins_with("--exe="):
+			# l'alias godot lance la variante console, qui ne fait qu'ouvrir l'autre
+			var exe := OS.get_executable_path().replace("_console.exe", ".exe")
+			var to := dest.path_join(a.trim_prefix("--exe="))
+			if DirAccess.copy_absolute(exe, to) != OK:
+				printerr("export_assets : copie de %s impossible" % exe)
+				quit(1)
+				return
+			print("OK executable signe de Godot %s -> %s" % [Engine.get_version_info().string, to])
 	quit(0)

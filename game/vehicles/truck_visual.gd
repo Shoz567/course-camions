@@ -655,12 +655,22 @@ func _probe_index(i: int) -> int:
 ## l'executable est dans CrazyWheels.app/Contents/MacOS, et rien ne s'ajoute
 ## dans le paquet sans casser sa signature (macOS refuserait de le lancer).
 static func asset_base() -> String:
-	if OS.has_feature("template"):
+	if exported():
 		var dir := OS.get_executable_path().get_base_dir()
 		if OS.has_feature("macos"):
 			dir = dir.path_join("../../..").simplify_path()
 		return dir.path_join("game")
 	return ProjectSettings.globalize_path("res://")
+
+
+## Jeu exporte : modele d'export de Godot, ou jeu partage pour Windows
+## (make share, 2026-10-23) lance par l'executable signe de Godot et ses
+## donnees CrazyWheels.pck, qui portent la fonctionnalite `jeu_partage`
+## (export_presets.cfg) : le controle intelligent des applications de
+## Windows 11 bloque tout executable non signe, dont le modele d'export.
+static func exported() -> bool:
+	return OS.has_feature("template") or OS.has_feature("jeu_partage")
+
 
 func _attach_external() -> void:
 	var path := asset_base().path_join(external_model).simplify_path()
@@ -891,7 +901,7 @@ static func _trailer_template(path: String) -> PackedScene:
 static func _model_exists(path: String) -> bool:
 	if FileAccess.file_exists(path):
 		return true
-	if OS.has_feature("template"):
+	if exported():
 		push_warning("TruckVisual : %s introuvable, camion en boites" % path)
 	return false
 
