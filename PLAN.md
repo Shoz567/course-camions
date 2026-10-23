@@ -1554,6 +1554,12 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   entier, missile et largage en hauteur derrière le tireur, laser de trois
   quarts, grue autour du peloton au virage. Qualité extrême imposée, sans
   toucher aux réglages du joueur.
+  Textes (2026-10-23, « des petits sauts visuels avec l'affichage du texte
+  […] des textes impactants qui donnent envie d'y jouer ») : les titres
+  dérivaient de 18 px/s, calés sur les pixels, donc par à-coups ; ils
+  claquent maintenant sur place puis restent immobiles. Plus de liste de
+  fonctions : PIED AU PLANCHER, SORS L'ARTILLERIE, AUCUNE PITIÉ, ENVOLE-TOI,
+  DÉFIE TES POTES, et « PRÊT À TOUT DÉFONCER ? » sous le logo.
 - [x] **Laser : vrai rayon d'énergie** (2026-10-23, « c'est juste un trait
   rouge lambda ») : cœur blanc-rose, halo additif aux bords doux avec
   pulsations le long du rayon (`gameplay/laser_beam.gdshader`), boule
