@@ -9,6 +9,8 @@ extends RayCast3D
 ## roule ni sur un autre camion ni sur un checkpoint.
 
 var in_contact: bool = false
+## Sol : normale a moins de 60 deg de l'axe vertical du camion (cos 60).
+const MIN_GROUND_DOT := 0.5
 ## Distance ancrage -> moyeu, le long du rayon. TRAVEL quand la roue pend.
 var hub_distance: float = TruckSpec.SUSPENSION_TRAVEL
 var contact_point: Vector3 = Vector3.ZERO
@@ -41,8 +43,18 @@ func probe() -> void:
 		load_n = 0.0
 		long_speed = 0.0
 		return
-	contact_point = get_collision_point()
 	contact_normal = get_collision_normal()
+	# une surface presque verticale (mur, glissiere) n'est pas un sol : camion
+	# penche contre un mur, le rayon des roues de ce cote touchait la glissiere
+	# et sa suspension, le long de la normale (horizontale), repoussait le
+	# camion comme un ressort invisible, roues sans adherence (2026-10-23)
+	if contact_normal.dot(global_basis.y) < MIN_GROUND_DOT:
+		in_contact = false
+		hub_distance = TruckSpec.SUSPENSION_TRAVEL
+		load_n = 0.0
+		long_speed = 0.0
+		return
+	contact_point = get_collision_point()
 	hub_distance = global_position.distance_to(contact_point) - (TruckSpec.WHEEL_RADIUS - radius_loss)
 	surface_grip = 1.0
 	var c := get_collider()

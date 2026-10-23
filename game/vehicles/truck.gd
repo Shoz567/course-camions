@@ -124,6 +124,7 @@ const STOP_SPEED_MS := 0.5
 @export var debug_steering: bool = true
 @export var debug_drag: bool = true
 @export var debug_anti_roll: bool = true
+@export var debug_downforce: bool = true
 @export var debug_handbrake: bool = true
 ## Anti tete-a-queue : derive prevue au-dela de drift_max_slip_deg ramenee.
 @export var debug_spin_guard: bool = true
@@ -1208,6 +1209,9 @@ func _physics_process(_delta: float) -> void:
 	# 1.6 au sol : anti-retournement (prioritaire : les camions se percutent
 	# souvent). En l'air : assiette automatique et lacet au stick.
 	if _grounded > 0:
+		# appui aerodynamique : plaque le camion, charge les roues (adherence)
+		if debug_downforce:
+			apply_central_force(-up * mass * _gravity * downforce_ratio(v_fwd))
 		if debug_anti_roll:
 			_apply_anti_roll(up, fwd)
 	else:
@@ -1685,11 +1689,21 @@ func _point_velocity(p: Vector3, com: Vector3) -> Vector3:
 
 
 ## Angle de braquage qui fait tourner a la limite d'adherence a la vitesse
-## v_fwd, multiplie par steer_grip_ratio (tache 1.5).
+## v_fwd, multiplie par steer_grip_ratio (tache 1.5). L'adherence compte
+## l'appui aerodynamique a cette vitesse.
 func _grip_steer_deg(v_fwd: float) -> float:
 	var v2 := maxf(v_fwd * v_fwd, 1.0)
 	var t := tuning
-	return rad_to_deg(atan(_wheelbase * t.lateral_grip_g * TruckSpec.GRAVITY / v2)) * t.steer_grip_ratio
+	var grip := t.lateral_grip_g * (1.0 + (downforce_ratio(v_fwd) if debug_downforce else 0.0))
+	return rad_to_deg(atan(_wheelbase * grip * TruckSpec.GRAVITY / v2)) * t.steer_grip_ratio
+
+
+## Appui aerodynamique a la vitesse speed_ms, en fraction du poids
+## (VehicleTuning.downforce_*).
+func downforce_ratio(speed_ms: float) -> float:
+	var t := tuning
+	var r := absf(speed_ms) / (t.downforce_ref_kmh / 3.6)
+	return minf(t.downforce_at_ref * r * r, t.downforce_max)
 
 
 ## Braquage max au plein stick a la vitesse actuelle, hors derive et hors

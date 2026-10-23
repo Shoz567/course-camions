@@ -13,6 +13,7 @@ extends PhysicsTest
 const SLOPE_DEG := 6.0
 const RAMP_LEN := 24.0
 const PLATEAU_LEN := 40.0
+const PLATEAU_OVERLAP := 0.1
 const TRAILERS: PackedStringArray = ["citerne", "porte_voitures", "grue"]
 ## Enfoncement tolere (m) : le ressort du suivi a un tick de retard.
 const MAX_SINK := 0.06
@@ -63,7 +64,11 @@ func _build_relief() -> void:
 	var run := RAMP_LEN * cos(a)
 	var z0 := 0.0
 	_slab(Vector3(14.0, h / 2.0 - 0.5 * cos(a), z0 - run / 2.0), Vector3(60.0, 1.0, RAMP_LEN), a)
-	_slab(Vector3(14.0, h - 0.5, z0 - run - PLATEAU_LEN / 2.0), Vector3(60.0, 1.0, PLATEAU_LEN), 0.0)
+	# plateau prolonge de PLATEAU_OVERLAP de chaque cote : les rampes (blocs de
+	# 1 m inclines) laissaient a chaque jonction une fente de ~5 cm ou un rayon
+	# voyait le sol 20 cm plus bas (2026-10-23 : remorque « dans le sol » une
+	# image, selon l'instant du passage). Marche laissee : ~1 cm.
+	_slab(Vector3(14.0, h - 0.5, z0 - run - PLATEAU_LEN / 2.0), Vector3(60.0, 1.0, PLATEAU_LEN + 2.0 * PLATEAU_OVERLAP), 0.0)
 	_slab(Vector3(14.0, h / 2.0 - 0.5 * cos(a), z0 - run - PLATEAU_LEN - run / 2.0), Vector3(60.0, 1.0, RAMP_LEN), -a)
 
 

@@ -228,6 +228,25 @@ multiplicateur hors de [0,8 ; 1,2]. Vérifié par `trailer_type_test` et
   d'adhérence tombait sous 3° et le camion ne tenait que 0,41 à 0,65 g au plein
   stick ; mesuré avec le plancher : 0,82 à 0,92 g de 140 à 225 km/h, toutes
   catégories). Mesuré : 90 % du lacet établi en 9 ticks.
+- **Appui aérodynamique** (décision de l'utilisateur, 2026-10-23 : « dans
+  quelques virages, c'est compliqué de tourner […] sans aller toucher les
+  bords […] même en ligne droite, quand on va plutôt vite ») : force vers le
+  sol de **0,30 × le poids à 150 km/h**, en carré de la vitesse, plafonnée à
+  0,40 (`downforce_*`) ; l'angle de braquage à haute vitesse compte cette
+  adhérence en plus. Rien ne change à basse vitesse (+3 % à 50 km/h, +8 % de
+  g latéral à 80 km/h). Mesuré au plein braquage, sans frein à main
+  (`high_speed_corner_test`) : rayon tenu 142 → **109 m** à 145 km/h
+  (Normal), 211 → **143 m** à 180 km/h (Rapide), 266 → **194 m** à 215 km/h
+  (Ultrasonique), dérive 3 à 4° (sous la saturation des pneus), inclinaison
+  ≤ 7°. Les virages des circuits (120 à 160 m, METRICS §4) passent à fond en
+  Normal. Coupé en arène (maniabilité réglée à part). Une vraie force, pas
+  une adhérence multipliée : sans elle, dérive passagère de 11° et roulis
+  doublé à l'entrée du virage.
+- Les roues ignorent les surfaces presque verticales (normale à plus de 60°
+  de l'axe du camion) : penché contre un mur, le rayon des roues de ce côté
+  touchait la glissière et la suspension repoussait le camion comme un
+  ressort invisible, roues sans adhérence (camion « aimanté » le long du mur
+  sans le toucher, 2026-10-23).
 - Dérapage : au frein à main, le lacet est piloté vers une dérive cible
   (**35°** au plein braquage, proportionnelle au stick, 8 rad/s² d'autorité)
   et le train avant est **débridé jusqu'à 16°** (`drift_steer_deg`, au lieu

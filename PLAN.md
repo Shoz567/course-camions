@@ -1565,6 +1565,24 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   pulsations le long du rayon (`gameplay/laser_beam.gdshader`), boule
   d'énergie à la bouche, éclat, lumière et étincelles à l'impact. Purement
   visuel (dégâts et portée inchangés), en jeu comme dans le trailer.
+- [x] **Virages à haute vitesse : appui aérodynamique** (2026-10-23, « dans
+  quelques virages, c'est compliqué de tourner […] sans aller toucher les
+  bords […] même en ligne droite, quand on va plutôt vite ») : mesuré, le
+  camion tenait déjà sa limite d'adhérence (1,13 g) ; à 145 km/h son virage
+  le plus serré faisait 142 m pour des virages de 120 à 160 m. Une adhérence
+  plus forte partout rendait le camion trop accrocheur en ville (rayon divisé
+  par deux) et le faisait se coucher contre les murs. Appui aérodynamique à
+  la place (VEHICLE_SPEC §5 quater bis) : 109 m à 145 km/h, 143 m à 180,
+  194 m à 215, sans glisse ; basse vitesse inchangée, arène inchangée.
+  Trouvé en route : les roues prenaient les murs pour du sol (camion
+  repoussé, « aimanté » le long des glissières) ; corrigé dans `WheelProbe`.
+  Tests : `high_speed_corner_test` (nouveau) ; baseline réécrit (g latéral
+  1,145 → 1,244, rayon 16,4 → 15,9 m) ; `truck_trailer_ground_test` : fente
+  de 5 cm entre les blocs du relief d'essai comblée (la remorque y tombait
+  une image) ; `respawn_launch_test` : les destructions par les tirs des
+  bots et par le test lui-même ne jugent plus la réapparition. Les bots
+  gardent leur modèle d'adhérence (1,145 g) : ils ont désormais de la marge
+  en virage.
 - [x] **Ancien sas jaune supprimé partout** (2026-10-22, « il y a toujours le
   texte jaune que je ne veux pas. Maintenant, c'est le menu ») : il ne
   restait que dans les scènes de course lancées sans le menu (captures,
