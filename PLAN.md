@@ -1580,6 +1580,8 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   github.com/Shoz567/crazy-wheels-download (dépôt public, releases seules).
   Puis (« le contrôle intelligent des applications bloque le jeu ») : le zip
   Windows livre l'exécutable officiel signé de Godot et le jeu en `.pck`.
+  Puis (« les mac n'ont pas les assets visuels chargés ») : les modèles sont
+  embarqués dans le `.pck`, plus de dossier Assets_Visuels dans les zips.
 - [x] **Virages à haute vitesse : appui aérodynamique** (2026-10-23, « dans
   quelques virages, c'est compliqué de tourner […] sans aller toucher les
   bords […] même en ligne droite, quand on va plutôt vite ») : mesuré, le

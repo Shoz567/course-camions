@@ -797,11 +797,11 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 ## principal (ecran de chargement, build_templates).
 static func _build_template(path: String, strip: PackedStringArray, exclude: PackedStringArray,
 		wheel_prefix: String, trailer_prefix: String) -> PackedScene:
-	if not _model_exists(path):
+	if not model_exists(path):
 		return null
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
-	if doc.append_from_file(path, state) != OK:
+	if read_model(doc, path, state) != OK:
 		push_warning("TruckVisual : %s illisible, camion en boites" % path)
 		return null
 	_generate_lods(state)
@@ -895,24 +895,52 @@ static func _trailer_template(path: String) -> PackedScene:
 	return packed
 
 
-## Modele present ? Dans le jeu exporte (make share), un absent se signale
-## dans le journal : dossier Assets_Visuels pas a cote du jeu, ou application
-## Mac lancee depuis une copie cachee (quarantaine non retiree).
-static func _model_exists(path: String) -> bool:
+## Jeu partage (make share, 2026-10-23) : les modeles sont dans les donnees du
+## jeu (.pck), copies par `export_assets.gd --ext` sous BUNDLE_DIR avec
+## l'extension BUNDLE_EXT (Godot n'importe pas ce qu'il ne connait pas, et
+## `include_filter` les emporte tels quels). Plus de dossier Assets_Visuels a
+## retrouver a cote du jeu : sur Mac, l'application lancee depuis une copie
+## cachee (quarantaine, App Translocation) ne le voyait pas, camions en boites.
+const BUNDLE_DIR := "res://modeles_partage/"
+const BUNDLE_EXT := ".modele"
+
+
+## Copie embarquee d'un modele d'Assets_Visuels ("" hors de ce dossier).
+static func _bundled(path: String) -> String:
+	var i := path.find("Assets_Visuels/")
+	return BUNDLE_DIR + path.substr(i) + BUNDLE_EXT if i >= 0 else ""
+
+
+## Modele present, a ce chemin ou embarque ? Dans le jeu exporte, un absent se
+## signale dans le journal.
+static func model_exists(path: String) -> bool:
 	if FileAccess.file_exists(path):
+		return true
+	var b := _bundled(path)
+	if b != "" and FileAccess.file_exists(b):
 		return true
 	if exported():
 		push_warning("TruckVisual : %s introuvable, camion en boites" % path)
 	return false
 
 
+## Lit le modele dans `state` : le fichier s'il existe, sinon sa copie embarquee.
+static func read_model(doc: GLTFDocument, path: String, state: GLTFState) -> Error:
+	if FileAccess.file_exists(path):
+		return doc.append_from_file(path, state)
+	var b := _bundled(path)
+	if b == "" or not FileAccess.file_exists(b):
+		return ERR_FILE_NOT_FOUND
+	return doc.append_from_buffer(FileAccess.get_file_as_bytes(b), path.get_base_dir(), state)
+
+
 ## Gabarit d'une remorque du catalogue, sans le cache (hors du thread principal).
 static func _build_trailer_template(path: String) -> PackedScene:
-	if not _model_exists(path):
+	if not model_exists(path):
 		return null
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
-	if doc.append_from_file(path, state) != OK:
+	if read_model(doc, path, state) != OK:
 		push_warning("TruckVisual : %s illisible, remorque d'origine" % path)
 		return null
 	_generate_lods(state)

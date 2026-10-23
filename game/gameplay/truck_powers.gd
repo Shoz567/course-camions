@@ -818,10 +818,10 @@ static func _weapon(relative: String) -> Node3D:
 	var path := TruckVisual.asset_base().path_join(relative).simplify_path()
 	if not _models.has(path):
 		_models[path] = null
-		if FileAccess.file_exists(path):
+		if TruckVisual.model_exists(path):
 			var doc := GLTFDocument.new()
 			var state := GLTFState.new()
-			if doc.append_from_file(path, state) == OK:
+			if TruckVisual.read_model(doc, path, state) == OK:
 				var root := doc.generate_scene(state)
 				var packed := PackedScene.new()
 				packed.pack(root)

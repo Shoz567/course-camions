@@ -57,12 +57,13 @@ share: export-windows-share export-macos
 
 # Windows : executable signe de Godot (le modele d'export ne l'est pas, et le
 # controle intelligent des applications de Windows 11 le bloque) et ses donnees.
+# Les modeles vont dans les donnees du jeu (game/modeles_partage, .pck).
 export-windows-share: import
-	$(GODOT) --headless -s tools/export_assets.gd -- builds/share-windows --exe=CrazyWheels.exe
+	$(GODOT) --headless -s tools/export_assets.gd -- game/modeles_partage --ext=.modele --exe=builds/share-windows/CrazyWheels.exe
 	$(GODOT) --headless --path $(PROJECT) --export-pack "Windows Desktop" ../builds/share-windows/CrazyWheels.pck
 
 export-macos: import
-	$(GODOT) --headless -s tools/export_assets.gd -- builds/macos/assets
+	$(GODOT) --headless -s tools/export_assets.gd -- game/modeles_partage --ext=.modele
 	$(GODOT) --headless --path $(PROJECT) --export-release "macOS" ../builds/macos/CrazyWheels.zip
 
 export-windows: import
