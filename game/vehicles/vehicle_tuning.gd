@@ -148,6 +148,18 @@ extends Resource
 @export_group("Adherence")
 ## Adherence laterale max, en g, ponderee par la charge de chaque roue.
 @export_range(0.0, 2.0, 0.01, "suffix:g") var lateral_grip_g: float = 0.0
+## Appui aerodynamique (2026-10-23 : « dans quelques virages, c'est complique
+## de tourner [...] meme en ligne droite quand on va vite ») : force vers le
+## sol, en fraction du poids, qui croit comme le carre de la vitesse
+## (downforce_at_ref a downforce_ref_kmh), plafonnee a downforce_max. Les roues
+## portent plus : plus d'adherence en virage a haute vitesse, et un camion plus
+## stable (charge en plus, pas de masse en plus ; adherence seule, sans force :
+## derive passagere de 11 deg et roulis double a l'entree du virage). Rien ne
+## change a basse vitesse. L'angle de braquage a haute vitesse en tient compte
+## (Truck._grip_steer_deg). Coupe en arene (for_arena : maniabilite a part).
+@export_range(0.0, 2.0, 0.01) var downforce_at_ref: float = 0.0
+@export_range(1.0, 400.0, 1.0, "suffix:km/h") var downforce_ref_kmh: float = 0.0
+@export_range(0.0, 2.0, 0.01) var downforce_max: float = 0.0
 ## Angle de glissement a partir duquel l'adherence laterale sature. En
 ## dessous, la force croit lineairement : c'est ce qui rend la direction
 ## progressive a haute vitesse (un demi-stick tourne moins qu'un plein stick).
@@ -315,6 +327,10 @@ extends Resource
 
 
 ## Copie reglee pour l'arene (facteurs arena_*).
+## Appui en arene : quasi nul (validate refuse 0, valeur non renseignee).
+const ARENA_DOWNFORCE := 0.0001
+
+
 func for_arena() -> VehicleTuning:
 	var t := duplicate() as VehicleTuning
 	t.lateral_grip_g = lateral_grip_g * arena_grip_factor
@@ -324,6 +340,8 @@ func for_arena() -> VehicleTuning:
 	t.max_steer_deg = minf(max_steer_deg * arena_max_steer_factor, 60.0)
 	t.steer_grip_ratio = minf(steer_grip_ratio * arena_steer_grip_factor, 3.0)
 	t.inertia_yaw_kgm2 = inertia_yaw_kgm2 * arena_yaw_inertia_factor
+	# pas d'appui : petites vitesses, maniabilite reglee a part
+	t.downforce_at_ref = ARENA_DOWNFORCE
 	return t
 
 

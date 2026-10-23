@@ -7,12 +7,17 @@ extends PhysicsTest
 ## CRASH_TICKS apres le GO ; a chaque reapparition :
 ##   A. il repart vers l'avant a la vitesse prevue (LocalRace.launch_for, a
 ##      10 % pres), et la plupart du temps a plus de 40 km/h ;
-##   B. dans les FOLLOW_TICKS qui suivent : aucune nouvelle destruction, et
+##   B. dans les FOLLOW_TICKS qui suivent : aucune nouvelle destruction par la
+##      conduite (tirs des bots et destruction forcee exclus), et
 ##      peu de degats de mur (moins de WALL_MAX PV par reapparition, en moyenne).
 
 const CRASH_TICKS: Array[int] = [300, 1500]
 const FOLLOW_TICKS := 300
 const WALL_MAX := 4.0
+## Destructions qui ne jugent pas la reapparition (2026-10-23 : un camion
+## reapparu, mitraille et passe au laser par les bots, puis repris par la
+## destruction forcee du test, faisait echouer le test).
+const NOT_DRIVING: Array[StringName] = [&"laser", &"mitrailleuse", &"missile", &"scie", &"boomerang", &"test"]
 
 @export var arena := false
 
@@ -56,7 +61,10 @@ func _test_setup() -> void:
 			if _since.has(t) and Engine.get_physics_frames() - int(_since[t]) <= FOLLOW_TICKS:
 				if s == &"mur":
 					_wall += a
-				if h.hp <= 0.0:
+				# detruit par la conduite (mur, chute, choc) : ni par les tirs des bots,
+				# ni par la destruction forcee du test, c'est la place de la
+				# reapparition qui est jugee
+				if h.hp <= 0.0 and not NOT_DRIVING.has(s):
 					_rewrecked += 1)
 
 
@@ -88,7 +96,8 @@ func _test_finish() -> void:
 	GameState.game_mode = _saved[2]
 	GameState.bot_level = _saved[3]
 	GameState.trailer_drops = _saved[4]
-	var ok := _launches.size() == 8
+	# 8 destructions forcees ; davantage si les tirs en ont fait
+	var ok := _launches.size() >= 8
 	var fast := 0
 	for l: Array in _launches:
 		ok = ok and absf(float(l[0]) - float(l[1])) <= 0.1 * float(l[1]) + 0.5
