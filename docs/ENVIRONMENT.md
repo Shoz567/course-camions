@@ -210,6 +210,33 @@ où `TruckVisual.asset_base()` les cherche. Sans eux (ou dans un clone sans
 Le dossier livré est donc **tout** `builds/<plateforme>/`, pas l'exécutable
 seul.
 
+**Jeu à partager** (2026-10-23) : `make share` exporte Windows et Mac puis
+fabrique `builds/CrazyWheels-Windows.zip` et `builds/CrazyWheels-Mac.zip`
+(`tools/package.js`) : un dossier `CrazyWheels/` avec le jeu, `Assets_Visuels/`
+et un `LISEZ-MOI.txt` (lancement, avertissements de sécurité, jeu en ligne par
+IP ou réseau virtuel). Ce sont ces deux zips qu'on envoie, tels quels.
+- Mac : application universelle (Intel et Apple Silicon), signée ad hoc par
+  Godot, non notarisée. L'export universel exige
+  `rendering/textures/vram_compression/import_etc2_astc=true`. Les modèles
+  sont posés **à côté** de `Crazy Wheels.app` (`asset_base()` remonte de
+  `Contents/MacOS`) : un fichier ajouté dans le paquet casserait sa
+  signature.
+- Le zip Mac recopie l'application telle que Godot l'a produite (attributs
+  Unix compris) : un zip refait sous Windows (Explorateur, `Compress-Archive`)
+  perd le droit d'exécution, et macOS refuse de lancer le jeu.
+- Une appli téléchargée non signée par Apple est lancée depuis une copie
+  cachée (App Translocation), sans `Assets_Visuels` à côté : la notice Mac fait
+  d'abord retirer la quarantaine du dossier (`xattr -cr`).
+- Dans le jeu exporté, un modèle absent s'écrit dans le journal
+  (« TruckVisual : … introuvable, camion en boîtes ») avec le chemin cherché.
+- Depuis Git Bash, `godot` (alias WinGet) n'est trouvé que pour les commandes
+  sans guillemets : passer `make share GODOT=<chemin de Godot_v4.7.2-stable_win64.exe>`.
+
+Vérifié le 2026-10-23 : les deux zips passent `unzip -t`, l'exécutable Mac
+garde `rwxr-xr-x` ; le zip Windows extrait par `Expand-Archive`, le jeu
+lancé ouvre le menu sans aucun modèle manquant (dossier retiré : chaque
+modèle signalé, au bon chemin). Le Mac n'a pas pu être essayé faute de Mac.
+
 Vérifié le 2026-10-17 sur la machine de référence : export des deux plateformes en 16 s (`CrazyWheels.exe` 105 Mo, `CrazyWheels.x86_64` 71 Mo) ; l'exe Windows lancé ouvre le menu, la page de sélection et une course Cyber City avec les modèles de l'équipe. Les modèles release officiels refusent une scène passée en ligne de commande : on teste en passant par le menu. Une capture d'écran Windows d'un jeu Vulkan en plein écran exclusif sort grise : tester en `--windowed`.
 ## 5. Baseline de performance
 

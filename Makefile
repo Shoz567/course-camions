@@ -12,7 +12,7 @@ GODOT   := godot
 BLENDER := blender
 PROJECT := game
 
-.PHONY: help assets import test test-full test-selftest baseline run solo sandbox trailer clean-spike vehicules export export-windows export-linux
+.PHONY: help assets import test test-full test-selftest baseline run solo sandbox trailer clean-spike vehicules export export-windows export-linux export-macos share
 
 help:
 	@echo "Cibles disponibles :"
@@ -25,6 +25,7 @@ help:
 	@echo "  make baseline   - mesure les metriques de conduite et les ECRIT dans baseline.json"
 	@echo "  make run        - lance le jeu : menu principal, puis course de 1 a 4 joueurs"
 	@echo "  make export     - exporte le jeu Windows et Linux dans builds/ (modeles d'export requis)"
+	@echo "  make share      - jeu a partager : builds/CrazyWheels-Windows.zip et CrazyWheels-Mac.zip"
 	@echo "  make solo       - course a 1 joueur, plein ecran, sans passer par le menu"
 	@echo "  make sandbox    - lance le bac a sable (arene, tremplin, camions gares)"
 	@echo "  make trailer    - enregistre le trailer de 30 s (builds/trailer.avi, 1080p 60 i/s, son)"
@@ -48,6 +49,15 @@ import:
 # le dossier, que l'export de Godot exige. Modeles d'export Godot
 # 4.7.2 requis (docs/ENVIRONMENT.md).
 export: export-windows export-linux
+
+# Jeu a partager (2026-10-23) : Windows et Mac, chacun en .zip pret a envoyer
+# (builds/CrazyWheels-Windows.zip, builds/CrazyWheels-Mac.zip ; tools/package.js).
+share: export-windows export-macos
+	node tools/package.js
+
+export-macos: import
+	$(GODOT) --headless -s tools/export_assets.gd -- builds/macos/assets
+	$(GODOT) --headless --path $(PROJECT) --export-release "macOS" ../builds/macos/CrazyWheels.zip
 
 export-windows: import
 	$(GODOT) --headless -s tools/export_assets.gd -- builds/windows

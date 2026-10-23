@@ -651,10 +651,15 @@ func _probe_index(i: int) -> int:
 ## (`../Assets_Visuels/...`) : celui du projet (game/) en developpement ; dans
 ## un jeu exporte, `res://` n'est pas un dossier, les modeles sont copies a
 ## cote de l'executable (`make export` : <exe>/Assets_Visuels/...), et
-## `<exe>/game/..` y mene.
+## `<exe>/game/..` y mene. Sur Mac (2026-10-23), a cote de CrazyWheels.app :
+## l'executable est dans CrazyWheels.app/Contents/MacOS, et rien ne s'ajoute
+## dans le paquet sans casser sa signature (macOS refuserait de le lancer).
 static func asset_base() -> String:
 	if OS.has_feature("template"):
-		return OS.get_executable_path().get_base_dir().path_join("game")
+		var dir := OS.get_executable_path().get_base_dir()
+		if OS.has_feature("macos"):
+			dir = dir.path_join("../../..").simplify_path()
+		return dir.path_join("game")
 	return ProjectSettings.globalize_path("res://")
 
 func _attach_external() -> void:
@@ -782,7 +787,7 @@ static func _template(path: String, strip: PackedStringArray, exclude: PackedStr
 ## principal (ecran de chargement, build_templates).
 static func _build_template(path: String, strip: PackedStringArray, exclude: PackedStringArray,
 		wheel_prefix: String, trailer_prefix: String) -> PackedScene:
-	if not FileAccess.file_exists(path):
+	if not _model_exists(path):
 		return null
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
@@ -880,9 +885,20 @@ static func _trailer_template(path: String) -> PackedScene:
 	return packed
 
 
+## Modele present ? Dans le jeu exporte (make share), un absent se signale
+## dans le journal : dossier Assets_Visuels pas a cote du jeu, ou application
+## Mac lancee depuis une copie cachee (quarantaine non retiree).
+static func _model_exists(path: String) -> bool:
+	if FileAccess.file_exists(path):
+		return true
+	if OS.has_feature("template"):
+		push_warning("TruckVisual : %s introuvable, camion en boites" % path)
+	return false
+
+
 ## Gabarit d'une remorque du catalogue, sans le cache (hors du thread principal).
 static func _build_trailer_template(path: String) -> PackedScene:
-	if not FileAccess.file_exists(path):
+	if not _model_exists(path):
 		return null
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
