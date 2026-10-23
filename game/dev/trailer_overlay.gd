@@ -23,6 +23,10 @@ var _crazy: Label
 var _wheels: Label
 var _tag: Label
 var _info: Label
+## Echelle du titre courant, pour qu'il tienne dans l'image.
+var _title_fit: float = 1.0
+const TITLE_POS := Vector2(100, 650)
+const SUB_POS := Vector2(112, 842)
 
 ## Textes programmes : [t0, t1, titre, sous-titre, couleur du titre].
 var _texts: Array = []
@@ -47,9 +51,13 @@ func _ready() -> void:
 	_flash.size = Vector2(W, H)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_flash)
-	_title = _big("", 132, UiKit.TEXT)
+	_title = _big("M", 150, UiKit.TEXT)
 	root.add_child(_title)
-	_sub = UiKit.label("", 34, UiKit.CYAN, 800)
+	# pivot au milieu du bord gauche : le titre grossit sur place
+	_title.reset_size()
+	_title.pivot_offset = Vector2(0.0, _title.size.y / 2.0)
+	_title.text = ""
+	_sub = UiKit.label("", 40, UiKit.CYAN, 800)
 	_sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	_sub.add_theme_constant_override("outline_size", 10)
 	root.add_child(_sub)
@@ -136,7 +144,10 @@ func update(t: float) -> void:
 		if x >= 0.0 and x < 1.0:
 			a = maxf(a, float(f[2]) * (1.0 - x) * (1.0 - x))
 	_flash.color.a = a
-	# grand titre : glisse depuis la gauche, s'efface vers la droite
+	# grand titre (2026-10-23 : « des petits sauts visuels avec l'affichage du
+	# texte ») : il claque sur place (grossi puis pose en 0,14 s), reste
+	# parfaitement immobile et s'efface vite. Plus de derive lente : un texte
+	# cale sur les pixels avancait par a-coups d'un pixel. Positions entieres.
 	_title.visible = false
 	_sub.visible = false
 	for e: Array in _texts:
@@ -144,27 +155,25 @@ func update(t: float) -> void:
 		var t1 := float(e[1])
 		if t < t0 or t > t1:
 			continue
-		var into := _ease_out((t - t0) / 0.16)
-		var out := clampf((t1 - t) / 0.14, 0.0, 1.0)
-		_title.visible = true
 		if _title.text != String(e[2]):
 			_title.text = String(e[2])
-			_title.reset_size()
-			var fit := minf(1.0, 1680.0 / maxf(_title.get_minimum_size().x, 1.0))
-			_title.scale = Vector2(fit, fit)
-			_title.pivot_offset = Vector2(0.0, _title.get_minimum_size().y)
+			var font := _title.get_theme_font(&"font")
+			var fs := _title.get_theme_font_size(&"font_size")
+			var width := font.get_string_size(_title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 40.0
+			_title_fit = minf(1.0, 1650.0 / maxf(width, 1.0))
+		var into := _ease_out((t - t0) / 0.14)
+		var out := clampf((t1 - t) / 0.12, 0.0, 1.0)
+		var punch := lerpf(1.35, 1.0, into) * _title_fit
+		_title.visible = true
 		_title.add_theme_color_override("font_color", e[4])
-		_title.position = Vector2(110.0 - 140.0 * (1.0 - into) + 160.0 * (1.0 - out), H - BAR_H - 300.0)
-		_title.modulate.a = minf(into, out)
-		var drift := (t - t0) * 18.0
-		_title.position.x += drift
+		_title.scale = Vector2(punch, punch)
+		_title.position = TITLE_POS
+		_title.modulate.a = minf(clampf((t - t0) / 0.05, 0.0, 1.0), out)
 		if String(e[3]) != "":
-			var into_s := _ease_out((t - t0 - 0.08) / 0.18)
 			_sub.visible = true
 			_sub.text = String(e[3])
-			_sub.position = Vector2(118.0 + 200.0 * (1.0 - into_s) + drift * 0.6 + 160.0 * (1.0 - out),
-				H - BAR_H - 128.0)
-			_sub.modulate.a = minf(into_s, out)
+			_sub.position = SUB_POS
+			_sub.modulate.a = minf(clampf((t - t0 - 0.12) / 0.12, 0.0, 1.0), out)
 	# compte a rebours : chaque chiffre claque, grossit et s'efface en 1 s
 	_count.visible = false
 	for k in count_marks.size():

@@ -151,13 +151,15 @@ func _program() -> void:
 	var o := overlay
 	o.flash(bar(0), 0.3, 1.0)
 	o.text(bar(0) + 0.02, bar(0) + 0.7, "GO !", "", UiKit.GOLD)
-	o.text(bar(1) + 0.05, bar(2.4), "COURSE DE CAMIONS", "ARCADE  ·  DÉRAPAGES  ·  CONTACTS  ·  SAUTS")
-	o.text(bar(3) + 0.05, bar(4.4), "6 POUVOIRS", "MISSILE  ·  LASER  ·  SCIE  ·  BOUCLIER  ·  MITRAILLEUSE  ·  BOOMERANG")
-	o.text(bar(5.5) + 0.05, bar(6.9), "LARGUE TA REMORQUE", "UN MUR EN PLEINE COURSE")
-	o.text(bar(8) + 0.05, bar(9.4), "3 CIRCUITS", "CYBER CITY  ·  PLAYA DEL SOL  ·  SAKURA")
-	o.text(bar(12) + 0.05, bar(13.0), "JUSQU'À 6 EN ÉCRAN PARTAGÉ", "12 EN LIGNE  ·  BOTS  ·  MODE ARÈNE")
+	# des textes qui donnent envie, pas une liste de fonctions (2026-10-23 :
+	# « des textes impactants qui donnent envie d'y jouer »)
+	o.text(bar(1) + 0.05, bar(2.4), "PIED AU PLANCHER", "40 TONNES DE FOLIE PURE")
+	o.text(bar(3) + 0.05, bar(4.4), "SORS L'ARTILLERIE", "MISSILES, LASERS, SCIES : TOUT EST PERMIS")
+	o.text(bar(5.5) + 0.05, bar(6.9), "AUCUNE PITIÉ", "TOUT CE QUI BOUGE EST UNE CIBLE")
+	o.text(bar(8) + 0.05, bar(9.4), "ENVOLE-TOI", "AUCUNE LIMITE")
+	o.text(bar(12) + 0.05, bar(13.0), "DÉFIE TES POTES", "ET FAIS-LEUR MORDRE LA POUSSIÈRE")
 	o.logo_at = bar(14)
-	o.set_info("PC  ·  1 À 6 JOUEURS EN LOCAL  ·  EN LIGNE")
+	o.set_info("PRÊT À TOUT DÉFONCER ?")
 	o.black_from = END - 0.7
 	o.black_to = END
 	for n: float in [1, 2, 3, 4.5, 5.5, 7, 8, 9, 10.5, 12]:
@@ -231,7 +233,7 @@ func _process(_delta: float) -> void:
 		for s: float in _snaps:
 			if absf(s - t) < 0.5 / FPS:
 				await RenderingServer.frame_post_draw
-				get_viewport().get_texture().get_image().save_png("%s/snap_%05.2f.png" % [_snap_dir, s])
+				get_viewport().get_texture().get_image().save_png("%s/snap_%06.3f.png" % [_snap_dir, s])
 	_frame += 1
 
 
