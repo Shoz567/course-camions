@@ -5,6 +5,8 @@ game/.godot/
 
 # Assets generes par Blender : ils se regenerent avec `make assets`
 game/assets/generated/
+# modeles embarques dans le jeu partage (make share, tools/export_assets.gd --ext)
+game/modeles_partage/
 
 # Modeles de l'equipe : seuls les .glb sont versionnes, via Git LFS
 # (.gitattributes) ; les sources (.fbx, .blend...) restent hors depot.

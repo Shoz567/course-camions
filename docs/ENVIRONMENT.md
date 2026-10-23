@@ -212,9 +212,17 @@ seul.
 
 **Jeu à partager** (2026-10-23) : `make share` exporte Windows et Mac puis
 fabrique `builds/CrazyWheels-Windows.zip` et `builds/CrazyWheels-Mac.zip`
-(`tools/package.js`) : un dossier `CrazyWheels/` avec le jeu, `Assets_Visuels/`
-et un `LISEZ-MOI.txt` (lancement, avertissements de sécurité, jeu en ligne par
+(`tools/package.js`) : un dossier `CrazyWheels/` avec le jeu et un
+`LISEZ-MOI.txt` (lancement, avertissements de sécurité, jeu en ligne par
 IP ou réseau virtuel). Ce sont ces deux zips qu'on envoie, tels quels.
+- **Modèles embarqués dans le jeu** (le `.pck`) : posés à côté, ils
+  n'étaient pas chargés sur les Mac des amis (« les mac n'ont pas les
+  assets visuels chargés », 2026-10-23), l'application étant lancée depuis
+  une copie cachée (App Translocation). `export_assets.gd -- game/modeles_partage
+  --ext=.modele` les copie dans le projet (git-ignoré) sous une extension que
+  Godot n'importe pas ; `include_filter="modeles_partage/*"` les emporte tels
+  quels. `TruckVisual.read_model` lit le fichier s'il existe, sinon sa copie
+  embarquée (`append_from_buffer`).
 - Windows : le contrôle intelligent des applications de Windows 11 bloque
   tout exécutable non signé, sans bouton « Exécuter quand même », et le
   modèle d'export de Godot n'est pas signé (constaté chez un ami le
@@ -224,28 +232,27 @@ IP ou réseau virtuel). Ce sont ces deux zips qu'on envoie, tels quels.
   `.pck` qui porte le nom de son exécutable. Renommer ne touche pas la
   signature. Ce Godot-là est l'éditeur (build de débogage) : le préréglage
   Windows ajoute la fonctionnalité `jeu_partage`, que `TruckVisual.exported()`
-  traite comme un jeu exporté (modèles à côté de l'exécutable) et qui coupe
+  traite comme un jeu exporté et qui coupe
   `DebugDraw`. `export_assets.gd --exe=` copie l'exécutable du Godot qui le
   lance (variante console remplacée par l'autre). `make export-windows`
   produit toujours l'exécutable non signé du modèle d'export.
 - Mac : application universelle (Intel et Apple Silicon), signée ad hoc par
   Godot, non notarisée. L'export universel exige
-  `rendering/textures/vram_compression/import_etc2_astc=true`. Les modèles
-  sont posés **à côté** de `Crazy Wheels.app` (`asset_base()` remonte de
-  `Contents/MacOS`) : un fichier ajouté dans le paquet casserait sa
-  signature.
+  `rendering/textures/vram_compression/import_etc2_astc=true`. Rien ne
+  s'ajoute dans le paquet après l'export : sa signature serait cassée.
 - Le zip Mac recopie l'application telle que Godot l'a produite (attributs
   Unix compris) : un zip refait sous Windows (Explorateur, `Compress-Archive`)
   perd le droit d'exécution, et macOS refuse de lancer le jeu.
-- Une appli téléchargée non signée par Apple est lancée depuis une copie
-  cachée (App Translocation), sans `Assets_Visuels` à côté : la notice Mac fait
-  d'abord retirer la quarantaine du dossier (`xattr -cr`).
+- Non signée par Apple, l'application est bloquée au premier lancement : la
+  notice Mac fait retirer la quarantaine (`xattr -cr`).
 - Dans le jeu exporté, un modèle absent s'écrit dans le journal
   (« TruckVisual : … introuvable, camion en boîtes ») avec le chemin cherché.
 - Depuis Git Bash, `godot` (alias WinGet) n'est trouvé que pour les commandes
   sans guillemets : passer `make share GODOT=<chemin de Godot_v4.7.2-stable_win64.exe>`.
 
-Vérifié le 2026-10-23 : zip Windows extrait, `CrazyWheels.exe` à signature
+Vérifié le 2026-10-23 : zip Windows extrait sans aucun dossier à côté, les
+19 modèles lus depuis le `.pck` (camions, remorques, armes), le menu sans
+aucun avertissement ; `CrazyWheels.exe` à signature
 valide (Prehensile Tales B.V.), le jeu ouvre le menu sans modèle manquant
 (non essayé sur un PC où le contrôle intelligent est actif). Les deux zips
 passent `unzip -t`, l'exécutable Mac

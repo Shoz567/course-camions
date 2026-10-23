@@ -2,19 +2,19 @@
 // a mes amis pour qu'on puisse jouer ensemble ») : deux archives pretes a
 // envoyer, chacune avec un dossier CrazyWheels/ et une notice.
 //
-//   builds/CrazyWheels-Windows.zip  CrazyWheels.exe + .pck, Assets_Visuels/, LISEZ-MOI
-//   builds/CrazyWheels-Mac.zip      Crazy Wheels.app, Assets_Visuels/, LISEZ-MOI
+//   builds/CrazyWheels-Windows.zip  CrazyWheels.exe + CrazyWheels.pck, LISEZ-MOI
+//   builds/CrazyWheels-Mac.zip      Crazy Wheels.app, LISEZ-MOI
 //
-// Les modeles des camions (Assets_Visuels, Git LFS) sont lus a cote du jeu
-// (TruckVisual.asset_base) : sur Mac, a cote de l'application, pas dedans
-// (y ajouter un fichier casserait sa signature). L'application Mac est recopiee
+// Les modeles de l'equipe (Assets_Visuels, Git LFS) sont dans les donnees du
+// jeu (TruckVisual.BUNDLE_DIR) : poses a cote, ils n'etaient pas trouves sur
+// Mac (2026-10-23, « les mac n'ont pas les assets visuels charges ») quand
+// l'application etait lancee depuis une copie cachee (App Translocation,
+// quarantaine non retiree). L'application Mac est recopiee
 // telle que Godot l'a produite (donnees et attributs Unix de chaque entree) :
 // un zip refait sous Windows perd le droit d'execution, et macOS refuse alors
 // de lancer le jeu. Ne pas recompresser le zip Mac sous Windows.
-// Une application telechargee et non signee par Apple est lancee depuis une
-// copie cachee (App Translocation), sans le dossier Assets_Visuels a cote :
-// la notice fait retirer la quarantaine de tout le dossier (xattr -cr) avant
-// le premier lancement.
+// Non signee par Apple, l'application est bloquee au premier lancement : la
+// notice fait retirer la quarantaine (xattr -cr).
 //
 // Windows : CrazyWheels.exe est l'executable officiel de Godot, signe par son
 // editeur, renomme ; il charge CrazyWheels.pck pose a cote. Le modele d'export
@@ -146,15 +146,6 @@ function readZip(file) {
 	return out;
 }
 
-function addTree(zip, srcDir, prefix) {
-	zip.dir(prefix);
-	for (const e of fs.readdirSync(srcDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-		const p = path.join(srcDir, e.name);
-		if (e.isDirectory()) addTree(zip, p, prefix + e.name + "/");
-		else zip.file(prefix + e.name, fs.readFileSync(p), 0o644);
-	}
-}
-
 function need(p) {
 	if (!fs.existsSync(p)) {
 		console.error("package : introuvable " + p + " (make export-windows-share / make export-macos)");
@@ -178,8 +169,6 @@ JOUER ENSEMBLE EN LIGNE
 MANETTE
 Manettes PlayStation, Xbox et compatibles reconnues ; jusqu'a 6 joueurs sur un
 meme PC en ecran partage (JOUER EN LOCAL).
-
-Le dossier Assets_Visuels doit rester a cote du jeu (modeles des camions).
 `;
 
 const README_WIN = `CRAZY WHEELS - Windows
@@ -196,7 +185,7 @@ const README_MAC = `CRAZY WHEELS - Mac (Intel et Apple Silicon, macOS 11 ou plus
 1. Double-cliquer sur le zip pour l'extraire : un dossier CrazyWheels apparait.
    Le ranger ou on veut (Applications, Bureau...), toujours le dossier entier.
 2. Une seule fois, avant le premier lancement (le jeu n'est pas signe par
-   Apple, sans cette etape macOS le bloque ou le lance sans les camions) :
+   Apple, sans cette etape macOS refuse de le lancer) :
    - ouvrir le Terminal (Cmd + espace, taper Terminal, Entree) ;
    - taper   xattr -cr   suivi d'un espace (sans appuyer sur Entree) ;
    - glisser le DOSSIER CrazyWheels dans la fenetre du Terminal ;
@@ -219,7 +208,6 @@ const winZip = path.join(BUILDS, "CrazyWheels-Windows.zip");
 	z.dir(TOP);
 	z.file(TOP + "CrazyWheels.exe", fs.readFileSync(path.join(winDir, "CrazyWheels.exe")), 0o755);
 	z.file(TOP + "CrazyWheels.pck", fs.readFileSync(need(path.join(winDir, "CrazyWheels.pck"))), 0o644);
-	addTree(z, need(path.join(winDir, "Assets_Visuels")), TOP + "Assets_Visuels/");
 	z.file(TOP + "LISEZ-MOI.txt", crlf(README_WIN), 0o644);
 	z.close();
 }
@@ -236,7 +224,6 @@ const macZip = path.join(BUILDS, "CrazyWheels-Mac.zip");
 		z.raw(TOP + e.name, e.data, e.method, e.crc, e.size, e.extAttr, e.madeBy);
 		app++;
 	}
-	addTree(z, need(path.join(BUILDS, "macos", "assets", "Assets_Visuels")), TOP + "Assets_Visuels/");
 	z.file(TOP + "LISEZ-MOI.txt", Buffer.from(README_MAC, "utf8"), 0o644);
 	z.close();
 	console.log("Mac : " + app + " entree(s) de l'application recopiees");
