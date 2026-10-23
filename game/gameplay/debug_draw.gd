@@ -52,8 +52,9 @@ const CH_FORCES := &"forces"           # forces de pneu : traction, adherence la
 const CH_COM := &"com"                 # centre de masse du camion
 const CH_TRACK := &"track"             # trajectoire, checkpoints, ligne de course
 
-## Interrupteur global. Actif par defaut en build de debug uniquement.
-var enabled: bool = OS.is_debug_build()
+## Interrupteur global. Actif par defaut en build de debug uniquement (pas
+## dans le jeu partage, lance par l'executable de l'editeur : TruckVisual.exported).
+var enabled: bool = OS.is_debug_build() and not OS.has_feature("jeu_partage")
 
 var _starts: PackedVector3Array = PackedVector3Array()
 var _ends: PackedVector3Array = PackedVector3Array()

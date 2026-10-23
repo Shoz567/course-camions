@@ -215,6 +215,19 @@ fabrique `builds/CrazyWheels-Windows.zip` et `builds/CrazyWheels-Mac.zip`
 (`tools/package.js`) : un dossier `CrazyWheels/` avec le jeu, `Assets_Visuels/`
 et un `LISEZ-MOI.txt` (lancement, avertissements de sécurité, jeu en ligne par
 IP ou réseau virtuel). Ce sont ces deux zips qu'on envoie, tels quels.
+- Windows : le contrôle intelligent des applications de Windows 11 bloque
+  tout exécutable non signé, sans bouton « Exécuter quand même », et le
+  modèle d'export de Godot n'est pas signé (constaté chez un ami le
+  2026-10-23). Le zip Windows livre donc l'**exécutable officiel de Godot**,
+  signé par Prehensile Tales B.V., renommé `CrazyWheels.exe`, avec le jeu
+  dans `CrazyWheels.pck` à côté (`--export-pack`) : Godot charge seul le
+  `.pck` qui porte le nom de son exécutable. Renommer ne touche pas la
+  signature. Ce Godot-là est l'éditeur (build de débogage) : le préréglage
+  Windows ajoute la fonctionnalité `jeu_partage`, que `TruckVisual.exported()`
+  traite comme un jeu exporté (modèles à côté de l'exécutable) et qui coupe
+  `DebugDraw`. `export_assets.gd --exe=` copie l'exécutable du Godot qui le
+  lance (variante console remplacée par l'autre). `make export-windows`
+  produit toujours l'exécutable non signé du modèle d'export.
 - Mac : application universelle (Intel et Apple Silicon), signée ad hoc par
   Godot, non notarisée. L'export universel exige
   `rendering/textures/vram_compression/import_etc2_astc=true`. Les modèles
@@ -232,7 +245,10 @@ IP ou réseau virtuel). Ce sont ces deux zips qu'on envoie, tels quels.
 - Depuis Git Bash, `godot` (alias WinGet) n'est trouvé que pour les commandes
   sans guillemets : passer `make share GODOT=<chemin de Godot_v4.7.2-stable_win64.exe>`.
 
-Vérifié le 2026-10-23 : les deux zips passent `unzip -t`, l'exécutable Mac
+Vérifié le 2026-10-23 : zip Windows extrait, `CrazyWheels.exe` à signature
+valide (Prehensile Tales B.V.), le jeu ouvre le menu sans modèle manquant
+(non essayé sur un PC où le contrôle intelligent est actif). Les deux zips
+passent `unzip -t`, l'exécutable Mac
 garde `rwxr-xr-x` ; le zip Windows extrait par `Expand-Archive`, le jeu
 lancé ouvre le menu sans aucun modèle manquant (dossier retiré : chaque
 modèle signalé, au bon chemin). Le Mac n'a pas pu être essayé faute de Mac.

@@ -160,8 +160,6 @@ static func apply_render_quality(quality: int) -> void:
 			bool(ps.call("rendering/environment/ssil/half_size", true)), float(ps.call("rendering/environment/ssil/adaptive_target", 0.5)),
 			int(ps.call("rendering/environment/ssil/blur_passes", 4)), float(ps.call("rendering/environment/ssil/fadeout_from", 50.0)),
 			float(ps.call("rendering/environment/ssil/fadeout_to", 300.0)))
-	RenderingServer.environment_set_ssr_roughness_quality(RenderingServer.ENV_SSR_ROUGHNESS_QUALITY_HIGH if x else int(ps.call(
-		"rendering/environment/screen_space_reflection/roughness_quality", 1)))
 	RenderingServer.environment_set_sdfgi_ray_count(RenderingServer.ENV_SDFGI_RAY_COUNT_128 if x else int(ps.call(
 		"rendering/global_illumination/sdfgi/probe_ray_count", 1)))
 	RenderingServer.gi_set_use_half_resolution(false if x else bool(ps.call(

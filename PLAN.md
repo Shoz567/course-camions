@@ -1568,7 +1568,7 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
 - [x] **Jeu à partager, Windows et Mac** (2026-10-23, « on met la dernière
   version dans un fichier que je puisse compacter et partager à mes amis
   pour qu'on puisse jouer ensemble » ; « il faudrait un Windows et un Mac ») :
-  `make share` → `builds/CrazyWheels-Windows.zip` (79 Mo) et
+  `make share` → `builds/CrazyWheels-Windows.zip` (125 Mo) et
   `builds/CrazyWheels-Mac.zip` (100 Mo, universel Intel / Apple Silicon),
   chacun avec les modèles de l'équipe et un LISEZ-MOI (avertissements de
   sécurité de Windows et de macOS, jeu en ligne par IP, port UDP 7777 ou
@@ -1576,7 +1576,10 @@ Liste remontée après les essais multijoueur ; un lot par branche et par PR
   macOS ; ETC2/ASTC activé (exigé par l'export Apple Silicon) ; modèles
   posés à côté de l'application Mac. Un modèle absent se signale désormais
   dans le journal du jeu exporté. Détails : ENVIRONMENT §4.4. Version Mac
-  non essayée sur un vrai Mac.
+  non essayée sur un vrai Mac. Publié pour les amis :
+  github.com/Shoz567/crazy-wheels-download (dépôt public, releases seules).
+  Puis (« le contrôle intelligent des applications bloque le jeu ») : le zip
+  Windows livre l'exécutable officiel signé de Godot et le jeu en `.pck`.
 - [x] **Virages à haute vitesse : appui aérodynamique** (2026-10-23, « dans
   quelques virages, c'est compliqué de tourner […] sans aller toucher les
   bords […] même en ligne droite, quand on va plutôt vite ») : mesuré, le

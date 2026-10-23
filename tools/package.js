@@ -2,7 +2,7 @@
 // a mes amis pour qu'on puisse jouer ensemble ») : deux archives pretes a
 // envoyer, chacune avec un dossier CrazyWheels/ et une notice.
 //
-//   builds/CrazyWheels-Windows.zip  CrazyWheels.exe, Assets_Visuels/, LISEZ-MOI
+//   builds/CrazyWheels-Windows.zip  CrazyWheels.exe + .pck, Assets_Visuels/, LISEZ-MOI
 //   builds/CrazyWheels-Mac.zip      Crazy Wheels.app, Assets_Visuels/, LISEZ-MOI
 //
 // Les modeles des camions (Assets_Visuels, Git LFS) sont lus a cote du jeu
@@ -15,6 +15,12 @@
 // copie cachee (App Translocation), sans le dossier Assets_Visuels a cote :
 // la notice fait retirer la quarantaine de tout le dossier (xattr -cr) avant
 // le premier lancement.
+//
+// Windows : CrazyWheels.exe est l'executable officiel de Godot, signe par son
+// editeur, renomme ; il charge CrazyWheels.pck pose a cote. Le modele d'export
+// n'est pas signe, et le controle intelligent des applications de Windows 11
+// bloquait le jeu sans recours (2026-10-23). Ne pas remplacer cet executable
+// par builds/windows/CrazyWheels.exe.
 //
 // Zip ecrit a la main (Node, sans dependance) : entrees stockees ou
 // deflate, attributs Unix, pas de Zip64 (archives < 4 Go).
@@ -151,7 +157,7 @@ function addTree(zip, srcDir, prefix) {
 
 function need(p) {
 	if (!fs.existsSync(p)) {
-		console.error("package : introuvable " + p + " (make export-windows / make export-macos)");
+		console.error("package : introuvable " + p + " (make export-windows-share / make export-macos)");
 		process.exit(1);
 	}
 	return p;
@@ -179,10 +185,10 @@ Le dossier Assets_Visuels doit rester a cote du jeu (modeles des camions).
 const README_WIN = `CRAZY WHEELS - Windows
 
 1. Extraire tout le zip (clic droit > Extraire tout), ne pas lancer depuis le zip.
-2. Lancer CrazyWheels.exe.
+2. Lancer CrazyWheels.exe (le moteur Godot, signe par son editeur ; il lance
+   le jeu contenu dans CrazyWheels.pck, qui doit rester a cote).
 3. Si Windows affiche « Windows a protege votre ordinateur » : cliquer sur
-   « Informations complementaires », puis « Executer quand meme » (le jeu n'est
-   pas signe par un editeur, c'est normal).
+   « Informations complementaires », puis « Executer quand meme ».
 ` + README_COMMON;
 
 const README_MAC = `CRAZY WHEELS - Mac (Intel et Apple Silicon, macOS 11 ou plus recent)
@@ -205,13 +211,14 @@ const README_MAC = `CRAZY WHEELS - Mac (Intel et Apple Silicon, macOS 11 ou plus
 function crlf(s) { return Buffer.from("\ufeff" + s.replace(/\n/g, "\r\n"), "utf8"); }
 
 // --- Windows ------------------------------------------------------------------
-const winDir = path.join(BUILDS, "windows");
+const winDir = path.join(BUILDS, "share-windows");
 need(path.join(winDir, "CrazyWheels.exe"));
 const winZip = path.join(BUILDS, "CrazyWheels-Windows.zip");
 {
 	const z = new ZipWriter(winZip);
 	z.dir(TOP);
 	z.file(TOP + "CrazyWheels.exe", fs.readFileSync(path.join(winDir, "CrazyWheels.exe")), 0o755);
+	z.file(TOP + "CrazyWheels.pck", fs.readFileSync(need(path.join(winDir, "CrazyWheels.pck"))), 0o644);
 	addTree(z, need(path.join(winDir, "Assets_Visuels")), TOP + "Assets_Visuels/");
 	z.file(TOP + "LISEZ-MOI.txt", crlf(README_WIN), 0o644);
 	z.close();
